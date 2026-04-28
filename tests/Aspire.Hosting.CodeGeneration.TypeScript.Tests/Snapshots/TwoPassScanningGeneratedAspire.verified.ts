@@ -906,6 +906,10 @@ export interface WithEndpointOptions {
     protocol?: ProtocolType;
 }
 
+export interface WithHiddenOnCompletionOptions {
+    exitCode?: number;
+}
+
 export interface WithHttpEndpointCallbackOptions {
     name?: string;
     createIfNotExists?: boolean;
@@ -7618,6 +7622,8 @@ export interface ContainerRegistryResource {
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerRegistryResourcePromise;
     excludeFromMcp(): ContainerRegistryResourcePromise;
+    withHidden(): ContainerRegistryResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     getResourceName(): Promise<string>;
@@ -7666,6 +7672,8 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerRegistryResourcePromise;
     excludeFromMcp(): ContainerRegistryResourcePromise;
+    withHidden(): ContainerRegistryResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     getResourceName(): Promise<string>;
@@ -7960,6 +7968,38 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /** Excludes the resource from MCP server exposure */
     excludeFromMcp(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._excludeFromMcpInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenInternal(): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise {
+        const exitCode = options?.exitCode;
+        return new ContainerRegistryResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
     }
 
     /** @internal */
@@ -8563,6 +8603,16 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
@@ -8787,6 +8837,8 @@ export interface ContainerResource {
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     excludeFromMcp(): ContainerResourcePromise;
+    withHidden(): ContainerResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     withRemoteImageName(remoteImageName: string): ContainerResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
@@ -8893,6 +8945,8 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withIconName(iconName: string, options?: WithIconNameOptions): ContainerResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     excludeFromMcp(): ContainerResourcePromise;
+    withHidden(): ContainerResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     withRemoteImageName(remoteImageName: string): ContainerResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
@@ -10118,6 +10172,38 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerResourcePromise {
+        const exitCode = options?.exitCode;
+        return new ContainerResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -11109,6 +11195,16 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -11353,6 +11449,8 @@ export interface CSharpAppResource {
     withIconName(iconName: string, options?: WithIconNameOptions): CSharpAppResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     excludeFromMcp(): CSharpAppResourcePromise;
+    withHidden(): CSharpAppResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): CSharpAppResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     withRemoteImageName(remoteImageName: string): CSharpAppResourcePromise;
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
@@ -11443,6 +11541,8 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withIconName(iconName: string, options?: WithIconNameOptions): CSharpAppResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     excludeFromMcp(): CSharpAppResourcePromise;
+    withHidden(): CSharpAppResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): CSharpAppResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     withRemoteImageName(remoteImageName: string): CSharpAppResourcePromise;
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
@@ -12427,6 +12527,38 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): CSharpAppResourcePromise {
+        const exitCode = options?.exitCode;
+        return new CSharpAppResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -13324,6 +13456,16 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -13568,6 +13710,8 @@ export interface DotnetToolResource {
     withIconName(iconName: string, options?: WithIconNameOptions): DotnetToolResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     excludeFromMcp(): DotnetToolResourcePromise;
+    withHidden(): DotnetToolResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): DotnetToolResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     withRemoteImageName(remoteImageName: string): DotnetToolResourcePromise;
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
@@ -13663,6 +13807,8 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withIconName(iconName: string, options?: WithIconNameOptions): DotnetToolResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     excludeFromMcp(): DotnetToolResourcePromise;
+    withHidden(): DotnetToolResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): DotnetToolResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     withRemoteImageName(remoteImageName: string): DotnetToolResourcePromise;
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
@@ -14719,6 +14865,38 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): DotnetToolResourcePromise {
+        const exitCode = options?.exitCode;
+        return new DotnetToolResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -15641,6 +15819,16 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -15879,6 +16067,8 @@ export interface ExecutableResource {
     withIconName(iconName: string, options?: WithIconNameOptions): ExecutableResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     excludeFromMcp(): ExecutableResourcePromise;
+    withHidden(): ExecutableResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExecutableResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     withRemoteImageName(remoteImageName: string): ExecutableResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
@@ -15968,6 +16158,8 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withIconName(iconName: string, options?: WithIconNameOptions): ExecutableResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     excludeFromMcp(): ExecutableResourcePromise;
+    withHidden(): ExecutableResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExecutableResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     withRemoteImageName(remoteImageName: string): ExecutableResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
@@ -16934,6 +17126,38 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExecutableResourcePromise {
+        const exitCode = options?.exitCode;
+        return new ExecutableResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -17826,6 +18050,16 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -18030,6 +18264,8 @@ export interface ExternalServiceResource {
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ExternalServiceResourcePromise;
     excludeFromMcp(): ExternalServiceResourcePromise;
+    withHidden(): ExternalServiceResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     getResourceName(): Promise<string>;
@@ -18079,6 +18315,8 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ExternalServiceResourcePromise;
     excludeFromMcp(): ExternalServiceResourcePromise;
+    withHidden(): ExternalServiceResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     getResourceName(): Promise<string>;
@@ -18394,6 +18632,38 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /** Excludes the resource from MCP server exposure */
     excludeFromMcp(): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._excludeFromMcpInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenInternal(): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise {
+        const exitCode = options?.exitCode;
+        return new ExternalServiceResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
     }
 
     /** @internal */
@@ -19002,6 +19272,16 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
@@ -19176,6 +19456,8 @@ export interface ParameterResource {
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ParameterResourcePromise;
     excludeFromMcp(): ParameterResourcePromise;
+    withHidden(): ParameterResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     getResourceName(): Promise<string>;
@@ -19225,6 +19507,8 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ParameterResourcePromise;
     excludeFromMcp(): ParameterResourcePromise;
+    withHidden(): ParameterResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     getResourceName(): Promise<string>;
@@ -19536,6 +19820,38 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /** Excludes the resource from MCP server exposure */
     excludeFromMcp(): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._excludeFromMcpInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenInternal(): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise {
+        const exitCode = options?.exitCode;
+        return new ParameterResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
     }
 
     /** @internal */
@@ -20144,6 +20460,16 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Adds a pipeline step to the resource */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
@@ -20353,6 +20679,8 @@ export interface ProjectResource {
     withIconName(iconName: string, options?: WithIconNameOptions): ProjectResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     excludeFromMcp(): ProjectResourcePromise;
+    withHidden(): ProjectResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ProjectResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     withRemoteImageName(remoteImageName: string): ProjectResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
@@ -20443,6 +20771,8 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withIconName(iconName: string, options?: WithIconNameOptions): ProjectResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     excludeFromMcp(): ProjectResourcePromise;
+    withHidden(): ProjectResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ProjectResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     withRemoteImageName(remoteImageName: string): ProjectResourcePromise;
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
@@ -21427,6 +21757,38 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ProjectResourcePromise {
+        const exitCode = options?.exitCode;
+        return new ProjectResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<ProjectResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -22324,6 +22686,16 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -22578,6 +22950,8 @@ export interface TestDatabaseResource {
     withIconName(iconName: string, options?: WithIconNameOptions): TestDatabaseResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     excludeFromMcp(): TestDatabaseResourcePromise;
+    withHidden(): TestDatabaseResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestDatabaseResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     withRemoteImageName(remoteImageName: string): TestDatabaseResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
@@ -22684,6 +23058,8 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withIconName(iconName: string, options?: WithIconNameOptions): TestDatabaseResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     excludeFromMcp(): TestDatabaseResourcePromise;
+    withHidden(): TestDatabaseResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestDatabaseResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     withRemoteImageName(remoteImageName: string): TestDatabaseResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
@@ -23909,6 +24285,38 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestDatabaseResourcePromise {
+        const exitCode = options?.exitCode;
+        return new TestDatabaseResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -24900,6 +25308,16 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -25161,6 +25579,8 @@ export interface TestRedisResource {
     withIconName(iconName: string, options?: WithIconNameOptions): TestRedisResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     excludeFromMcp(): TestRedisResourcePromise;
+    withHidden(): TestRedisResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestRedisResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     withRemoteImageName(remoteImageName: string): TestRedisResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
@@ -25282,6 +25702,8 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withIconName(iconName: string, options?: WithIconNameOptions): TestRedisResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     excludeFromMcp(): TestRedisResourcePromise;
+    withHidden(): TestRedisResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestRedisResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     withRemoteImageName(remoteImageName: string): TestRedisResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
@@ -26544,6 +26966,38 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestRedisResourcePromise {
+        const exitCode = options?.exitCode;
+        return new TestRedisResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -27734,6 +28188,16 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -28058,6 +28522,8 @@ export interface TestVaultResource {
     withIconName(iconName: string, options?: WithIconNameOptions): TestVaultResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     excludeFromMcp(): TestVaultResourcePromise;
+    withHidden(): TestVaultResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestVaultResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     withRemoteImageName(remoteImageName: string): TestVaultResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
@@ -28165,6 +28631,8 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withIconName(iconName: string, options?: WithIconNameOptions): TestVaultResourcePromise;
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     excludeFromMcp(): TestVaultResourcePromise;
+    withHidden(): TestVaultResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestVaultResourcePromise;
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     withRemoteImageName(remoteImageName: string): TestVaultResourcePromise;
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
@@ -29391,6 +29859,38 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withHiddenInternal(): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestVaultResourcePromise {
+        const exitCode = options?.exitCode;
+        return new TestVaultResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+    }
+
+    /** @internal */
     private async _withImagePushOptionsInternal(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ContainerImagePushOptionsCallbackContextHandle;
@@ -30397,6 +30897,16 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
     }
 
+    /** Hides the resource from default resource lists */
+    withHidden(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
+    }
+
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
@@ -30786,6 +31296,8 @@ export interface Resource {
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ResourcePromise;
     excludeFromMcp(): ResourcePromise;
+    withHidden(): ResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     getResourceName(): Promise<string>;
@@ -30834,6 +31346,8 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
     withIconName(iconName: string, options?: WithIconNameOptions): ResourcePromise;
     excludeFromMcp(): ResourcePromise;
+    withHidden(): ResourcePromise;
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     getResourceName(): Promise<string>;
@@ -31128,6 +31642,38 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /** Excludes the resource from MCP server exposure */
     excludeFromMcp(): ResourcePromise {
         return new ResourcePromiseImpl(this._excludeFromMcpInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenInternal(): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withHidden',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ResourcePromise {
+        return new ResourcePromiseImpl(this._withHiddenInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withHiddenOnCompletion',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise {
+        const exitCode = options?.exitCode;
+        return new ResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
     }
 
     /** @internal */
@@ -31729,6 +32275,16 @@ class ResourcePromiseImpl implements ResourcePromise {
     /** Excludes the resource from MCP server exposure */
     excludeFromMcp(): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.excludeFromMcp()), this._client);
+    }
+
+    /** Hides the resource from default resource lists */
+    withHidden(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withHidden()), this._client);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withHiddenOnCompletion(options)), this._client);
     }
 
     /** Adds a pipeline step to the resource */
