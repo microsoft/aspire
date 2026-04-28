@@ -25,6 +25,8 @@ internal interface IBrowserLogsCdpConnection : IAsyncDisposable
 
     Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken);
 
+    Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken);
+
     Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken);
 }
 
@@ -37,6 +39,10 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
     // timers without sending frequent pings during normal local development.
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_commandTimeout = TimeSpan.FromSeconds(10);
+    // Screenshot capture asks the browser to rasterize and encode the current surface. Real browsers can take longer
+    // than lightweight lifecycle/enable commands, especially under CI or agent load, so give this command a larger
+    // protocol budget without slowing down ordinary command failures.
+    private static readonly TimeSpan s_screenshotCommandTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_keepAliveInterval = TimeSpan.FromSeconds(15);
 
     private readonly CancellationTokenSource _disposeCts = new();
@@ -156,6 +162,21 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
         await SendCommandAsync(BrowserLogsCdpProtocol.NetworkEnableMethod, sessionId, writeParameters: null, BrowserLogsCdpProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
     }
 
+    public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        return SendCommandAsync(
+            BrowserLogsCdpProtocol.PageCaptureScreenshotMethod,
+            sessionId,
+            static writer =>
+            {
+                writer.WriteString("format", "png");
+                writer.WriteBoolean("fromSurface", true);
+            },
+            BrowserLogsCdpProtocol.ParseCaptureScreenshotResponse,
+            cancellationToken,
+            s_screenshotCommandTimeout);
+    }
+
     public Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
     {
         return SendCommandAsync(
@@ -204,7 +225,8 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
         string? sessionId,
         Action<Utf8JsonWriter>? writeParameters,
         ResponseParser<TResult> parseResponse,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? commandTimeout = null)
     {
         var commandId = Interlocked.Increment(ref _nextCommandId);
         var pendingCommand = new PendingCommand<TResult>(parseResponse);
@@ -213,7 +235,7 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
         try
         {
             using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposeCts.Token);
-            sendCts.CancelAfter(s_commandTimeout);
+            sendCts.CancelAfter(commandTimeout ?? s_commandTimeout);
 
             using var registration = sendCts.Token.Register(static state =>
             {

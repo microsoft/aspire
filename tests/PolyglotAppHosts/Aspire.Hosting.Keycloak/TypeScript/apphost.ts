@@ -23,13 +23,13 @@ const keycloak2 = await builder.addKeycloak("keycloak2")
     .withRealmImport(".")
     .withEnabledFeatures(["rolling-updates"])
     .withDisabledFeatures(["scripts"])
-    .withOtlpExporterWithProtocol(OtlpProtocol.HttpProtobuf);
+    .withOtlpExporter({ protocol: OtlpProtocol.HttpProtobuf });
 
 await builder.addContainer("consumer", "nginx")
     .withReference(keycloak)
     .withReference(keycloak2);
 
-const _keycloakName = await keycloak.name.get();
+const _keycloakName = await keycloak.name();
 const _keycloakEntrypoint = await keycloak.entrypoint.get();
 const _keycloakShellExecution = await keycloak.shellExecution.get();
 

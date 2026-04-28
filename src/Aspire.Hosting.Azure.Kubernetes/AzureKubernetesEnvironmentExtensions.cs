@@ -10,7 +10,6 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Extensions;
-using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
@@ -58,13 +57,10 @@ public static class AzureKubernetesEnvironmentExtensions
         builder.Services.Configure<AzureProvisioningOptions>(
             o => o.SupportsTargetedRoleAssignments = true);
 
-        // Register the AKS-specific infrastructure eventing subscriber
-        builder.Services.TryAddEventingSubscriber<AzureKubernetesInfrastructure>();
-
         // Create the inner KubernetesEnvironmentResource via the public API.
-        // This registers KubernetesInfrastructure, creates the resource with
-        // Helm chart name/dashboard, adds it to the model, and sets up the
-        // default Helm deployment engine.
+        // This registers the Kubernetes infrastructure pipeline step, creates the
+        // resource with Helm chart name/dashboard, adds it to the model, and sets up
+        // the default Helm deployment engine.
         var k8sEnvBuilder = builder.AddKubernetesEnvironment($"{name}-k8s");
 
         // Scope the Helm chart name to this AKS environment to avoid
@@ -87,9 +83,9 @@ public static class AzureKubernetesEnvironmentExtensions
         }
 
         // Auto-create a default Azure Container Registry for image push/pull.
-        // Wire it to the inner K8s environment immediately so KubernetesInfrastructure
-        // can discover it during BeforeStartEvent (both subscribers run during the same
-        // event, so we can't rely on annotation ordering during the event).
+        // Wire it to the inner K8s environment immediately so the inner Kubernetes
+        // env's prepare-deployment-targets step can discover it as the container
+        // registry for compute resources.
         var defaultRegistry = builder.AddAzureContainerRegistry($"{name}-acr");
         resource.DefaultContainerRegistry = defaultRegistry.Resource;
         k8sEnvBuilder.WithAnnotation(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
@@ -280,7 +276,7 @@ public static class AzureKubernetesEnvironmentExtensions
     ///     .WithSubnet(gpuSubnet);
     /// </code>
     /// </example>
-    [AspireExport("withAksNodePoolSubnet", Description = "Configures an AKS node pool to use a specific VNet subnet")]
+    [AspireExport(Description = "Configures an AKS node pool to use a specific VNet subnet")]
     public static IResourceBuilder<AksNodePoolResource> WithSubnet(
         this IResourceBuilder<AksNodePoolResource> builder,
         IResourceBuilder<AzureSubnetResource> subnet)

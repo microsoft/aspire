@@ -109,6 +109,43 @@ public class BrowserLogsCdpConnectionTests
         await pair.ServerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None).DefaultTimeout();
     }
 
+    [Fact]
+    public async Task CaptureScreenshotAsync_SendsPageCaptureScreenshotForTargetSession()
+    {
+        await using var pair = InMemoryWebSocketPair.Create();
+        var connector = new ConnectedClientWebSocketConnector(pair.ClientSocket);
+        await using var connection = await BrowserLogsCdpConnection.ConnectAsync(
+            new Uri("ws://127.0.0.1/devtools/browser/test"),
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            CancellationToken.None,
+            () => connector);
+
+        var captureTask = connection.CaptureScreenshotAsync("target-session-1", CancellationToken.None);
+
+        var command = await ReceiveCommandAsync(pair.ServerSocket).DefaultTimeout();
+        Assert.Equal(BrowserLogsCdpProtocol.PageCaptureScreenshotMethod, command.Method);
+        Assert.Equal("target-session-1", command.SessionId);
+        Assert.Equal("png", command.Format);
+        Assert.Equal(true, command.FromSurface);
+
+        await SendTextAsync(
+            pair.ServerSocket,
+            $$"""
+            {
+              "id": {{command.Id}},
+              "result": {
+                "data": "aW1hZ2UtZGF0YQ=="
+              }
+            }
+            """).DefaultTimeout();
+
+        var result = await captureTask.DefaultTimeout();
+        Assert.Equal("aW1hZ2UtZGF0YQ==", result.Data);
+
+        await pair.ServerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None).DefaultTimeout();
+    }
+
     private static async Task<ReceivedCommand> ReceiveCommandAsync(WebSocket socket)
     {
         using var document = await ReceiveJsonDocumentAsync(socket).DefaultTimeout();
@@ -127,8 +164,14 @@ public class BrowserLogsCdpConnectionTests
         var url = parameters?.TryGetProperty("url", out var urlElement) == true
             ? urlElement.GetString()
             : null;
+        var format = parameters?.TryGetProperty("format", out var formatElement) == true
+            ? formatElement.GetString()
+            : null;
+        var fromSurface = parameters?.TryGetProperty("fromSurface", out var fromSurfaceElement) == true
+            ? fromSurfaceElement.GetBoolean()
+            : (bool?)null;
 
-        return new ReceivedCommand(id, method, sessionId, targetId, url);
+        return new ReceivedCommand(id, method, sessionId, targetId, url, format, fromSurface);
     }
 
     private static async Task<JsonDocument> ReceiveJsonDocumentAsync(WebSocket socket)
@@ -157,7 +200,7 @@ public class BrowserLogsCdpConnectionTests
         return socket.SendAsync(Encoding.UTF8.GetBytes(text), WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
     }
 
-    private sealed record ReceivedCommand(long Id, string Method, string? SessionId, string? TargetId, string? Url);
+    private sealed record ReceivedCommand(long Id, string Method, string? SessionId, string? TargetId, string? Url, string? Format, bool? FromSurface);
 
     private sealed class ConnectedClientWebSocketConnector(WebSocket webSocket) : IClientWebSocketConnector
     {

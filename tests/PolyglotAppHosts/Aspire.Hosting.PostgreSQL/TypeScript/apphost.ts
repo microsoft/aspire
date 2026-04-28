@@ -44,16 +44,16 @@ await pg2.withPassword(customPassword);
 await pg2.withUserName(customUser);
 
 // ---- Property access on PostgresServerResource ----
-const _endpoint = await postgres.primaryEndpoint.get();
-const _nameRef = await postgres.userNameReference.get();
-const _uri = await postgres.uriExpression.get();
-const _jdbc = await postgres.jdbcConnectionString.get();
-const _cstr = await postgres.connectionStringExpression.get();
+const _endpoint = await postgres.primaryEndpoint();
+const _nameRef = await postgres.userNameReference();
+const _uri = await postgres.uriExpression();
+const _jdbc = await postgres.jdbcConnectionString();
+const _cstr = await postgres.connectionStringExpression();
 
 // ---- Property access on PostgresDatabaseResource ----
-const _dbName: string = await db.databaseName.get();
-const _dbUri = await db.uriExpression.get();
-const _dbJdbc = await db.jdbcConnectionString.get();
-const _dbCstr = await db.connectionStringExpression.get();
+const _dbName: string = await db.databaseName();
+const _dbUri = await db.uriExpression();
+const _dbJdbc = await db.jdbcConnectionString();
+const _dbCstr = await db.connectionStringExpression();
 
 await builder.build().run();

@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Extensions;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting;
@@ -16,10 +19,46 @@ public static class KubernetesEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddKubernetesInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        builder.Services.TryAddEventingSubscriber<KubernetesInfrastructure>();
         builder.Services.TryAddSingleton<IHelmRunner, DefaultHelmRunner>();
 
+        // Register the pipeline step idempotently. AddKubernetesInfrastructureCore can be
+        // called more than once (e.g. when AddKubernetesEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating Kubernetes service resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on KubernetesEnvironmentResource.
+        // This global step only validates that no resource has a PublishAsKubernetesService annotation
+        // when there are no KubernetesEnvironmentResource instances in the model.
+        if (builder.Services.All(d => d.ServiceType != typeof(KubernetesPipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<KubernetesPipelineStepMarker>();
+
+            builder.Pipeline.AddStep(
+                name: KubernetesPipelineStepMarker.StepName,
+                action: ctx =>
+                {
+                    if (!ctx.Model.Resources.OfType<KubernetesEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<KubernetesServiceCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Kubernetes service, but there are no '{nameof(KubernetesEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddKubernetesEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+        }
+
         return builder;
+    }
+
+    private sealed class KubernetesPipelineStepMarker
+    {
+        public const string StepName = "validate-kubernetes";
     }
 
     /// <summary>
@@ -221,7 +260,7 @@ public static class KubernetesEnvironmentExtensions
     ///     .WithNodePool(gpuPool);
     /// </code>
     /// </example>
-    [AspireExport("withKubernetesNodePool", Description = "Schedules a workload on a specific Kubernetes node pool")]
+    [AspireExport("withKubernetesNodePool", MethodName = "withNodePool", Description = "Schedules a workload on a specific Kubernetes node pool")]
     public static IResourceBuilder<T> WithNodePool<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<KubernetesNodePoolResource> nodePool)

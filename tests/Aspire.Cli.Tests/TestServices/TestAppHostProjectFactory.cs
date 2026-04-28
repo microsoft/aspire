@@ -18,6 +18,11 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
     /// </summary>
     public Func<FileInfo, AppHostValidationResult>? ValidateAppHostCallback { get; set; }
 
+    /// <summary>
+    /// Optional async callback to control validation behavior.
+    /// </summary>
+    public Func<FileInfo, CancellationToken, Task<AppHostValidationResult>>? ValidateAppHostAsyncCallback { get; set; }
+
     public TestAppHostProjectFactory()
     {
         _testProject = new TestAppHostProject(this);
@@ -157,6 +162,11 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             if (IsUnsupported)
             {
                 return Task.FromResult(new AppHostValidationResult(IsValid: false, IsUnsupported: true));
+            }
+
+            if (_factory.ValidateAppHostAsyncCallback is not null)
+            {
+                return _factory.ValidateAppHostAsyncCallback(appHostFile, cancellationToken);
             }
 
             if (_factory.ValidateAppHostCallback is not null)

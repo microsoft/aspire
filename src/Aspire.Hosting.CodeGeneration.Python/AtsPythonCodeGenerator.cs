@@ -3,6 +3,8 @@
 
 using System.Globalization;
 using System.Reflection;
+using System.Text;
+using System.Text.Json.Nodes;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Python;
@@ -18,6 +20,13 @@ internal sealed class BuilderModel
     public required List<AtsCapabilityInfo> Capabilities { get; init; }
     public bool IsInterface { get; init; }
     public AtsTypeRef? TargetType { get; init; }
+}
+
+internal sealed class PythonExportedValueTreeNode
+{
+    public Dictionary<string, PythonExportedValueTreeNode> Children { get; } = new(StringComparer.Ordinal);
+
+    public AtsExportedValueInfo? Value { get; set; }
 }
 
 /// <summary>
@@ -634,6 +643,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
         var enumTypes = context.EnumTypes;
+        var exportedValues = context.ExportedValues;
 
         // Get builder models (flattened - each builder has all its applicable capabilities)
         var allBuilders = CreateBuilderModels(capabilities);
@@ -711,6 +721,9 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Generate DTO classes
         GenerateDtoClasses(dtoTypes);
 
+        // Generate exported immutable values
+        GenerateExportedValues(exportedValues, dtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
+
         // Generate type classes (context types and wrapper types)
         foreach (var typeClass in typeClasses.Where(t => !_ignoreTypes.Contains(t.TypeId)))
         {
@@ -777,6 +790,137 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             }
             sb.AppendLine();
         }
+    }
+
+    private void GenerateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var sb = _moduleBuilder.ExportedValues;
+        if (exportedValues.Count == 0)
+        {
+            return;
+        }
+
+        var root = BuildExportedValueTree(exportedValues);
+        foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{name} = types.SimpleNamespace()");
+            WritePythonExportedValueChildren(sb, name, node, dtoTypesById);
+            sb.AppendLine();
+        }
+    }
+
+    private void WritePythonExportedValueChildren(
+        StringBuilder sb,
+        string path,
+        PythonExportedValueTreeNode node,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        foreach (var (name, child) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var childPath = $"{path}.{name}";
+            if (child.Value is { } valueInfo)
+            {
+                if (!string.IsNullOrWhiteSpace(valueInfo.Description))
+                {
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"# {valueInfo.Description}");
+                }
+
+                sb.AppendLine(CultureInfo.InvariantCulture, $"{childPath} = {RenderPythonExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById, topLevel: true)}");
+            }
+            else
+            {
+                sb.AppendLine(CultureInfo.InvariantCulture, $"{childPath} = types.SimpleNamespace()");
+                WritePythonExportedValueChildren(sb, childPath, child, dtoTypesById);
+            }
+        }
+    }
+
+    private string RenderPythonExportedValue(
+        JsonNode? value,
+        AtsTypeRef typeRef,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        bool topLevel)
+    {
+        string expression;
+
+        if (value is null)
+        {
+            expression = "None";
+        }
+        else
+        {
+            expression = typeRef.Category switch
+            {
+                AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
+                    => RenderPythonDtoValue(obj, dtoInfo, dtoTypesById),
+                AtsTypeCategory.Array or AtsTypeCategory.List when value is JsonArray arr
+                    => "[" + string.Join(", ", arr.Select(item => RenderPythonExportedValue(item, typeRef.ElementType!, dtoTypesById, topLevel: false))) + "]",
+                AtsTypeCategory.Dict when value is JsonObject obj
+                    => "{" + string.Join(", ", obj.Select(pair => $"{AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}: {RenderPythonExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById, topLevel: false)}")) + "}",
+                _ => RenderPythonPrimitiveValue(value)
+            };
+        }
+
+        if (!topLevel || typeRef.Category is AtsTypeCategory.Primitive)
+        {
+            return expression;
+        }
+
+        return $"typing.cast({MapTypeRefToPython(typeRef)}, {expression})";
+    }
+
+    private string RenderPythonDtoValue(
+        JsonObject value,
+        AtsDtoTypeInfo dtoInfo,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var members = new List<string>();
+        foreach (var property in dtoInfo.Properties)
+        {
+            if (!value.TryGetPropertyValue(property.Name, out var propertyValue))
+            {
+                continue;
+            }
+
+            members.Add($"{AtsJsonCodeWriter.ToRelaxedJsonString(property.Name)}: {RenderPythonExportedValue(propertyValue, property.Type, dtoTypesById, topLevel: false)}");
+        }
+
+        return "{ " + string.Join(", ", members) + " }";
+    }
+
+    private static string RenderPythonPrimitiveValue(JsonNode value)
+    {
+        return value switch
+        {
+            JsonValue jsonValue when jsonValue.TryGetValue<bool>(out var boolValue) => boolValue ? "True" : "False",
+            JsonValue jsonValue => jsonValue.ToRelaxedJsonString(),
+            _ => value.ToRelaxedJsonString()
+        };
+    }
+
+    private static PythonExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        var root = new PythonExportedValueTreeNode();
+        foreach (var exportedValue in exportedValues)
+        {
+            var current = root;
+            foreach (var segment in exportedValue.PathSegments)
+            {
+                if (!current.Children.TryGetValue(segment, out var child))
+                {
+                    child = new PythonExportedValueTreeNode();
+                    current.Children[segment] = child;
+                }
+
+                current = child;
+            }
+
+            current.Value = exportedValue;
+        }
+
+        return root;
     }
 
     /// <summary>

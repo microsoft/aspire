@@ -453,7 +453,8 @@ public class BrowserLogsSessionManagerTests
             ResourceNotificationServiceTestHelpers.Create(),
             TimeProvider.System,
             NullLogger<BrowserLogsSessionManager>.Instance,
-            sessionFactory);
+            artifactWriter: null,
+            sessionFactory: sessionFactory);
         var resource = new BrowserLogsResource(
             "web-browser-logs",
             new TestResourceWithEndpoints("web"),

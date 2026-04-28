@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.TypeSystem;
 using Xunit;
@@ -436,6 +437,93 @@ public class AtsCapabilityScannerTests
 
     #endregion
 
+    #region Exported Value Tests
+
+    [Fact]
+    public void ScanAssembly_MutableDictionaryExportedValue_IsSkipped()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "InvalidValues.InvalidExportedValues.MutableMetadata");
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "InvalidValues.InvalidExportedValues.DtoWithMutableList");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("copied shapes", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValues.MutableMetadata");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("copied shapes", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValues.DtoWithMutableList");
+    }
+
+    [Fact]
+    public void ScanAssembly_ExportedDtoValueWithIgnoredMutableProperty_IsIncluded()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var exportedValue = Assert.Single(result.ExportedValues,
+            value => string.Join(".", value.PathSegments) == "IgnoredPropertyValues.IgnoredPropertyExportedValues.Value");
+        var valueObject = Assert.IsType<JsonObject>(exportedValue.Value);
+        Assert.True(valueObject.ContainsKey(nameof(ExportedDtoWithIgnoredMutableProperty.Name)));
+        Assert.False(valueObject.ContainsKey(nameof(ExportedDtoWithIgnoredMutableProperty.Items)));
+    }
+
+    [Fact]
+    public void ScanAssembly_InvalidExportedValuePath_EmitsWarningAndSkipsValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments).Contains("Invalid-Values", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments).Contains("123Name", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("path segment 'Invalid-Values'", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValuePaths.BadCatalog");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("path segment '123Name'", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValuePaths.BadName");
+    }
+
+    [Fact]
+    public void ScanAssembly_DuplicateExportedValuePath_EmitsWarningAndSkipsLaterValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.Single(result.ExportedValues,
+            value => string.Join(".", value.PathSegments) == "DuplicateValues.DuplicateExportedValues.Shared");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains(
+                "Duplicate exported value path 'DuplicateValues.DuplicateExportedValues.Shared'",
+                StringComparison.Ordinal)
+            && diagnostic.Location == "DuplicateValues.DuplicateExportedValues.Shared");
+    }
+
+    [Fact]
+    public void ScanAssembly_PrefixConflictingExportedValuePath_EmitsWarningAndSkipsLaterValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains(
+                "Conflicting exported value path 'ConflictingValues.PrefixConflictingExportedValues.Node.Child'",
+                StringComparison.Ordinal)
+            && diagnostic.Message.Contains(
+                "Existing path 'ConflictingValues.PrefixConflictingExportedValues.Node'",
+                StringComparison.Ordinal)
+            && diagnostic.Location == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
+    }
+
+    #endregion
+
     #region Test Types
 
     private sealed class TestResource : Resource
@@ -472,6 +560,70 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+    }
+
+    private static class InvalidExportedValues
+    {
+        [AspireValue("InvalidValues")]
+        public static Dictionary<string, string> MutableMetadata { get; } = [];
+
+        [AspireValue("InvalidValues")]
+        public static InvalidExportedDto DtoWithMutableList { get; } = new();
+    }
+
+    [AspireDto]
+    private sealed class InvalidExportedDto
+    {
+        public List<string> Items { get; set; } = [];
+    }
+
+    private static class IgnoredPropertyExportedValues
+    {
+        [AspireValue("IgnoredPropertyValues")]
+        public static ExportedDtoWithIgnoredMutableProperty Value { get; } = new()
+        {
+            Name = "valid",
+            Items = ["ignored"]
+        };
+    }
+
+    [AspireDto]
+    private sealed class ExportedDtoWithIgnoredMutableProperty
+    {
+        public string Name { get; init; } = "";
+
+        [AspireExportIgnore]
+        public List<string> Items { get; init; } = [];
+    }
+
+    private static class InvalidExportedValuePaths
+    {
+        [AspireValue("Invalid-Values")]
+        public static string BadCatalog { get; } = "bad";
+
+        [AspireValue("InvalidValues", Name = "123Name")]
+        public static string BadName { get; } = "bad";
+    }
+
+    private static class DuplicateExportedValues
+    {
+        [AspireValue("DuplicateValues", Name = "Shared")]
+        public static string FirstShared { get; } = "first";
+
+        [AspireValue("DuplicateValues", Name = "Shared")]
+        public static string SecondShared { get; } = "second";
+    }
+
+    private static class PrefixConflictingExportedValues
+    {
+        [AspireValue("ConflictingValues", Name = "Node")]
+        public static string NodeValue { get; } = "root";
+
+        public static class Node
+        {
+            [AspireValue("ConflictingValues", Name = "Child")]
+            public static string ChildValue { get; } = "child";
         }
     }
 

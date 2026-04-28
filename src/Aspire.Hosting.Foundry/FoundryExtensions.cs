@@ -53,7 +53,7 @@ public static class FoundryExtensions
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <param name="format">The format of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, string modelName, string modelVersion, string format)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -79,6 +79,28 @@ public static class FoundryExtensions
         return deploymentBuilder;
     }
 
+    [AspireExport("addDeployment", Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
+    internal static IResourceBuilder<FoundryDeploymentResource> AddDeploymentForPolyglot(
+        this IResourceBuilder<FoundryResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(FoundryModel), typeof(string))] object model,
+        string? modelVersion = null,
+        string? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return model switch
+        {
+            FoundryModel foundryModel when modelVersion is null && format is null => builder.AddDeployment(name, foundryModel),
+            FoundryModel => throw new ArgumentException("Model version and format must be omitted when using a FoundryModel.", nameof(modelVersion)),
+            string modelName when modelVersion is not null && format is not null => builder.AddDeployment(name, modelName, modelVersion, format),
+            string => throw new ArgumentException("Model version and format are required when the model is provided as a string.", nameof(modelVersion)),
+            _ => throw new ArgumentException("Model must be a FoundryModel or a string model name.", nameof(model))
+        };
+    }
+
     /// <summary>
     /// Adds and returns a Microsoft Foundry Deployment resource to the application model using a <see cref="FoundryModel"/>.
     /// </summary>
@@ -97,7 +119,7 @@ public static class FoundryExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addDeploymentFromModel", Description = "Adds a Microsoft Foundry deployment resource by using a Microsoft Foundry model descriptor.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, FoundryModel model)
     {
         ArgumentNullException.ThrowIfNull(builder);

@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker;
 using Aspire.Hosting.Docker.Resources;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -15,9 +18,44 @@ public static class DockerComposeEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddDockerComposeInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        builder.Services.TryAddEventingSubscriber<DockerComposeInfrastructure>();
+        // Register the pipeline step idempotently. AddDockerComposeInfrastructureCore can be
+        // called more than once (e.g. when AddDockerComposeEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating Docker Compose service resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on DockerComposeEnvironmentResource.
+        // This global step only validates that no resource has a PublishAsDockerComposeService annotation
+        // when there are no DockerComposeEnvironmentResource instances in the model.
+        if (builder.Services.All(d => d.ServiceType != typeof(DockerComposePipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<DockerComposePipelineStepMarker>();
+
+            builder.Pipeline.AddStep(
+                name: DockerComposePipelineStepMarker.StepName,
+                action: ctx =>
+                {
+                    if (!ctx.Model.Resources.OfType<DockerComposeEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<DockerComposeServiceCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Docker Compose service, but there are no '{nameof(DockerComposeEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddDockerComposeEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+        }
 
         return builder;
+    }
+
+    private sealed class DockerComposePipelineStepMarker
+    {
+        public const string StepName = "validate-docker-compose";
     }
 
     /// <summary>

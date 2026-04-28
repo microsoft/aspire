@@ -388,9 +388,9 @@ public class CapabilityDispatcherTests
         Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.executionContext"),
             "EnvironmentCallbackContext.executionContext capability should be registered");
 
-        // Other EnvironmentCallbackContext properties should also be registered
-        Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environmentVariables"),
-            "EnvironmentCallbackContext.environmentVariables should be registered");
+        // Other EnvironmentCallbackContext ATS-facing properties should also be registered
+        Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment"),
+            "EnvironmentCallbackContext.environment should be registered");
 
         // DistributedApplicationExecutionContext properties should also be registered
         Assert.True(dispatcher.HasCapability("Aspire.Hosting/DistributedApplicationExecutionContext.operation"),
@@ -897,6 +897,83 @@ public class CapabilityDispatcherTests
 
         Assert.NotNull(result);
         Assert.Equal("42", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_AcceptsUnionWithDtoObject()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject
+            {
+                ["label"] = "dto-value"
+            }
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptDtoUnion", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("dto-value", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_AcceptsUnionWithBuilderBackedHandle()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly]);
+
+        var resource = new TestResourceWithProperties("union-resource");
+        var builder = new TestResourceBuilder<TestResourceWithProperties>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithProperties");
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject { ["$handle"] = handleId }
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptHandleUnion", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("union-resource", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_UnionWithUnsupportedArray_ThrowsTypeMismatch()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonArray { 1, 2, 3 }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptUnion", args));
+
+        Assert.Equal(AtsErrorCodes.TypeMismatch, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Equal("String | Int32", ex.Error.Details?.Expected);
+        Assert.Equal("array", ex.Error.Details?.Actual);
+    }
+
+    [Fact]
+    public void Invoke_UnionWithUnsupportedObject_ThrowsTypeMismatch()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject
+            {
+                ["label"] = "unexpected"
+            }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptUnion", args));
+
+        Assert.Equal(AtsErrorCodes.TypeMismatch, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Equal("String | Int32", ex.Error.Details?.Expected);
+        Assert.Equal("object", ex.Error.Details?.Actual);
     }
 
     // List operations tests
@@ -2141,6 +2218,28 @@ internal static class TestTypeCategoryCapabilities
         return value.ToString()!;
     }
 
+    [AspireExport("acceptDtoUnion", Description = "Accepts a union of DTO or string array")]
+    public static string AcceptDtoUnion([AspireUnion(typeof(TestUnionDto), typeof(string[]))] object value)
+    {
+        return value switch
+        {
+            TestUnionDto dto => dto.Label ?? string.Empty,
+            string[] values => string.Join(",", values),
+            _ => throw new InvalidOperationException($"Unexpected union value type: {value.GetType().Name}")
+        };
+    }
+
+    [AspireExport("acceptHandleUnion", Description = "Accepts a union of resource handle or string")]
+    public static string AcceptHandleUnion([AspireUnion(typeof(TestResourceWithProperties), typeof(string))] object value)
+    {
+        return value switch
+        {
+            TestResourceWithProperties resource => resource.Name,
+            string text => text,
+            _ => throw new InvalidOperationException($"Unexpected union value type: {value.GetType().Name}")
+        };
+    }
+
     [AspireExport(Description = "Returns a mutable List<string>")]
     public static List<object> ReturnMutableList()
     {
@@ -2225,6 +2324,12 @@ internal sealed class TestDtoWithEnum
 {
     public string? Label { get; set; }
     public TestDispatchEnum Status { get; set; }
+}
+
+[AspireDto]
+internal sealed class TestUnionDto
+{
+    public string? Label { get; set; }
 }
 
 /// <summary>

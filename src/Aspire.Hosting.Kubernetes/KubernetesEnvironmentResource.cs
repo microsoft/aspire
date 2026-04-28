@@ -8,6 +8,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Kubernetes;
 
@@ -185,6 +187,20 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
 
+            // Add prepare-deployment-targets-{name} step that materializes Kubernetes
+            // service resources and DeploymentTargetAnnotations for compute resources
+            // targeted to this environment. Runs before the BeforeStart synchronization
+            // point so downstream code can observe the deployment targets.
+            var prepareStep = new PipelineStep
+            {
+                Name = $"prepare-deployment-targets-{Name}",
+                Description = $"Prepares Kubernetes deployment targets for {Name}.",
+                Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+
+            steps.Add(prepareStep);
+
             // Publish step
             var publishStep = new PipelineStep
             {
@@ -290,5 +306,110 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             this,
             context.CancellationToken);
         return kubernetesContext.WriteModelAsync(context.Model, this);
+    }
+
+    /// <summary>
+    /// Materializes Kubernetes deployment targets for compute resources targeted to this
+    /// environment. Invoked by the per-environment <c>prepare-deployment-targets-{name}</c>
+    /// pipeline step.
+    /// </summary>
+    private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
+    {
+        var appModel = context.Model;
+        var services = context.Services;
+        var executionContext = context.ExecutionContext;
+
+        if (executionContext.IsRunMode)
+        {
+            return;
+        }
+
+        var logger = services.GetRequiredService<ILogger<KubernetesEnvironmentResource>>();
+        var cancellationToken = context.CancellationToken;
+
+        var environmentContext = new KubernetesEnvironmentContext(this, logger);
+        var containerRegistry = GetContainerRegistry(this, appModel);
+
+        // Create a Kubernetes resource for the dashboard if enabled
+        if (DashboardEnabled && Dashboard?.Resource is KubernetesAspireDashboardResource dashboard)
+        {
+            var dashboardService = await environmentContext.CreateKubernetesResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
+            dashboardService.AddPrintSummaryStep();
+
+            dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
+            {
+                ComputeEnvironment = this,
+                ContainerRegistry = containerRegistry
+            });
+        }
+
+        foreach (var r in appModel.GetComputeResources())
+        {
+            // Skip resources that are explicitly targeted to a different compute environment.
+            // Also match if the resource targets a parent compute environment (e.g., AKS)
+            // that owns this Kubernetes environment.
+            var resourceComputeEnvironment = r.GetComputeEnvironment();
+            if (resourceComputeEnvironment is not null &&
+                resourceComputeEnvironment != this &&
+                resourceComputeEnvironment != OwningComputeEnvironment)
+            {
+                continue;
+            }
+
+            // Configure OTLP for resources if dashboard is enabled
+            if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+            {
+                ConfigureOtlp(r, otlpGrpcEndpoint);
+            }
+
+            // Create a Kubernetes compute resource for the resource
+            var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+            serviceResource.AddPrintSummaryStep();
+
+            // Add deployment target annotation to the resource.
+            // Use the resource's actual compute environment (which may be a parent
+            // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
+            // can match it correctly during publish.
+            var computeEnvForAnnotation = resourceComputeEnvironment ?? (IComputeEnvironmentResource)this;
+            r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
+            {
+                ComputeEnvironment = computeEnvForAnnotation,
+                ContainerRegistry = containerRegistry
+            });
+        }
+    }
+
+    private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
+    {
+        // Check for explicit container registry reference annotation on the environment
+        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
+        {
+            return annotation.Registry;
+        }
+
+        // Check if there's a single container registry in the app model
+        var registries = appModel.Resources.OfType<IContainerRegistry>().ToArray();
+        if (registries.Length == 1)
+        {
+            return registries[0];
+        }
+
+        // Kubernetes has no local registry fallback — return null if no registry is configured.
+        // The PushPrereq step will validate and error if a registry is required but not available.
+        return null;
+    }
+
+    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    {
+        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        {
+            resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+            {
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                return Task.CompletedTask;
+            }));
+        }
     }
 }

@@ -6,24 +6,21 @@ void main() throws Exception {
         var foundry = builder.addFoundry("foundry");
 
         var chat = foundry
-            .addDeployment("chat", "Phi-4", "1", "Microsoft")
+            .addDeployment("chat", "Phi-4", new AddDeploymentOptions().modelVersion("1").format("Microsoft"))
             .withProperties((deployment) -> {
                 deployment.setDeploymentName("chat-deployment");
                 deployment.setSkuCapacity(10);
                 var _capacity = deployment.skuCapacity();
             });
 
-        var model = new FoundryModel();
-        model.setName("gpt-4.1-mini");
-        model.setVersion("1");
-        model.setFormat("OpenAI");
+        var model = FoundryModels.OpenAI.Gpt41Mini;
 
-        var _chatFromModel = foundry.addDeploymentFromModel("chat-from-model", model);
+        var _chatFromModel = foundry.addDeployment("chat-from-model", model);
 
         var localFoundry = builder.addFoundry("local-foundry")
             .runAsFoundryLocal();
 
-        var _localChat = localFoundry.addDeployment("local-chat", "Phi-3.5-mini-instruct", "1", "Microsoft");
+        var _localChat = localFoundry.addDeployment("local-chat", "Phi-3.5-mini-instruct", new AddDeploymentOptions().modelVersion("1").format("Microsoft"));
 
         var registry = builder.addAzureContainerRegistry("registry");
         var keyVault = builder.addAzureKeyVault("vault");
@@ -36,15 +33,15 @@ void main() throws Exception {
         project.withKeyVault(keyVault);
         project.withAppInsights(appInsights);
 
-        var _cosmosConnection = project.addCosmosConnection(cosmos);
-        var _storageConnection = project.addStorageConnection(storage);
-        var _registryConnection = project.addContainerRegistryConnection(registry);
-        var _keyVaultConnection = project.addKeyVaultConnection(keyVault);
+        var _cosmosConnection = project.addConnection(cosmos);
+        var _storageConnection = project.addConnection(storage);
+        var _registryConnection = project.addConnection(registry);
+        var _keyVaultConnection = project.addConnection(keyVault);
 
         var builderProjectFoundry = builder.addFoundry("builder-project-foundry");
         var builderProject = builderProjectFoundry.addProject("builder-project");
-        var _builderProjectModel = builderProject.addModelDeployment("builder-project-model", "Phi-4-mini", "1", "Microsoft");
-        var _projectModel = project.addModelDeploymentFromModel("project-model", model);
+        var _builderProjectModel = builderProject.addModelDeployment("builder-project-model", "Phi-4-mini", new AddModelDeploymentOptions().modelVersion("1").format("Microsoft"));
+        var _projectModel = project.addModelDeployment("project-model", FoundryModels.Microsoft.Phi4);
         var hostedAgent = builder.addExecutable(
             "hosted-agent",
             "node",
@@ -83,9 +80,8 @@ server.listen(port, '127.0.0.1');
             }));
 
         var api = builder.addContainer("api", "nginx");
-        api.withRoleAssignments(foundry, new FoundryRole[] {
-            FoundryRole.COGNITIVE_SERVICES_OPEN_AIUSER,
-            FoundryRole.COGNITIVE_SERVICES_USER
+        foundry.withRoleAssignments(registry, new AzureContainerRegistryRole[] {
+            AzureContainerRegistryRole.ACR_PULL
         });
 
         var _deploymentName = chat.deploymentName();

@@ -338,7 +338,7 @@ public static class AzureCosmosExtensions
     /// <param name="partitionKeyPath">Partition key path for the container.</param>
     /// <param name="containerName">The name of the container. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Cosmos DB container resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBContainerResource> AddContainer(this IResourceBuilder<AzureCosmosDBDatabaseResource> builder, [ResourceName] string name, string partitionKeyPath, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -354,6 +354,25 @@ public static class AzureCosmosExtensions
         return builder.ApplicationBuilder.AddResource(container);
     }
 
+    [AspireExport("addContainer", Description = "Adds an Azure Cosmos DB container resource")]
+    internal static IResourceBuilder<AzureCosmosDBContainerResource> AddContainerForPolyglot(
+        this IResourceBuilder<AzureCosmosDBDatabaseResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(IEnumerable<string>))] object partitionKeyPaths,
+        string? containerName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(partitionKeyPaths);
+
+        return partitionKeyPaths switch
+        {
+            string partitionKeyPath => builder.AddContainer(name, partitionKeyPath, containerName),
+            IEnumerable<string> partitionKeyPathCollection => builder.AddContainer(name, partitionKeyPathCollection, containerName),
+            _ => throw new ArgumentException("Partition key paths must be a string or a string collection.", nameof(partitionKeyPaths))
+        };
+    }
+
     /// <summary>
     /// Adds a container to the associated Cosmos DB database resource with hierarchical partition keys.
     /// </summary>
@@ -362,7 +381,7 @@ public static class AzureCosmosExtensions
     /// <param name="partitionKeyPaths">Hierarchical partition key paths for the container.</param>
     /// <param name="containerName">The name of the container. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addContainerWithPartitionKeyPaths", Description = "Adds an Azure Cosmos DB container resource with hierarchical partition keys")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBContainerResource> AddContainer(this IResourceBuilder<AzureCosmosDBDatabaseResource> builder, [ResourceName] string name, IEnumerable<string> partitionKeyPaths, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -473,7 +492,7 @@ public static class AzureCosmosExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures Azure Cosmos DB to use access key authentication")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureCosmosDBResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -498,13 +517,25 @@ public static class AzureCosmosExtensions
         return builder.WithAccessKeyAuthentication(kv);
     }
 
+    [AspireExport("withAccessKeyAuthentication", Description = "Configures Azure Cosmos DB to use access key authentication")]
+    internal static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthenticationForPolyglot(
+        this IResourceBuilder<AzureCosmosDBResource> builder,
+        IResourceBuilder<IAzureKeyVaultResource>? keyVaultBuilder = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return keyVaultBuilder is null
+            ? builder.WithAccessKeyAuthentication()
+            : builder.WithAccessKeyAuthentication(keyVaultBuilder);
+    }
+
     /// <summary>
     /// Configures the resource to use access key authentication with Azure Cosmos DB.
     /// </summary>
     /// <param name="builder">The Azure Cosmos DB resource builder.</param>
     /// <param name="keyVaultBuilder">The Azure Key Vault resource builder where the connection string used to connect to this AzureCosmosDBResource will be stored.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> builder.</returns>
-    [AspireExport("withAccessKeyAuthenticationWithKeyVault", Description = "Configures Azure Cosmos DB access key authentication using a specified Azure Key Vault resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
     public static IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureCosmosDBResource> builder, IResourceBuilder<IAzureKeyVaultResource> keyVaultBuilder)
     {
         ArgumentNullException.ThrowIfNull(builder);

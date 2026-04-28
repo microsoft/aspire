@@ -137,6 +137,68 @@ public class BrowserPageSessionTests
     }
 
     [Fact]
+    public async Task CaptureScreenshotAsync_UsesCurrentTargetSession()
+    {
+        var host = new TestBrowserHost();
+        var connection = new FakeBrowserLogsCdpConnection
+        {
+            CreatedTargetId = "created-target",
+            ScreenshotData = "image-data"
+        };
+
+        var session = await BrowserPageSession.StartAsync(
+            host,
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
+            CreateConnectionFactory(host, connection),
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            TimeProvider.System,
+            reuseInitialBlankTarget: false,
+            CancellationToken.None);
+
+        var result = await session.CaptureScreenshotAsync(CancellationToken.None);
+
+        Assert.Equal("image-data", result.Data);
+        Assert.Contains("CaptureScreenshot:target-session-1", connection.Calls);
+
+        await session.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task CaptureScreenshotAsync_IsCanceledWhenSessionIsDisposed()
+    {
+        var host = new TestBrowserHost();
+        var connection = new FakeBrowserLogsCdpConnection
+        {
+            CreatedTargetId = "created-target",
+            WaitForScreenshotCancellation = true
+        };
+
+        var session = await BrowserPageSession.StartAsync(
+            host,
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
+            CreateConnectionFactory(host, connection),
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            TimeProvider.System,
+            reuseInitialBlankTarget: false,
+            CancellationToken.None);
+
+        var captureTask = session.CaptureScreenshotAsync(CancellationToken.None);
+        await connection.ScreenshotCaptureStarted.Task.DefaultTimeout();
+
+        var disposeTask = session.DisposeAsync().AsTask();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await captureTask.DefaultTimeout());
+        await disposeTask.DefaultTimeout();
+        Assert.True(connection.Disposed);
+    }
+
+    [Fact]
     public async Task MonitorAsync_ReconnectsToExistingTargetAfterConnectionLoss()
     {
         var host = new TestBrowserHost();
@@ -262,6 +324,12 @@ public class BrowserPageSessionTests
 
         public string AttachSessionId { get; init; } = "target-session-1";
 
+        public string ScreenshotData { get; init; } = Convert.ToBase64String([0x89, 0x50, 0x4e, 0x47]);
+
+        public bool WaitForScreenshotCancellation { get; init; }
+
+        public TaskCompletionSource ScreenshotCaptureStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public bool Disposed { get; private set; }
 
         public BrowserLogsTargetInfo[]? TargetInfos { get; init; }
@@ -311,6 +379,19 @@ public class BrowserPageSessionTests
         {
             Calls.Add($"Navigate:{sessionId}:{url}");
             return Task.FromResult(BrowserLogsCommandAck.Instance);
+        }
+
+        public async Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+        {
+            Calls.Add($"CaptureScreenshot:{sessionId}");
+            ScreenshotCaptureStarted.TrySetResult();
+
+            if (WaitForScreenshotCancellation)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+
+            return new BrowserLogsCaptureScreenshotResult { Data = ScreenshotData };
         }
 
         public void SetEventHandler(Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler)

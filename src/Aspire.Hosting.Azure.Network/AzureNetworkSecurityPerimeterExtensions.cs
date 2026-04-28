@@ -129,7 +129,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// keyVault.WithNetworkSecurityPerimeter(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
     /// </code>
     /// </example>
-    [AspireExport("associateWithNetworkSecurityPerimeter", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
+    [AspireExport("associateWithNetworkSecurityPerimeter", MethodName = "withNetworkSecurityPerimeter", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
     public static IResourceBuilder<T> WithNetworkSecurityPerimeter<T>(
         this IResourceBuilder<T> target,
         IResourceBuilder<AzureNetworkSecurityPerimeterResource> nsp,

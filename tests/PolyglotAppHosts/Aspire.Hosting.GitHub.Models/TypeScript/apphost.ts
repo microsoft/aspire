@@ -17,7 +17,7 @@ const apiKey = await builder.addParameter("gh-api-key", { secret: true });
 await githubModel.withApiKey(apiKey);
 
 // 4) enableHealthCheck — integration-specific no-args health check
-await githubModel.enableHealthCheck();
+await githubModel.withHealthCheck();
 
 // 5) withReference — pass GitHubModelResource as a connection string source to a container
 const container = await builder.addContainer("my-service", "mcr.microsoft.com/dotnet/samples:latest");
