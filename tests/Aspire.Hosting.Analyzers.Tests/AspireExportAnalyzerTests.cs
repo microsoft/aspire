@@ -1153,6 +1153,96 @@ public class AspireExportAnalyzerTests
         await test.RunAsync();
     }
 
+    [Fact]
+    public async Task ExposeMethodsSpecialRuntimeMethods_NoASPIREEXPORT013()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+
+            namespace TestPackage
+            {
+                [AspireExport(ExposeMethods = true)]
+                public class Context
+                {
+                    public override string ToString() => "";
+
+                    public string ToString(string format) => format;
+
+                    public override int GetHashCode() => 0;
+
+                    public override bool Equals(object? obj) => false;
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExposeMethodsGenericAndNonGenericTypesWithSameName_NoASPIREEXPORT013()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+
+            namespace TestPackage
+            {
+                [AspireExport(ExposeMethods = true)]
+                public class Context
+                {
+                    public void Configure() { }
+                }
+
+                [AspireExport(ExposeMethods = true)]
+                public class Context<T>
+                {
+                    public void Configure() { }
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task AssemblyExportExposeMethodsOverloads_ReportASPIREEXPORT013()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            [assembly: AspireExport(typeof(AssemblyContext), ExposeMethods = true)]
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+
+            public class AssemblyContext
+            {
+                public void Configure(string name) { }
+
+                public void Configure(int port) { }
+            }
+            """,
+            [
+                CompilerWarning(diagnostic.Id).WithLocation(12, 17),
+                CompilerWarning(diagnostic.Id).WithLocation(14, 17)
+            ]);
+
+        await test.RunAsync();
+    }
+
     // Additional ASPIREEXPORT006 tests - valid ATS types in unions
 
     [Fact]
