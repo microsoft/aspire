@@ -105,6 +105,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.True(container.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target));
         Assert.NotNull(target.DeploymentTarget);
 
+        // The compute environment should be the Azure K8s environment
         Assert.Same(aks.Resource, target.ComputeEnvironment);
 
         // CRITICAL: ContainerRegistry must be set on the DeploymentTargetAnnotation
