@@ -17,8 +17,8 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// The strategy is resolved from (in priority order):
 /// <list type="number">
 ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — install from local nupkg directory</item>
-///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed (optionally with <c>ASPIRE_E2E_VERSION</c>)</item>
 ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
+///   <item>Published NuGet feed (optionally with <c>ASPIRE_E2E_VERSION</c> or prerelease packages when <c>ASPIRE_E2E_QUALITY</c> is <c>dev</c> or <c>staging</c>)</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -26,13 +26,9 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
 {
     [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task DotnetToolInstall_CreateAndRunAspireStarterProject()
+    public async Task CreateAndRunAspireStarterProject()
     {
         var strategy = GetDotnetToolStrategy();
-
-        Assert.True(strategy is not null,
-            "DotnetToolSmokeTests requires one of: ASPIRE_E2E_DOTNET_TOOL_SOURCE + ASPIRE_E2E_VERSION, " +
-            "ASPIRE_E2E_DOTNET_TOOL=true, or BUILT_NUGETS_PATH containing Aspire.Cli nupkg.");
 
         output.WriteLine($"DotnetTool strategy resolved: {strategy}");
 
@@ -93,7 +89,8 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
                     "This indicates multiple apphosts were incorrectly detected.");
             }
 
-            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+            // Dotnet tool smoke tests can run against older published packages that used different AppHost casing.
+            return s.GetScreenText().Contains("Press CTRL+C to stop the AppHost and exit.", StringComparison.OrdinalIgnoreCase);
         }, timeout: TimeSpan.FromMinutes(2), description: "Press CTRL+C message (aspire run started)");
 
         // Stop the running apphost with Ctrl+C
@@ -112,13 +109,11 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
     /// Checks (in order):
     /// <list type="number">
     ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — explicit local nupkg directory</item>
-    ///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed</item>
     ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
+    ///   <item>Published NuGet feed, including prerelease packages when <c>ASPIRE_E2E_QUALITY</c> is <c>dev</c> or <c>staging</c></item>
     /// </list>
-    /// Returns <see langword="null"/> when none of the above are configured — callers should fail with
-    /// a clear message indicating the workflow is misconfigured.
     /// </summary>
-    private static CliInstallStrategy? GetDotnetToolStrategy()
+    private static CliInstallStrategy GetDotnetToolStrategy()
     {
         // 1. Explicit local nupkg source (user-provided)
         var source = Environment.GetEnvironmentVariable("ASPIRE_E2E_DOTNET_TOOL_SOURCE");
@@ -136,17 +131,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
             return CliInstallStrategy.FromDotnetToolLocalSource(source, version);
         }
 
-        // 2. Published NuGet feed
-        var dotnetTool = Environment.GetEnvironmentVariable("ASPIRE_E2E_DOTNET_TOOL");
-
-        if (string.Equals(dotnetTool, "true", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(dotnetTool, "1", StringComparison.OrdinalIgnoreCase))
-        {
-            var version = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
-            return CliInstallStrategy.FromDotnetTool(version);
-        }
-
-        // 3. Auto-discover from CI-built nupkgs (BUILT_NUGETS_PATH contains the tool nupkg
+        // 2. Auto-discover from CI-built nupkgs (BUILT_NUGETS_PATH contains the tool nupkg
         //    directly since the dotnet tool is built as part of the normal package build)
         var builtNugetsPath = Environment.GetEnvironmentVariable("BUILT_NUGETS_PATH");
 
@@ -170,7 +155,11 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
             }
         }
 
-        return null;
+        // 3. Published NuGet feed. This test always validates dotnet tool installation; env only
+        //    selects the feed source/version behavior.
+        var requestedVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
+        var quality = CliInstallStrategy.GetQualityFromEnvironment();
+        return CliInstallStrategy.FromPublishedDotnetToolFeed(requestedVersion, quality);
     }
 
     /// <summary>

@@ -87,6 +87,7 @@ RUN apt-get update -qq && \
 # Copy the install scripts.
 COPY eng/scripts/get-aspire-cli.sh /opt/aspire-scripts/
 COPY eng/scripts/get-aspire-cli-pr.sh /opt/aspire-scripts/
+COPY tests/Shared/Docker/NuGet.DotnetTool.config /opt/aspire-scripts/NuGet.config
 RUN chmod +x /opt/aspire-scripts/*.sh
 
 # Copy the bundle directory from the build stage.
