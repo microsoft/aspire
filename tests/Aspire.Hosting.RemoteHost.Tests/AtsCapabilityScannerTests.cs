@@ -425,6 +425,37 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_HelmChartOptions_ExportsUnionHelpers()
+    {
+        var kubernetesAssembly = typeof(global::Aspire.Hosting.Kubernetes.HelmChartOptions).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssembly(kubernetesAssembly);
+
+        static void AssertUnionCapability(
+            AtsCapabilityScanner.ScanResult scanResult,
+            string capabilityId,
+            string parameterName,
+            string expectedMethodName)
+        {
+            var capability = Assert.Single(scanResult.Capabilities, c => c.CapabilityId == capabilityId);
+            var parameter = Assert.Single(capability.Parameters, p => p.Name == parameterName);
+
+            Assert.NotNull(parameter.Type);
+            Assert.Equal(AtsTypeCategory.Union, parameter.Type.Category);
+            Assert.NotNull(parameter.Type.UnionTypes);
+            Assert.Contains(parameter.Type.UnionTypes, t => t.TypeId == "string");
+            Assert.Contains(parameter.Type.UnionTypes, t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(ParameterResource)));
+
+            var method = Assert.Single(scanResult.Methods, m => m.Key == capabilityId).Value;
+            Assert.Equal(expectedMethodName, method.Name);
+        }
+
+        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/withNamespace", "namespace", "WithNamespaceCore");
+        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/withReleaseName", "releaseName", "WithReleaseNameCore");
+        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/withChartVersion", "version", "WithChartVersionCore");
+    }
+
+    [Fact]
     public void ScanAssembly_ClassLevelBackgroundThreadOptIn_AppliesToExportedMethods()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);

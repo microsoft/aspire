@@ -33,6 +33,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="namespace">The namespace name.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Use the exported withNamespace union helper instead.")]
     public HelmChartOptions WithNamespace(string @namespace)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
@@ -48,6 +49,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="namespace">A parameter resource builder for the namespace value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Use the exported withNamespace union helper instead.")]
     public HelmChartOptions WithNamespace(IResourceBuilder<ParameterResource> @namespace)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
@@ -57,11 +59,22 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
+    [AspireExport("withNamespace", Description = "Sets the target Kubernetes namespace for deployment from a string or parameter resource.")]
+    internal HelmChartOptions WithNamespaceCore(
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object @namespace)
+        => @namespace switch
+        {
+            string value => WithNamespace(value),
+            IResourceBuilder<ParameterResource> parameter => WithNamespace(parameter),
+            _ => throw new ArgumentException($"Unexpected namespace type: {@namespace.GetType().Name}", nameof(@namespace))
+        };
+
     /// <summary>
     /// Sets the Helm release name for deployment.
     /// </summary>
     /// <param name="releaseName">The release name.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Use the exported withReleaseName union helper instead.")]
     public HelmChartOptions WithReleaseName(string releaseName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseName);
@@ -77,6 +90,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="releaseName">A parameter resource builder for the release name value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Use the exported withReleaseName union helper instead.")]
     public HelmChartOptions WithReleaseName(IResourceBuilder<ParameterResource> releaseName)
     {
         ArgumentNullException.ThrowIfNull(releaseName);
@@ -86,11 +100,22 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
+    [AspireExport("withReleaseName", Description = "Sets the Helm release name for deployment from a string or parameter resource.")]
+    internal HelmChartOptions WithReleaseNameCore(
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object releaseName)
+        => releaseName switch
+        {
+            string value => WithReleaseName(value),
+            IResourceBuilder<ParameterResource> parameter => WithReleaseName(parameter),
+            _ => throw new ArgumentException($"Unexpected release name type: {releaseName.GetType().Name}", nameof(releaseName))
+        };
+
     /// <summary>
     /// Sets the Helm chart version for deployment.
     /// </summary>
     /// <param name="version">The chart version (e.g., "1.0.0").</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Use the exported withChartVersion union helper instead.")]
     public HelmChartOptions WithChartVersion(string version)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
@@ -106,6 +131,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="version">A parameter resource builder for the chart version value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Use the exported withChartVersion union helper instead.")]
     public HelmChartOptions WithChartVersion(IResourceBuilder<ParameterResource> version)
     {
         ArgumentNullException.ThrowIfNull(version);
@@ -114,6 +140,16 @@ public sealed partial class HelmChartOptions
         EnvironmentBuilder.WithAnnotation(new HelmChartVersionAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
         return this;
     }
+
+    [AspireExport("withChartVersion", Description = "Sets the Helm chart version for deployment from a string or parameter resource.")]
+    internal HelmChartOptions WithChartVersionCore(
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object version)
+        => version switch
+        {
+            string value => WithChartVersion(value),
+            IResourceBuilder<ParameterResource> parameter => WithChartVersion(parameter),
+            _ => throw new ArgumentException($"Unexpected chart version type: {version.GetType().Name}", nameof(version))
+        };
 
     private static void ValidateDnsLabel(string value, string target, int maxLength, string paramName)
     {

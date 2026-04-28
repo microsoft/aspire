@@ -1908,4 +1908,72 @@ public class AspireExportAnalyzerTests
 
         await test.RunAsync();
     }
+
+    [Fact]
+    public async Task AutoExportedInstanceMethodOverloads_ReportsASPIREEXPORT013()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateInstanceMethodName;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport(ExposeMethods = true)]
+            public interface IYarpConfigurationBuilder
+            {
+                string AddCluster(string endpoint);
+                string AddCluster(int port);
+            }
+            """,
+            [
+                new DiagnosticResult(diagnostic).WithLocation(8, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster"),
+                new DiagnosticResult(diagnostic).WithLocation(9, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster")
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task AutoExportedInstanceMethodOverloads_WithAspireExportIgnore_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport(ExposeMethods = true)]
+            public interface IYarpConfigurationBuilder
+            {
+                [AspireExportIgnore(Reason = "Use addClusterFromEndpoint instead.")]
+                string AddCluster(string endpoint);
+
+                string AddCluster(int port);
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task AutoExportedInstanceMethodOverloads_WithUniqueExplicitIds_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport(ExposeMethods = true)]
+            public interface IYarpConfigurationBuilder
+            {
+                [AspireExport("addClusterFromEndpoint")]
+                string AddCluster(string endpoint);
+
+                [AspireExport("addClusterWithPort")]
+                string AddCluster(int port);
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
 }
