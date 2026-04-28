@@ -1509,10 +1509,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return 0;
         }
 
+        if (_guestRuntime is null)
+        {
+            _interactionService.DisplayError("GuestRuntime not initialized.");
+            return ExitCodeConstants.FailedToDotnetRunAppHost;
+        }
+
         var typeCheckResult = await _interactionService.ShowStatusAsync(
             "Type-checking TypeScript AppHost...",
             async () =>
             {
+                await _guestRuntime.EnsureMigrationFilesExistAsync(directory, cancellationToken);
+
                 var launcher = new ProcessGuestLauncher(_resolvedLanguage.LanguageId, _logger, _fileLoggerProvider);
                 var (exitCode, output) = await launcher.LaunchAsync(
                     _typeScriptTypeCheckCommand.Command,

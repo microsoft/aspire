@@ -149,7 +149,7 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Yarn => new CommandSpec
             {
                 Command = "yarn",
-                Args = ["exec", "tsc", "-p", tsConfigFileName, "--noEmit"]
+                Args = ["exec", "tsc", "--", "-p", tsConfigFileName, "--noEmit"]
             },
             TypeScriptAppHostToolchain.Pnpm => new CommandSpec
             {

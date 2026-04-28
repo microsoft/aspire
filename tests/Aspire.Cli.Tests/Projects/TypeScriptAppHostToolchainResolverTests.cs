@@ -119,11 +119,11 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Theory]
-    [InlineData("Npm", "npx", "--no-install", "tsc")]
-    [InlineData("Bun", "bun", "x", "tsc")]
-    [InlineData("Yarn", "yarn", "exec", "tsc")]
-    [InlineData("Pnpm", "pnpm", "exec", "tsc")]
-    public void CreateTypeCheckCommand_UsesToolchainAndAppHostTsConfig(string toolchainName, string command, string firstArg, string secondArg)
+    [InlineData("Npm", "npx", "--no-install tsc -p tsconfig.apphost.json --noEmit")]
+    [InlineData("Bun", "bun", "x tsc -p tsconfig.apphost.json --noEmit")]
+    [InlineData("Yarn", "yarn", "exec tsc -- -p tsconfig.apphost.json --noEmit")]
+    [InlineData("Pnpm", "pnpm", "exec tsc -p tsconfig.apphost.json --noEmit")]
+    public void CreateTypeCheckCommand_UsesToolchainAndAppHostTsConfig(string toolchainName, string command, string args)
     {
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
         var toolchain = Enum.Parse<TypeScriptAppHostToolchain>(toolchainName);
@@ -131,11 +131,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         var typeCheckCommand = TypeScriptAppHostToolchainResolver.CreateTypeCheckCommand(baseRuntimeSpec, toolchain);
 
         Assert.Equal(command, typeCheckCommand.Command);
-        Assert.Equal(firstArg, typeCheckCommand.Args[0]);
-        Assert.Equal(secondArg, typeCheckCommand.Args[1]);
-        Assert.Contains("-p", typeCheckCommand.Args);
-        Assert.Contains("tsconfig.apphost.json", typeCheckCommand.Args);
-        Assert.Contains("--noEmit", typeCheckCommand.Args);
+        Assert.Equal(args, string.Join(" ", typeCheckCommand.Args));
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()

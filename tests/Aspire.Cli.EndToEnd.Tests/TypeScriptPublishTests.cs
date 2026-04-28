@@ -240,7 +240,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
             const builder = await createBuilder();
 
             const compose = await builder.addDockerComposeEnvironment("compose");
-            await compose.withDashboard(false);
+            await compose.withDashboard({ enabled: false });
 
             const container = await builder.addContainer("my-container", "nginx:alpine");
             await container.withBindMount("/host/path/data", "/container/data");

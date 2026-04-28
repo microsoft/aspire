@@ -196,7 +196,7 @@ internal sealed class GuestRuntime
     /// Creates any migration files that are required by the runtime but missing from the project directory.
     /// This handles upgrade scenarios where a newer CLI introduces new required files.
     /// </summary>
-    private async Task EnsureMigrationFilesExistAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    public async Task EnsureMigrationFilesExistAsync(DirectoryInfo directory, CancellationToken cancellationToken)
     {
         if (_spec.MigrationFiles is null or { Count: 0 })
         {
