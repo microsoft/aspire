@@ -21,8 +21,8 @@ IResourceBuilder<IComputeEnvironmentResource>? environment = (publisher, target)
     _ => null
 };
 
-var param0 = builder.AddParameter("param0", "default");
-var param1 = builder.AddParameter("param1", "default", secret: true);
+var param0 = builder.AddParameter("param0");
+var param1 = builder.AddParameter("param1", secret: true);
 var param2 = builder.AddParameter("param2", "default", publishValueAsDefault: true);
 var param3 = builder.AddParameter("param3", "default"); // Runtime only default value.
 
