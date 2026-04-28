@@ -18,6 +18,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
 {
+    private const string BingAccountsResourceVersion = "2020-06-10";
+
     /// <summary>
     /// Adds a Microsoft Foundry project connection resource to a project. This is a low level
     /// interface that requires the caller to specify all connection properties.
@@ -53,7 +55,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 },
                 infra =>
                 {
-                    var resource = new CognitiveServicesProjectConnection(aspireResource.GetBicepIdentifier())
+                    var resource = new CognitiveServicesProjectConnection(aspireResource.GetBicepIdentifier(), AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
                     {
                         Parent = project,
                         Name = name,
@@ -313,7 +315,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <para>
     /// Once the Bing resource exists, pass its resource ID to this method. The connection is
     /// created in the Foundry project using API key authentication with
-    /// <c>category: "GroundingWithBingSearch"</c>.
+    /// <c>category: "ApiKey"</c> and <c>metadata.Type: "bing_grounding"</c>.
     /// </para>
     /// </remarks>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
@@ -338,12 +340,15 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             return new BingGroundingConnectionProperties()
             {
                 Target = "https://api.bing.microsoft.com/",
-                IsSharedToAll = true,
+                UseWorkspaceManagedIdentity = false,
+                IsSharedToAll = false,
+                PeRequirement = ManagedPERequirement.NotRequired,
+                PeStatus = ManagedPEStatus.NotApplicable,
                 CredentialsKey = (BicepValue<string>)new MemberExpression(
                     new FunctionCallExpression(
                         new IdentifierExpression("listKeys"),
                         new StringLiteralExpression(bingResourceId),
-                        new StringLiteralExpression("2020-06-10")),
+                        new StringLiteralExpression(BingAccountsResourceVersion)),
                     "key1"),
                 Metadata =
                 {
@@ -388,12 +393,15 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             return new BingGroundingConnectionProperties()
             {
                 Target = "https://api.bing.microsoft.com/",
-                IsSharedToAll = true,
+                UseWorkspaceManagedIdentity = false,
+                IsSharedToAll = false,
+                PeRequirement = ManagedPERequirement.NotRequired,
+                PeStatus = ManagedPEStatus.NotApplicable,
                 CredentialsKey = (BicepValue<string>)new MemberExpression(
                     new FunctionCallExpression(
                         new IdentifierExpression("listKeys"),
                         resourceIdParam.Value.Compile(),
-                        new StringLiteralExpression("2020-06-10")),
+                        new StringLiteralExpression(BingAccountsResourceVersion)),
                     "key1"),
                 Metadata =
                 {
@@ -412,24 +420,23 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     {
         void configureInfrastructure(AzureResourceInfrastructure infrastructure)
         {
-            var aspireResource = (AzureCognitiveServicesProjectConnectionResource)infrastructure.AspireResource;
-            var projectBicepId = aspireResource.Parent.GetBicepIdentifier();
-            var project = aspireResource.Parent.AddAsExistingResource(infrastructure);
+            var aspireResource = (BingGroundingConnectionResource)infrastructure.AspireResource;
+            var account = aspireResource.Parent.Parent.AddAsExistingResource(infrastructure);
 
             var connection = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
                 infrastructure,
                 (identifier, resourceName) =>
                 {
                     var resource = aspireResource.FromExisting(identifier);
-                    resource.Parent = project;
+                    resource.Parent = account;
                     resource.Name = resourceName;
                     return resource;
                 },
                 infra =>
                 {
-                    var resource = new CognitiveServicesProjectConnection(aspireResource.GetBicepIdentifier())
+                    var resource = new CognitiveServicesAccountConnection(aspireResource.GetBicepIdentifier(), AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
                     {
-                        Parent = project,
+                        Parent = account,
                         Name = name,
                         Properties = configureProperties(infra)
                     };

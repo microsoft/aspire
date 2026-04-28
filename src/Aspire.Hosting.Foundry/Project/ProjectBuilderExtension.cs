@@ -511,7 +511,7 @@ public static class AzureCognitiveServicesProjectExtensions
             Value = appInsights.ConnectionString
         });
         // Project needs a connection to send server-side telemetry
-        var appInsightsConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_ai_conn")
+        var appInsightsConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_ai_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = $"{aspireResource.Name}-ai-conn",
@@ -560,7 +560,7 @@ public static class AzureCognitiveServicesProjectExtensions
         */
 
         var storage = (StorageAccount)capHostConfig.Storage!.AddAsExistingResource(infra);
-        var storageConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_storage_conn")
+        var storageConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_storage_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = BicepFunction.Interpolate($"{project.Name}-{storage.Name}"),
@@ -592,7 +592,7 @@ public static class AzureCognitiveServicesProjectExtensions
         */
 
         var cosmosDb = (CosmosDBAccount)capHostConfig.CosmosDB!.AddAsExistingResource(infra);
-        var cosmosDbConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_cosmosdb_conn")
+        var cosmosDbConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_cosmosdb_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = BicepFunction.Interpolate($"{project.Name}-{cosmosDb.Name}"),
@@ -631,7 +631,7 @@ public static class AzureCognitiveServicesProjectExtensions
         */
 
         var searchService = (SearchService)capHostConfig.Search!.AddAsExistingResource(infra);
-        var searchConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_search_conn")
+        var searchConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_search_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
         {
             Parent = project,
             Name = BicepFunction.Interpolate($"{project.Name}-{searchService.Name}"),
@@ -671,7 +671,7 @@ public static class AzureCognitiveServicesProjectExtensions
         if (capHostConfig.AzureOpenAI is not null)
         {
             var aoaiAccount = capHostConfig.AzureOpenAI.AddAsExistingResource(infra);
-            aoaiConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_aoai_conn")
+            aoaiConn = new CognitiveServicesProjectConnection($"{aspireResource.GetBicepIdentifier()}_aoai_conn", AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
             {
                 Parent = project,
                 Name = BicepFunction.Interpolate($"{project.Name}-{aoaiAccount.Name}"),

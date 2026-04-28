@@ -8,8 +8,8 @@ using Azure.Provisioning.Expressions;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var foundry = builder.AddFoundry("aif-myfoundry");
-var project = foundry.AddProject("proj-myproject")
+var foundry = builder.AddFoundry("aif-myfoundry5");
+var project = foundry.AddProject("proj-myproject5")
     // workaround for https://github.com/microsoft/aspire/issues/15971
     .ConfigureInfrastructure(infra =>
     {
