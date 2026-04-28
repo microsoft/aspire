@@ -459,12 +459,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         try
         {
-            return await ResolveExpressionAsync(expression, cancellationToken).ConfigureAwait(false);
+            return (await expression.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
         }
         catch (MissingParameterValueException)
         {
-            // Parameter has no default and no configured value — use its format string
-            // (which is the parameter name for simple parameter references).
             return expression.Format;
         }
     }
