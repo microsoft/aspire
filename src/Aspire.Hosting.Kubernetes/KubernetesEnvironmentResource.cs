@@ -450,6 +450,25 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
     }
 
+    /// <summary>
+    /// Resolves a <see cref="ReferenceExpression"/> to a string value. If the expression wraps
+    /// a <see cref="ParameterResource"/> that has no value yet (common during publish), returns
+    /// the parameter's name as a fallback so it can be used in Helm values.
+    /// </summary>
+    private static async Task<string> ResolveExpressionAsync(ReferenceExpression expression, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ResolveExpressionAsync(expression, cancellationToken).ConfigureAwait(false);
+        }
+        catch (MissingParameterValueException)
+        {
+            // Parameter has no default and no configured value — use its format string
+            // (which is the parameter name for simple parameter references).
+            return expression.Format;
+        }
+    }
+
     private async Task ProcessIngressResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger, CancellationToken cancellationToken)
     {
         var ingressResources = model.Resources
@@ -493,7 +512,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var (key, value) in ingressResource.IngressAnnotations)
         {
-            ingress.Metadata.Annotations[key] = (await value.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
+            ingress.Metadata.Annotations[key] = await ResolveExpressionAsync(value, cancellationToken).ConfigureAwait(false);
         }
 
         var routesByHost = ingressResource.Routes.GroupBy(r => r.Host ?? string.Empty);
@@ -541,12 +560,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             var tlsEntry = new IngressTLSV1
             {
-                SecretName = (await tls.SecretName.GetValueAsync(cancellationToken).ConfigureAwait(false))!,
+                SecretName = await ResolveExpressionAsync(tls.SecretName, cancellationToken).ConfigureAwait(false),
             };
 
             foreach (var host in tls.Hosts)
             {
-                tlsEntry.Hosts.Add((await host.GetValueAsync(cancellationToken).ConfigureAwait(false))!);
+                tlsEntry.Hosts.Add(await ResolveExpressionAsync(host, cancellationToken).ConfigureAwait(false));
             }
 
             ingress.Spec.Tls.Add(tlsEntry);
@@ -565,7 +584,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 foreach (var host in tls.Hosts)
                 {
-                    var resolvedHost = (await host.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
+                    var resolvedHost = await ResolveExpressionAsync(host, cancellationToken).ConfigureAwait(false);
                     if (!hostsWithRules.Contains(resolvedHost))
                     {
                         ingress.Spec.Rules.Add(new IngressRuleV1
@@ -689,7 +708,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var (key, value) in gatewayResource.GatewayAnnotations)
         {
-            gateway.Metadata.Annotations[key] = (await value.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
+            gateway.Metadata.Annotations[key] = await ResolveExpressionAsync(value, cancellationToken).ConfigureAwait(false);
         }
 
         gateway.Spec.Listeners.Add(new GatewayListenerV1
@@ -711,8 +730,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 var listenerName = tlsListenerIndex == 0 ? "https" : $"https-{tlsListenerIndex}";
                 tlsListenerIndex++;
 
-                var resolvedHost = (await host.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
-                var resolvedSecretName = (await tls.SecretName.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
+                var resolvedHost = await ResolveExpressionAsync(host, cancellationToken).ConfigureAwait(false);
+                var resolvedSecretName = await ResolveExpressionAsync(tls.SecretName, cancellationToken).ConfigureAwait(false);
 
                 gateway.Spec.Listeners.Add(new GatewayListenerV1
                 {
@@ -875,8 +894,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var (secretNameExpr, hostnameExpr) in tlsSecrets)
         {
-            var secretName = await secretNameExpr.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            var hostname = await hostnameExpr.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            var secretName = await ResolveExpressionAsync(secretNameExpr, context.CancellationToken).ConfigureAwait(false);
+            var hostname = await ResolveExpressionAsync(hostnameExpr, context.CancellationToken).ConfigureAwait(false);
 
             var checkArgs = $"get secret {secretName} --namespace {@namespace}";
             if (environment.KubeConfigPath is not null)
