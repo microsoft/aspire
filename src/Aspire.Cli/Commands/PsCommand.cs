@@ -25,6 +25,7 @@ internal sealed class AppHostDisplayInfo
 {
     public required string AppHostPath { get; init; }
     public required int AppHostPid { get; init; }
+    public string? SdkVersion { get; init; }
     public int? CliPid { get; init; }
     public string? DashboardUrl { get; init; }
 
@@ -158,6 +159,31 @@ internal sealed class PsCommand : BaseCommand
                 continue;
             }
 
+            string? sdkVersion = null;
+            var appHostPath = info.AppHostPath;
+            var appHostPid = info.ProcessId;
+            var cliPid = info.CliProcessId;
+
+            try
+            {
+                var v2Info = await connection.GetAppHostInfoV2Async(cancellationToken).ConfigureAwait(false);
+                if (v2Info is not null)
+                {
+                    sdkVersion = NormalizeSdkVersion(v2Info.AspireHostVersion);
+                    appHostPath = string.IsNullOrWhiteSpace(v2Info.AppHostPath) ? appHostPath : v2Info.AppHostPath;
+                    cliPid = v2Info.CliProcessId ?? cliPid;
+
+                    if (int.TryParse(v2Info.Pid, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPid))
+                    {
+                        appHostPid = parsedPid;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to get AppHost SDK version for {AppHostPath}", info.AppHostPath);
+            }
+
             string? dashboardUrl = null;
 
             try
@@ -186,15 +212,27 @@ internal sealed class PsCommand : BaseCommand
 
             appHostInfos.Add(new AppHostDisplayInfo
             {
-                AppHostPath = info.AppHostPath ?? PsCommandStrings.UnknownPath,
-                AppHostPid = info.ProcessId,
-                CliPid = info.CliProcessId,
+                AppHostPath = appHostPath ?? PsCommandStrings.UnknownPath,
+                AppHostPid = appHostPid,
+                SdkVersion = sdkVersion,
+                CliPid = cliPid,
                 DashboardUrl = dashboardUrl,
                 Resources = resources
             });
         }
 
         return appHostInfos;
+    }
+
+    private static string? NormalizeSdkVersion(string? sdkVersion)
+    {
+        if (string.IsNullOrWhiteSpace(sdkVersion) ||
+            string.Equals(sdkVersion, "unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return sdkVersion;
     }
 
     private void DisplayTable(List<AppHostDisplayInfo> appHosts)
@@ -208,6 +246,7 @@ internal sealed class PsCommand : BaseCommand
 
         var table = new Table();
         table.AddBoldColumn(PsCommandStrings.HeaderPath);
+        table.AddBoldColumn(PsCommandStrings.HeaderSdk);
         table.AddBoldColumn(PsCommandStrings.HeaderPid);
         table.AddBoldColumn(PsCommandStrings.HeaderCliPid);
         table.AddBoldColumn(PsCommandStrings.HeaderDashboard);
@@ -231,6 +270,7 @@ internal sealed class PsCommand : BaseCommand
 
             table.AddRow(
                 Markup.Escape(shortPath),
+                Markup.Escape(appHost.SdkVersion ?? string.Empty),
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
                 dashboard);
