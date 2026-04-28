@@ -108,7 +108,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             return dashboardApi.ExitCode;
         }
 
-        return await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, cancellationToken);
+        return await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, cancellationToken);
     }
 
     private async Task<int> FetchLogsAsync(
@@ -121,6 +121,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         bool follow,
         OutputFormat format,
         bool dashboardOnly,
+        string dashboardUrl,
         CancellationToken cancellationToken)
     {
         try
@@ -148,11 +149,11 @@ internal sealed class TelemetryLogsCommand : BaseCommand
 
             if (follow)
             {
-                return await StreamLogsAsync(client, url, format, allOtlpResources, baseUrl, cancellationToken);
+                return await StreamLogsAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
             else
             {
-                return await GetLogsSnapshotAsync(client, url, format, allOtlpResources, baseUrl, cancellationToken);
+                return await GetLogsSnapshotAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
         }
         catch (HttpRequestException ex)
