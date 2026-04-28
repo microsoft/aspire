@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // GENERATED CODE - DO NOT EDIT
 
 package aspire
@@ -10904,6 +10904,19 @@ func (s *IUserSecretsManager) TrySetSecret(name string, value string) (*bool, er
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/IUserSecretsManager.trySetSecret", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// TryDeleteSecret attempts to delete a user secret value
+func (s *IUserSecretsManager) TryDeleteSecret(name string) (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/IUserSecretsManager.tryDeleteSecret", reqArgs)
 	if err != nil {
 		return nil, err
 	}

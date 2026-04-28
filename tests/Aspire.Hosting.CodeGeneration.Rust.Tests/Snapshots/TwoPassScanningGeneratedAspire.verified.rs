@@ -1,4 +1,4 @@
-//! aspire.rs - Capability-based Aspire SDK
+﻿//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -10162,6 +10162,15 @@ impl IUserSecretsManager {
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/IUserSecretsManager.trySetSecret", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Attempts to delete a user secret value
+    pub fn try_delete_secret(&self, name: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/IUserSecretsManager.tryDeleteSecret", args)?;
         Ok(serde_json::from_value(result)?)
     }
 

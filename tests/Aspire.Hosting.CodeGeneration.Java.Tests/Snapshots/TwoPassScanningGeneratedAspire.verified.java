@@ -12790,6 +12790,14 @@ public class IUserSecretsManager extends HandleWrapperBase {
         return (boolean) getClient().invokeCapability("Aspire.Hosting/IUserSecretsManager.trySetSecret", reqArgs);
     }
 
+    /** Attempts to delete a user secret value */
+    public boolean tryDeleteSecret(String name) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting/IUserSecretsManager.tryDeleteSecret", reqArgs);
+    }
+
     public void saveStateJson(String json) {
         saveStateJson(json, null);
     }

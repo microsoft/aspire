@@ -7473,6 +7473,8 @@ export interface UserSecretsManager {
     filePath(): Promise<string>;
     /** Attempts to set a user secret value */
     trySetSecret(name: string, value: string): Promise<boolean>;
+    /** Attempts to delete a user secret value */
+    tryDeleteSecret(name: string): Promise<boolean>;
     /** Saves state to user secrets from a JSON string */
     saveStateJson(json: string, options?: SaveStateJsonOptions): UserSecretsManagerPromise;
     /** Gets a secret value if it exists, or sets it to the provided value if it does not */
@@ -7486,6 +7488,8 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
     filePath(): Promise<string>;
     /** Attempts to set a user secret value */
     trySetSecret(name: string, value: string): Promise<boolean>;
+    /** Attempts to delete a user secret value */
+    tryDeleteSecret(name: string): Promise<boolean>;
     /** Saves state to user secrets from a JSON string */
     saveStateJson(json: string, options?: SaveStateJsonOptions): UserSecretsManagerPromise;
     /** Gets a secret value if it exists, or sets it to the provided value if it does not */
@@ -7527,6 +7531,16 @@ class UserSecretsManagerImpl implements UserSecretsManager {
         );
     }
 
+    /** Attempts to delete a user secret value */
+    async tryDeleteSecret(name: string): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/IUserSecretsManager.tryDeleteSecret',
+            rpcArgs
+        );
+    }
+
+    /** Saves state to user secrets from a JSON string */
     /** @internal */
     async _saveStateJsonInternal(json: string, cancellationToken?: AbortSignal | CancellationToken): Promise<UserSecretsManager> {
         const rpcArgs: Record<string, unknown> = { userSecretsManager: this._handle, json };
@@ -7587,6 +7601,12 @@ class UserSecretsManagerPromiseImpl implements UserSecretsManagerPromise {
         return this._promise.then(obj => obj.trySetSecret(name, value));
     }
 
+    /** Attempts to delete a user secret value */
+    tryDeleteSecret(name: string): Promise<boolean> {
+        return this._promise.then(obj => obj.tryDeleteSecret(name));
+    }
+
+    /** Saves state to user secrets from a JSON string */
     saveStateJson(json: string, options?: SaveStateJsonOptions): UserSecretsManagerPromise {
         return new UserSecretsManagerPromiseImpl(this._promise.then(obj => obj.saveStateJson(json, options)), this._client);
     }
@@ -33415,4 +33435,3 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints', (handle, client) => new ResourceWithEndpointsImpl(handle as IResourceWithEndpointsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport', (handle, client) => new ResourceWithWaitSupportImpl(handle as IResourceWithWaitSupportHandle, client));
-

@@ -1,4 +1,4 @@
-#   -------------------------------------------------------------
+﻿#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -2920,6 +2920,16 @@ class AbstractUserSecretsManager:
         rpc_args['value'] = value
         result = self._client.invoke_capability(
             'Aspire.Hosting/IUserSecretsManager.trySetSecret',
+            rpc_args,
+        )
+        return result
+
+    def try_delete_secret(self, name: str) -> bool:
+        """Attempts to delete a user secret value"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['name'] = name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/IUserSecretsManager.tryDeleteSecret',
             rpc_args,
         )
         return result
