@@ -130,6 +130,36 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
+    public static CommandSpec CreateTypeCheckCommand(RuntimeSpec runtimeSpec, TypeScriptAppHostToolchain toolchain)
+    {
+        var tsConfigFileName = GetTsConfigFileName(runtimeSpec);
+
+        return toolchain switch
+        {
+            TypeScriptAppHostToolchain.Npm => new CommandSpec
+            {
+                Command = "npx",
+                Args = ["--no-install", "tsc", "-p", tsConfigFileName, "--noEmit"]
+            },
+            TypeScriptAppHostToolchain.Bun => new CommandSpec
+            {
+                Command = "bun",
+                Args = ["x", "tsc", "-p", tsConfigFileName, "--noEmit"]
+            },
+            TypeScriptAppHostToolchain.Yarn => new CommandSpec
+            {
+                Command = "yarn",
+                Args = ["exec", "tsc", "-p", tsConfigFileName, "--noEmit"]
+            },
+            TypeScriptAppHostToolchain.Pnpm => new CommandSpec
+            {
+                Command = "pnpm",
+                Args = ["exec", "tsc", "-p", tsConfigFileName, "--noEmit"]
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+        };
+    }
+
     private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain)
     {
         return new CommandSpec

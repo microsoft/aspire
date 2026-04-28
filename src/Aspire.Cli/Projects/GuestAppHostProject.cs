@@ -15,6 +15,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared.UserSecrets;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -45,6 +46,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
     private GuestRuntime? _guestRuntime;
+    private CommandSpec? _typeScriptTypeCheckCommand;
 
     public GuestAppHostProject(
         LanguageInfo language,
@@ -518,6 +520,27 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launcher = _guestRuntime.CreateDefaultLauncher();
             }
 
+            var typeCheckResult = await TypeCheckTypeScriptAppHostAsync(directory, cancellationToken);
+            if (typeCheckResult != 0)
+            {
+                context.BackchannelCompletionSource?.TrySetException(
+                    new InvalidOperationException("Failed to type-check TypeScript AppHost."));
+
+                if (!appHostServerProcess.HasExited)
+                {
+                    try
+                    {
+                        appHostServerProcess.Kill(entireProcessTree: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Error killing AppHost server process after TypeScript typecheck failure");
+                    }
+                }
+
+                return typeCheckResult;
+            }
+
             // Start guest apphost - it will connect to AppHost server, define resources.
             // If launcher is an ExtensionGuestLauncher, it delegates to the VS Code extension.
             var (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
@@ -954,6 +977,27 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
             environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
 
+            var typeCheckResult = await TypeCheckTypeScriptAppHostAsync(directory, cancellationToken);
+            if (typeCheckResult != 0)
+            {
+                context.BackchannelCompletionSource?.TrySetException(
+                    new InvalidOperationException("Failed to type-check TypeScript AppHost."));
+
+                if (!appHostServerProcess.HasExited)
+                {
+                    try
+                    {
+                        appHostServerProcess.Kill(entireProcessTree: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Error killing AppHost server process after TypeScript typecheck failure");
+                    }
+                }
+
+                return typeCheckResult;
+            }
+
             // Step 6: Execute the guest apphost for publishing
             // Pass the publish arguments (e.g., --operation publish --step deploy)
             var (guestExitCode, guestOutput) = await ExecuteGuestAppHostForPublishAsync(
@@ -1386,6 +1430,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
             {
                 var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
+                _typeScriptTypeCheckCommand = TypeScriptAppHostToolchainResolver.CreateTypeCheckCommand(runtimeSpec, toolchain);
                 runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
             }
 
@@ -1455,6 +1500,45 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         return result;
+    }
+
+    private async Task<int> TypeCheckTypeScriptAppHostAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    {
+        if (_typeScriptTypeCheckCommand is null)
+        {
+            return 0;
+        }
+
+        var typeCheckResult = await _interactionService.ShowStatusAsync(
+            "Type-checking TypeScript AppHost...",
+            async () =>
+            {
+                var launcher = new ProcessGuestLauncher(_resolvedLanguage.LanguageId, _logger, _fileLoggerProvider);
+                var (exitCode, output) = await launcher.LaunchAsync(
+                    _typeScriptTypeCheckCommand.Command,
+                    _typeScriptTypeCheckCommand.Args,
+                    directory,
+                    new Dictionary<string, string>(),
+                    cancellationToken);
+
+                return (ExitCode: exitCode, Output: output);
+            },
+            emoji: KnownEmojis.Gear);
+
+        if (typeCheckResult.ExitCode != 0)
+        {
+            var lines = typeCheckResult.Output?.GetLines().ToArray() ?? [];
+            if (lines.Length > 0)
+            {
+                _interactionService.DisplayLines(lines);
+            }
+            else
+            {
+                _interactionService.DisplayError("Failed to type-check TypeScript AppHost.");
+            }
+        }
+
+        return typeCheckResult.ExitCode;
     }
 
     /// <summary>

@@ -117,7 +117,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task AspireRunWithTypeScriptRuntimeErrorEmitsConciseOutput()
+    public async Task AspireRunWithTypeScriptTypeErrorEmitsCompilerDiagnostic()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -169,39 +169,43 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync($"(set -o pipefail; aspire run 2>&1 | tee {RuntimeErrorOutputFileName})");
         await auto.EnterAsync();
 
-        var sawRuntimeErrorSummary = false;
-        var sawMissingMethod = false;
+        var sawCompilerError = false;
+        var sawMissingProperty = false;
         var sawSourceLocation = false;
         var sawErrorPrompt = false;
 
         await auto.WaitUntilAsync(snapshot =>
         {
-            sawRuntimeErrorSummary |= snapshot.ContainsText("TypeScript AppHost failed.");
-            sawMissingMethod |= snapshot.ContainsText("TypeError: withDefinitelyMissingRuntimeMethod is not a function");
-            sawSourceLocation |= snapshot.ContainsText("apphost.ts:");
+            sawCompilerError |= snapshot.ContainsText("error TS2339:");
+            sawMissingProperty |= snapshot.ContainsText("Property 'withDefinitelyMissingRuntimeMethod' does not exist");
+            sawSourceLocation |= snapshot.ContainsText("apphost.ts(");
 
             var errorPrompt = new CellPatternSearcher()
                 .FindPattern(expectedPrompt.ToString())
                 .RightText(" ERR:");
             sawErrorPrompt = errorPrompt.Search(snapshot).Count > 0;
 
-            return sawRuntimeErrorSummary && sawMissingMethod && sawSourceLocation && sawErrorPrompt;
-        }, timeout: TimeSpan.FromMinutes(3), description: "waiting for concise TypeScript runtime error output");
+            return sawCompilerError && sawMissingProperty && sawSourceLocation && sawErrorPrompt;
+        }, timeout: TimeSpan.FromMinutes(3), description: "waiting for TypeScript compiler diagnostic");
         counter.Increment();
 
-        await auto.TypeAsync($"grep -F 'TypeScript AppHost failed.' {RuntimeErrorOutputFileName}");
+        await auto.TypeAsync($"grep -F 'error TS2339:' {RuntimeErrorOutputFileName}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter);
 
-        await auto.TypeAsync($"grep -F 'TypeError: withDefinitelyMissingRuntimeMethod is not a function' {RuntimeErrorOutputFileName}");
+        await auto.TypeAsync($"grep -F \"Property 'withDefinitelyMissingRuntimeMethod' does not exist\" {RuntimeErrorOutputFileName}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter);
 
-        await auto.TypeAsync($"grep -F 'apphost.ts:' {RuntimeErrorOutputFileName}");
+        await auto.TypeAsync($"grep -F 'apphost.ts(' {RuntimeErrorOutputFileName}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync($"if grep -F 'Uncaught Exception:' {RuntimeErrorOutputFileName}; then exit 1; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
+
+        await auto.TypeAsync($"if grep -F 'TypeError:' {RuntimeErrorOutputFileName}; then exit 1; fi");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter);
 

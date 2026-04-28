@@ -33290,48 +33290,6 @@ export type { HandleReference, Awaitable } from './base.js';
  * Set up global error handlers to ensure the process exits properly on errors.
  * Node.js doesn't exit on unhandled rejections by default, so we need to handle them.
  */
-function formatRuntimeError(error: Error): string[] {
-    const errorName = error.name || 'Error';
-    const message = getRuntimeErrorMessage(error.message);
-    const summary = message ? `${errorName}: ${message}` : errorName;
-    const stackFrames = getStackFrames(error.stack);
-
-    return [summary, ...stackFrames];
-}
-
-function getRuntimeErrorMessage(message: string): string {
-    const methodNotFunctionMatch = message.match(/\.([A-Za-z_$][\w$]*) is not a function/);
-    if (methodNotFunctionMatch?.[1]) {
-        return `${methodNotFunctionMatch[1]} is not a function`;
-    }
-
-    const compactMessage = message.replace(/\s+/g, ' ').trim();
-    const maxLength = 500;
-
-    return compactMessage.length > maxLength
-        ? `${compactMessage.slice(0, maxLength)}...`
-        : compactMessage;
-}
-
-function getStackFrames(stack?: string): string[] {
-    if (!stack) {
-        return [];
-    }
-
-    return stack
-        .split(/\r?\n/)
-        .map(line => line.trimEnd())
-        .filter(line => /^\s*at\s+/.test(line))
-        .slice(0, 5);
-}
-
-function writeRuntimeError(error: Error): void {
-    console.error('\n❌ TypeScript AppHost failed.');
-    for (const line of formatRuntimeError(error)) {
-        console.error(line);
-    }
-}
-
 process.on('unhandledRejection', (reason: unknown) => {
     const error = reason instanceof Error ? reason : new Error(String(reason));
 
@@ -33344,7 +33302,10 @@ process.on('unhandledRejection', (reason: unknown) => {
             console.error(`   Capability: ${(reason as CapabilityError).capability}`);
         }
     } else {
-        writeRuntimeError(error);
+        console.error(`\n❌ Unhandled Error: ${error.message}`);
+        if (error.stack) {
+            console.error(error.stack);
+        }
     }
 
     process.exit(1);
@@ -33360,7 +33321,12 @@ process.on('uncaughtException', (error: Error) => {
             console.error(`   Capability: ${error.capability}`);
         }
     } else {
-        writeRuntimeError(error);
+        console.error(`\n❌ Uncaught Exception: ${error.message}`);
+    }
+    // Suppress stack traces for structured errors (AppHostUsageError, CapabilityError)
+    // to keep polyglot output clean. Use --verbose for full diagnostics.
+    if (!(error instanceof AppHostUsageError) && !(error instanceof CapabilityError) && error.stack) {
+        console.error(error.stack);
     }
     process.exit(1);
 });
