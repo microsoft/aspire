@@ -135,6 +135,7 @@ internal static class BackchannelConstants
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <returns>A 16-character lowercase hex string, or <c>null</c> if it matches the current hash.</returns>
+    // TODO: Remove legacy hash support once all supported AppHost versions use normalized hashing.
     public static string? ComputeLegacyHash(string appHostPath)
     {
         var normalizedPath = NormalizePath(appHostPath);
@@ -209,20 +210,43 @@ internal static class BackchannelConstants
     /// <returns>An array of socket file paths, or empty if none found.</returns>
     public static string[] FindMatchingSockets(string appHostPath, string homeDirectory)
     {
-        var prefix = ComputeSocketPrefix(appHostPath, homeDirectory);
-        var dir = Path.GetDirectoryName(prefix);
-        var prefixFileName = Path.GetFileName(prefix);
+        var dir = GetBackchannelsDirectory(homeDirectory);
 
-        if (dir is null || !Directory.Exists(dir))
+        if (!Directory.Exists(dir))
         {
             return [];
         }
 
+        var hash = ComputeHash(appHostPath);
+        var prefixFileName = $"{SocketPrefix}.{hash}";
+        var results = FindSocketsByPrefix(dir, prefixFileName);
+
+        // Also search for sockets created by older AppHosts that used the raw (unnormalized) path hash.
+        var legacyHash = ComputeLegacyHash(appHostPath);
+        if (legacyHash is not null)
+        {
+            var legacyPrefixFileName = $"{SocketPrefix}.{legacyHash}";
+            var legacyResults = FindSocketsByPrefix(dir, legacyPrefixFileName);
+            if (legacyResults.Length > 0)
+            {
+                results = [.. results, .. legacyResults];
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Finds socket files in <paramref name="directory"/> whose names match
+    /// <paramref name="prefixFileName"/> in any of the supported socket name formats.
+    /// </summary>
+    private static string[] FindSocketsByPrefix(string directory, string prefixFileName)
+    {
         // Match old format (auxi.sock.{hash}), previous format (auxi.sock.{hash}.{pid}),
         // and current format (auxi.sock.{hash}.{instanceHash}.{pid})
         // Use pattern with "*" to match optional PID suffix
-        var allMatches = Directory.GetFiles(dir, prefixFileName + "*");
-        
+        var allMatches = Directory.GetFiles(directory, prefixFileName + "*");
+
         // Filter to only include exact match (old format), .{pid} suffix (previous format),
         // or .{instanceHash}.{pid} suffix (current format). This avoids matching
         // auxi.sock.{hash}abc (different hash that starts with same chars) and files

@@ -412,11 +412,15 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "backchannels");
         Directory.CreateDirectory(backchannelsDir);
 
-        // Simulate paths with different drive letter casing, as can happen when
+        // Simulate paths with different casing, as can happen when
         // the CLI resolves via FileInfo.FullName (uppercase) and the AppHost resolves
         // via MSBuild metadata (lowercase).
-        var upperCasePath = @"C:\Development\MyApp\MyApp.AppHost.csproj";
-        var lowerCasePath = @"c:\development\myapp\myapp.apphost.csproj";
+        var upperCasePath = OperatingSystem.IsWindows()
+            ? @"C:\Development\MyApp\MyApp.AppHost.csproj"
+            : "/Users/Dev/MyApp/MyApp.AppHost.csproj";
+        var lowerCasePath = OperatingSystem.IsWindows()
+            ? @"c:\development\myapp\myapp.apphost.csproj"
+            : "/users/dev/myapp/myapp.apphost.csproj";
 
         // Both casings should produce the same hash (current behavior after normalization)
         var upperPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(upperCasePath, workspace.WorkspaceRoot.FullName);
@@ -450,7 +454,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDir);
 
         // A mixed-case path produces a legacy hash that differs from the normalized hash
-        var appHostPath = @"c:\Development\MyApp\MyApp.AppHost.csproj";
+        var appHostPath = OperatingSystem.IsWindows()
+            ? @"c:\Development\MyApp\MyApp.AppHost.csproj"
+            : "/users/Dev/MyApp/MyApp.AppHost.csproj";
         var legacyHash = AppHostHelper.ComputeLegacyHash(appHostPath);
         Assert.NotNull(legacyHash);
 
@@ -458,18 +464,14 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var legacySocket = Path.Combine(backchannelsDir, $"auxi.sock.{legacyHash}.a1b2c3d4e5f6.99999");
         File.WriteAllText(legacySocket, "");
 
-        // The current normalized hash should NOT find the legacy socket
+        // The current normalized hash differs from the legacy hash
         var currentPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
         var currentHash = Path.GetFileName(currentPrefix)["auxi.sock.".Length..];
         Assert.NotEqual(currentHash, legacyHash);
 
-        var foundByCurrentHash = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
-        Assert.Empty(foundByCurrentHash);
-
-        // But the legacy hash lets us locate it via directory scan
-        var legacyPrefix = Path.Combine(backchannelsDir, $"auxi.sock.{legacyHash}");
-        var legacyMatches = Directory.GetFiles(backchannelsDir, Path.GetFileName(legacyPrefix) + "*");
-        Assert.Single(legacyMatches);
-        Assert.Contains(legacySocket, legacyMatches);
+        // FindMatchingSockets should still find the legacy socket via fallback
+        var found = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
+        Assert.Single(found);
+        Assert.Contains(legacySocket, found);
     }
 }
