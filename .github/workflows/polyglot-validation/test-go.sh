@@ -54,7 +54,7 @@ if grep -q "builder.Build()" apphost.go; then
     # Use awk for portable multi-line insertion (works on both GNU/Linux and BSD/macOS)
     awk '/builder\.Build\(\)/{
         print "\t// Add Redis cache resource"
-        print "\tredis := builder.AddRedisWithPort(\"cache\", 0.0).WithImageRegistry(\"netaspireci.azurecr.io\")"
+        print "\tredis := builder.AddRedis(\"cache\", &aspire.AddRedisOptions{Port: aspire.Float64Ptr(0)}).WithImageRegistry(\"netaspireci.azurecr.io\")"
         print "\tif err := redis.Err(); err != nil {"
         print "\t\tlog.Fatalf(\"Failed to set up Redis: %v\", err)"
         print "\t}"

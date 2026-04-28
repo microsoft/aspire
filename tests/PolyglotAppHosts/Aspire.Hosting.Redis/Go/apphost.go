@@ -19,8 +19,8 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// addRedisWithPort — overload with explicit port
-	cache2 := builder.AddRedisWithPort("cache2", 6380)
+	// addRedis — explicit port
+	cache2 := builder.AddRedis("cache2", &aspire.AddRedisOptions{Port: aspire.Float64Ptr(6380)})
 	if err = cache2.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
