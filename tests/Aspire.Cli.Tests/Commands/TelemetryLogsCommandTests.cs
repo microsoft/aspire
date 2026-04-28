@@ -568,4 +568,103 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedBaseUrl);
         Assert.DoesNotContain("/login", capturedBaseUrl);
     }
+
+    [Fact]
+    public async Task TelemetryLogsCommand_JsonOutput_ProducesExpectedJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var resourceLogs = new OtlpResourceLogsJson[]
+        {
+            new()
+            {
+                Resource = TelemetryTestHelper.CreateOtlpResource("apiservice", null),
+                ScopeLogs =
+                [
+                    new OtlpScopeLogsJson
+                    {
+                        LogRecords =
+                        [
+                            new OtlpLogRecordJson
+                            {
+                                TimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime),
+                                SeverityNumber = 9,
+                                SeverityText = "Information",
+                                Body = new OtlpAnyValueJson { StringValue = "Request started" },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson { Key = "aspire.log_id", Value = new OtlpAnyValueJson { StringValue = "42" } },
+                                    new OtlpKeyValueJson { Key = "http.method", Value = new OtlpAnyValueJson { StringValue = "GET" } }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        var apiResponse = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceLogs = resourceLogs },
+            TotalCount = 1,
+            ReturnedCount = 1
+        };
+        var responseJson = JsonSerializer.Serialize(apiResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            if (url.Contains("/api/telemetry/logs"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel logs --format json --dashboard-url http://localhost:18888");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
+        var formattedJson = TelemetryTestHelper.FormatJson(jsonLine);
+
+        var expected = """
+            [
+              {
+                "logId": 42,
+                "message": "Request started",
+                "severity": "Information",
+                "resourceName": "apiservice",
+                "attributes": {
+                  "http.method": "GET"
+                },
+                "dashboardUrl": "http://localhost:18888/structuredlogs?logEntryId=42"
+              }
+            ]
+            """;
+
+        Assert.Equal(expected, formattedJson, ignoreLineEndingDifferences: true);
+    }
 }

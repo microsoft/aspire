@@ -163,24 +163,21 @@ public class ListTracesToolTests
         var tracesArray = JsonNode.Parse(jsonText)?.AsArray();
 
         Assert.NotNull(tracesArray);
-        // Should have 2 traces (grouped by trace_id)
+        // Should have 2 traces (grouped by traceId)
         Assert.Equal(2, tracesArray.Count);
 
-        // Verify first trace (trace_id is shortened to 7 characters)
+        // Verify first trace
         var firstTrace = tracesArray[0]?.AsObject();
         Assert.NotNull(firstTrace);
-        Assert.Equal("abc123d", firstTrace["trace_id"]?.GetValue<string>());
+        Assert.Equal("abc123def456789012345678901234567890", firstTrace["traceId"]?.GetValue<string>());
 
         // Verify spans in first trace have correct source and destination
         var spans = firstTrace["spans"]?.AsArray();
         Assert.NotNull(spans);
         Assert.Equal(2, spans.Count);
 
-        // Verify dashboard_link is included for each trace with correct URLs (trace_id is shortened to 7 chars in the URL)
-        var firstDashboardLink = firstTrace["dashboard_link"]?.AsObject();
-        Assert.NotNull(firstDashboardLink);
-        Assert.Equal("http://localhost:18888/traces/detail/abc123d", firstDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("abc123d", firstDashboardLink["text"]?.GetValue<string>());
+        // Verify dashboardUrl is included for each trace with correct URLs
+        Assert.Equal("http://localhost:18888/traces/detail/abc123def456789012345678901234567890", firstTrace["dashboardUrl"]?.GetValue<string>());
 
         // First span (server) should have source from resource name, no destination
         var serverSpan = spans.FirstOrDefault(s => s?["kind"]?.GetValue<string>() == "Server")?.AsObject();
@@ -197,12 +194,9 @@ public class ListTracesToolTests
         // Verify second trace
         var secondTrace = tracesArray[1]?.AsObject();
         Assert.NotNull(secondTrace);
-        Assert.Equal("xyz789a", secondTrace["trace_id"]?.GetValue<string>());
+        Assert.Equal("xyz789abc123456789012345678901234567890", secondTrace["traceId"]?.GetValue<string>());
 
-        var secondDashboardLink = secondTrace["dashboard_link"]?.AsObject();
-        Assert.NotNull(secondDashboardLink);
-        Assert.Equal("http://localhost:18888/traces/detail/xyz789a", secondDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("xyz789a", secondDashboardLink["text"]?.GetValue<string>());
+        Assert.Equal("http://localhost:18888/traces/detail/xyz789abc123456789012345678901234567890", secondTrace["dashboardUrl"]?.GetValue<string>());
 
         // Verify spans in second trace have correct source and destination
         var secondTraceSpans = secondTrace["spans"]?.AsArray();

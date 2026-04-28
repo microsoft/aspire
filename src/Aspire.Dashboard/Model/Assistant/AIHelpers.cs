@@ -116,7 +116,7 @@ internal static class AIHelpers
 
             if (includeDashboardUrl && dashboardBaseUrl != null)
             {
-                resourceObj["dashboard_link"] = SharedAIHelpers.GetDashboardLinkObject(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: resource.Name), resourceName);
+                resourceObj["dashboardUrl"] = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: resource.Name));
             }
 
             if (includeEnvironmentVariables)
