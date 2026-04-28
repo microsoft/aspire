@@ -70,7 +70,7 @@ public static class KubernetesIngressExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(className);
 
-        builder.Resource.IngressClassName = className;
+        builder.Resource.IngressClassName = ReferenceExpression.Create($"{className}");
         return builder;
     }
 
@@ -88,7 +88,7 @@ public static class KubernetesIngressExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(className);
 
-        builder.Resource.IngressClassName = className.Resource.Name;
+        builder.Resource.IngressClassName = ReferenceExpression.Create($"{className.Resource}");
         return builder;
     }
 

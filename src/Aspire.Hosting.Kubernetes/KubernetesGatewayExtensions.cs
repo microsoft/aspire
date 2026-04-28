@@ -61,7 +61,7 @@ public static class KubernetesGatewayExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(className);
 
-        builder.Resource.GatewayClassName = className;
+        builder.Resource.GatewayClassName = ReferenceExpression.Create($"{className}");
         return builder;
     }
 
@@ -79,9 +79,7 @@ public static class KubernetesGatewayExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(className);
 
-        // Store as string — will need async resolution during pipeline step
-        // For now, use the parameter's default value or name as placeholder
-        builder.Resource.GatewayClassName = className.Resource.Name;
+        builder.Resource.GatewayClassName = ReferenceExpression.Create($"{className.Resource}");
         return builder;
     }
 

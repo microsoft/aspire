@@ -49,7 +49,7 @@ public class KubernetesGatewayResource(
     /// Common values include <c>"azure-alb-external"</c> (for AKS with AGC),
     /// <c>"istio"</c>, or controller-specific class names.
     /// </remarks>
-    public string? GatewayClassName { get; set; }
+    public ReferenceExpression? GatewayClassName { get; set; }
 
     /// <summary>
     /// Gets the list of hostnames this gateway matches.

@@ -49,7 +49,7 @@ public class KubernetesIngressResource(
     /// Common values include <c>"nginx"</c>, <c>"traefik"</c>, <c>"azure-alb-external"</c> (for AKS with AGC),
     /// or controller-specific class names. If not set, the cluster's default ingress class is used.
     /// </remarks>
-    public string? IngressClassName { get; set; }
+    public ReferenceExpression? IngressClassName { get; set; }
 
     /// <summary>
     /// Gets the list of hostnames this ingress matches. If empty, the ingress matches all hosts.

@@ -505,7 +505,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         if (ingressResource.IngressClassName is not null)
         {
-            ingress.Spec.IngressClassName = ingressResource.IngressClassName;
+            ingress.Spec.IngressClassName = await ResolveExpressionAsync(ingressResource.IngressClassName, cancellationToken).ConfigureAwait(false);
         }
 
         foreach (var (key, value) in ingressResource.IngressAnnotations)
@@ -688,7 +688,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(gatewayResource.GatewayClassName))
+        if (gatewayResource.GatewayClassName is null)
         {
             throw new InvalidOperationException(
                 $"Gateway '{gatewayResource.Name}' must have a GatewayClassName set via WithGatewayClass(). " +
@@ -702,7 +702,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             Metadata = { Name = gatewayName }
         };
 
-        gateway.Spec.GatewayClassName = gatewayResource.GatewayClassName;
+        gateway.Spec.GatewayClassName = await ResolveExpressionAsync(gatewayResource.GatewayClassName, cancellationToken).ConfigureAwait(false);
 
         foreach (var (key, value) in gatewayResource.GatewayAnnotations)
         {
