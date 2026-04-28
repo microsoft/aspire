@@ -412,6 +412,17 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             var uriScheme = allowUnsecureTransport ? "http" : "https";
             var endpointName = allowUnsecureTransport ? "http" : "https";
             dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true));
+
+            eventing.Subscribe<BeforeResourceStartedEvent>(dashboardResource, (@event, _) =>
+            {
+                var dcpOptions = @event.Services.GetRequiredService<IOptions<DcpOptions>>();
+                if (!dcpOptions.Value.RandomizePorts)
+                {
+                    distributedApplicationLogger.LogInformation("Generating a dynamic url for dashboard.  If you want a consistent url, configure `ASPNETCORE_URLS`");
+                }
+                return Task.CompletedTask;
+            });
+
         }
         else
         {
@@ -640,19 +651,10 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true, transport: transport);
         }
 
-        if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out var endpointUri))
+        var address = BindingAddress.Parse(endpointUrl);
+        return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: transport)
         {
-            throw new DistributedApplicationException($"The endpoint URL '{endpointUrl}' for '{endpointName}' is not a valid absolute URI.");
-        }
-
-        var explicitPort = endpointUri.GetComponents(UriComponents.StrongPort, UriFormat.Unescaped);
-        int? port = int.TryParse(explicitPort, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPort)
-            ? parsedPort
-            : null;
-
-        return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: endpointUri.Scheme, port: port, isProxied: true, transport: transport)
-        {
-            TargetHost = endpointUri.Host
+            TargetHost = address.Host
         };
     }
 
