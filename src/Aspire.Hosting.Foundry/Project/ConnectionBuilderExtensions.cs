@@ -342,6 +342,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 Target = "https://api.bing.microsoft.com/",
                 UseWorkspaceManagedIdentity = false,
                 IsSharedToAll = false,
+                SharedUserList = [],
                 PeRequirement = ManagedPERequirement.NotRequired,
                 PeStatus = ManagedPEStatus.NotApplicable,
                 CredentialsKey = (BicepValue<string>)new MemberExpression(
@@ -395,6 +396,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 Target = "https://api.bing.microsoft.com/",
                 UseWorkspaceManagedIdentity = false,
                 IsSharedToAll = false,
+                SharedUserList = [],
                 PeRequirement = ManagedPERequirement.NotRequired,
                 PeStatus = ManagedPEStatus.NotApplicable,
                 CredentialsKey = (BicepValue<string>)new MemberExpression(

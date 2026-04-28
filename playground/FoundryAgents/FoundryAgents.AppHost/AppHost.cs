@@ -8,8 +8,8 @@ using Azure.Provisioning.Expressions;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var foundry = builder.AddFoundry("aif-myfoundry5");
-var project = foundry.AddProject("proj-myproject5")
+var foundry = builder.AddFoundry("aif-myfoundry");
+var project = foundry.AddProject("proj-myproject")
     // workaround for https://github.com/microsoft/aspire/issues/15971
     .ConfigureInfrastructure(infra =>
     {
@@ -37,13 +37,6 @@ var search = builder.AddAzureSearch("search")
 var aiSearchTool = project.AddAISearchTool("aisearch-tool", indexName: "default")
     .WithReference(search);
 
-// Bing Grounding resources must be created manually in the Azure portal.
-// Then store the resource ID in user secrets:
-//   dotnet user-secrets set "Parameters:bingResourceId" "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}"
-var bingResourceId = builder.AddParameter("bingResourceId");
-var bingTool = project.AddBingGroundingTool("bing-tool")
-    .WithReference(bingResourceId);
-
 var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
 
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
@@ -65,7 +58,6 @@ var researchAgent = project.AddPromptAgent(chat, "research-agent",
         2. Use the code interpreter to analyze data or perform calculations
         Always cite your sources and be thorough in your analysis.
         """)
-    .WithTool(bingTool)
     .WithTool(aiSearchTool)
     .WithTool(codeInterpreter);
 
