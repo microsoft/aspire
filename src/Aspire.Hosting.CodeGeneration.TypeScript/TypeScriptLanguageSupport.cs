@@ -73,13 +73,17 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
             import { createBuilder } from './.modules/aspire.js';
 
-            const builder = await createBuilder();
+            async function main() {
+                const builder = await createBuilder();
 
-            // Add your resources here, for example:
-            // const redis = await builder.addContainer("cache", "redis:latest");
-            // const postgres = await builder.addPostgres("db");
+                // Add your resources here, for example:
+                // const redis = await builder.addContainer("cache", "redis:latest");
+                // const postgres = await builder.addPostgres("db");
 
-            await builder.build().run();
+                await builder.build().run();
+            }
+
+            void main();
             """;
 
         files[PackageJsonFileName] = CreatePackageJson(request);
@@ -100,7 +104,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 },
               },
               rules: {
-                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
+                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true, ignoreVoid: true }],
               },
             });
             """;

@@ -12,6 +12,6 @@ export default defineConfig({
     },
   },
   rules: {
-    '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
+    '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true, ignoreVoid: true }],
   },
 });
