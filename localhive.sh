@@ -89,6 +89,7 @@ VERSION_SUFFIX=""
 OUTPUT_DIR=""
 TARGET_RID=""
 ARCHIVE=0
+BUNDLE_PAYLOAD_ARCHIVE=""
 is_valid_versionsuffix() {
   local s="$1"
   # Must be dot-separated identifiers containing only 0-9A-Za-z- per SemVer2.
