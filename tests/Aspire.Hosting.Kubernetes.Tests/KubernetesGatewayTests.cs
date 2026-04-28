@@ -56,7 +56,7 @@ public class KubernetesGatewayTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
-        var gateway = k8s.AddGateway("public");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
@@ -82,14 +82,14 @@ public class KubernetesGatewayTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
-        var gateway = k8s.AddGateway("public");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
 
         gateway
             .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
-            .WithTls("my-tls-secret", "api.example.com");
+            .WithHostname("api.example.com").WithTls("my-tls-secret");
 
         var app = builder.Build();
         app.Run();
@@ -113,14 +113,14 @@ public class KubernetesGatewayTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
-        var gateway = k8s.AddGateway("public");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
 
         gateway
             .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
-            .WithTls("my-tls-secret", "api.example.com");
+            .WithHostname("api.example.com").WithTls("my-tls-secret");
 
         var app = builder.Build();
         app.Run();
@@ -138,7 +138,7 @@ public class KubernetesGatewayTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
-        var gateway = k8s.AddGateway("public");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
@@ -185,7 +185,7 @@ public class KubernetesGatewayTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
-        var gateway = k8s.AddGateway("public");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
@@ -199,7 +199,7 @@ public class KubernetesGatewayTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
-        var gateway = k8s.AddGateway("public");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         Assert.Equal(k8s.Resource, gateway.Resource.Parent);
         Assert.IsType<KubernetesGatewayResource>(gateway.Resource);

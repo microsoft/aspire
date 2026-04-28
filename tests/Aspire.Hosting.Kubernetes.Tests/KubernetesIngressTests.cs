@@ -77,7 +77,7 @@ public class KubernetesIngressTests
 
         ingress
             .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
-            .WithTls("my-tls-secret", "api.example.com");
+            .WithHostname("api.example.com").WithTls("my-tls-secret");
 
         var app = builder.Build();
         app.Run();
@@ -266,7 +266,7 @@ public class KubernetesIngressTests
         // The ingress should auto-generate a rule for the TLS host.
         ingress
             .WithDefaultBackend(web.GetEndpoint("http"))
-            .WithTls("my-tls-secret", "app.example.com");
+            .WithHostname("app.example.com").WithTls("my-tls-secret");
 
         var app = builder.Build();
         app.Run();
@@ -300,7 +300,7 @@ public class KubernetesIngressTests
         ingress
             .WithRoute("app.example.com", "/", web.GetEndpoint("http"))
             .WithDefaultBackend(web.GetEndpoint("http"))
-            .WithTls("my-tls-secret", "app.example.com");
+            .WithHostname("app.example.com").WithTls("my-tls-secret");
 
         var app = builder.Build();
         app.Run();
@@ -329,14 +329,16 @@ public class KubernetesIngressTests
     }
 
     [Fact]
-    public void WithTls_NoHosts_Throws()
+    public void WithTls_NoArg_GeneratesSecretName()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
         var ingress = k8s.AddIngress("public");
 
-        Assert.Throws<ArgumentException>(() =>
-            ingress.WithTls("my-secret"));
+        ingress.WithTls();
+
+        Assert.Single(ingress.Resource.TlsConfigs);
+        Assert.Equal("public-tls", ingress.Resource.TlsConfigs[0].SecretName);
     }
 
     [Fact]

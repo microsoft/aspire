@@ -158,38 +158,79 @@ public static class KubernetesIngressExtensions
     }
 
     /// <summary>
+    /// Adds a hostname that this ingress matches. Multiple hostnames can be added by calling
+    /// this method repeatedly. If no hostnames are configured, the ingress matches all hosts.
+    /// </summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// ingress.WithHostname("api.example.com")
+    ///        .WithHostname("www.example.com");
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Adds a hostname to a Kubernetes Ingress")]
+    public static IResourceBuilder<KubernetesIngressResource> WithHostname(
+        this IResourceBuilder<KubernetesIngressResource> builder,
+        string hostname)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(hostname);
+
+        builder.Resource.Hostnames.Add(hostname);
+        return builder;
+    }
+
+    /// <summary>
     /// Configures TLS termination for the ingress by referencing a Kubernetes TLS secret.
     /// The secret must contain <c>tls.crt</c> and <c>tls.key</c> entries and exist in the
-    /// same namespace as the ingress.
+    /// same namespace as the ingress. The TLS configuration applies to all hostnames
+    /// configured via <see cref="WithHostname"/>.
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret containing
     /// the TLS certificate and private key.</param>
-    /// <param name="hosts">One or more hostnames that the TLS certificate covers.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
     /// <example>
     /// <code>
-    /// ingress.WithTls("my-tls-secret", "api.example.com", "www.example.com");
+    /// ingress.WithHostname("api.example.com")
+    ///        .WithTls("my-tls-secret");
     /// </code>
     /// </example>
     [AspireExport(Description = "Configures TLS for a Kubernetes Ingress using a K8S secret")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder,
-        string secretName,
-        params string[] hosts)
+        string secretName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(secretName);
-        ArgumentNullException.ThrowIfNull(hosts);
-
-        if (hosts.Length == 0)
-        {
-            throw new ArgumentException("At least one host must be specified for TLS.", nameof(hosts));
-        }
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
             SecretName: secretName,
-            Hosts: [.. hosts]));
+            Hosts: [.. builder.Resource.Hostnames]));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures TLS termination for the ingress with an auto-generated secret name
+    /// derived from the ingress resource name. The TLS configuration applies to all
+    /// hostnames configured via <see cref="WithHostname"/>.
+    /// </summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    [AspireExport("withIngressTlsAuto", Description = "Configures TLS for a Kubernetes Ingress with an auto-generated secret")]
+    public static IResourceBuilder<KubernetesIngressResource> WithTls(
+        this IResourceBuilder<KubernetesIngressResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var secretName = $"{builder.Resource.Name}-tls";
+
+        builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
+            SecretName: secretName,
+            Hosts: [.. builder.Resource.Hostnames]));
 
         return builder;
     }

@@ -52,6 +52,11 @@ public class KubernetesGatewayResource(
     public string? GatewayClassName { get; set; }
 
     /// <summary>
+    /// Gets the list of hostnames this gateway matches.
+    /// </summary>
+    internal List<string> Hostnames { get; } = [];
+
+    /// <summary>
     /// Gets the list of routing rules configured for this gateway.
     /// </summary>
     internal List<GatewayRouteConfig> Routes { get; } = [];

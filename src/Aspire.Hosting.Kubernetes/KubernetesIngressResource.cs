@@ -52,6 +52,11 @@ public class KubernetesIngressResource(
     public string? IngressClassName { get; set; }
 
     /// <summary>
+    /// Gets the list of hostnames this ingress matches. If empty, the ingress matches all hosts.
+    /// </summary>
+    internal List<string> Hostnames { get; } = [];
+
+    /// <summary>
     /// Gets the list of routing rules configured for this ingress.
     /// </summary>
     internal List<IngressRouteConfig> Routes { get; } = [];

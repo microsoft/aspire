@@ -668,6 +668,13 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         Dictionary<IResource, KubernetesResource> deploymentTargets,
         ILogger logger)
     {
+        if (string.IsNullOrWhiteSpace(gatewayResource.GatewayClassName))
+        {
+            throw new InvalidOperationException(
+                $"Gateway '{gatewayResource.Name}' must have a GatewayClassName set via WithGatewayClass(). " +
+                $"The Gateway API requires a gatewayClassName to select the controller implementation.");
+        }
+
         var gatewayName = gatewayResource.Name.ToKubernetesResourceName();
 
         var gateway = new GatewayV1
@@ -675,10 +682,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             Metadata = { Name = gatewayName }
         };
 
-        if (gatewayResource.GatewayClassName is not null)
-        {
-            gateway.Spec.GatewayClassName = gatewayResource.GatewayClassName;
-        }
+        gateway.Spec.GatewayClassName = gatewayResource.GatewayClassName;
 
         foreach (var (key, value) in gatewayResource.GatewayAnnotations)
         {
@@ -731,7 +735,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             var routeName = string.IsNullOrEmpty(hostGroup.Key)
                 ? $"{gatewayName}-route"
-                : $"{gatewayName}-{hostGroup.Key.Replace(".", "-")}-route";
+                : $"{gatewayName}-{hostGroup.Key.Replace(".", "-").Replace("*", "wildcard").ToLowerInvariant()}-route";
 
             var httpRoute = new HttpRouteV1
             {

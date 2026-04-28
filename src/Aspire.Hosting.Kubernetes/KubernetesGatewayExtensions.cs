@@ -139,49 +139,88 @@ public static class KubernetesGatewayExtensions
     }
 
     /// <summary>
+    /// Adds a hostname that this gateway's routes match. Multiple hostnames can be added by calling
+    /// this method repeatedly. Hostnames are used as <c>hostnames</c> in generated <c>HTTPRoute</c>
+    /// resources and as HTTPS listener hostnames when TLS is configured.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    [AspireExport(Description = "Adds a hostname to a Kubernetes Gateway")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithHostname(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        string hostname)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(hostname);
+
+        builder.Resource.Hostnames.Add(hostname);
+        return builder;
+    }
+
+    /// <summary>
     /// Configures TLS termination on the gateway by adding an HTTPS listener that references
     /// a Kubernetes TLS secret. The Gateway terminates TLS and forwards plain HTTP to backends.
-    /// This does not create a separate route ΓÇö existing HTTPRoutes serve both HTTP and HTTPS.
+    /// This does not create a separate route — existing HTTPRoutes serve both HTTP and HTTPS.
+    /// The TLS configuration applies to all hostnames configured via <see cref="WithHostname"/>.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
-    /// <param name="hosts">One or more hostnames that the TLS certificate covers.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
     [AspireExport(Description = "Configures TLS on a Kubernetes Gateway listener")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
-        string secretName,
-        params string[] hosts)
+        string secretName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(secretName);
-        ArgumentNullException.ThrowIfNull(hosts);
-
-        if (hosts.Length == 0)
-        {
-            throw new ArgumentException("At least one host must be specified for TLS.", nameof(hosts));
-        }
 
         builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
             SecretName: secretName,
-            Hosts: [.. hosts]));
+            Hosts: [.. builder.Resource.Hostnames]));
 
         return builder;
     }
 
     /// <summary>
-    /// Adds a Kubernetes metadata annotation to the generated Gateway resource. These are
-    /// key-value pairs in the <c>metadata.annotations</c> field of the K8S Gateway, commonly
-    /// used for controller-specific configuration (e.g., AGC's <c>alb.networking.azure.io/alb-name</c>).
+    /// Configures TLS termination on the gateway with an auto-generated secret name
+    /// derived from the gateway resource name. The TLS configuration applies to all
+    /// hostnames configured via <see cref="WithHostname"/>.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    [AspireExport("withGatewayTlsAuto", Description = "Configures TLS on a Kubernetes Gateway with an auto-generated secret")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithTls(
+        this IResourceBuilder<KubernetesGatewayResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var secretName = $"{builder.Resource.Name}-tls";
+
+        builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
+            SecretName: secretName,
+            Hosts: [.. builder.Resource.Hostnames]));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a Kubernetes metadata annotation to the generated Gateway resource.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="key">The annotation key.</param>
     /// <param name="value">The annotation value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
     /// <remarks>
-    /// This method sets Kubernetes metadata annotations, not Aspire <see cref="ApplicationModel.IResourceAnnotation"/>
-    /// instances. For Azure Application Gateway for Containers (AGC), you typically need:
+    /// <para>
+    /// This sets Kubernetes <c>metadata.annotations</c> on the generated K8S Gateway resource,
+    /// not Aspire <see cref="ApplicationModel.IResourceAnnotation"/> instances. These are key-value
+    /// string pairs used by ingress controllers for provider-specific configuration.
+    /// </para>
+    /// <para>
+    /// For Azure Application Gateway for Containers (AGC), you typically need:
     /// <c>alb.networking.azure.io/alb-name</c> and <c>alb.networking.azure.io/alb-namespace</c>.
+    /// </para>
     /// </remarks>
     [AspireExport(Description = "Adds a Kubernetes metadata annotation to a Gateway")]
     public static IResourceBuilder<KubernetesGatewayResource> WithGatewayAnnotation(
