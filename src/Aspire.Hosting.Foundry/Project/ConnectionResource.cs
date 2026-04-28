@@ -4,7 +4,6 @@
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
-using Azure.Provisioning.Primitives;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -40,97 +39,18 @@ public class AzureCognitiveServicesProjectConnectionResource(string name, Action
 /// </remarks>
 [AspireExport]
 public class BingGroundingConnectionResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure, AzureCognitiveServicesProjectResource parent) :
-    AzureProvisionableAspireResourceWithParent<CognitiveServicesAccountConnection, AzureCognitiveServicesProjectResource>(name, configureInfrastructure, parent)
+    AzureProvisionableAspireResourceWithParent<CognitiveServicesConnection, AzureCognitiveServicesProjectResource>(name, configureInfrastructure, parent)
 {
     /// <inheritdoc/>
-    public override CognitiveServicesAccountConnection FromExisting(string bicepIdentifier)
+    public override CognitiveServicesConnection FromExisting(string bicepIdentifier)
     {
-        return CognitiveServicesAccountConnection.FromExisting(bicepIdentifier, AzureCognitiveServicesProjectConnectionResource.ResourceVersion);
+        return CognitiveServicesConnection.FromExisting(bicepIdentifier, AzureCognitiveServicesProjectConnectionResource.ResourceVersion);
     }
 
     /// <inheritdoc/>
-    public override void SetName(CognitiveServicesAccountConnection provisionableResource, BicepValue<string> name)
+    public override void SetName(CognitiveServicesConnection provisionableResource, BicepValue<string> name)
     {
         provisionableResource.Name = name;
-    }
-}
-
-/// <summary>
-/// The Microsoft Foundry account connection resource.
-/// </summary>
-public class CognitiveServicesAccountConnection(string bicepIdentifier, string? resourceVersion = null) :
-    ProvisionableResource(bicepIdentifier, new("Microsoft.CognitiveServices/accounts/connections"), resourceVersion)
-{
-    /// <summary>
-    /// Gets or sets the friendly name of the connection.
-    /// </summary>
-    public BicepValue<string> Name
-    {
-        get { Initialize(); return _name!; }
-        set { Initialize(); _name!.Assign(value); }
-    }
-    private BicepValue<string>? _name;
-
-    /// <summary>
-    /// Gets or sets the connection properties.
-    /// </summary>
-    public CognitiveServicesConnectionProperties? Properties
-    {
-        get { Initialize(); return _properties; }
-        set
-        {
-            Initialize();
-            if (value is null)
-            {
-                _properties = null;
-            }
-            else
-            {
-                AssignOrReplace(ref _properties, value);
-            }
-        }
-    }
-    private CognitiveServicesConnectionProperties? _properties;
-
-    /// <summary>
-    /// Gets or sets the parent Foundry account.
-    /// </summary>
-    public CognitiveServicesAccount? Parent
-    {
-        get { Initialize(); return _parent!.Value; }
-        set { Initialize(); _parent!.Value = value; }
-    }
-    private ResourceReference<CognitiveServicesAccount>? _parent;
-
-    /// <summary>
-    /// Gets the Id.
-    /// </summary>
-    public BicepValue<string> Id
-    {
-        get { Initialize(); return _id!; }
-    }
-    private BicepValue<string>? _id;
-
-    /// <summary>
-    /// Gets an existing Microsoft Foundry account connection.
-    /// </summary>
-    public static CognitiveServicesAccountConnection FromExisting(string bicepIdentifier, string? resourceVersion = null)
-    {
-        var resource = new CognitiveServicesAccountConnection(bicepIdentifier, resourceVersion)
-        {
-            IsExistingResource = true
-        };
-
-        return resource;
-    }
-
-    /// <inheritdoc/>
-    protected override void DefineProvisionableProperties()
-    {
-        _name = DefineProperty<string>(nameof(Name), ["name"], isRequired: true);
-        _properties = DefineModelProperty<CognitiveServicesConnectionProperties>(nameof(Properties), ["properties"]);
-        _parent = DefineResource<CognitiveServicesAccount>(nameof(Parent), ["parent"], isRequired: true);
-        _id = DefineProperty<string>(nameof(Id), ["id"], isOutput: true);
     }
 }
 

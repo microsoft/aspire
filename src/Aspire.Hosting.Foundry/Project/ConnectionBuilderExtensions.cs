@@ -436,7 +436,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 },
                 infra =>
                 {
-                    var resource = new CognitiveServicesAccountConnection(aspireResource.GetBicepIdentifier(), AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
+                    var resource = new CognitiveServicesConnection(aspireResource.GetBicepIdentifier(), AzureCognitiveServicesProjectConnectionResource.ResourceVersion)
                     {
                         Parent = account,
                         Name = name,
