@@ -11,7 +11,6 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Extension methods for adding and configuring Durable Task resources within a distributed application.
 /// </summary>
-[Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class DurableTaskResourceExtensions
 {
     /// <summary>
@@ -28,6 +27,7 @@ public static class DurableTaskResourceExtensions
     /// </code>
     /// </example>
     [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
+    [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         var scheduler = new DurableTaskSchedulerResource(name);
@@ -56,6 +56,7 @@ public static class DurableTaskResourceExtensions
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "Polyglot export is via RunAsExistingCore which accepts both string and parameter resource inputs.")]
+    [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsExisting(this IResourceBuilder<DurableTaskSchedulerResource> builder, string connectionString)
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -87,6 +88,7 @@ public static class DurableTaskResourceExtensions
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "Polyglot export is via RunAsExistingCore which accepts both string and parameter resource inputs.")]
+    [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsExisting(this IResourceBuilder<DurableTaskSchedulerResource> builder, IResourceBuilder<ParameterResource> connectionString)
     {
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -98,6 +100,7 @@ public static class DurableTaskResourceExtensions
     }
 
     [AspireExport("runAsExisting", Description = "Configures the Durable Task scheduler to use an existing scheduler instance from a connection string or parameter resource.")]
+#pragma warning disable ASPIREDURABLETASK001
     internal static IResourceBuilder<DurableTaskSchedulerResource> RunAsExistingCore(
         this IResourceBuilder<DurableTaskSchedulerResource> builder,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object connectionString)
@@ -107,6 +110,7 @@ public static class DurableTaskResourceExtensions
             IResourceBuilder<ParameterResource> parameter => builder.RunAsExisting(parameter),
             _ => throw new ArgumentException($"Unexpected connection string type: {connectionString.GetType().Name}", nameof(connectionString))
         };
+#pragma warning restore ASPIREDURABLETASK001
 
     /// <summary>
     /// Configures the Durable Task scheduler to run using the local emulator (only in non-publish modes).
@@ -123,6 +127,7 @@ public static class DurableTaskResourceExtensions
     /// </code>
     /// </example>
     [AspireExport(Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
+    [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsEmulator(this IResourceBuilder<DurableTaskSchedulerResource> builder, Action<IResourceBuilder<DurableTaskSchedulerEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -202,6 +207,7 @@ public static class DurableTaskResourceExtensions
     /// </code>
     /// </example>
     [AspireExport(Description = "Adds a Durable Task hub resource associated with the scheduler.")]
+    [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskHubResource> AddTaskHub(this IResourceBuilder<DurableTaskSchedulerResource> builder, [ResourceName] string name)
     {
         var hub = new DurableTaskHubResource(name, builder.Resource);
@@ -246,6 +252,7 @@ public static class DurableTaskResourceExtensions
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "Polyglot export is via WithTaskHubNameCore which accepts both string and parameter resource inputs.")]
+    [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskHubResource> WithTaskHubName(this IResourceBuilder<DurableTaskHubResource> builder, string taskHubName)
     {
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName));
@@ -268,12 +275,14 @@ public static class DurableTaskResourceExtensions
     /// </code>
     /// </example>
     [AspireExportIgnore(Reason = "Polyglot export is via WithTaskHubNameCore which accepts both string and parameter resource inputs.")]
+    [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskHubResource> WithTaskHubName(this IResourceBuilder<DurableTaskHubResource> builder, IResourceBuilder<ParameterResource> taskHubName)
     {
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName.Resource));
     }
 
     [AspireExport("withTaskHubName", Description = "Sets the Durable Task hub name from a string or parameter resource.")]
+#pragma warning disable ASPIREDURABLETASK001
     internal static IResourceBuilder<DurableTaskHubResource> WithTaskHubNameCore(
         this IResourceBuilder<DurableTaskHubResource> builder,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object taskHubName)
@@ -283,4 +292,5 @@ public static class DurableTaskResourceExtensions
             IResourceBuilder<ParameterResource> parameter => builder.WithTaskHubName(parameter),
             _ => throw new ArgumentException($"Unexpected task hub name type: {taskHubName.GetType().Name}", nameof(taskHubName))
         };
+#pragma warning restore ASPIREDURABLETASK001
 }
