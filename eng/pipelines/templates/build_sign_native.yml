@@ -5,6 +5,7 @@ parameters:
     - linux-x64
   extraBuildArgs: ''
   codeSign: false
+  signCliToolPackages: true
   teamName: ''
 
 jobs:
@@ -12,8 +13,8 @@ jobs:
 - ${{ each targetRid in parameters.targetRidsForSameOS }}:
   - template: /eng/common/templates-official/jobs/jobs.yml@self
     parameters:
-      enableMicrobuild: ${{ eq(parameters.codeSign, true) }}
-      enableMicrobuildForMacAndLinux: ${{ and(eq(parameters.codeSign, true), ne(parameters.agentOs, 'windows')) }}
+      enableMicrobuild: ${{ or(eq(parameters.codeSign, true), eq(parameters.signCliToolPackages, true)) }}
+      enableMicrobuildForMacAndLinux: ${{ and(or(eq(parameters.codeSign, true), eq(parameters.signCliToolPackages, true)), ne(parameters.agentOs, 'windows')) }}
       enableTelemetry: true
       # Publish build logs
       enablePublishBuildArtifacts: true
@@ -150,11 +151,26 @@ jobs:
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
 
+          - ${{ if eq(parameters.signCliToolPackages, true) }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                build
+                $(Build.SourcesDirectory)/eng/signing/signCliToolNupkg.proj
+                -c $(_BuildConfig)
+                /p:PackagesDir=$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)
+                /p:SignType=$(_SignType)
+                $(_SignArgs)
+                /bl:$(Build.Arcade.LogsPath)SignCliToolNupkg.binlog
+              displayName: 🟣Sign CLI tool nupkgs
+              env:
+                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
           - pwsh: |
               $ErrorActionPreference = 'Stop'
               $verifyParams = @{
                 PackagesDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
                 Rid = "${{ targetRid }}"
+                VerifySignature = $true
               }
               $archiveFilter = if ("${{ targetRid }}".StartsWith('win-')) { "aspire-cli-${{ targetRid }}-*.zip" } else { "aspire-cli-${{ targetRid }}-*.tar.gz" }
               $archive = @(Get-ChildItem -Path $verifyParams.PackagesDir -Filter $archiveFilter -Recurse -File -ErrorAction SilentlyContinue)
