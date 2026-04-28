@@ -181,6 +181,7 @@ public class AzureContainerAppEnvironmentResource :
             DefaultContainerRegistry is not null)
         {
             appModel.Resources.Remove(DefaultContainerRegistry);
+            DefaultContainerRegistry = null;
         }
 
         var logger = services.GetRequiredService<ILogger<AzureContainerAppEnvironmentResource>>();

@@ -65,6 +65,13 @@ internal static class BundleDiscovery
     /// </summary>
     public const string ManagedDirectoryName = "managed";
 
+    /// <summary>
+    /// Directory name for the single top-level reparse point that links to the
+    /// active versioned bundle directory. Components (<c>managed/</c> and <c>dcp/</c>)
+    /// are resolved as subdirectories of this link target.
+    /// </summary>
+    public const string BundleDirectoryName = "bundle";
+
     // ═══════════════════════════════════════════════════════════════════════
     // EXECUTABLE NAMES (without path, just the file name)
     // ═══════════════════════════════════════════════════════════════════════

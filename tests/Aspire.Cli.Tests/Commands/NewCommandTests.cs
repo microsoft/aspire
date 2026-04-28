@@ -799,7 +799,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(promptedTemplates);
         Assert.Contains((KnownTemplateId.CSharpEmptyAppHost, "Empty AppHost"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptEmptyAppHost, "Empty (TypeScript AppHost)"), promptedTemplates);
-        Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React)"), promptedTemplates);
+        Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React, TypeScript AppHost)"), promptedTemplates);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
     }
 
@@ -1850,4 +1850,3 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(skillPath));
     }
 }
-

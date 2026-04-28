@@ -245,7 +245,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var targetEnv = (IComputeEnvironmentResource?)environment.OwningComputeEnvironment ?? environment;
+                var targetEnv = environment.OwningComputeEnvironment ?? environment;
                 var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is not null &&
                     deploymentTarget.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var annotations))
@@ -282,7 +282,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var targetEnv = (IComputeEnvironmentResource?)OwningComputeEnvironment ?? this;
+                var targetEnv = OwningComputeEnvironment ?? this;
                 var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is null)
                 {
@@ -296,7 +296,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
                 // Push steps must complete before the helm deploy step
                 var pushSteps = context.GetSteps(computeResource, WellKnownPipelineTags.PushContainerImage);
-                var helmDeploySteps = context.GetSteps(this, "helm-deploy");
+                var helmDeploySteps = context.GetSteps(targetEnv, "helm-deploy");
                 helmDeploySteps.DependsOn(pushSteps);
 
                 // Print summary steps are on the deployment target and must run after helm deploy
@@ -349,6 +349,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         var environmentContext = new KubernetesEnvironmentContext(this, logger);
         var containerRegistry = GetContainerRegistry(this, appModel);
+        var targetComputeEnvironment = OwningComputeEnvironment ?? this;
 
         // Create a Kubernetes resource for the dashboard if enabled
         if (DashboardEnabled && Dashboard?.Resource is KubernetesAspireDashboardResource dashboard)
@@ -358,10 +359,13 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
             {
-                ComputeEnvironment = this,
+                ComputeEnvironment = targetComputeEnvironment,
                 ContainerRegistry = containerRegistry
             });
         }
+
+        // Build deployment target lookup for endpoint resolution
+        var deploymentTargets = new Dictionary<IResource, KubernetesResource>();
 
         foreach (var r in appModel.GetComputeResources())
         {
@@ -390,23 +394,14 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             // Use the resource's actual compute environment (which may be a parent
             // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
             // can match it correctly during publish.
-            var computeEnvForAnnotation = resourceComputeEnvironment ?? (IComputeEnvironmentResource)this;
+            var computeEnvForAnnotation = resourceComputeEnvironment ?? targetComputeEnvironment;
             r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
             {
                 ComputeEnvironment = computeEnvForAnnotation,
                 ContainerRegistry = containerRegistry
             });
-        }
 
-        // Build deployment target lookup for endpoint resolution
-        var targetEnv = (IComputeEnvironmentResource?)OwningComputeEnvironment ?? this;
-        var deploymentTargets = new Dictionary<IResource, KubernetesResource>();
-        foreach (var resource in appModel.Resources)
-        {
-            if (resource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget is KubernetesResource k8sResource)
-            {
-                deploymentTargets[resource] = k8sResource;
-            }
+            deploymentTargets[r] = serviceResource;
         }
 
         // Process Ingress resources
