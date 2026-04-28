@@ -1844,7 +1844,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("\t\tif pwd, err := os.Getwd(); err == nil { resolved[\"ProjectDirectory\"] = pwd }");
         WriteLine("\t}");
         WriteLine();
-        WriteLine($"\tresult, err := c.invokeCapability(context.Background(), \"Aspire.Hosting/createBuilderWithOptions\", map[string]any{{\"options\": resolved}})");
+        WriteLine($"\tresult, err := c.invokeCapability(context.Background(), \"{AtsConstants.CreateBuilderCapability}\", map[string]any{{\"argsOrOptions\": resolved}})");
         WriteLine("\tif err != nil { return nil, err }");
         WriteLine("\thref, ok := result.(handleReference)");
         WriteLine("\tif !ok { return nil, fmt.Errorf(\"aspire: createBuilder returned unexpected type %T\", result) }");

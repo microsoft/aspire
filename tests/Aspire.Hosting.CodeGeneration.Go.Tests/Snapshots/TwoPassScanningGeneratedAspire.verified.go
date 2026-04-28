@@ -24534,7 +24534,7 @@ func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuil
 		if pwd, err := os.Getwd(); err == nil { resolved["ProjectDirectory"] = pwd }
 	}
 
-	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilderWithOptions", map[string]any{"options": resolved})
+	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})
 	if err != nil { return nil, err }
 	href, ok := result.(handleReference)
 	if !ok { return nil, fmt.Errorf("aspire: createBuilder returned unexpected type %T", result) }
