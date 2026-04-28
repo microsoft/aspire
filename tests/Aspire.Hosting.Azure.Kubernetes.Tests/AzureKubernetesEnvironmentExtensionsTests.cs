@@ -9,6 +9,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -90,7 +91,40 @@ public class AzureKubernetesEnvironmentExtensionsTests
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         Assert.NotNull(aks.Resource.KubernetesEnvironment);
-        Assert.Equal("aks-k8s", aks.Resource.KubernetesEnvironment.Name);
+        Assert.Equal("aks", aks.Resource.KubernetesEnvironment.Name);
+        Assert.True(aks.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var annotation));
+    }
+
+    [Fact]
+    public void AddAzureKubernetesEnvironment_AddsOnlyAksComputeEnvironmentToModel()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.DoesNotContain(model.Resources, r => r is KubernetesEnvironmentResource);
+
+        var computeEnvironment = Assert.Single(model.Resources.OfType<IComputeEnvironmentResource>());
+        Assert.Same(aks.Resource, computeEnvironment);
+    }
+
+    [Fact]
+    public async Task AddAzureKubernetesEnvironment_AllowsKubernetesServiceCustomizationWithoutVisibleKubernetesEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        builder.AddAzureKubernetesEnvironment("aks");
+        builder.AddContainer("api", "myimage")
+            .PublishAsKubernetesService(_ => { });
+
+        await using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
     }
 
     [Fact]
@@ -292,7 +326,9 @@ public class AzureKubernetesEnvironmentExtensionsTests
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        // The inner K8s environment should have the registry annotation
+        Assert.True(aks.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var aksAnnotation));
+        Assert.Same(aks.Resource.DefaultContainerRegistry, aksAnnotation.Registry);
+
         Assert.True(aks.Resource.KubernetesEnvironment
             .TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
         Assert.Same(aks.Resource.DefaultContainerRegistry, annotation.Registry);

@@ -7,8 +7,8 @@
 .DESCRIPTION
   Mirrors localhive.sh behavior on Windows. Packs the repo, creates a symlink from
   $HOME/.aspire/hives/<HiveName> to artifacts/packages/<Config>/Shipping (or copies .nupkg files),
-  installs the locally-built Aspire CLI to $HOME/.aspire/bin, and builds/installs the bundle
-  (aspire-managed + DCP) to $HOME/.aspire so the CLI can auto-discover it.
+  installs the locally-built Aspire CLI to $HOME/.aspire/bin, and embeds the bundle
+  payload (aspire-managed + DCP) in the CLI binary so it self-extracts on first run.
 
 .PARAMETER Configuration
   Build configuration: Release or Debug (positional parameter 0). If omitted, the script tries Release then falls back to Debug.
@@ -26,7 +26,8 @@
   Skip installing the locally-built CLI to $HOME/.aspire/bin.
 
 .PARAMETER SkipBundle
-  Skip building and installing the bundle (aspire-managed + DCP) to $HOME/.aspire.
+  Skip building the bundle payload. Without it the CLI binary will not have an embedded
+  bundle and will require externally-provided managed/ and dcp/ directories.
 
 .PARAMETER NativeAot
   Build and install the native AOT CLI (self-extracting binary with embedded bundle) instead of the dotnet tool version.
@@ -303,7 +304,7 @@ else {
   }
 }
 
-# Build the bundle (aspire-managed + DCP, and optionally native AOT CLI)
+# Build the bundle payload (aspire-managed + DCP tar.gz archive, and optionally native AOT CLI)
 if (-not $SkipBundle) {
   $bundleProjPath = Join-Path $RepoRoot "eng" "Bundle.proj"
   $skipNativeArg = if ($NativeAot) { '' } else { '/p:SkipNativeBuild=true' }
@@ -326,29 +327,16 @@ if (-not $SkipBundle) {
     exit 1
   }
 
-  $bundleLayoutDir = Join-Path $RepoRoot "artifacts" "bundle" $bundleRid
-
-  if (-not (Test-Path -LiteralPath $bundleLayoutDir)) {
-    Write-Err "Bundle layout not found at $bundleLayoutDir"
+  # Locate the bundle payload archive produced by Bundle.proj / CreateLayout.
+  # The archive is embedded in the CLI binary so EnsureExtractedAsync handles
+  # versioned layout creation, symlink/junction management, and cleanup at runtime.
+  $bundlePayloadArchive = Get-ChildItem -Path (Join-Path $RepoRoot "artifacts" "bundle") -Filter "aspire-*-$bundleRid.tar.gz" -File |
+    Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+  if (-not $bundlePayloadArchive) {
+    Write-Err "Bundle payload archive not found in artifacts/bundle/ for RID $bundleRid"
     exit 1
   }
-
-  # Copy managed/ and dcp/ to $HOME/.aspire so the CLI auto-discovers them
-  foreach ($component in @('managed', 'dcp')) {
-    $sourceDir = Join-Path $bundleLayoutDir $component
-    $destDir = Join-Path $aspireRoot $component
-    if (Test-Path -LiteralPath $sourceDir) {
-      if (Test-Path -LiteralPath $destDir) {
-        Remove-Item -LiteralPath $destDir -Force -Recurse
-      }
-      Write-Log "Copying $component/ to $destDir"
-      Copy-Item -LiteralPath $sourceDir -Destination $destDir -Recurse -Force
-    } else {
-      Write-Warn "$component/ not found in bundle layout at $sourceDir"
-    }
-  }
-
-  Write-Log "Bundle installed to $aspireRoot (managed/ + dcp/)"
+  Write-Log "Bundle payload archive: $($bundlePayloadArchive.FullName) ($([math]::Round($bundlePayloadArchive.Length / 1MB, 1)) MB)"
 }
 
 # Install the CLI to $aspireRoot/bin
@@ -357,24 +345,37 @@ if (-not $SkipCli) {
 
   if ($NativeAot) {
     # Native AOT CLI is produced by Bundle.proj's _PublishNativeCli target
+    # (already has embedded bundle payload)
     $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $bundleRid "native"
     if (-not (Test-Path -LiteralPath $cliPublishDir)) {
       $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $bundleRid "publish"
     }
   } elseif ($Rid) {
-    # Cross-RID: publish CLI for the target platform
+    # Cross-RID: publish CLI for the target platform with embedded bundle payload
     Write-Log "Publishing Aspire CLI for target RID: $Rid"
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.csproj"
     $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $Rid "publish"
-    & dotnet publish $cliProj -c $effectiveConfig -r $Rid --self-contained /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VersionSuffix"
+    $publishArgs = @($cliProj, '-c', $effectiveConfig, '-r', $Rid, '--self-contained', '/p:PublishAot=false', '/p:PublishSingleFile=true', "/p:VersionSuffix=$VersionSuffix")
+    if ($bundlePayloadArchive) {
+      $publishArgs += "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
+    }
+    & dotnet publish @publishArgs
     if ($LASTEXITCODE -ne 0) {
       Write-Err "CLI publish for RID $Rid failed."
       exit 1
     }
   } else {
-    # Framework-dependent CLI from dotnet tool build
+    # Framework-dependent CLI with embedded bundle payload
+    $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.Tool.csproj"
     $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
-    if (-not (Test-Path -LiteralPath $cliPublishDir)) {
+    if ($bundlePayloadArchive) {
+      Write-Log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
+      & dotnet publish $cliProj -c $effectiveConfig "/p:VersionSuffix=$VersionSuffix" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
+      if ($LASTEXITCODE -ne 0) {
+        Write-Err "CLI publish with embedded bundle failed."
+        exit 1
+      }
+    } elseif (-not (Test-Path -LiteralPath $cliPublishDir)) {
       $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
     }
   }
@@ -494,8 +495,8 @@ if ($Output) {
     Write-Host
   }
   if (-not $SkipBundle) {
-    Write-Log "Bundle (aspire-managed + DCP) installed to: $aspireRoot"
-    Write-Log "  The CLI at ~/.aspire/bin/ will auto-discover managed/ and dcp/ in the parent directory."
+    Write-Log "Bundle payload embedded in CLI binary. The CLI will extract and"
+    Write-Log "  create the versioned layout (bundle/ -> versions/<id>/) on first run."
     Write-Host
   }
   Write-Log 'The Aspire CLI discovers channels automatically from the hives directory; no extra flags are required.'

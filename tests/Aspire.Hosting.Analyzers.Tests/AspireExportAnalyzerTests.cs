@@ -1011,6 +1011,7 @@ public class AspireExportAnalyzerTests
     public async Task DuplicateExportIdSameTargetType_ReportsASPIREEXPORT007()
     {
         var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateExportId;
+        var capabilityDiagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
 
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
             using Aspire.Hosting;
@@ -1028,7 +1029,9 @@ public class AspireExportAnalyzerTests
             """,
             [
                 new DiagnosticResult(diagnostic).WithLocation(7, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder"),
-                new DiagnosticResult(diagnostic).WithLocation(10, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder")
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(7, 6),
+                new DiagnosticResult(diagnostic).WithLocation(10, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(10, 6)
             ]);
 
         await test.RunAsync();
@@ -1056,8 +1059,10 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
-    public async Task SameExportIdDifferentTargetTypes_NoDiagnostics()
+    public async Task SameExportIdDifferentTargetTypes_ReportsASPIREEXPORT013()
     {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
+
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
             using Aspire.Hosting;
             using Aspire.Hosting.ApplicationModel;
@@ -1080,16 +1085,20 @@ public class AspireExportAnalyzerTests
                 public static IResourceBuilder<MyResource> ConfigureResource(this IResourceBuilder<MyResource> builder, string value)
                     => builder;
             }
-            """, []);
+            """,
+            [
+                CompilerWarning(diagnostic.Id).WithLocation(15, 6),
+                CompilerWarning(diagnostic.Id).WithLocation(18, 6)
+            ]);
 
         await test.RunAsync();
     }
 
     [Fact]
-    public async Task NonExtensionMethod_NoDuplicateCheck()
+    public async Task NonExtensionMethod_ReportsASPIREEXPORT013()
     {
-        // Non-extension methods with same export ID should not trigger ASPIREEXPORT007
-        // since they don't have a target type in the same way
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
+
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
             using Aspire.Hosting;
 
@@ -1103,7 +1112,133 @@ public class AspireExportAnalyzerTests
                 [AspireExport("getValue")]
                 public static string GetValueWithDefault(string defaultValue) => defaultValue;
             }
+            """,
+            [
+                CompilerWarning(diagnostic.Id).WithLocation(7, 6),
+                CompilerWarning(diagnostic.Id).WithLocation(10, 6)
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExposeMethodsOverloadsLikeKubernetesHelmOptions_ReportASPIREEXPORT013()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+
+            namespace Aspire.Hosting.Kubernetes
+            {
+                [AspireExport(ExposeMethods = true)]
+                public class HelmChartOptions
+                {
+                    public void WithNamespace(string namespaceName) { }
+
+                    public void WithNamespace(int namespaceNumber) { }
+                }
+            }
+            """,
+            [
+                CompilerWarning(diagnostic.Id).WithLocation(13, 21),
+                CompilerWarning(diagnostic.Id).WithLocation(15, 21)
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExposeMethodsSpecialRuntimeMethods_NoASPIREEXPORT013()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+
+            namespace TestPackage
+            {
+                [AspireExport(ExposeMethods = true)]
+                public class Context
+                {
+                    public override string ToString() => "";
+
+                    public string ToString(string format) => format;
+
+                    public override int GetHashCode() => 0;
+
+                    public override bool Equals(object? obj) => false;
+                }
+            }
             """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExposeMethodsGenericAndNonGenericTypesWithSameName_NoASPIREEXPORT013()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+
+            namespace TestPackage
+            {
+                [AspireExport(ExposeMethods = true)]
+                public class Context
+                {
+                    public void Configure() { }
+                }
+
+                [AspireExport(ExposeMethods = true)]
+                public class Context<T>
+                {
+                    public void Configure() { }
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task AssemblyExportExposeMethodsOverloads_ReportASPIREEXPORT013()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            [assembly: AspireExport(typeof(AssemblyContext), ExposeMethods = true)]
+
+            public static class Program
+            {
+                public static void Main() { }
+            }
+
+            public class AssemblyContext
+            {
+                public void Configure(string name) { }
+
+                public void Configure(int port) { }
+            }
+            """,
+            [
+                CompilerWarning(diagnostic.Id).WithLocation(12, 17),
+                CompilerWarning(diagnostic.Id).WithLocation(14, 17)
+            ]);
 
         await test.RunAsync();
     }
@@ -1203,6 +1338,7 @@ public class AspireExportAnalyzerTests
     public async Task DuplicateExportIdAcrossClasses_ReportsASPIREEXPORT007()
     {
         var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateExportId;
+        var capabilityDiagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
 
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
             using Aspire.Hosting;
@@ -1223,7 +1359,9 @@ public class AspireExportAnalyzerTests
             """,
             [
                 new DiagnosticResult(diagnostic).WithLocation(7, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder"),
-                new DiagnosticResult(diagnostic).WithLocation(13, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder")
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(7, 6),
+                new DiagnosticResult(diagnostic).WithLocation(13, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(13, 6)
             ]);
 
         await test.RunAsync();
@@ -1233,6 +1371,7 @@ public class AspireExportAnalyzerTests
     public async Task ThreeOrMoreDuplicates_ReportsAllASPIREEXPORT007()
     {
         var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateExportId;
+        var capabilityDiagnostic = AspireExportAnalyzer.Diagnostics.s_duplicatePolyglotCapabilityId;
 
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
             using Aspire.Hosting;
@@ -1253,8 +1392,11 @@ public class AspireExportAnalyzerTests
             """,
             [
                 new DiagnosticResult(diagnostic).WithLocation(7, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(7, 6),
                 new DiagnosticResult(diagnostic).WithLocation(10, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder"),
-                new DiagnosticResult(diagnostic).WithLocation(13, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder")
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(10, 6),
+                new DiagnosticResult(diagnostic).WithLocation(13, 6).WithArguments("addThing", "Aspire.Hosting.IDistributedApplicationBuilder"),
+                CompilerWarning(capabilityDiagnostic.Id).WithLocation(13, 6)
             ]);
 
         await test.RunAsync();

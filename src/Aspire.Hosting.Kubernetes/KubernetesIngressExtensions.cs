@@ -188,7 +188,7 @@ public static class KubernetesIngressExtensions
     ///        .WithHostname("www.example.com");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a hostname to a Kubernetes Ingress")]
+    [AspireExport("withIngressHostname", MethodName = "withHostname", Description = "Adds a hostname to a Kubernetes Ingress")]
     public static IResourceBuilder<KubernetesIngressResource> WithHostname(
         this IResourceBuilder<KubernetesIngressResource> builder,
         string hostname)
@@ -225,7 +225,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Configures TLS for a Kubernetes Ingress using a K8S secret")]
+    [AspireExport("withIngressTls", MethodName = "withTls", Description = "Configures TLS for a Kubernetes Ingress using a K8S secret")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder,
         string secretName)
