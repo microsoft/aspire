@@ -113,16 +113,51 @@ internal static class BackchannelConstants
     /// Computes the hash portion of the socket name from an AppHost path.
     /// </summary>
     /// <remarks>
-    /// The hash is case-sensitive. On case-insensitive file systems (Windows, macOS with default settings),
-    /// "C:\App\MyApp.csproj" and "C:\app\myapp.csproj" will produce different hashes even though they
-    /// reference the same file. This is acceptable because the CLI typically uses the exact path provided
-    /// by MSBuild or the user, which should be consistent within a session.
+    /// On case-insensitive file systems (Windows, macOS), the path is normalized to uppercase
+    /// before hashing so that "C:\App\MyApp.csproj" and "c:\app\myapp.csproj" produce the
+    /// same hash. Without this, the CLI and AppHost can derive different drive-letter casings
+    /// (e.g. <c>FileInfo.FullName</c> vs MSBuild metadata) and fail to match sockets.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <returns>A 16-character lowercase hex string.</returns>
     public static string ComputeHash(string appHostPath)
     {
+        return ComputeStableIdentifier(NormalizePath(appHostPath), HashLength);
+    }
+
+    /// <summary>
+    /// Computes the legacy (pre-normalization) hash for backward compatibility.
+    /// </summary>
+    /// <remarks>
+    /// Older AppHost versions hashed the raw path without case normalization.
+    /// The CLI uses this to find sockets created by older AppHosts.
+    /// Returns <c>null</c> when the legacy hash would be identical to <see cref="ComputeHash"/>.
+    /// </remarks>
+    /// <param name="appHostPath">The full path to the AppHost project file.</param>
+    /// <returns>A 16-character lowercase hex string, or <c>null</c> if it matches the current hash.</returns>
+    public static string? ComputeLegacyHash(string appHostPath)
+    {
+        var normalizedPath = NormalizePath(appHostPath);
+        if (string.Equals(appHostPath, normalizedPath, StringComparison.Ordinal))
+        {
+            // Path didn't change after normalization, so legacy hash is identical.
+            return null;
+        }
+
         return ComputeStableIdentifier(appHostPath, HashLength);
+    }
+
+    /// <summary>
+    /// Normalizes the path for consistent hashing on case-insensitive file systems.
+    /// </summary>
+    private static string NormalizePath(string path)
+    {
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        {
+            return path.ToUpperInvariant();
+        }
+
+        return path;
     }
 
     /// <summary>

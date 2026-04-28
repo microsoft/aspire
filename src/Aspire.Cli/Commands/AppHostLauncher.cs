@@ -128,8 +128,13 @@ internal sealed class AppHostLauncher(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName);
         var expectedHash = AppHostHelper.ExtractHashFromSocketPath(expectedSocketPrefix)!;
+        var legacyHash = AppHostHelper.ComputeLegacyHash(effectiveAppHostFile.FullName);
 
         logger.LogDebug("Waiting for socket with prefix: {SocketPrefix}, Hash: {Hash}", expectedSocketPrefix, expectedHash);
+        if (legacyHash is not null)
+        {
+            logger.LogDebug("Also searching for legacy hash: {LegacyHash}", legacyHash);
+        }
 
         // If --wait-for-debugger is active, show a message so the user knows the AppHost
         // is paused. In detached mode we don't have the AppHost PID (stdout is suppressed),
@@ -144,7 +149,7 @@ internal sealed class AppHostLauncher(
         // Start the child process and wait for the backchannel
         var launchResult = await interactionService.ShowStatusAsync(
             RunCommandStrings.StartingAppHostInBackground,
-            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, cancellationToken));
+            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, cancellationToken));
 
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
@@ -246,6 +251,7 @@ internal sealed class AppHostLauncher(
         string executablePath,
         List<string> childArgs,
         string expectedHash,
+        string? legacyHash,
         CancellationToken cancellationToken)
     {
         Process childProcess;
@@ -283,7 +289,8 @@ internal sealed class AppHostLauncher(
 
             await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
 
-            var connection = backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault();
+            var connection = backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault()
+                ?? (legacyHash is not null ? backchannelMonitor.GetConnectionsByHash(legacyHash).FirstOrDefault() : null);
             if (connection is not null)
             {
                 DashboardUrlsState? dashboardUrls = null;

@@ -387,4 +387,89 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedCompatible, isCompatible);
         Assert.Equal(aspireVersion, returnedVersion);
     }
+
+    [Fact]
+    public void ComputeLegacyHash_ReturnsNullWhenPathUnchangedByNormalization()
+    {
+        // On Linux, normalization is a no-op so the legacy hash is always null.
+        // On Windows/macOS, a path that is already fully uppercase won't change either.
+        var appHostPath = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? @"C:\PATH\TO\MYAPP.APPHOST.CSPROJ"
+            : "/path/to/MyApp.AppHost.csproj";
+
+        var legacyHash = AppHostHelper.ComputeLegacyHash(appHostPath);
+
+        Assert.Null(legacyHash);
+    }
+
+    [Fact]
+    public void FindMatchingSockets_FindsSocketsCreatedWithDifferentPathCasing()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS(),
+            "Path case normalization only applies on case-insensitive file systems (Windows/macOS).");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "backchannels");
+        Directory.CreateDirectory(backchannelsDir);
+
+        // Simulate paths with different drive letter casing, as can happen when
+        // the CLI resolves via FileInfo.FullName (uppercase) and the AppHost resolves
+        // via MSBuild metadata (lowercase).
+        var upperCasePath = @"C:\Development\MyApp\MyApp.AppHost.csproj";
+        var lowerCasePath = @"c:\development\myapp\myapp.apphost.csproj";
+
+        // Both casings should produce the same hash (current behavior after normalization)
+        var upperPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(upperCasePath, workspace.WorkspaceRoot.FullName);
+        var lowerPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(lowerCasePath, workspace.WorkspaceRoot.FullName);
+        Assert.Equal(upperPrefix, lowerPrefix);
+
+        var hash = Path.GetFileName(upperPrefix)["auxi.sock.".Length..];
+
+        // Create a socket file using the normalized hash (simulates a new AppHost)
+        var socket = Path.Combine(backchannelsDir, $"auxi.sock.{hash}.a1b2c3d4e5f6.12345");
+        File.WriteAllText(socket, "");
+
+        // Both path casings should find the socket
+        var fromUpper = AppHostHelper.FindMatchingSockets(upperCasePath, workspace.WorkspaceRoot.FullName);
+        var fromLower = AppHostHelper.FindMatchingSockets(lowerCasePath, workspace.WorkspaceRoot.FullName);
+
+        Assert.Single(fromUpper);
+        Assert.Single(fromLower);
+        Assert.Contains(socket, fromUpper);
+        Assert.Contains(socket, fromLower);
+    }
+
+    [Fact]
+    public void FindMatchingSockets_LegacyHashFindsSocketsFromOlderAppHost()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS(),
+            "Legacy hash divergence only occurs on case-insensitive file systems (Windows/macOS).");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "backchannels");
+        Directory.CreateDirectory(backchannelsDir);
+
+        // A mixed-case path produces a legacy hash that differs from the normalized hash
+        var appHostPath = @"c:\Development\MyApp\MyApp.AppHost.csproj";
+        var legacyHash = AppHostHelper.ComputeLegacyHash(appHostPath);
+        Assert.NotNull(legacyHash);
+
+        // Create a socket using the legacy (pre-normalization) hash, as an older AppHost would
+        var legacySocket = Path.Combine(backchannelsDir, $"auxi.sock.{legacyHash}.a1b2c3d4e5f6.99999");
+        File.WriteAllText(legacySocket, "");
+
+        // The current normalized hash should NOT find the legacy socket
+        var currentPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
+        var currentHash = Path.GetFileName(currentPrefix)["auxi.sock.".Length..];
+        Assert.NotEqual(currentHash, legacyHash);
+
+        var foundByCurrentHash = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
+        Assert.Empty(foundByCurrentHash);
+
+        // But the legacy hash lets us locate it via directory scan
+        var legacyPrefix = Path.Combine(backchannelsDir, $"auxi.sock.{legacyHash}");
+        var legacyMatches = Directory.GetFiles(backchannelsDir, Path.GetFileName(legacyPrefix) + "*");
+        Assert.Single(legacyMatches);
+        Assert.Contains(legacySocket, legacyMatches);
+    }
 }
