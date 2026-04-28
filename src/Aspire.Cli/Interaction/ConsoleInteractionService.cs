@@ -520,7 +520,8 @@ internal class ConsoleInteractionService : IInteractionService
             var key = await MessageConsole.Input.ReadKeyAsync(intercept: true, cancellationToken);
             if (key is null)
             {
-                continue;
+                MessageConsole.WriteLine();
+                return defaultValue;
             }
 
             if (key.Value.Key == ConsoleKey.Enter || key.Value.KeyChar is '\r' or '\n')
@@ -531,13 +532,15 @@ internal class ConsoleInteractionService : IInteractionService
 
             if (key.Value.Key == ConsoleKey.Y || key.Value.KeyChar is 'y' or 'Y')
             {
-                MessageConsole.WriteLine("y");
+                var echoedChoice = key.Value.KeyChar is 'y' or 'Y' ? key.Value.KeyChar : yesChoice;
+                MessageConsole.WriteLine(echoedChoice.ToString());
                 return true;
             }
 
             if (key.Value.Key == ConsoleKey.N || key.Value.KeyChar is 'n' or 'N')
             {
-                MessageConsole.WriteLine("n");
+                var echoedChoice = key.Value.KeyChar is 'n' or 'N' ? key.Value.KeyChar : noChoice;
+                MessageConsole.WriteLine(echoedChoice.ToString());
                 return false;
             }
         }

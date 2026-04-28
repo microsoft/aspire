@@ -882,33 +882,37 @@ public class ConsoleInteractionServiceTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ConfirmAsync_WhenUserPressesYWithoutEnter_ReturnsTrue(bool defaultValue)
+    [InlineData(true, "y")]
+    [InlineData(true, "Y")]
+    [InlineData(false, "y")]
+    [InlineData(false, "Y")]
+    public async Task ConfirmAsync_WhenUserPressesYWithoutEnter_ReturnsTrue(bool defaultValue, string input)
     {
         var output = new StringBuilder();
-        var console = CreateInteractiveConsoleWithInput(output, "y");
+        var console = CreateInteractiveConsoleWithInput(output, input);
         var interactionService = CreateInteractionService(console);
 
         var result = await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
 
         Assert.True(result);
-        Assert.EndsWith("y\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+        Assert.EndsWith($"{input}\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ConfirmAsync_WhenUserPressesNWithoutEnter_ReturnsFalse(bool defaultValue)
+    [InlineData(true, "n")]
+    [InlineData(true, "N")]
+    [InlineData(false, "n")]
+    [InlineData(false, "N")]
+    public async Task ConfirmAsync_WhenUserPressesNWithoutEnter_ReturnsFalse(bool defaultValue, string input)
     {
         var output = new StringBuilder();
-        var console = CreateInteractiveConsoleWithInput(output, "n");
+        var console = CreateInteractiveConsoleWithInput(output, input);
         var interactionService = CreateInteractionService(console);
 
         var result = await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
 
         Assert.False(result);
-        Assert.EndsWith("n\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+        Assert.EndsWith($"{input}\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
     }
 
     [Fact]
