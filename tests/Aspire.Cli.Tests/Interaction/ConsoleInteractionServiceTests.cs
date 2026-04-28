@@ -881,6 +881,36 @@ public class ConsoleInteractionServiceTests
         Assert.Equal(defaultValue, result);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConfirmAsync_WhenUserPressesYWithoutEnter_ReturnsTrue(bool defaultValue)
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "y");
+        var interactionService = CreateInteractionService(console);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
+
+        Assert.True(result);
+        Assert.EndsWith("y\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConfirmAsync_WhenUserPressesNWithoutEnter_ReturnsFalse(bool defaultValue)
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "n");
+        var interactionService = CreateInteractionService(console);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
+
+        Assert.False(result);
+        Assert.EndsWith("n\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task PromptForStringAsync_CliProvidedValue_RunsValidator()
     {

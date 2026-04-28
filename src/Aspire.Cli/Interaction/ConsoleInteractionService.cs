@@ -505,17 +505,42 @@ internal class ConsoleInteractionService : IInteractionService
         var yesChoice = defaultValue ? 'Y' : 'y';
         var noChoice = defaultValue ? 'n' : 'N';
 
-        var prompt = new ConfirmationPrompt(promptText)
-        {
-            Yes = yesChoice,
-            No = noChoice,
-            ShowDefaultValue = false,
-            DefaultValue = defaultValue,
-        };
-
-        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        var result = await PromptConfirmWithSingleKeyAsync(promptText, yesChoice, noChoice, defaultValue, cancellationToken);
         MessageLogger.LogInformation("Confirm result: {Result}", result);
         return result;
+    }
+
+    private async Task<bool> PromptConfirmWithSingleKeyAsync(string promptText, char yesChoice, char noChoice, bool defaultValue, CancellationToken cancellationToken)
+    {
+        MessageConsole.Markup(promptText);
+        MessageConsole.Write($" [{yesChoice}/{noChoice}] ");
+
+        while (true)
+        {
+            var key = await MessageConsole.Input.ReadKeyAsync(intercept: true, cancellationToken);
+            if (key is null)
+            {
+                continue;
+            }
+
+            if (key.Value.Key == ConsoleKey.Enter || key.Value.KeyChar is '\r' or '\n')
+            {
+                MessageConsole.WriteLine();
+                return defaultValue;
+            }
+
+            if (key.Value.Key == ConsoleKey.Y || key.Value.KeyChar is 'y' or 'Y')
+            {
+                MessageConsole.WriteLine("y");
+                return true;
+            }
+
+            if (key.Value.Key == ConsoleKey.N || key.Value.KeyChar is 'n' or 'N')
+            {
+                MessageConsole.WriteLine("n");
+                return false;
+            }
+        }
     }
 
     public void DisplaySubtleMessage(string message, bool allowMarkup = false)
