@@ -375,6 +375,7 @@ jobs:
     needs: [
       setup_for_tests,
       build_packages,
+      validate_cli_tool_pack,
       build_cli_archive_linux,
       build_cli_archive_linux_arm64,
       build_cli_archive_windows,

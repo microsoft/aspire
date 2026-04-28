@@ -223,6 +223,13 @@ internal sealed class UpdateCommand : BaseCommand
 
                 if (shouldUpdateCli)
                 {
+                    if (IsRunningAsDotNetTool())
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+                        InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
+                        return ExitCodeConstants.Success;
+                    }
+
                     // Use the same channel that was selected for the project update
                     return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
                 }
