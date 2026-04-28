@@ -171,7 +171,7 @@ public sealed class SupportProjectTemplateBehaviorTests(ITestOutputHelper output
     [InlineData("aspire-nunit", "SupportTemplate.NUnit", null)]
     [InlineData("aspire-mstest", "SupportTemplate.MSTest", null)]
     [CaptureWorkspaceOnFailure]
-    public async Task SupportProjectTemplatesBuildAgainstGeneratedAppHost(string templateName, string projectName, string? xunitVersion)
+    public async Task SupportProjectTemplatesRunAgainstGeneratedAppHost(string templateName, string projectName, string? xunitVersion)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
@@ -203,9 +203,9 @@ public sealed class SupportProjectTemplateBehaviorTests(ITestOutputHelper output
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("dotnet build");
+        await auto.TypeAsync("dotnet test");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();

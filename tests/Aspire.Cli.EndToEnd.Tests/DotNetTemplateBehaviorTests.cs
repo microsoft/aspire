@@ -67,6 +67,46 @@ public sealed class DotNetTemplateLocalhostTldTests(ITestOutputHelper output)
     }
 }
 
+public sealed class DotNetSingleFileAppHostTemplateTests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task SingleFileAppHostTemplateBuildsAndStarts()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await DotNetTemplateBehaviorTestHelpers.CreateTemplateBootstrapAsync(auto, counter);
+        await DotNetTemplateBehaviorTestHelpers.CreateDotNetTemplateInBootstrapAsync(auto, counter, workspace, "aspire-apphost-singlefile", "SingleFileAppHost", []);
+
+        await auto.TypeAsync("cd SingleFileAppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("dotnet build apphost.cs");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+}
+
 public sealed class DotNetTemplateTransportTests(ITestOutputHelper output)
 {
     [Fact]
