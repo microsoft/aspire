@@ -22,7 +22,7 @@ public static class KubernetesIngressExtensions
     /// <para>
     /// After creating the ingress, configure routes using
     /// <see cref="WithRoute(IResourceBuilder{KubernetesIngressResource}, string, EndpointReference, IngressPathType)"/>
-    /// and optionally set an ingress class with <see cref="WithIngressClass"/>.
+    /// and optionally set an ingress class with <see cref="WithIngressClass(IResourceBuilder{KubernetesIngressResource}, string)"/>.
     /// </para>
     /// </remarks>
     /// <example>
@@ -71,6 +71,24 @@ public static class KubernetesIngressExtensions
         ArgumentException.ThrowIfNullOrEmpty(className);
 
         builder.Resource.IngressClassName = className;
+        return builder;
+    }
+
+    /// <summary>
+    /// Sets the Kubernetes ingress class name using a parameter that will be resolved at deploy time.
+    /// </summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <param name="className">A parameter resource builder for the ingress class name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    [AspireExport("withIngressClassParam", Description = "Sets a parameterized ingress class for a Kubernetes Ingress")]
+    public static IResourceBuilder<KubernetesIngressResource> WithIngressClass(
+        this IResourceBuilder<KubernetesIngressResource> builder,
+        IResourceBuilder<ParameterResource> className)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(className);
+
+        builder.Resource.IngressClassName = className.Resource.Name;
         return builder;
     }
 
