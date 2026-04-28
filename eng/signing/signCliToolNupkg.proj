@@ -9,6 +9,7 @@
 
     <PackagesDir Condition="'$(PackagesDir)' == ''">$(ArtifactsPackagesDir)</PackagesDir>
     <PackagesDir>$([MSBuild]::NormalizeDirectory('$(PackagesDir)'))</PackagesDir>
+    <PackagesDir>$([MSBuild]::EnsureTrailingSlash('$(PackagesDir)'))</PackagesDir>
     <OutDir>$(PackagesDir)</OutDir>
   </PropertyGroup>
 
