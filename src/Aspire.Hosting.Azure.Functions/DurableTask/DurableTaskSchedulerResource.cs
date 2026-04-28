@@ -44,7 +44,9 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
             };
         }
 
+#pragma warning disable ASPIREDURABLETASK001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         throw new InvalidOperationException($"Unable to resolve the Durable Task Scheduler connection string. Configure the scheduler using {nameof(DurableTaskResourceExtensions.RunAsEmulator)}() or {nameof(DurableTaskResourceExtensions.RunAsExisting)}(connectionString) before accessing {nameof(ConnectionStringExpression)}.");
+#pragma warning restore ASPIREDURABLETASK001
     }
 
     private ReferenceExpression CreateDashboardEndpoint()
