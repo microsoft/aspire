@@ -8,139 +8,125 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Dcp.Process;
-using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
-using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Hosting.Azure.Kubernetes;
+namespace Aspire.Hosting.Azure;
 
 /// <summary>
-/// Infrastructure eventing subscriber that processes compute resources
-/// targeting an AKS environment.
+/// AKS-specific pipeline step implementations for <see cref="AzureKubernetesEnvironmentResource"/>.
 /// </summary>
-internal sealed partial class AzureKubernetesInfrastructure(
-    ILogger<AzureKubernetesInfrastructure> logger)
-    : IDistributedApplicationEventingSubscriber
+public partial class AzureKubernetesEnvironmentResource
 {
-    /// <inheritdoc />
-    public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
+    /// <summary>
+    /// Per-environment AKS preparation work invoked by the <c>prepare-aks-{name}</c> pipeline
+    /// step. Ensures a default user node pool exists and applies node-pool affinity and
+    /// workload-identity annotations to compute resources targeting this AKS environment so
+    /// that the inner Kubernetes environment can consume them when materializing service
+    /// resources.
+    /// </summary>
+    private Task PrepareAksEnvironmentAsync(PipelineStepContext context)
     {
-        if (!executionContext.IsRunMode)
-        {
-            eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
-        }
+        var appModel = context.Model;
+        var executionContext = context.ExecutionContext;
 
-        return Task.CompletedTask;
-    }
-
-    private Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken = default)
-    {
-        var aksEnvironments = @event.Model.Resources
-            .OfType<AzureKubernetesEnvironmentResource>()
-            .ToArray();
-
-        if (aksEnvironments.Length == 0)
+        if (executionContext.IsRunMode)
         {
             return Task.CompletedTask;
         }
 
-        foreach (var environment in aksEnvironments)
+        var logger = context.Services.GetRequiredService<ILogger<AzureKubernetesEnvironmentResource>>();
+
+        logger.LogInformation("Processing AKS environment '{Name}'", Name);
+
+        // Ensure a default user node pool exists for workload scheduling.
+        // The system pool should only run system pods; application workloads
+        // need a user pool.
+        var defaultUserPool = EnsureDefaultUserNodePool(this, appModel);
+
+        foreach (var r in appModel.GetComputeResources())
         {
-            logger.LogInformation("Processing AKS environment '{Name}'", environment.Name);
+            var resourceComputeEnvironment = r.GetComputeEnvironment();
 
-            // Add a pipeline step to fetch AKS credentials into an isolated kubeconfig
-            // file. This runs after AKS is provisioned and before the Helm deploy.
-            AddGetCredentialsStep(environment);
-
-            // Ensure a default user node pool exists for workload scheduling.
-            // The system pool should only run system pods; application workloads
-            // need a user pool.
-            var defaultUserPool = EnsureDefaultUserNodePool(environment, @event.Model);
-
-            foreach (var r in @event.Model.GetComputeResources())
+            // Check if this resource targets THIS AKS environment
+            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
             {
-                var resourceComputeEnvironment = r.GetComputeEnvironment();
+                continue;
+            }
 
-                // Check if this resource targets THIS AKS environment
-                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
+            // If the resource has no explicit node pool affinity, assign it
+            // to the default user pool.
+            if (!r.TryGetLastAnnotation<KubernetesNodePoolAnnotation>(out _) && defaultUserPool is not null)
+            {
+                r.Annotations.Add(new KubernetesNodePoolAnnotation(defaultUserPool));
+            }
+
+            // Wire workload identity: if the resource has an AppIdentityAnnotation
+            // (auto-created by AzureResourcePreparer or explicit via WithAzureUserAssignedIdentity),
+            // generate a ServiceAccount and wire the pod spec.
+            if (r.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity))
+            {
+                // Ensure OIDC + workload identity are enabled on the cluster
+                OidcIssuerEnabled = true;
+                WorkloadIdentityEnabled = true;
+
+                var saName = $"{r.Name}-sa";
+                var identityClientId = appIdentity.IdentityResource.ClientId;
+
+                // Use KubernetesServiceCustomizationAnnotation to inject SA + pod spec changes
+                // during Helm chart generation.
+                r.Annotations.Add(new KubernetesServiceCustomizationAnnotation(kubeResource =>
                 {
-                    continue;
-                }
+                    // Create ServiceAccount with workload identity annotations
+                    var serviceAccount = new ServiceAccountV1();
+                    serviceAccount.Metadata.Name = saName;
+                    serviceAccount.Metadata.Annotations["azure.workload.identity/client-id"] =
+                        $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}";
+                    serviceAccount.Metadata.Labels["azure.workload.identity/use"] = "true";
+                    kubeResource.AdditionalResources.Add(serviceAccount);
 
-                // If the resource has no explicit node pool affinity, assign it
-                // to the default user pool.
-                if (!r.TryGetLastAnnotation<KubernetesNodePoolAnnotation>(out _) && defaultUserPool is not null)
-                {
-                    r.Annotations.Add(new KubernetesNodePoolAnnotation(defaultUserPool));
-                }
+                    // Add a placeholder parameter for the identity clientId
+                    // so it appears in values.yaml under parameters.<name>.identityClientId.
+                    // The actual value is resolved at deploy time via CapturedHelmValueProviders.
+                    kubeResource.Parameters["identityClientId"] = new KubernetesResource.HelmValue(
+                        $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}",
+                        string.Empty);
 
-                // Wire workload identity: if the resource has an AppIdentityAnnotation
-                // (auto-created by AzureResourcePreparer or explicit via WithAzureUserAssignedIdentity),
-                // generate a ServiceAccount and wire the pod spec.
-                if (r.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity))
-                {
-                    // Ensure OIDC + workload identity are enabled on the cluster
-                    environment.OidcIssuerEnabled = true;
-                    environment.WorkloadIdentityEnabled = true;
-
-                    var saName = $"{r.Name}-sa";
-                    var identityClientId = appIdentity.IdentityResource.ClientId;
-
-                    // Use KubernetesServiceCustomizationAnnotation to inject SA + pod spec changes
-                    // during Helm chart generation.
-                    r.Annotations.Add(new KubernetesServiceCustomizationAnnotation(kubeResource =>
+                    // Set serviceAccountName on pod spec and add workload identity label
+                    if (kubeResource.Workload?.PodTemplate is { } podTemplate)
                     {
-                        // Create ServiceAccount with workload identity annotations
-                        var serviceAccount = new ServiceAccountV1();
-                        serviceAccount.Metadata.Name = saName;
-                        serviceAccount.Metadata.Annotations["azure.workload.identity/client-id"] =
-                            $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}";
-                        serviceAccount.Metadata.Labels["azure.workload.identity/use"] = "true";
-                        kubeResource.AdditionalResources.Add(serviceAccount);
-
-                        // Add a placeholder parameter for the identity clientId
-                        // so it appears in values.yaml under parameters.<name>.identityClientId.
-                        // The actual value is resolved at deploy time via CapturedHelmValueProviders.
-                        kubeResource.Parameters["identityClientId"] = new KubernetesResource.HelmValue(
-                            $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}",
-                            string.Empty);
-
-                        // Set serviceAccountName on pod spec and add workload identity label
-                        if (kubeResource.Workload?.PodTemplate is { } podTemplate)
+                        if (podTemplate.Spec is { } podSpec)
                         {
-                            if (podTemplate.Spec is { } podSpec)
-                            {
-                                podSpec.ServiceAccountName = saName;
-                            }
-
-                            // The workload identity webhook requires this label on the POD
-                            // to inject AZURE_CLIENT_ID, token volume mounts, etc.
-                            podTemplate.Metadata.Labels["azure.workload.identity/use"] = "true";
+                            podSpec.ServiceAccountName = saName;
                         }
-                    }));
 
-                    // Wire the identity clientId as a deferred Helm value so it gets
-                    // resolved from the Bicep output at deploy time. The SA annotation
-                    // references {{ .Values.parameters.<name>.identityClientId }}.
-                    if (identityClientId is IValueProvider clientIdProvider)
-                    {
-                        environment.KubernetesEnvironment.CapturedHelmValueProviders.Add(
-                            new KubernetesEnvironmentResource.CapturedHelmValueProvider(
-                                "parameters",
-                                r.Name,
-                                "identityClientId",
-                                clientIdProvider));
+                        // The workload identity webhook requires this label on the POD
+                        // to inject AZURE_CLIENT_ID, token volume mounts, etc.
+                        podTemplate.Metadata.Labels["azure.workload.identity/use"] = "true";
                     }
+                }));
 
-                    // Store the identity reference for federated credential Bicep generation
-                    environment.WorkloadIdentities[r.Name] = appIdentity.IdentityResource;
+                // Wire the identity clientId as a deferred Helm value so it gets
+                // resolved from the Bicep output at deploy time. The SA annotation
+                // references {{ .Values.parameters.<name>.identityClientId }}.
+                if (identityClientId is IValueProvider clientIdProvider)
+                {
+                    KubernetesEnvironment.CapturedHelmValueProviders.Add(
+                        new KubernetesEnvironmentResource.CapturedHelmValueProvider(
+                            "parameters",
+                            r.Name,
+                            "identityClientId",
+                            clientIdProvider));
                 }
+
+                // Store the identity reference for federated credential Bicep generation
+                WorkloadIdentities[r.Name] = appIdentity.IdentityResource;
             }
         }
 
@@ -208,45 +194,14 @@ internal sealed partial class AzureKubernetesInfrastructure(
     }
 
     /// <summary>
-    /// Adds a pipeline step to the inner KubernetesEnvironmentResource that fetches
-    /// AKS cluster credentials into an isolated kubeconfig file after the AKS cluster
-    /// is provisioned via Bicep.
-    /// </summary>
-    private static void AddGetCredentialsStep(AzureKubernetesEnvironmentResource environment)
-    {
-        var k8sEnv = environment.KubernetesEnvironment;
-
-        k8sEnv.Annotations.Add(new PipelineStepAnnotation((_) =>
-        {
-            var step = new PipelineStep
-            {
-                Name = $"aks-get-credentials-{environment.Name}",
-                Description = $"Fetches AKS credentials for {environment.Name}",
-                Action = ctx => GetAksCredentialsAsync(ctx, environment)
-            };
-
-            // Run after ALL Azure infrastructure is provisioned (including the AKS cluster).
-            // This depends on the aggregation step that gates on all individual provision-* steps.
-            step.DependsOn(AzureEnvironmentResource.ProvisionInfrastructureStepName);
-
-            // Must complete before Helm prepare step
-            step.RequiredBy($"prepare-{k8sEnv.Name}");
-
-            return new[] { step };
-        }));
-    }
-
-    /// <summary>
     /// Fetches AKS credentials into an isolated kubeconfig file using az aks get-credentials,
     /// then sets the KubeConfigPath on the inner KubernetesEnvironmentResource so that
     /// subsequent Helm and kubectl commands target the AKS cluster.
     /// </summary>
-    private static async Task GetAksCredentialsAsync(
-        PipelineStepContext context,
-        AzureKubernetesEnvironmentResource environment)
+    private async Task GetAksCredentialsAsync(PipelineStepContext context)
     {
         var getCredsTask = await context.ReportingStep.CreateTaskAsync(
-            $"Fetching AKS credentials for {environment.Name}",
+            $"Fetching AKS credentials for {Name}",
             context.CancellationToken).ConfigureAwait(false);
 
         await using (getCredsTask.ConfigureAwait(false))
@@ -256,8 +211,8 @@ internal sealed partial class AzureKubernetesInfrastructure(
                 // Get the actual provisioned cluster name from the Bicep output.
                 // The Azure.Provisioning SDK may add a unique suffix to the name
                 // (e.g., take('aks-${uniqueString(resourceGroup().id)}', 63)).
-                var clusterName = await environment.NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
-                    ?? environment.Name;
+                var clusterName = await NameOutputReference.GetValueAsync(context.CancellationToken).ConfigureAwait(false)
+                    ?? Name;
 
                 var azPath = FindAzCli();
 
@@ -304,7 +259,7 @@ internal sealed partial class AzureKubernetesInfrastructure(
 
                 // Set the kubeconfig path on the inner K8s environment so
                 // Helm and kubectl commands use --kubeconfig to target this cluster
-                environment.KubernetesEnvironment.KubeConfigPath = kubeConfigPath;
+                KubernetesEnvironment.KubeConfigPath = kubeConfigPath;
 
                 context.Logger.LogInformation(
                     "AKS credentials written to {KubeConfigPath}", kubeConfigPath);

@@ -284,16 +284,20 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
         }
 
-        var args = configuration.Arguments.Select(a => a.Value);
+        var args = configuration.Arguments.ToList();
         if (modelContainer is ContainerResource { ShellExecution: true })
         {
-            spec.Args = ["-c", $"{string.Join(' ', args)}"];
+            spec.Args = ["-c", $"{string.Join(' ', args.Select(a => a.Value))}"];
         }
         else
         {
-            spec.Args = args.ToList();
+            spec.Args = args.Select(a => a.Value).ToList();
         }
-        dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, configuration.Arguments.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive)));
+
+        var appLaunchArgumentAnnotations = modelContainer is ContainerResource { ShellExecution: true }
+            ? args.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive))
+            : args.Select((a, index) => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: index));
+        dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, appLaunchArgumentAnnotations);
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
         spec.CreateFiles = createFiles;

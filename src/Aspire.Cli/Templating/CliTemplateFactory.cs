@@ -95,7 +95,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         [
             new CallbackTemplate(
                 KnownTemplateId.TypeScriptStarter,
-                "Starter App (Express/React)",
+                "Starter App (Express/React, TypeScript AppHost)",
                 projectName => $"./{projectName}",
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyTypeScriptStarterTemplateAsync,
@@ -149,7 +149,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.PythonStarter,
-                "Starter App (FastAPI/React)",
+                "Starter App (FastAPI/React, TypeScript AppHost)",
                 projectName => $"./{projectName}",
                 cmd =>
                 {

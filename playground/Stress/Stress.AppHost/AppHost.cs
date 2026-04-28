@@ -5,6 +5,8 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
+#pragma warning disable ASPIREDOTNETTOOL
+
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
 builder.Services.AddHealthChecks().AddAsyncCheck("health-test", async (ct) =>
@@ -12,6 +14,27 @@ builder.Services.AddHealthChecks().AddAsyncCheck("health-test", async (ct) =>
     await Task.Delay(5_000, ct);
     return HealthCheckResult.Healthy();
 });
+
+var manualArgSource = builder.AddExecutable("manual-arg-source", "dotnet", Environment.CurrentDirectory)
+    .WithHttpEndpoint(targetPort: 8088);
+var manualArgEndpoint = manualArgSource.GetEndpoint("http");
+
+manualArgSource.WithArgs("--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
+
+builder.AddProject<Projects.Stress_Empty>("manual-project-args", launchProfileName: null)
+    .WithArgs("--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
+
+builder.AddContainer("manual-container-args", "alpine")
+    .WithEntrypoint("sleep")
+    .WithArgs("3600", "--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
+
+builder.AddDotnetTool("manual-dotnet-tool-args", "dotnet-dump")
+    .WithArgs("--version", "--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)))
+    .WithExplicitStart();
 
 for (var i = 0; i < 2; i++)
 {
