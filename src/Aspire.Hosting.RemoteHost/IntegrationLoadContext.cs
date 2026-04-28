@@ -17,12 +17,19 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
     private const string SharedAssemblyName = "Aspire.TypeSystem";
 
     private readonly string[] _probeDirectories;
+    private readonly IntegrationPackageProbeManifest _packageProbeManifest;
     private readonly ILogger _logger;
 
     internal IntegrationLoadContext(string[] probeDirectories, ILogger logger)
+        : this(probeDirectories, IntegrationPackageProbeManifest.Empty, logger)
+    {
+    }
+
+    internal IntegrationLoadContext(string[] probeDirectories, IntegrationPackageProbeManifest packageProbeManifest, ILogger logger)
         : base("Aspire.Integrations")
     {
         _probeDirectories = probeDirectories;
+        _packageProbeManifest = packageProbeManifest;
         _logger = logger;
     }
 
@@ -39,17 +46,8 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
             return null;
         }
 
-        // Find the assembly in probe directories
-        string? probedPath = null;
-        foreach (var dir in _probeDirectories)
-        {
-            var path = Path.Combine(dir, $"{assemblyName.Name}.dll");
-            if (File.Exists(path))
-            {
-                probedPath = path;
-                break;
-            }
-        }
+        var probedPath = _packageProbeManifest.TryGetManagedAssemblyPath(assemblyName)
+            ?? TryResolveFromProbeDirectories(assemblyName.Name);
 
         if (probedPath is null)
         {
@@ -73,6 +71,40 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
         return LoadFromAssemblyPath(probedPath);
     }
 
+    protected override nint LoadUnmanagedDll(string unmanagedDllName)
+    {
+        foreach (var path in _packageProbeManifest.GetNativeLibraryPaths(unmanagedDllName))
+        {
+            try
+            {
+                _logger.LogDebug("[IntegrationALC] Loading native library: {NativeLibraryName} from {Path}", unmanagedDllName, path);
+                return LoadUnmanagedDllFromPath(path);
+            }
+            catch (DllNotFoundException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (BadImageFormatException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (FileLoadException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (IOException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+        }
+
+        return base.LoadUnmanagedDll(unmanagedDllName);
+    }
+
     private static bool TryGetDefaultContextVersion(AssemblyName assemblyName, out Version? version)
     {
         version = null;
@@ -86,5 +118,19 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
         {
             return false;
         }
+    }
+
+    private string? TryResolveFromProbeDirectories(string assemblyName)
+    {
+        foreach (var dir in _probeDirectories)
+        {
+            var path = Path.Combine(dir, $"{assemblyName}.dll");
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return null;
     }
 }

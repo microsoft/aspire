@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -70,6 +71,49 @@ public class AssemblyLoaderTests
     }
 
     [Fact]
+    public void GetAssemblyNamesToLoad_AddsAutoDiscoveredAssembliesFromPackageProbeManifest()
+    {
+        using var manifestDirectory = new TemporaryDirectory();
+        using var packageAssemblyDirectory = new TemporaryDirectory();
+
+        var runtimeAssemblyPath = System.IO.Path.Combine(packageAssemblyDirectory.Path, "Aspire.Hosting.Azure.OperationalInsights.dll");
+        var resourceAssemblyPath = System.IO.Path.Combine(packageAssemblyDirectory.Path, "de", "Aspire.Hosting.resources.dll");
+        File.WriteAllText(runtimeAssemblyPath, string.Empty);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(resourceAssemblyPath)!);
+        File.WriteAllText(resourceAssemblyPath, string.Empty);
+
+        var manifestPath = System.IO.Path.Combine(manifestDirectory.Path, "integration-package-probe-manifest.json");
+        WriteProbeManifest(
+            manifestPath,
+            managedAssemblies:
+            [
+                new { Name = "Aspire.Hosting.Azure.OperationalInsights", Path = runtimeAssemblyPath },
+                new { Name = "Aspire.Hosting.resources", Culture = "de", Path = resourceAssemblyPath }
+            ]);
+
+        var probeManifest = IntegrationPackageProbeManifest.Load(manifestPath);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AtsAssemblies:0"] = "Aspire.Hosting.Azure.AppService"
+            })
+            .Build();
+
+        var assemblyNames = AssemblyLoader.GetAssemblyNamesToLoad(
+            configuration,
+            integrationLibsPath: null,
+            applicationBasePath: System.IO.Path.Combine(manifestDirectory.Path, "missing"),
+            packageProbeManifest: probeManifest);
+
+        Assert.Equal(
+            [
+                "Aspire.Hosting.Azure.AppService",
+                "Aspire.Hosting.Azure.OperationalInsights"
+            ],
+            assemblyNames);
+    }
+
+    [Fact]
     public void GetAssemblies_LoadsConfiguredAssembly()
     {
         var configuration = new ConfigurationBuilder()
@@ -85,15 +129,33 @@ public class AssemblyLoaderTests
         Assert.Contains(assemblies, a => string.Equals(a.GetName().Name, "Aspire.Hosting", StringComparison.Ordinal));
     }
 
+    private static void WriteProbeManifest(string manifestPath, IEnumerable<object>? managedAssemblies = null, IEnumerable<object>? nativeLibraries = null)
+    {
+        File.WriteAllText(
+            manifestPath,
+            JsonSerializer.Serialize(
+                new
+                {
+                    ManagedAssemblies = managedAssemblies ?? [],
+                    NativeLibraries = nativeLibraries ?? []
+                },
+                new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = true
+                }));
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
+        private readonly DirectoryInfo _directory;
+
         public TemporaryDirectory()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"aspire-remotehost-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(Path);
+            _directory = Directory.CreateTempSubdirectory("aspire-remotehost-");
         }
 
-        public string Path { get; }
+        public string Path => _directory.FullName;
 
         public void CreateFile(string fileName)
         {
