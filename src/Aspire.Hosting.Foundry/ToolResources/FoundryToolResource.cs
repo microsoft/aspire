@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -36,5 +35,5 @@ public abstract class FoundryToolResource : Resource, IFoundryTool
     public AzureCognitiveServicesProjectResource Project { get; }
 
     /// <inheritdoc/>
-    public abstract Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default);
+    public abstract Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default);
 }

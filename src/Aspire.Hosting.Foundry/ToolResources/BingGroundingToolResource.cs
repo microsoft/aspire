@@ -3,7 +3,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Aspire.Hosting.Pipelines;
 using Azure.AI.Projects.Agents;
 using OpenAI.Responses;
 
@@ -51,7 +50,7 @@ public class BingGroundingToolResource : FoundryToolResource
     internal BingGroundingConnectionResource? Connection { get; set; }
 
     /// <inheritdoc/>
-    public override async Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override async Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         if (Connection is null)
         {

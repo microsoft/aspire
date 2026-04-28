@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Pipelines;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -25,8 +24,7 @@ public interface IFoundryTool
     /// Tools that depend on provisioned resources (e.g., Azure AI Search connections) can
     /// safely resolve their connection identifiers at this point.
     /// </remarks>
-    /// <param name="context">The pipeline step context for resolving deploy-time values, or <c>null</c> in run mode.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The SDK tool representation.</returns>
-    Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default);
+    Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default);
 }

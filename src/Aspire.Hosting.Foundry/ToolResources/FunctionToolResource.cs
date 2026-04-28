@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -67,7 +66,7 @@ public sealed class FunctionToolResource : FoundryToolResource
     public bool? StrictModeEnabled { get; }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(
             ResponseTool.CreateFunctionTool(FunctionName, Parameters, StrictModeEnabled, Description));

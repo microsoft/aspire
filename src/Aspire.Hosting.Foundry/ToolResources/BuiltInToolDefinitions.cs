@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -29,7 +28,7 @@ public sealed class CodeInterpreterToolResource : FoundryToolResource
     }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         var container = new CodeInterpreterToolContainer(new AutomaticCodeInterpreterToolContainerConfiguration());
         return Task.FromResult<ResponseTool>(new CodeInterpreterTool(container));
@@ -63,7 +62,7 @@ public sealed class FileSearchToolResource : FoundryToolResource
     public IList<string> VectorStoreIds { get; init; } = [];
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(ResponseTool.CreateFileSearchTool(VectorStoreIds));
     }
@@ -91,7 +90,7 @@ public sealed class WebSearchToolResource : FoundryToolResource
     }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(ResponseTool.CreateWebSearchTool());
     }
@@ -114,7 +113,7 @@ public sealed class ImageGenerationToolResource : FoundryToolResource
     }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(new ImageGenerationTool());
     }
@@ -167,7 +166,7 @@ public sealed class ComputerToolResource : FoundryToolResource
     public string Environment { get; }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(
             new ComputerTool(new ComputerToolEnvironment(Environment), DisplayWidth, DisplayHeight));

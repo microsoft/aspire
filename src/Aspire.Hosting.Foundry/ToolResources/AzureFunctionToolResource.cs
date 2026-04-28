@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 using Azure.AI.Projects.Agents;
 using OpenAI.Responses;
 
@@ -96,7 +95,7 @@ public sealed class AzureFunctionToolResource : FoundryToolResource
     public string OutputQueueName { get; }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(CancellationToken cancellationToken = default)
     {
         var function = new AzureFunctionDefinitionFunction(FunctionName, Parameters)
         {
