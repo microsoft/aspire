@@ -138,6 +138,7 @@ jobs:
               $(Build.SourcesDirectory)/$(scriptName)
               -ci
               -build
+              -pack
               -restore
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
@@ -148,6 +149,21 @@ jobs:
             displayName: 🟣Build native packages
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $verifyParams = @{
+                PackagesDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                Rid = "${{ targetRid }}"
+              }
+              $archiveFilter = if ("${{ targetRid }}".StartsWith('win-')) { "aspire-cli-${{ targetRid }}-*.zip" } else { "aspire-cli-${{ targetRid }}-*.tar.gz" }
+              $archive = @(Get-ChildItem -Path $verifyParams.PackagesDir -Filter $archiveFilter -Recurse -File -ErrorAction SilentlyContinue)
+              if ($archive.Count -ne 1) {
+                throw "Expected exactly one CLI archive for ${{ targetRid }}, but found $($archive.Count): $($archive.FullName -join ', ')"
+              }
+              $verifyParams.ArchivePath = $archive[0].FullName
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @verifyParams
+            displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
 
           # Verify the signed CLI archive can execute and create a project.
           # Only runs when the target RID architecture matches the build agent
@@ -175,17 +191,21 @@ jobs:
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
           - ${{ if and(ne(parameters.agentOs, 'windows'), not(contains(targetRid, 'musl'))) }}:
-            - script: |
-                set -euo pipefail
-                echo "Finding CLI archive for ${{ targetRid }}..."
-                ARCHIVE=$(find "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)" -name "aspire-cli-${{ targetRid }}-*.tar.gz" -type f | head -1)
-                if [ -z "$ARCHIVE" ]; then
-                  echo "##[error]No CLI archive found for ${{ targetRid }}"
+            - pwsh: |
+                $ErrorActionPreference = 'Stop'
+                Write-Host "Finding CLI archive for ${{ targetRid }}..."
+                $archiveDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                $archive = Get-ChildItem -Path $archiveDir -Filter "aspire-cli-${{ targetRid }}-*.tar.gz" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if (-not $archive) {
+                  Write-Host "##[error]No CLI archive found for ${{ targetRid }}"
                   exit 1
-                fi
-                echo "Found archive: $ARCHIVE"
-                chmod +x "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.sh"
-                "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.sh" "$ARCHIVE"
+                }
+                Write-Host "Found archive: $($archive.FullName)"
+                & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.ps1" -ArchivePath $archive.FullName
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Host "##[error]CLI archive verification failed"
+                  exit 1
+                }
               displayName: 🟣Verify CLI archive (${{ targetRid }})
               condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']))
               env:

@@ -28,6 +28,34 @@ function Write-Step  { param([string]$msg) Write-Host "▶ $msg" -ForegroundColo
 function Write-Ok    { param([string]$msg) Write-Host "✅ $msg" -ForegroundColor Green }
 function Write-Err   { param([string]$msg) Write-Host "❌ $msg" -ForegroundColor Red }
 
+function Get-UserHome {
+    if ($env:USERPROFILE) {
+        return $env:USERPROFILE
+    }
+
+    if ($env:HOME) {
+        return $env:HOME
+    }
+
+    throw "Unable to determine the user home directory."
+}
+
+function Test-IsWindows {
+    return [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+function Set-ExecutablePermission([string]$Path) {
+    if (Test-IsWindows) {
+        return
+    }
+
+    & chmod +x $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to mark '$Path' as executable."
+    }
+}
+
+$userHome = Get-UserHome
 $verifyTmpDir = $null
 $aspireBackup = $null
 
@@ -37,7 +65,7 @@ function Invoke-Cleanup {
         Remove-Item -Recurse -Force $verifyTmpDir -ErrorAction SilentlyContinue
     }
     # Restore ~/.aspire if we backed it up
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     if ($aspireBackup -and (Test-Path $aspireBackup)) {
         if (Test-Path $aspireDir) {
             Remove-Item -Recurse -Force $aspireDir -ErrorAction SilentlyContinue
@@ -72,7 +100,7 @@ try {
 
     # Step 1: Back up and clean ~/.aspire
     Write-Step "Cleaning ~/.aspire state..."
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     if (Test-Path $aspireDir) {
         $aspireBackup = Join-Path ([System.IO.Path]::GetTempPath()) "aspire-backup-$([System.IO.Path]::GetRandomFileName())"
         Move-Item $aspireDir $aspireBackup
@@ -115,12 +143,13 @@ try {
 
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     $aspireBinDir = Join-Path $aspireDir "bin"
     New-Item -ItemType Directory -Path $aspireBinDir -Force | Out-Null
     Copy-Item $aspireBin (Join-Path $aspireBinDir (Split-Path $aspireBin -Leaf))
     $aspireBin = Join-Path $aspireBinDir (Split-Path $aspireBin -Leaf)
-    $env:PATH = "$aspireBinDir;$env:PATH"
+    Set-ExecutablePermission $aspireBin
+    $env:PATH = "$aspireBinDir$([System.IO.Path]::PathSeparator)$env:PATH"
     Write-Ok "CLI installed to ~/.aspire/bin"
 
     # Step 3: Verify aspire --version

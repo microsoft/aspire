@@ -141,6 +141,20 @@ Each CLI archive job:
 
 This makes the archive job self-sufficient for the RID-specific artifacts it needs.
 
+### Native CLI archives are the canonical payload
+
+The native CLI archive is the payload that downstream jobs should consume. Arcade creates each `aspire-cli-<rid>-<version>.zip` or `.tar.gz` from the `PublishToDisk` staging directory under `artifacts/obj/Aspire.Cli.<rid>/<Configuration>/<TargetFramework>/output`, but that staging directory is only an archive input.
+
+In the internal Azure DevOps `build_sign_native` stage, Windows and macOS native jobs run with code signing enabled. MicroBuild treats the CLI archive as a container: it extracts signable nested files such as `aspire.exe`, `aspire`, and native libraries to `artifacts/tmp/<Configuration>/ContainerSigning`, signs them, and writes the signed streams back into the archive. It does not update Arcade's original staging directory.
+
+Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, extracting from the native archive gives the same unsigned ELF payload, and the resulting NuGet packages are signed later as packages by the main Windows build.
+
+When adding or changing archive consumers:
+
+1. Use the native archive artifacts (`cli-native-archives-*`, `native_archives_*`, or `artifacts/signed-archives`) as the source of truth.
+2. Do not compute installer hashes, build dotnet-tool packages, or publish from `artifacts/obj/.../output` or another parallel binary output.
+3. Keep downloaded signed archives outside `artifacts/packages` in the main Windows build so MicroBuild does not repack already-signed non-Windows archives. Repacking changes tarball bytes and breaks Homebrew/WinGet hash validation.
+
 ### `run-tests.yml`
 
 When a test lane sets `requiresNugets: true`, `run-tests.yml`:

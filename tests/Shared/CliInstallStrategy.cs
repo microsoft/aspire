@@ -206,9 +206,6 @@ internal sealed class CliInstallStrategy
     internal const string CliArchiveDirEnvironmentVariableName = "ASPIRE_E2E_CLI_ARCHIVE_DIR";
 
     private const string PreinstalledEnvironmentVariableName = "ASPIRE_E2E_PREINSTALLED";
-    private static readonly Regex s_versionPattern = new(@"^[0-9A-Za-z.\-]+$", RegexOptions.Compiled);
-    private static readonly Regex s_cliNupkgPattern = new(@"^Aspire\.Cli\.\d", RegexOptions.Compiled);
-
     /// <summary>
     /// The install mode.
     /// </summary>
@@ -291,7 +288,7 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public static CliInstallStrategy FromVersion(string version)
     {
-        if (!s_versionPattern.IsMatch(version))
+        if (!CliPackageDiscovery.IsValidVersion(version))
         {
             throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
         }
@@ -326,7 +323,7 @@ internal sealed class CliInstallStrategy
             throw new DirectoryNotFoundException($"LocalArchive directory not found: {archiveDir}");
         }
 
-        var expectedVersion = ExtractExpectedVersionFromNupkgs(archiveDir);
+        var expectedVersion = CliPackageDiscovery.TryFindAspireCliPointerPackage(archiveDir)?.Version;
         return new CliInstallStrategy(CliInstallMode.LocalArchive, archiveDir: archiveDir, expectedVersion: expectedVersion);
     }
 
@@ -343,12 +340,12 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public static CliInstallStrategy FromDotnetTool(string? version = null)
     {
-        if (version is not null && !s_versionPattern.IsMatch(version))
+        if (version is not null && !CliPackageDiscovery.IsValidVersion(version))
         {
             throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
         }
 
-        return new CliInstallStrategy(CliInstallMode.DotnetTool, version: version);
+        return new CliInstallStrategy(CliInstallMode.DotnetTool, version: version, expectedVersion: version);
     }
 
     /// <summary>
@@ -361,7 +358,7 @@ internal sealed class CliInstallStrategy
             throw new DirectoryNotFoundException($"Nupkg source directory not found: {nupkgSourcePath}");
         }
 
-        if (!s_versionPattern.IsMatch(version))
+        if (!CliPackageDiscovery.IsValidVersion(version))
         {
             throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
         }
@@ -370,38 +367,18 @@ internal sealed class CliInstallStrategy
     }
 
     /// <summary>
-    /// Extracts the CLI version from an <c>Aspire.Cli.{version}.nupkg</c> file in the given directory.
-    /// Returns <c>null</c> when no matching nupkg is found.
-    /// Throws if multiple non-symbol <c>Aspire.Cli.*.nupkg</c> files are found (ambiguous).
+    /// Creates a DotnetTool strategy to install from a local directory of nupkg files, inferring
+    /// the tool package version from the <c>Aspire.Cli.{version}.nupkg</c> package.
     /// </summary>
-    internal static string? ExtractExpectedVersionFromNupkgs(string archiveDir)
+    public static CliInstallStrategy FromDotnetToolLocalSource(string nupkgSourcePath)
     {
-        var matches = Directory.GetFiles(archiveDir, "Aspire.Cli.*.nupkg")
-            .Select(Path.GetFileName)
-            .Where(f => f is not null && !f.Contains(".symbols.", StringComparison.OrdinalIgnoreCase) && s_cliNupkgPattern.IsMatch(f))
-            .ToList();
-
-        if (matches.Count == 0)
+        if (!Directory.Exists(nupkgSourcePath))
         {
-            return null;
+            throw new DirectoryNotFoundException($"Nupkg source directory not found: {nupkgSourcePath}");
         }
 
-        if (matches.Count > 1)
-        {
-            throw new InvalidOperationException(
-                $"Found {matches.Count} Aspire.Cli nupkg files in '{archiveDir}': {string.Join(", ", matches)}. " +
-                "Expected exactly one non-symbol Aspire.Cli.*.nupkg.");
-        }
-
-        var version = matches[0]!["Aspire.Cli.".Length..^".nupkg".Length];
-        if (!s_versionPattern.IsMatch(version))
-        {
-            throw new InvalidOperationException(
-                $"Invalid Aspire.Cli nupkg version '{version}' in '{matches[0]}'. " +
-                "Expected only alphanumeric characters, dots, and dashes.");
-        }
-
-        return version;
+        var version = CliPackageDiscovery.FindAspireCliPointerPackage(nupkgSourcePath).Version;
+        return FromDotnetToolLocalSource(nupkgSourcePath, version);
     }
 
     /// <summary>
@@ -434,14 +411,12 @@ internal sealed class CliInstallStrategy
         if (!string.IsNullOrEmpty(dotnetToolSource))
         {
             var toolVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
-            if (string.IsNullOrEmpty(toolVersion))
-            {
-                throw new InvalidOperationException(
-                    "ASPIRE_E2E_DOTNET_TOOL_SOURCE requires ASPIRE_E2E_VERSION to specify which version to install.");
-            }
+            var strategy = !string.IsNullOrEmpty(toolVersion)
+                ? FromDotnetToolLocalSource(dotnetToolSource, toolVersion)
+                : FromDotnetToolLocalSource(dotnetToolSource);
 
-            log?.Invoke($"  → Selected: DotnetTool local source (ASPIRE_E2E_DOTNET_TOOL_SOURCE={dotnetToolSource}, version={toolVersion})");
-            return FromDotnetToolLocalSource(dotnetToolSource, toolVersion);
+            log?.Invoke($"  → Selected: DotnetTool local source (ASPIRE_E2E_DOTNET_TOOL_SOURCE={dotnetToolSource}, version={strategy.Version})");
+            return strategy;
         }
 
         var dotnetTool = Environment.GetEnvironmentVariable("ASPIRE_E2E_DOTNET_TOOL");

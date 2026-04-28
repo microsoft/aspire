@@ -223,12 +223,15 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void Detect_DotnetToolLocalSource_ThrowsWithoutVersion()
+    public void Detect_DotnetToolLocalSource_InfersVersion()
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
 
         try
         {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0-preview.1.25175.1.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0-preview.1.25175.1.nupkg"), "");
+
             using var environment = new EnvironmentVariableScope(
                 ("ASPIRE_E2E_ARCHIVE", null),
                 ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
@@ -241,7 +244,11 @@ public class CliInstallStrategyTests
                 ("CI", null),
                 ("GITHUB_ACTIONS", null));
 
-            Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.Detect());
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+            Assert.Equal("13.3.0-preview.1.25175.1", strategy.Version);
+            Assert.Equal(tempDir.FullName, strategy.NupkgSourcePath);
         }
         finally
         {
@@ -392,16 +399,16 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void FromLocalArchive_ThrowsWhenNupkgVersionIsMalformed()
+    public void FromLocalArchive_IgnoresRidSpecificCliNupkg()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
         try
         {
-            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0;bad.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0.nupkg"), "");
 
-            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
+            var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
 
-            Assert.Contains("Invalid Aspire.Cli nupkg version", exception.Message);
+            Assert.Null(strategy.ExpectedVersion);
         }
         finally
         {
@@ -410,7 +417,7 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void FromLocalArchive_ThrowsWhenMultipleCliNupkgsArePresent()
+    public void FromLocalArchive_ThrowsWhenMultiplePointerCliNupkgsArePresent()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
         try
@@ -420,7 +427,26 @@ public class CliInstallStrategyTests
 
             var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
 
-            Assert.Contains("Found 2 Aspire.Cli nupkg files", exception.Message);
+            Assert.Contains("Found 2 Aspire.Cli pointer nupkg files", exception.Message);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FromDotnetToolLocalSource_ThrowsWhenOnlyRidSpecificPackagesArePresent()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0.nupkg"), "");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName));
+
+            Assert.Contains("No Aspire.Cli tool nupkg found", exception.Message);
         }
         finally
         {
