@@ -133,14 +133,45 @@
 
   <Target Name="_PackCliTool">
     <Error Condition="'$(CliRuntime)' == ''" Text="CliRuntime must be set before packing the CLI tool." />
-    <Error Condition="'$(CliToolPreBuiltBinaryPath)' == ''" Text="CliToolPreBuiltBinaryPath must be set to the signed NativeAOT CLI binary before packing the CLI tool." />
-    <Message Importance="High" Text="Packing CLI tool for $(CliRuntime) from '$(CliToolPreBuiltBinaryPath)'." />
-    <Error Condition="!Exists('$(CliToolPreBuiltBinaryPath)')" Text="CliToolPreBuiltBinaryPath does not exist: '$(CliToolPreBuiltBinaryPath)'." />
 
     <PropertyGroup>
       <_CliToolPublishDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish', '$(CliRuntime)'))</_CliToolPublishDir>
       <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish', 'pointer'))</_CliToolPointerPublishDir>
+      <_CliToolArchiveExtractDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-archive', '$(CliRuntime)'))</_CliToolArchiveExtractDir>
+      <_CliToolArchiveBinaryPath>$([MSBuild]::NormalizePath($(_CliToolArchiveExtractDir), '$(_NativeBinaryName)'))</_CliToolArchiveBinaryPath>
     </PropertyGroup>
+
+    <ItemGroup Condition="'$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')">
+      <_CliToolPreBuiltArchive Include="$(CliToolPreBuiltArchivePath)" Condition="'$(CliToolPreBuiltArchivePath)' != ''" />
+      <_CliToolPreBuiltArchive Include="$(ArtifactsShippingPackagesDir)$(ArchiveName)-*.$(ArchiveFormat)" Condition="'$(CliToolPreBuiltArchivePath)' == ''" />
+    </ItemGroup>
+
+    <Error Condition="('$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')) and '@(_CliToolPreBuiltArchive)' == ''"
+           Text="CliToolPreBuiltBinaryPath does not exist: '$(CliToolPreBuiltBinaryPath)', and no $(ArchiveName)-*.$(ArchiveFormat) archive was found to extract the CLI tool binary from." />
+    <Error Condition="('$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')) and '@(_CliToolPreBuiltArchive->Count())' != '1'"
+           Text="Expected exactly one CLI archive for $(CliRuntime) but found @(_CliToolPreBuiltArchive->Count()): @(_CliToolPreBuiltArchive)." />
+    <Error Condition="('$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')) and '@(_CliToolPreBuiltArchive->Count())' == '1' and !Exists('%(_CliToolPreBuiltArchive.FullPath)')"
+           Text="CLI archive does not exist: '%(_CliToolPreBuiltArchive.FullPath)'." />
+
+    <Message Importance="High"
+             Condition="'$(CliToolPreBuiltBinaryPath)' != '' and Exists('$(CliToolPreBuiltBinaryPath)')"
+             Text="Packing CLI tool for $(CliRuntime) from '$(CliToolPreBuiltBinaryPath)'." />
+    <Message Importance="High"
+             Condition="'$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')"
+             Text="Packing CLI tool for $(CliRuntime) from archive '@(_CliToolPreBuiltArchive)' because '$(CliToolPreBuiltBinaryPath)' does not exist." />
+
+    <RemoveDir Condition="'$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')" Directories="$(_CliToolArchiveExtractDir)" />
+    <MakeDir Condition="'$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')" Directories="$(_CliToolArchiveExtractDir)" />
+    <Exec Condition="('$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')) and '$(ArchiveFormat)' == 'zip'"
+          Command="pwsh -NoProfile -NonInteractive -Command &quot;Expand-Archive -LiteralPath '%(_CliToolPreBuiltArchive.FullPath)' -DestinationPath '$(_CliToolArchiveExtractDir)' -Force&quot;" />
+    <Exec Condition="('$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')) and '$(ArchiveFormat)' == 'tar.gz'"
+          Command="tar -xzf &quot;%(_CliToolPreBuiltArchive.FullPath)&quot; -C &quot;$(_CliToolArchiveExtractDir)&quot;" />
+    <PropertyGroup Condition="'$(CliToolPreBuiltBinaryPath)' == '' or !Exists('$(CliToolPreBuiltBinaryPath)')">
+      <CliToolPreBuiltBinaryPath>$(_CliToolArchiveBinaryPath)</CliToolPreBuiltBinaryPath>
+    </PropertyGroup>
+
+    <Error Condition="'$(CliToolPreBuiltBinaryPath)' == ''" Text="CliToolPreBuiltBinaryPath must be set to the signed NativeAOT CLI binary before packing the CLI tool." />
+    <Error Condition="!Exists('$(CliToolPreBuiltBinaryPath)')" Text="CliToolPreBuiltBinaryPath does not exist: '$(CliToolPreBuiltBinaryPath)'." />
 
     <ItemGroup>
       <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />

@@ -116,9 +116,17 @@ try {
         throw "Pointer package $($pointerPackage.Name) is missing a nuspec."
     }
 
-    $nuspecText = Get-Content -Path $pointerNuspec.FullName -Raw
-    if ($nuspecText -notmatch "Aspire\.Cli\.$([regex]::Escape($Rid))") {
-        throw "Pointer package nuspec does not reference Aspire.Cli.$Rid."
+    $pointerToolSettings = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter 'DotnetToolSettings.xml' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pointerToolSettings) {
+        throw "Pointer package $($pointerPackage.Name) is missing DotnetToolSettings.xml."
+    }
+
+    $pointerToolSettingsXml = [xml](Get-Content -Path $pointerToolSettings.FullName -Raw)
+    $runtimeIdentifierPackage = @($pointerToolSettingsXml.DotNetCliTool.RuntimeIdentifierPackages.RuntimeIdentifierPackage) |
+        Where-Object { $_.RuntimeIdentifier -eq $Rid -and $_.Id -eq "Aspire.Cli.$Rid" } |
+        Select-Object -First 1
+    if (-not $runtimeIdentifierPackage) {
+        throw "Pointer package DotnetToolSettings.xml does not reference Aspire.Cli.$Rid for $Rid."
     }
 
     if ($VerifySignature) {
