@@ -37,11 +37,6 @@
         <target state="translated">NUnit</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspirePyStarter_Description">
-        <source>Starter App (FastAPI/React, TypeScript AppHost)</source>
-        <target state="needs-review-translation">スターター アプリ (FastAPI/React)</target>
-        <note />
-      </trans-unit>
       <trans-unit id="AspireServiceDefaults_Description">
         <source>Service defaults</source>
         <target state="translated">サービスの既定値</target>

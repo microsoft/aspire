@@ -141,9 +141,6 @@
   <data name="AspireServiceDefaults_Description" xml:space="preserve">
     <value>Service defaults</value>
   </data>
-  <data name="AspirePyStarter_Description" xml:space="preserve">
-    <value>Starter App (FastAPI/React, TypeScript AppHost)</value>
-  </data>
   <data name="AspireAppHostSingleFile_Description" xml:space="preserve">
     <value>Empty AppHost</value>
   </data>
