@@ -43,7 +43,7 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                             }
 
                             const { category, output } = message.body;
-                            if (category === 'stdout' || category === 'stderr') {
+                            if (typeof output === 'string' && category !== 'telemetry') {
                                 const notification: ServiceLogsNotification = {
                                     notification_type: 'serviceLogs',
                                     session_id: session.configuration.runId,
