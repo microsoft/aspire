@@ -501,11 +501,15 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var snapshot = new CustomResourceSnapshot
         {
             Properties = [],
-            ResourceType = dashboardResource.GetResourceType(),
-            IsHidden = hideDashboard
+            ResourceType = dashboardResource.GetResourceType()
         };
 
         dashboardResource.Annotations.Add(new ResourceSnapshotAnnotation(snapshot));
+
+        if (hideDashboard)
+        {
+            dashboardResource.Annotations.Add(new HiddenAnnotation(HiddenBehavior.Always));
+        }
 
         dashboardResource.Annotations.Add(new EnvironmentCallbackAnnotation(ConfigureEnvironmentVariables));
     }

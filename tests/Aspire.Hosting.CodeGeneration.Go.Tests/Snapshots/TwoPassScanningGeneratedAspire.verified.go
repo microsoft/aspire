@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // GENERATED CODE - DO NOT EDIT
 
 package aspire
@@ -1561,6 +1561,33 @@ func (s *CSharpAppResource) ExcludeFromMcp() (*IResource, error) {
 	return result.(*IResource), nil
 }
 
+// WithHidden hides the resource from default resource lists
+func (s *CSharpAppResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *CSharpAppResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithImagePushOptions sets image push options via callback
 func (s *CSharpAppResource) WithImagePushOptions(callback func(...any) any) (*IComputeResource, error) {
 	reqArgs := map[string]any{
@@ -2623,6 +2650,33 @@ func (s *ContainerRegistryResource) ExcludeFromMcp() (*IResource, error) {
 		"builder": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *ContainerRegistryResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *ContainerRegistryResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -4139,6 +4193,33 @@ func (s *ContainerResource) ExcludeFromMcp() (*IResource, error) {
 		"builder": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *ContainerResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *ContainerResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -6113,6 +6194,33 @@ func (s *DotnetToolResource) ExcludeFromMcp() (*IResource, error) {
 		"builder": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *DotnetToolResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *DotnetToolResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -8191,6 +8299,33 @@ func (s *ExecutableResource) ExcludeFromMcp() (*IResource, error) {
 	return result.(*IResource), nil
 }
 
+// WithHidden hides the resource from default resource lists
+func (s *ExecutableResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *ExecutableResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithImagePushOptions sets image push options via callback
 func (s *ExecutableResource) WithImagePushOptions(callback func(...any) any) (*IComputeResource, error) {
 	reqArgs := map[string]any{
@@ -9083,6 +9218,33 @@ func (s *ExternalServiceResource) ExcludeFromMcp() (*IResource, error) {
 		"builder": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *ExternalServiceResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *ExternalServiceResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -11306,6 +11468,33 @@ func (s *ParameterResource) ExcludeFromMcp() (*IResource, error) {
 	return result.(*IResource), nil
 }
 
+// WithHidden hides the resource from default resource lists
+func (s *ParameterResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *ParameterResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithPipelineStepFactory adds a pipeline step to the resource
 func (s *ParameterResource) WithPipelineStepFactory(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string, tags []string, description *string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -13077,6 +13266,33 @@ func (s *ProjectResource) ExcludeFromMcp() (*IResource, error) {
 		"builder": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *ProjectResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *ProjectResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -15316,6 +15532,33 @@ func (s *TestDatabaseResource) ExcludeFromMcp() (*IResource, error) {
 	return result.(*IResource), nil
 }
 
+// WithHidden hides the resource from default resource lists
+func (s *TestDatabaseResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *TestDatabaseResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
 // WithImagePushOptions sets image push options via callback
 func (s *TestDatabaseResource) WithImagePushOptions(callback func(...any) any) (*IComputeResource, error) {
 	reqArgs := map[string]any{
@@ -17101,6 +17344,33 @@ func (s *TestRedisResource) ExcludeFromMcp() (*IResource, error) {
 		"builder": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *TestRedisResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *TestRedisResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -18993,6 +19263,33 @@ func (s *TestVaultResource) ExcludeFromMcp() (*IResource, error) {
 		"builder": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *TestVaultResource) WithHidden() (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHidden", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *TestVaultResource) WithHiddenOnCompletion(exitCode *float64) (*IResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if exitCode != nil {
+		reqArgs["exitCode"] = SerializeValue(exitCode)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs)
 	if err != nil {
 		return nil, err
 	}

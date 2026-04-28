@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Hosting;
@@ -610,6 +611,109 @@ public class ResourceNotificationTests
     }
 
     [Fact]
+    public async Task WithHidden_AlwaysHidden()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHidden();
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Starting));
+
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.FailedToStart, exitCode: 1));
+    }
+
+    [Fact]
+    public async Task WithHiddenOnCompletion_HidesOnSuccessfulCompletion()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion();
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Running));
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 1));
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 1));
+
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 0));
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 0));
+    }
+
+    [Fact]
+    public async Task WithHiddenOnCompletion_HidesOnSuccessfulCompletionWithCustomExitCodes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion(123,456,789);
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Running));
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 1));
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 1));
+
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 456));
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 456));
+    }
+
+    [Fact]
+    public async Task WithHiddenOnCompletion_WithCustomExitCode_HidesOnMatchingCode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion(5);
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 0));
+
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 5));
+    }
+
+    [Fact]
+    public async Task WithHiddenOnCompletion_WithCustomExitCodes_HidesOnAnyMatchingCode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion(3, 7);
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 2));
+
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 7));
+    }
+
+    [Fact]
+    public async Task WithHiddenOnCompletion_BecomesVisibleOnRestart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion();
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        // Resource starts — should be visible
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Running));
+
+        // Resource completes successfully — should be hidden
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 0));
+
+        // Resource is restarted — exit code may still be set from previous run; should become visible
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Starting, exitCode: 0));
+
+        // Resource is running again — should remain visible
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Running));
+
+        // Resource completes again — should be hidden again
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 0));
+    }
+
+    [Fact]
     public async Task WaitForResourceHealthyAsyncWaitsForResourceReadyEvent()
     {
         var resource = new CustomResource("myResource");
@@ -718,6 +822,17 @@ public class ResourceNotificationTests
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Waiting for resource 'myResource' to enter the 'Healthy' state."));
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Waiting for resource ready to execute for 'myResource'."));
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Finished waiting for resource 'myResource'."));
+    }
+
+    private static async Task<bool> PublishAndGetIsHiddenAsync<T>(
+        ResourceNotificationService notificationService,
+        IResourceBuilder<T> resourceBuilder,
+        string state,
+        int? exitCode = default) where T : IResource
+    {
+        await notificationService.PublishUpdateAsync(resourceBuilder.Resource, snapshot => snapshot with { State = state, ExitCode = exitCode }).DefaultTimeout();
+        Assert.True(notificationService.TryGetCurrentState(resourceBuilder.Resource.Name, out var resourceEvent));
+        return resourceEvent!.Snapshot.IsHidden;
     }
 
     private sealed class CustomResource(string name) : Resource(name),
