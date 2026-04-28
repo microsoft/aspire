@@ -15,6 +15,9 @@
     <!-- Run `file` on the native binary and check the output but only on Linux/macOS -->
     <_CheckFileSignature Condition="'$(PublishNativeAot)' == 'true' and !$([System.OperatingSystem]::IsWindows())">true</_CheckFileSignature>
 
+    <!-- Read the PE Machine field from the binary and compare against PEExpectedMachine (hex) — Windows only -->
+    <_CheckPEMachine Condition="'$(PublishNativeAot)' == 'true' and $([System.OperatingSystem]::IsWindows())">true</_CheckPEMachine>
+
     <_NativeBinaryPath>$([MSBuild]::NormalizePath($(OutputPath), 'aspire'))</_NativeBinaryPath>
     <_NativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_NativeBinaryPath).exe</_NativeBinaryPath>
   </PropertyGroup>
@@ -24,7 +27,7 @@
   </ItemGroup>
 
   <Target Name="PublishToDisk"
-          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;PrepareOutputPathForPublishToDisk" />
+          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;PrepareOutputPathForPublishToDisk" />
 
   <Target Name="PrepareOutputPathForPublishToDisk">
     <!-- TODO: avoid generating the file instead of manually deleting it here -->
@@ -105,6 +108,24 @@
            Text="`file` signature for `$(CliRuntime)` did not match the expected regex.
            Got     : $(_FileCommandOutput)
            vs regex: $(FileSignatureRegex)" />
+  </Target>
+
+  <!--
+    Validate that the PE Machine type in the Windows native binary header matches the
+    expected architecture.  Uses a small PowerShell snippet that reads the PE header:
+      MZ @ 0x00 → e_lfanew @ 0x3C → PE\0\0 → Machine @ PE+4
+    PEExpectedMachine must be set to a 4-digit hex string (e.g. 8664 for AMD64, AA64 for ARM64).
+  -->
+  <Target Name="_ValidateNativeBinaryPEMachineOnWindows" Condition="'$(_CheckPEMachine)' == 'true'">
+    <Error Condition="'$(PEExpectedMachine)' == ''" Text="Property %24(PEExpectedMachine) is unset for $(CliRuntime)." />
+
+    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_NativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); [Console]::Write(([BitConverter]::ToUInt16($b,$p+4)).ToString('X4'))&quot;"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PEMachineHex" />
+    </Exec>
+
+    <Error Condition="'$(_PEMachineHex)' != '$(PEExpectedMachine)'"
+           Text="PE Machine type mismatch for $(CliRuntime). Expected: $(PEExpectedMachine), Got: $(_PEMachineHex)" />
   </Target>
 
 </Project>

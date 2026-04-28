@@ -354,7 +354,6 @@ internal static class BackchannelConstants
 
         return deleted;
     }
-
     /// <summary>
     /// Computes a compact stable identifier from a string value.
     /// </summary>

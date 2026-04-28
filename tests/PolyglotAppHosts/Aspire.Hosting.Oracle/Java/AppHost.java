@@ -7,7 +7,7 @@ void main() throws Exception {
         // ---- addOracle: factory method with defaults ----
         var oracle = builder.addOracle("oracledb");
         // ---- addOracle: factory method with custom password and port ----
-        var customPassword = builder.addParameter("oracle-password", true);
+        var customPassword = builder.addParameter("oracle-password", new AddParameterOptions().secret(true));
         var oracle2 = builder.addOracle("oracledb2", new AddOracleOptions().password(customPassword).port(1522.0));
         // ---- addDatabase: child resource with default databaseName ----
         var db = oracle.addDatabase("mydb");
@@ -26,11 +26,11 @@ void main() throws Exception {
         // ---- withReference: connection string reference (from core) ----
         var otherOracle = builder.addOracle("other-oracle");
         var otherDb = otherOracle.addDatabase("otherdb");
-        oracle.withReference(otherDb);
+        oracle.withReference(otherDb, new WithReferenceOptions());
         // ---- withReference: with connection name option ----
         oracle.withReference(otherDb, new WithReferenceOptions().connectionName("secondary-db"));
         // ---- withReference: unified reference to another Oracle server resource ----
-        oracle.withReference(otherOracle);
+        oracle.withReference(otherOracle, new WithReferenceOptions());
         // ---- Fluent chaining: multiple methods chained ----
         var oracle3 = builder.addOracle("oracledb3");
         oracle3.withLifetime(ContainerLifetime.PERSISTENT);

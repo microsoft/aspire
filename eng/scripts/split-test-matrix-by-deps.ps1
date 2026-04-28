@@ -74,15 +74,25 @@ if ($matrix.include -and $matrix.include.Count -gt 0) {
 
 Write-Host "Input matrix: $($allEntries.Count) total entries"
 
+# Helper to safely read a boolean flag from the properties sub-object
+function Get-PropertyFlag {
+  param($Entry, [string]$Name)
+  if ($Entry.PSObject.Properties.Name -contains 'properties' -and $Entry.properties -and
+      $Entry.properties.PSObject.Properties.Name -contains $Name) {
+    return $Entry.properties.$Name -eq $true
+  }
+  return $false
+}
+
 # Split into categories based on dependency requirements
-$cliArchiveEntries = @($allEntries | Where-Object { $_.PSObject.Properties.Name -contains 'requiresCliArchive' -and $_.requiresCliArchive -eq $true })
+$cliArchiveEntries = @($allEntries | Where-Object { Get-PropertyFlag $_ 'requiresCliArchive' })
 $nugetEntries = @($allEntries | Where-Object {
-  ($_.PSObject.Properties.Name -contains 'requiresNugets' -and $_.requiresNugets -eq $true) -and
-  -not ($_.PSObject.Properties.Name -contains 'requiresCliArchive' -and $_.requiresCliArchive -eq $true)
+  (Get-PropertyFlag $_ 'requiresNugets') -and
+  -not (Get-PropertyFlag $_ 'requiresCliArchive')
 })
 $noNugetEntries = @($allEntries | Where-Object {
-  -not ($_.PSObject.Properties.Name -contains 'requiresNugets' -and $_.requiresNugets -eq $true) -and
-  -not ($_.PSObject.Properties.Name -contains 'requiresCliArchive' -and $_.requiresCliArchive -eq $true)
+  -not (Get-PropertyFlag $_ 'requiresNugets') -and
+  -not (Get-PropertyFlag $_ 'requiresCliArchive')
 })
 
 Write-Host "  - No nugets: $($noNugetEntries.Count)"

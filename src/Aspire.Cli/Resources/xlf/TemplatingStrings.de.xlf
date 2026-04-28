@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AspireJsFrontendStarter_Description">
-        <source>Starter App (ASP.NET Core/React)</source>
-        <target state="translated">Starter-App (ASP.NET Core/React)</target>
+        <source>Starter App (ASP.NET Core/React, C# AppHost)</source>
+        <target state="needs-review-translation">Starter-App (ASP.NET Core/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireMSTest_Description">
@@ -35,11 +35,6 @@
       <trans-unit id="AspireNUnit_Description">
         <source>NUnit</source>
         <target state="translated">NUnit</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspirePyStarter_Description">
-        <source>Starter App (FastAPI/React)</source>
-        <target state="translated">Starter-App (FastAPI/React)</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireServiceDefaults_Description">

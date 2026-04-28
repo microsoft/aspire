@@ -47,7 +47,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
                 Action = BuildProjectImage,
                 Tags = [WellKnownPipelineTags.BuildCompute],
                 RequiredBySteps = [WellKnownPipelineSteps.Build],
-                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
+                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq, WellKnownPipelineSteps.CheckContainerRuntime],
                 Resource = this
             };
             steps.Add(buildStep);
@@ -144,7 +144,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
         var tempTag = $"temp-{Guid.NewGuid():N}";
         var tempImageName = $"{originalImageName}:{tempTag}";
 
-        var containerRuntime = ctx.Services.GetRequiredService<IContainerRuntime>();
+        var containerRuntime = await ctx.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(ctx.CancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Tagging image {OriginalImageName} as {TempImageName}", originalImageName, tempImageName);
         await containerRuntime.TagImageAsync(originalImageName, tempImageName, ctx.CancellationToken).ConfigureAwait(false);

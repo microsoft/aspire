@@ -7,7 +7,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -21,23 +20,30 @@ internal sealed class AzureProvisioner(
     ResourceNotificationService notificationService,
     ResourceLoggerService loggerService,
     IDistributedApplicationEventing eventing,
+    DistributedApplicationExecutionContext executionContext,
     IProvisioningContextProvider provisioningContextProvider
-    ) : IDistributedApplicationEventingSubscriber
+    )
 {
     internal const string AspireResourceNameTag = "aspire-resource-name";
 
     private ILookup<IResource, IResourceWithParent>? _parentChildLookup;
 
-    private async Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken = default)
+    internal async Task ProvisionResourcesAsync(DistributedApplicationModel model, CancellationToken cancellationToken = default)
     {
-        var azureResources = AzureResourcePreparer.GetAzureResourcesFromAppModel(@event.Model);
+        // Only run in RunMode
+        if (!executionContext.IsRunMode)
+        {
+            return;
+        }
+
+        var azureResources = AzureResourcePreparer.GetAzureResourcesFromAppModel(model);
         if (azureResources.Count == 0)
         {
             return;
         }
 
         // Create a map of parents to their children used to propagate state changes later.
-        _parentChildLookup = @event.Model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
+        _parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
 
         // Sets the state of the resource and all of its children
         async Task UpdateStateAsync((IResource Resource, IAzureResource AzureResource) resource, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
@@ -235,12 +241,12 @@ internal sealed class AzureProvisioner(
             }
             catch (AzureCliNotOnPathException ex)
             {
-                resourceLogger.LogCritical("Using Azure resources during local development requires the installation of the Azure CLI. See https://aka.ms/dotnet/aspire/azcli for instructions.");
+                resourceLogger.LogCritical("Using Azure resources during local development requires the installation of the Azure CLI. See https://aka.ms/aspire/azcli for instructions.");
                 resource.AzureResource.ProvisioningTaskCompletionSource?.TrySetException(ex);
             }
             catch (MissingConfigurationException ex)
             {
-                resourceLogger.LogCritical("Resource could not be provisioned because Azure subscription, location, and resource group information is missing. See https://aka.ms/dotnet/aspire/azure/provisioning for more details.");
+                resourceLogger.LogCritical("Resource could not be provisioned because Azure subscription, location, and resource group information is missing. See https://aka.ms/aspire/azure/provisioning for more details.");
                 resource.AzureResource.ProvisioningTaskCompletionSource?.TrySetException(ex);
             }
             catch (Exception ex)
@@ -275,15 +281,5 @@ internal sealed class AzureProvisioner(
                 }
             }
         }
-    }
-
-    public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
-    {
-        if (executionContext.IsRunMode)
-        {
-            eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
-        }
-
-        return Task.CompletedTask;
     }
 }

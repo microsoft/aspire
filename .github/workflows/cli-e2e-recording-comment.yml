@@ -139,6 +139,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p cast_files
+          mkdir -p trx_files
 
           for zipfile in recordings/*.zip; do
             if [ -f "$zipfile" ]; then
@@ -149,9 +150,47 @@ jobs:
 
           # Find and copy all .cast files
           find recordings -name "*.cast" -exec cp {} cast_files/ \; 2>/dev/null || true
+          # Find and copy all .trx files (test results)
+          find recordings -name "*.trx" -exec cp {} trx_files/ \; 2>/dev/null || true
 
           echo "Found recordings:"
           ls -la cast_files/ || echo "No .cast files found"
+          echo "Found TRX files:"
+          ls -la trx_files/ || echo "No .trx files found"
+
+      - name: Parse test results from TRX files
+        if: steps.run-info.outputs.skip != 'true' && hashFiles('cast_files/*.cast') != ''
+        id: test-results
+        continue-on-error: true
+        shell: bash
+        run: |
+          # Parse TRX (XML) files to extract test method outcomes using yq (pre-installed on ubuntu-latest).
+          # Produces a JSON map of testMethodName -> outcome for the bash comment step to consume.
+          # When the same test appears in multiple TRX files (e.g. retries), "Failed" wins over other outcomes.
+          if compgen -G trx_files/*.trx > /dev/null 2>&1; then
+            echo "Parsing TRX files with yq..."
+            # yq can read XML natively; extract testName+outcome from each UnitTestResult.
+            # -s merges all files, producing a combined JSON array of results.
+            # Prefer "Failed" over other outcomes when duplicates exist.
+            yq -p xml -o json '.TestRun.Results.UnitTestResult | (if type == "!!seq" then .[] else . end) | {(."@testName" // ."+@testName"): (."@outcome" // ."+@outcome")}' trx_files/*.trx \
+              | jq -s '
+                  reduce (.[] | to_entries[]) as {$key, $value} ({};
+                    # Extract simple method name (last segment after dot) for .cast file matching
+                    ($key | split(".") | last) as $method |
+                    # Prefer "Failed" over any other outcome
+                    if .[$method] == "Failed" then . else .[$method] = $value end |
+                    if .[$key] == "Failed" then . else .[$key] = $value end
+                  )
+                ' > test_outcomes.json
+
+            OUTCOME_COUNT=$(jq 'length' test_outcomes.json)
+            echo "Parsed $OUTCOME_COUNT test outcome(s)"
+            echo "has_outcomes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No TRX files found"
+            echo '{}' > test_outcomes.json
+            echo "has_outcomes=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload recordings and post comment
         if: steps.run-info.outputs.skip != 'true'
@@ -173,6 +212,15 @@ jobs:
             # Install asciinema
             pip install asciinema
 
+            # Load test outcomes from TRX parsing step (JSON: {"methodName": "Passed|Failed", ...})
+            HAS_OUTCOMES="${{ steps.test-results.outputs.has_outcomes }}"
+            if [ "$HAS_OUTCOMES" = "true" ] && [ -f "test_outcomes.json" ]; then
+              echo "Loaded test outcomes from TRX files"
+            else
+              echo "No test outcomes available, will show recordings without pass/fail status"
+              echo '{}' > test_outcomes.json
+            fi
+
             # Unique marker to identify CLI E2E recording comments
             COMMENT_MARKER="<!-- cli-e2e-recordings -->"
 
@@ -183,7 +231,10 @@ jobs:
             UPLOAD_COUNT=0
             FAIL_COUNT=0
             TOTAL_COUNT=0
+            TEST_FAIL_COUNT=0
 
+            # Arrays to track failed test recordings separately
+            FAILED_TESTS_BODY=""
             TABLE_BODY=""
 
             for castfile in "$RECORDINGS_DIR"/*.cast; do
@@ -191,6 +242,25 @@ jobs:
                 filename=$(basename "$castfile" .cast)
                 echo "Uploading $castfile..."
                 TOTAL_COUNT=$((TOTAL_COUNT + 1))
+
+                # Sanitize filename for safe markdown rendering.
+                # .cast files are named via [CallerMemberName] so should be valid C# identifiers,
+                # but we sanitize defensively since this runs in a privileged workflow_run context
+                # and artifacts could come from fork PRs.
+                safe_filename=$(echo "$filename" | tr -cd 'A-Za-z0-9_.-')
+
+                # Look up test outcome from TRX data.
+                # .cast files are named after the test method name (via [CallerMemberName] in CreateTestTerminal),
+                # so the filename matches the method name key in the outcomes JSON.
+                TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
+                if [ "$TEST_OUTCOME" = "Passed" ]; then
+                  STATUS_EMOJI="✅"
+                elif [ "$TEST_OUTCOME" = "Failed" ]; then
+                  STATUS_EMOJI="❌"
+                  TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
+                else
+                  STATUS_EMOJI="❔"
+                fi
 
                 # Upload to asciinema with retry logic for transient failures
                 ASCIINEMA_URL=""
@@ -209,37 +279,60 @@ jobs:
 
                 if [ -n "$ASCIINEMA_URL" ]; then
                   TABLE_BODY="${TABLE_BODY}
-          | ${filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
+          | ${STATUS_EMOJI} | ${safe_filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
+
+                  # Track failed tests for the prominent section
+                  if [ "$TEST_OUTCOME" = "Failed" ]; then
+                    FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
+          - ❌ **${safe_filename}** — [▶️ View Recording](${ASCIINEMA_URL})"
+                  fi
                 else
                   TABLE_BODY="${TABLE_BODY}
-          | ${filename} | ❌ Upload failed |"
+          | ${STATUS_EMOJI} | ${safe_filename} | ⚠️ Upload failed |"
                   echo "Failed to upload $castfile after $MAX_UPLOAD_RETRIES attempts"
                   FAIL_COUNT=$((FAIL_COUNT + 1))
+
+                  if [ "$TEST_OUTCOME" = "Failed" ]; then
+                    FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
+          - ❌ **${safe_filename}** — ⚠️ Recording upload failed"
+                  fi
                 fi
               fi
             done
 
-            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT failures"
+            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT upload failures, $TEST_FAIL_COUNT test failures"
 
             # Build comment with summary outside collapsible and table inside
-            if [ "$FAIL_COUNT" -gt 0 ]; then
+            if [ "$TEST_FAIL_COUNT" -gt 0 ]; then
+              SUMMARY_EMOJI="❌"
+              SUMMARY_TEXT="${TEST_FAIL_COUNT} test(s) failed, ${UPLOAD_COUNT} recordings uploaded"
+            elif [ "$FAIL_COUNT" -gt 0 ]; then
               SUMMARY_EMOJI="⚠️"
-              SUMMARY_TEXT="${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} failed"
+              SUMMARY_TEXT="${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} upload(s) failed"
             else
               SUMMARY_EMOJI="🎬"
               SUMMARY_TEXT="${UPLOAD_COUNT} recordings uploaded"
             fi
 
+            # Build the failed tests section (shown outside the collapsible)
+            FAILED_SECTION=""
+            if [ -n "$FAILED_TESTS_BODY" ]; then
+              FAILED_SECTION="
+          ### Failed Tests
+          ${FAILED_TESTS_BODY}
+          "
+            fi
+
             COMMENT_BODY="${COMMENT_MARKER}
           ${SUMMARY_EMOJI} **CLI E2E Test Recordings** — ${SUMMARY_TEXT} (commit \`${SHORT_SHA}\`)
-
+          ${FAILED_SECTION}
           <details>
-          <summary>View recordings</summary>
+          <summary>View all recordings</summary>
 
-          | Test | Recording |
-          |------|-----------|${TABLE_BODY}
+          | Status | Test | Recording |
+          |--------|------|-----------|${TABLE_BODY}
 
           ---
           <sub>📹 Recordings uploaded automatically from [CI run #${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID})</sub>

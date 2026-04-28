@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Utils;
 
 internal static class LoggingUtils
 {
+    [AspireExportIgnore(Reason = "Health check logging suppression is an internal helper and is not part of the ATS surface.")]
     public static void SuppressHealthCheckHttpClientLogging(this IServiceCollection services, string healthCheckName)
     {
         services.AddLogging(configure =>

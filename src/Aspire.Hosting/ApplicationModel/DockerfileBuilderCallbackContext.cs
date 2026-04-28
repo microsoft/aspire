@@ -9,6 +9,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Provides context information for Dockerfile build callbacks.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class DockerfileBuilderCallbackContext
 {

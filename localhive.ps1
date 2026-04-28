@@ -61,6 +61,14 @@ param(
   [Alias('v')]
   [string] $VersionSuffix,
 
+  [Alias('o')]
+  [string] $Output,
+
+  [Alias('r')]
+  [string] $Rid,
+
+  [switch] $Archive,
+
   [switch] $Copy,
 
   [switch] $SkipCli,
@@ -88,7 +96,10 @@ Positional parameters:
 Options:
   -Configuration (-c)   Build configuration: Release or Debug
   -Name (-n)            Hive name (default: local)
+  -Output (-o)          Output directory for portable layout (instead of $HOME\.aspire)
+  -Rid (-r)             Target RID for cross-platform builds (e.g. linux-x64)
   -VersionSuffix (-v)   Prerelease version suffix (default: auto-generates local.YYYYMMDD.tHHmmss)
+  -Archive              Create an archive (.tar.gz or .zip) of the output. Requires -Output.
   -Copy                 Copy .nupkg files instead of creating a symlink
   -SkipCli              Skip installing the locally-built CLI to $HOME\.aspire\bin
   -SkipBundle           Skip building and installing the bundle (aspire-managed + DCP)
@@ -102,6 +113,7 @@ Examples:
   .\localhive.ps1            # Packs (tries Release then Debug) -> hive 'local'
   .\localhive.ps1 Debug      # Packs Debug -> hive 'local'
   .\localhive.ps1 Release demo
+  .\localhive.ps1 -o ./aspire-linux -r linux-x64 -Archive  # Portable archive for a Linux machine
 
 This will pack NuGet packages into artifacts\packages\<Config>\Shipping and create/update
 a hive at $HOME\.aspire\hives\<HiveName> so the Aspire CLI can use it as a channel.
@@ -114,6 +126,26 @@ function Write-Warn  { param([string]$m) Write-Warning "[localhive] $m" }
 function Write-Err   { param([string]$m) Write-Error "[localhive] $m" }
 
 if ($Help) { Show-Usage; exit 0 }
+
+# Validate flag combinations
+if ($Archive -and -not $Output) {
+  Write-Err "-Archive requires -Output to be specified."
+  exit 1
+}
+
+if ($Rid -and $NativeAot) {
+  # Detect if this is a cross-OS build
+  $hostPrefix = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
+  if (-not $Rid.StartsWith($hostPrefix)) {
+    Write-Err "Cross-OS native AOT builds are not supported (host=$hostPrefix, target=$Rid). Use -Rid without -NativeAot."
+    exit 1
+  }
+}
+
+# When -Output is specified, always copy (portable layout, no symlinks)
+if ($Output) {
+  $Copy = $true
+}
 
 # Normalize configuration casing if provided (case-insensitive) and allow common abbreviations.
 if ($Configuration) {
@@ -206,7 +238,26 @@ if (-not $packages -or $packages.Count -eq 0) {
 }
 Write-Log ("Found {0} packages in {1}" -f $packages.Count, $pkgDir)
 
-$hivesRoot = Join-Path (Join-Path $HOME '.aspire') 'hives'
+# Determine the RID for the target platform (or auto-detect from host)
+if ($Rid) {
+  $bundleRid = $Rid
+  Write-Log "Using target RID: $bundleRid"
+} elseif ($IsWindows) {
+  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'win-arm64' } else { 'win-x64' }
+} elseif ($IsMacOS) {
+  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'osx-arm64' } else { 'osx-x64' }
+} else {
+  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'linux-arm64' } else { 'linux-x64' }
+}
+
+if ($Output) {
+  $aspireRoot = $Output
+} else {
+  $aspireRoot = Join-Path $HOME '.aspire'
+}
+$cliBinDir = Join-Path $aspireRoot 'bin'
+
+$hivesRoot = Join-Path $aspireRoot 'hives'
 $hiveRoot  = Join-Path $hivesRoot $Name
 $hivePath  = Join-Path $hiveRoot 'packages'
 
@@ -252,25 +303,20 @@ else {
   }
 }
 
-# Determine the RID for the current platform
-if ($IsWindows) {
-  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'win-arm64' } else { 'win-x64' }
-} elseif ($IsMacOS) {
-  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'osx-arm64' } else { 'osx-x64' }
-} else {
-  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'linux-arm64' } else { 'linux-x64' }
-}
-
-$aspireRoot = Join-Path $HOME '.aspire'
-$cliBinDir = Join-Path $aspireRoot 'bin'
-
 # Build the bundle (aspire-managed + DCP, and optionally native AOT CLI)
 if (-not $SkipBundle) {
   $bundleProjPath = Join-Path $RepoRoot "eng" "Bundle.proj"
   $skipNativeArg = if ($NativeAot) { '' } else { '/p:SkipNativeBuild=true' }
 
+  # Clean stale managed publish output so dotnet publish doesn't skip due to incremental builds
+  $staleManagedDir = Join-Path $RepoRoot "artifacts" "bundle" $bundleRid "managed"
+  if (Test-Path -LiteralPath $staleManagedDir) {
+    Write-Log "Cleaning stale managed publish output at $staleManagedDir"
+    Remove-Item -LiteralPath $staleManagedDir -Force -Recurse
+  }
+
   Write-Log "Building bundle (aspire-managed + DCP$(if ($NativeAot) { ' + native AOT CLI' }))..."
-  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix")
+  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:TargetRid=$bundleRid")
   if (-not $NativeAot) {
     $buildArgs += '/p:SkipNativeBuild=true'
   }
@@ -305,15 +351,25 @@ if (-not $SkipBundle) {
   Write-Log "Bundle installed to $aspireRoot (managed/ + dcp/)"
 }
 
-# Install the CLI to $HOME/.aspire/bin
+# Install the CLI to $aspireRoot/bin
 if (-not $SkipCli) {
-  $cliExeName = if ($IsWindows) { 'aspire.exe' } else { 'aspire' }
+  $cliExeName = if ($bundleRid -like 'win-*') { 'aspire.exe' } else { 'aspire' }
 
   if ($NativeAot) {
     # Native AOT CLI is produced by Bundle.proj's _PublishNativeCli target
     $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $bundleRid "native"
     if (-not (Test-Path -LiteralPath $cliPublishDir)) {
       $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $bundleRid "publish"
+    }
+  } elseif ($Rid) {
+    # Cross-RID: publish CLI for the target platform
+    Write-Log "Publishing Aspire CLI for target RID: $Rid"
+    $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.csproj"
+    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $Rid "publish"
+    & dotnet publish $cliProj -c $effectiveConfig -r $Rid --self-contained /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VersionSuffix"
+    if ($LASTEXITCODE -ne 0) {
+      Write-Err "CLI publish for RID $Rid failed."
+      exit 1
     }
   } else {
     # Framework-dependent CLI from dotnet tool build
@@ -377,16 +433,18 @@ if (-not $SkipCli) {
     $installedCliPath = Join-Path $cliBinDir $cliExeName
     Write-Log "Aspire CLI installed to: $installedCliPath"
 
-    # Set the channel to the local hive so templates and packages resolve from it
-    & $installedCliPath config set channel $Name -g 2>$null
-    Write-Log "Set global channel to '$Name'"
+    if (-not $Output) {
+      # Set the channel to the local hive so templates and packages resolve from it
+      & $installedCliPath config set channel $Name -g 2>$null
+      Write-Log "Set global channel to '$Name'"
 
-    # Check if the bin directory is in PATH
-    $pathSeparator = [System.IO.Path]::PathSeparator
-    $currentPathArray = $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries)
-    if ($currentPathArray -notcontains $cliBinDir) {
-      Write-Warn "The CLI bin directory is not in your PATH."
-      Write-Log "Add it to your PATH with: `$env:PATH = '$cliBinDir' + '$pathSeparator' + `$env:PATH"
+      # Check if the bin directory is in PATH
+      $pathSeparator = [System.IO.Path]::PathSeparator
+      $currentPathArray = $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries)
+      if ($currentPathArray -notcontains $cliBinDir) {
+        Write-Warn "The CLI bin directory is not in your PATH."
+        Write-Log "Add it to your PATH with: `$env:PATH = '$cliBinDir' + '$pathSeparator' + `$env:PATH"
+      }
     }
   }
   else {
@@ -395,21 +453,50 @@ if (-not $SkipCli) {
   }
 }
 
+# Create archive if requested
+if ($Archive) {
+  if ($bundleRid -like 'win-*') {
+    $archivePath = "$Output.zip"
+    Write-Log "Creating archive: $archivePath"
+    Compress-Archive -Path (Join-Path $Output '*') -DestinationPath $archivePath -Force
+  } else {
+    $archivePath = "$Output.tar.gz"
+    Write-Log "Creating archive: $archivePath"
+    tar -czf $archivePath -C $Output .
+  }
+  Write-Log "Archive created: $archivePath"
+}
+
 Write-Host
 Write-Log 'Done.'
 Write-Host
-Write-Log "Aspire CLI will discover a channel named '$Name' from:"
-Write-Log "  $hivePath"
-Write-Host
-Write-Log "Channel behavior: Aspire* comes from the hive; others from nuget.org."
-Write-Host
-if (-not $SkipCli) {
-  Write-Log "The locally-built CLI was installed to: $(Join-Path (Join-Path $HOME '.aspire') 'bin')"
+if ($Output) {
+  Write-Log "Portable layout created at: $Output"
+  if ($Archive) {
+    Write-Log "Archive: $archivePath"
+    Write-Log ""
+    Write-Log "To install on the target machine:"
+    if ($bundleRid -like 'win-*') {
+      Write-Log "  Expand-Archive -Path $(Split-Path $archivePath -Leaf) -DestinationPath `$HOME\.aspire"
+    } else {
+      Write-Log "  mkdir -p ~/.aspire && tar -xzf $(Split-Path $archivePath -Leaf) -C ~/.aspire"
+    }
+    Write-Log "  ~/.aspire/bin/aspire config set channel '$Name' -g"
+  }
+} else {
+  Write-Log "Aspire CLI will discover a channel named '$Name' from:"
+  Write-Log "  $hivePath"
   Write-Host
-}
-if (-not $SkipBundle) {
-  Write-Log "Bundle (aspire-managed + DCP) installed to: $(Join-Path $HOME '.aspire')"
-  Write-Log "  The CLI at ~/.aspire/bin/ will auto-discover managed/ and dcp/ in the parent directory."
+  Write-Log "Channel behavior: Aspire* comes from the hive; others from nuget.org."
   Write-Host
+  if (-not $SkipCli) {
+    Write-Log "The locally-built CLI was installed to: $cliBinDir"
+    Write-Host
+  }
+  if (-not $SkipBundle) {
+    Write-Log "Bundle (aspire-managed + DCP) installed to: $aspireRoot"
+    Write-Log "  The CLI at ~/.aspire/bin/ will auto-discover managed/ and dcp/ in the parent directory."
+    Write-Host
+  }
+  Write-Log 'The Aspire CLI discovers channels automatically from the hives directory; no extra flags are required.'
 }
-Write-Log 'The Aspire CLI discovers channels automatically from the hives directory; no extra flags are required.'

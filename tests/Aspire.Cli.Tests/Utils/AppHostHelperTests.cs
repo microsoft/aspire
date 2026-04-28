@@ -362,7 +362,6 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(orphanedSocket), "Orphaned socket should be deleted");
         Assert.True(File.Exists(liveSocket), "Live socket should still exist");
     }
-
     [Theory]
     [InlineData("10.0.0", true)]
     [InlineData("9.2.0", true)]

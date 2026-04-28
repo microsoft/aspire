@@ -67,11 +67,6 @@
         <target state="new">Manage the Aspire dashboard</target>
         <note />
       </trans-unit>
-      <trans-unit id="EnableApiOptionDescription">
-        <source>Enable the telemetry API endpoint on the dashboard</source>
-        <target state="new">Enable the telemetry API endpoint on the dashboard</target>
-        <note />
-      </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
         <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
         <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>

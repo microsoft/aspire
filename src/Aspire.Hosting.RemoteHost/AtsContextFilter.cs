@@ -73,6 +73,10 @@ internal static class AtsContextFilter
                 .Select(type => type.TypeId),
             StringComparer.Ordinal);
 
+        var filteredExportedValues = context.ExportedValues
+            .Where(value => normalizedAssemblyNames.Contains(value.OwningAssemblyName))
+            .ToList();
+
         if (includeReferencedTypes)
         {
             foreach (var capability in filteredCapabilities)
@@ -100,6 +104,11 @@ internal static class AtsContextFilter
                     CollectReferencedType(parameter.CallbackReturnType, handleTypesById, dtoTypesById, enumTypesById, includedHandleTypeIds, includedDtoTypeIds, includedEnumTypeIds);
                 }
             }
+
+            foreach (var exportedValue in filteredExportedValues)
+            {
+                CollectReferencedType(exportedValue.Type, handleTypesById, dtoTypesById, enumTypesById, includedHandleTypeIds, includedDtoTypeIds, includedEnumTypeIds);
+            }
         }
 
         var filteredContext = new AtsContext
@@ -108,6 +117,7 @@ internal static class AtsContextFilter
             HandleTypes = context.HandleTypes.Where(type => includedHandleTypeIds.Contains(type.AtsTypeId)).ToList(),
             DtoTypes = context.DtoTypes.Where(type => includedDtoTypeIds.Contains(type.TypeId)).ToList(),
             EnumTypes = context.EnumTypes.Where(type => includedEnumTypeIds.Contains(type.TypeId)).ToList(),
+            ExportedValues = filteredExportedValues,
             Diagnostics = context.Diagnostics
         };
 

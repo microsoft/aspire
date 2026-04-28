@@ -3,6 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Commands;
@@ -53,6 +54,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceLogLine>))]
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
+[JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(CapabilitiesInfo))]
 [JsonSerializable(typeof(CommonErrorData))]
 // V2 API request/response types
@@ -76,6 +78,10 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(ExecuteResourceCommandResponse))]
 [JsonSerializable(typeof(WaitForResourceRequest))]
 [JsonSerializable(typeof(WaitForResourceResponse))]
+[JsonSerializable(typeof(PipelineStepInfo))]
+[JsonSerializable(typeof(PipelineStepInfo[]))]
+[JsonSerializable(typeof(GetPipelineStepsRequest))]
+[JsonSerializable(typeof(GetPipelineStepsResponse))]
 internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
 {
     [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "Using the Json source generator.")]

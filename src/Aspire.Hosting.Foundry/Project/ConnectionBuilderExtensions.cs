@@ -100,7 +100,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds CosmosDB to a project as a connection
     /// </summary>
-    [AspireExport("addCosmosConnection", Description = "Adds an Azure Cosmos DB connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureCosmosDBResource> db)
@@ -140,7 +140,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure Storage account to a project as a connection.
     /// </summary>
-    [AspireExport("addStorageConnection", Description = "Adds an Azure Storage connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureStorageResource> storage)
@@ -186,7 +186,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
-    [AspireExport("addContainerRegistryConnection", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureContainerRegistryResource> registry)
@@ -202,7 +202,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// As such, we recommend adding this connection *before* any others, so that those connections
     /// can leverage the Key Vault connection for secret storage.
     /// </remarks>
-    [AspireExport("addKeyVaultConnection", Description = "Adds an Azure Key Vault connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureKeyVaultResource> keyVault)
@@ -231,6 +231,31 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                     { "location", vault.Location }
                 }
             };
-        });
+            });
+    }
+
+    [AspireExport("addConnection", Description = "Adds a connection to a Microsoft Foundry project.")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnectionForPolyglot(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        [AspireUnion(
+            typeof(IResourceBuilder<AzureCosmosDBResource>),
+            typeof(IResourceBuilder<AzureStorageResource>),
+            typeof(IResourceBuilder<AzureContainerRegistryResource>),
+            typeof(IResourceBuilder<AzureKeyVaultResource>))]
+        object resource)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return resource switch
+        {
+            IResourceBuilder<AzureCosmosDBResource> cosmosDb => builder.AddConnection(cosmosDb),
+            IResourceBuilder<AzureStorageResource> storage => builder.AddConnection(storage),
+            IResourceBuilder<AzureContainerRegistryResource> registry => builder.AddConnection(registry),
+            IResourceBuilder<AzureKeyVaultResource> keyVault => builder.AddConnection(keyVault),
+            _ => throw new ArgumentException(
+                "Resource must be a Cosmos DB, Storage, Container Registry, or Key Vault resource builder.",
+                nameof(resource))
+        };
     }
 }

@@ -795,6 +795,28 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task NonGenericCollectionTypes_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System.Collections;
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static object? DictMethod(this IDictionary dict, string key) => dict[key];
+
+                [AspireExport]
+                public static object? ListMethod(this IList list, int index) => list[index];
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task InvalidCollectionElementType_ReportsASPIREEXPORT004()
     {
         var diagnostic = AspireExportAnalyzer.Diagnostics.s_parameterTypeMustBeAtsCompatible;

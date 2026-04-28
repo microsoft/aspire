@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Exec;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -44,8 +45,9 @@ internal class AppHostRpcTarget(
                 yield return entry;
             }
 
-            // Stream live entries
-            await foreach (var entry in channel.Reader.ReadAllAsync(linkedToken).ConfigureAwait(false))
+            // Stream live entries — uses a helper that swallows OperationCanceledException on cancellation
+            // instead of propagating it, since yield return cannot appear in a try/catch block.
+            await foreach (var entry in AsyncEnumerableUtils.ReadUntilCancelledAsync(channel.Reader.ReadAllAsync(linkedToken), linkedToken).ConfigureAwait(false))
             {
                 yield return entry;
             }
@@ -70,10 +72,10 @@ internal class AppHostRpcTarget(
             {
                 publishingActivity = await activityReporter.ActivityItemUpdated.Reader.ReadAsync(linkedToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (_shutdownCts.Token.IsCancellationRequested)
+            catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
             {
-                // Gracefully handle cancellation due to shutdown
-                logger.LogDebug("Publishing activities stream cancelled due to AppHost shutdown");
+                // Expected when the stream is cancelled due to shutdown or client disconnect.
+                logger.LogDebug("Publishing activities stream cancelled.");
                 yield break;
             }
 
@@ -95,7 +97,9 @@ internal class AppHostRpcTarget(
 
         var resourceEvents = resourceNotificationService.WatchAsync(linkedToken);
 
-        await foreach (var resourceEvent in resourceEvents.WithCancellation(linkedToken).ConfigureAwait(false))
+        // Use a helper that swallows OperationCanceledException on cancellation instead of propagating it,
+        // since yield return cannot appear in a try/catch block.
+        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
         {
             if (resourceEvent.Resource.Name == "aspire-dashboard")
             {
@@ -191,7 +195,8 @@ internal class AppHostRpcTarget(
 
         _ = cancellationToken;
         return Task.FromResult(new string[] {
-            "baseline.v2"
+            "baseline.v2",
+            "pipeline-steps.v1"
             });
     }
 #pragma warning restore CA1822
@@ -204,5 +209,52 @@ internal class AppHostRpcTarget(
     public async Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken = default)
     {
         await activityReporter.CompleteInteractionAsync(promptId, answers, updateResponse: true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(GetPipelineStepsRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        logger.LogDebug("Resolving pipeline steps for list-steps request.");
+
+#pragma warning disable ASPIREPIPELINES001
+        var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>() as DistributedApplicationPipeline
+            ?? throw new InvalidOperationException("Pipeline is not a DistributedApplicationPipeline.");
+
+        var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        var pipelineContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
+
+        var resolvedSteps = await pipeline.ResolveStepsAsync(pipelineContext).ConfigureAwait(false);
+
+        // If a target step is specified, filter to its transitive dependencies
+        if (!string.IsNullOrEmpty(request?.Step))
+        {
+            var stepsByName = resolvedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+            if (stepsByName.TryGetValue(request.Step, out var targetStep))
+            {
+                resolvedSteps = DistributedApplicationPipeline.ComputeTransitiveDependencies(targetStep, stepsByName);
+            }
+            else
+            {
+                var availableSteps = string.Join(", ", resolvedSteps.Select(s => $"'{s.Name}'"));
+                throw new InvalidOperationException(
+                    $"Step '{request.Step}' not found in pipeline. Available steps: {availableSteps}");
+            }
+        }
+
+        var orderedSteps = DistributedApplicationPipeline.GetTopologicalOrder(resolvedSteps);
+#pragma warning restore ASPIREPIPELINES001
+
+        return new GetPipelineStepsResponse
+        {
+            Steps = orderedSteps.Select(step => new PipelineStepInfo
+            {
+                Name = step.Name,
+                Description = step.Description,
+                DependsOn = [.. step.DependsOnSteps],
+                Tags = [.. step.Tags],
+                ResourceName = step.Resource?.Name
+            }).ToArray()
+        };
     }
 }

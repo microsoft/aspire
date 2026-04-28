@@ -147,6 +147,9 @@
   <data name="PromptRunAgentInit" xml:space="preserve">
     <value>Would you like to configure AI agent environments for this project?</value>
   </data>
+  <data name="AgentInitOptionDescription" xml:space="preserve">
+    <value>Suppress AI agent environment configuration after project creation</value>
+  </data>
   <data name="PipelineLogLevelOptionDescription" xml:space="preserve">
     <value>Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</value>
   </data>

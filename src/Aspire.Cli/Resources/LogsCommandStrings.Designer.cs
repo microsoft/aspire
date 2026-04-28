@@ -105,6 +105,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string IncludeHiddenOptionDescription {
+            get {
+                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
+            }
+        }
+
         public static string SelectAppHostAction {
             get {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);

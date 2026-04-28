@@ -2,7 +2,18 @@ import aspire.*;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
+        var helmNamespace = builder.addParameter("helm-namespace");
+        var helmReleaseName = builder.addParameter("helm-release-name");
+        var helmChartVersion = builder.addParameter("helm-chart-version");
         var kubernetes = builder.addKubernetesEnvironment("kube");
+        kubernetes.withHelm((helm) -> {
+            helm.withNamespace("validation-namespace");
+            helm.withReleaseName("validation-release");
+            helm.withChartVersion("1.2.3");
+            helm.withNamespace(helmNamespace);
+            helm.withReleaseName(helmReleaseName);
+            helm.withChartVersion(helmChartVersion);
+        });
         kubernetes.withProperties((environment) -> {
             environment.setHelmChartName("validation-kubernetes");
             var _configuredHelmChartName = environment.helmChartName();

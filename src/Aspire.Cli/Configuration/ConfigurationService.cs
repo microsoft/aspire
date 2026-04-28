@@ -13,6 +13,10 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     public async Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
     {
         var settingsFilePath = GetSettingsFilePath(isGlobal);
+        if (!isGlobal && AppHostPathConfigurationPolicy.IsHierarchicalAppHostPathKey(key))
+        {
+            settingsFilePath = EnsureAspireConfigFileForAppHostPathSettings(settingsFilePath);
+        }
 
         JsonObject settings;
 
@@ -122,6 +126,25 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         var defaultPath = Path.Combine(executionContext.WorkingDirectory.FullName, AspireConfigFile.FileName);
         logger.LogDebug("No existing settings file found, defaulting to {Path}", defaultPath);
         return defaultPath;
+    }
+
+    private string EnsureAspireConfigFileForAppHostPathSettings(string settingsFilePath)
+    {
+        var settingsFile = new FileInfo(settingsFilePath);
+        var legacySettingsRootDirectory = ConfigurationHelper.GetLegacySettingsRootDirectory(settingsFile);
+        if (legacySettingsRootDirectory is null)
+        {
+            return settingsFilePath;
+        }
+
+        var aspireConfigPath = Path.Combine(legacySettingsRootDirectory.FullName, AspireConfigFile.FileName);
+        if (!File.Exists(aspireConfigPath))
+        {
+            logger.LogInformation("Migrating legacy settings from {LegacyDir} to {ConfigFile}", legacySettingsRootDirectory.FullName, aspireConfigPath);
+            _ = AspireConfigFile.LoadOrCreate(legacySettingsRootDirectory.FullName);
+        }
+
+        return aspireConfigPath;
     }
 
     public async Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)

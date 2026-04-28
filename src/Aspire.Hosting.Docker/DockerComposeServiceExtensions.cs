@@ -54,8 +54,8 @@ public static class DockerComposeServiceExtensions
     /// <param name="manifestExpressionProvider">The manifest expression provider.</param>
     /// <param name="dockerComposeService">The Docker Compose service resource to associate the environment variable with.</param>
     /// <returns>A string representing the environment variable placeholder in Docker Compose syntax (e.g., <c>${ENV_VAR}</c>).</returns>
-    /// <remarks>This overload is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot projection for Docker Compose placeholder helpers is not currently available.")]
+    /// <remarks>This overload is not available in polyglot app hosts because <see cref="IManifestExpressionProvider"/> is not ATS-compatible.</remarks>
+    [AspireExportIgnore(Reason = "IManifestExpressionProvider parameters are not ATS-compatible. Use the parameter-builder overload in polyglot app hosts.")]
     public static string AsEnvironmentPlaceholder(this IManifestExpressionProvider manifestExpressionProvider, DockerComposeServiceResource dockerComposeService)
     {
         var env = manifestExpressionProvider.ValueExpression.Replace("{", "")
@@ -76,8 +76,10 @@ public static class DockerComposeServiceExtensions
     /// <param name="builder">The resource builder for the parameter resource.</param>
     /// <param name="dockerComposeService">The Docker Compose service resource to associate the environment variable with.</param>
     /// <returns>A string representing the environment variable placeholder in Docker Compose syntax (e.g., <c>${ENV_VAR}</c>).</returns>
-    /// <remarks>This overload is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot projection for Docker Compose placeholder helpers is not currently available.")]
+    /// <remarks>
+    /// Use this overload with parameter builders returned by methods such as <see cref="ParameterResourceBuilderExtensions.AddParameter(IDistributedApplicationBuilder, string, bool)"/>.
+    /// </remarks>
+    [AspireExport(Description = "Creates a Docker Compose environment variable placeholder from a parameter builder")]
     public static string AsEnvironmentPlaceholder(this IResourceBuilder<ParameterResource> builder, DockerComposeServiceResource dockerComposeService)
     {
         return builder.Resource.AsEnvironmentPlaceholder(dockerComposeService);
@@ -89,8 +91,8 @@ public static class DockerComposeServiceExtensions
     /// <param name="parameter">The parameter resource for which to create the environment variable placeholder.</param>
     /// <param name="dockerComposeService">The Docker Compose service resource to associate the environment variable with.</param>
     /// <returns>A string representing the environment variable placeholder in Docker Compose syntax (e.g., <c>${ENV_VAR}</c>).</returns>
-    /// <remarks>This overload is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore(Reason = "Polyglot projection for Docker Compose placeholder helpers is not currently available.")]
+    /// <remarks>This overload is not available in polyglot app hosts. Use the builder or manifest-expression overload instead.</remarks>
+    [AspireExportIgnore(Reason = "Prefer the builder or IManifestExpressionProvider overloads in polyglot app hosts to avoid duplicate asEnvironmentPlaceholder projections on ParameterResource.")]
     public static string AsEnvironmentPlaceholder(this ParameterResource parameter, DockerComposeServiceResource dockerComposeService)
     {
         // Placeholder for resolving the actual parameter value

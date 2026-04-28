@@ -20,11 +20,11 @@ void main() throws Exception {
         nats3.withDataBindMount("/tmp/nats-data");
         // addNats - with custom userName and password parameters
         var customUser = builder.addParameter("nats-user");
-        var customPass = builder.addParameter("nats-pass", true);
+        var customPass = builder.addParameter("nats-pass", new AddParameterOptions().secret(true));
         var nats4 = builder.addNats("messaging4", new AddNatsOptions().userName(customUser).password(customPass));
         // withReference - a container referencing a NATS resource (connection string)
         var consumer = builder.addContainer("consumer", "myimage");
-        consumer.withReference(nats);
+        consumer.withReference(nats, new WithReferenceOptions());
         // withReference - with explicit connection name option
         consumer.withReference(nats4, new WithReferenceOptions().connectionName("messaging4-connection"));
         // ---- Property access on NatsServerResource ----

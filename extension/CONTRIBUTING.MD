@@ -23,3 +23,19 @@ If you want to effectively debug the Aspire CLI together with the Aspire VS Code
 You may also want to use the `Run Extension (cli stop on entry)` launch configuration, as `Run Extension` does not prevent the Aspire CLI from executing immediately.
 
 You can use the `Aspire: Extension settings` command to open VS Code settings directly to the Aspire extension category.
+
+## Updating dependency overrides
+
+The extension is built with both **npm** and **yarn**, so `package.json` carries two parallel pin mechanisms:
+
+- `overrides` — consumed by npm when generating `package-lock.json`
+- `resolutions` — consumed by yarn when generating `yarn.lock`
+
+When pinning a transitive dependency (e.g. to address a security advisory), add the pin to **both** sections and regenerate **both** lockfiles in the same change:
+
+```bash
+npm install
+yarn install
+```
+
+Keeping the two sections and the two lockfiles in sync prevents drift between the npm-resolved and yarn-resolved dependency graphs.

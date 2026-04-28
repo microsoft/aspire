@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Úvodní aplikace Aspire (ASP.NET Core/React)",
+  "name": "Úvodní aplikace Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Šablona projektu pro vytvoření aplikace Aspire s front-endem React a back-endovou službou minimálního rozhraní API jazyka C# s volitelným ukládáním do mezipaměti Redis",
   "symbols/Framework/description": "Cílová architektura pro projekt.",
   "symbols/Framework/choices/net8.0/description": "Cílový net8.0",

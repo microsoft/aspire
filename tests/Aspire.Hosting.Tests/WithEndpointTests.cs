@@ -5,6 +5,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Sockets;
 
 namespace Aspire.Hosting.Tests;
 
@@ -151,6 +152,38 @@ public class WithEndpointTests
 
         Assert.True(executed);
         Assert.True(projectA.Resource.TryGetAnnotationsOfType<EndpointAnnotation>(out _));
+    }
+
+    [Fact]
+    public void WithHttpEndpointCallbackCreatesHttpEndpointWhenMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("app", "image")
+            .WithHttpEndpointCallback(_ => { }, name: "callback-http");
+
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Single(endpoint => string.Equals(endpoint.Name, "callback-http", EndpointAnnotationName));
+
+        Assert.Equal("http", endpoint.UriScheme);
+        Assert.Equal("http", endpoint.Transport);
+        Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
+    }
+
+    [Fact]
+    public void WithHttpsEndpointCallbackCreatesHttpsEndpointWhenMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("app", "image")
+            .WithHttpsEndpointCallback(_ => { }, name: "callback-https");
+
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Single(endpoint => string.Equals(endpoint.Name, "callback-https", EndpointAnnotationName));
+
+        Assert.Equal("https", endpoint.UriScheme);
+        Assert.Equal("http", endpoint.Transport);
+        Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
     }
 
     [Fact]

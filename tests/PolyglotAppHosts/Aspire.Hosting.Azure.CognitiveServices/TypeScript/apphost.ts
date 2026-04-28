@@ -9,9 +9,9 @@ const openai = await builder.addAzureOpenAI('openai');
 const chat = await openai.addDeployment('chat', 'gpt-4o-mini', '2024-07-18');
 
 const api = await builder.addContainer('api', 'redis:latest');
-await api.withCognitiveServicesRoleAssignments(openai, [AzureOpenAIRole.CognitiveServicesOpenAIUser]);
+await api.withRoleAssignments(openai, [AzureOpenAIRole.CognitiveServicesOpenAIUser]);
 
-const _deploymentParent = await chat.parent.get();
-const _deploymentConnectionString = await chat.connectionStringExpression.get();
+const _deploymentParent = await chat.parent();
+const _deploymentConnectionString = await chat.connectionStringExpression();
 
 await builder.build().run();

@@ -121,6 +121,16 @@ public partial class AspireExportAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{RedundantExportIdId}");
 
+        private const string CallbackContextTypeMissingExportId = "ASPIREEXPORT012";
+        internal static readonly DiagnosticDescriptor s_callbackContextTypeMissingExport = new(
+            id: CallbackContextTypeMissingExportId,
+            title: "Callback context type missing AspireExport attribute",
+            messageFormat: "Callback parameter type '{0}' in method '{1}' is not exported. Add [AspireExport(ExposeMethods = true)] or [AspireExport(ExposeProperties = true)] to '{0}' so its members are accessible from TypeScript.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{CallbackContextTypeMissingExportId}");
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -132,7 +142,8 @@ public partial class AspireExportAnalyzer
             s_missingExportAttribute,
             s_exportNameShouldBeUnique,
             s_exportedSyncDelegateInvokedInline,
-            s_redundantExportId
+            s_redundantExportId,
+            s_callbackContextTypeMissingExport
         );
     }
 }

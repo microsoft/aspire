@@ -1109,6 +1109,16 @@ public static class ResourceExtensions
     }
 
     /// <summary>
+    /// Returns the display name for the specified resource.
+    /// For resources with replicas, returns the full <paramref name="resourceId"/> to identify the instance.
+    /// For single-instance resources, returns the resource's display name without the DCP suffix.
+    /// </summary>
+    internal static string GetResolvedDisplayResourceName(this IResource resource, string resourceId)
+    {
+        return resource.GetReplicaCount() > 1 ? resourceId : resource.Name;
+    }
+
+    /// <summary>
     /// Attempts to get the DCP instances for the specified resource.
     /// </summary>
     /// <param name="resource">The resource to get the DCP instances from.</param>

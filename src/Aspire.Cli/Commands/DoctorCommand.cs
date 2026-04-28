@@ -129,7 +129,7 @@ internal sealed class DoctorCommand : BaseCommand
     private void OutputCheckResult(EnvironmentCheckResult result)
     {
         var (icon, color) = GetStatusIconAndColor(result.Status);
-        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole);
+        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole, suppressColor: true);
 
         // Primary grid: icon + message (wrapped lines stay aligned with message text)
         var messageGrid = new Grid();
@@ -177,7 +177,7 @@ internal sealed class DoctorCommand : BaseCommand
     {
         return status switch
         {
-            EnvironmentCheckStatus.Pass => (KnownEmojis.CheckMark, "green"),
+            EnvironmentCheckStatus.Pass => (KnownEmojis.CheckMarkButton, "green"),
             EnvironmentCheckStatus.Warning => (KnownEmojis.Warning, "yellow"),
             EnvironmentCheckStatus.Fail => (KnownEmojis.CrossMark, "red"),
             _ => (KnownEmojis.Information, "grey")
