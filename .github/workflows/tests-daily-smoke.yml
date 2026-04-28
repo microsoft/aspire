@@ -22,6 +22,9 @@ on:
     # Run daily at 6 AM UTC
     - cron: '0 6 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   smoke-test:
     name: CLI Smoke Test (${{ inputs.quality || 'dev' }})
@@ -31,6 +34,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
@@ -74,6 +79,8 @@ jobs:
       - name: Generate test results summary
         if: always()
         continue-on-error: true
+        env:
+          SMOKE_TEST_RESULTS_ARTIFACT_URL: ${{ steps.upload-logs.outputs.artifact-url }}
         run: |
           if [ -d "${{ github.workspace }}/testresults" ]; then
             summary_args=(
@@ -84,7 +91,7 @@ jobs:
               "${{ github.workspace }}/testresults"
             )
 
-            artifact_url="${{ steps.upload-logs.outputs.artifact-url }}"
+            artifact_url="${SMOKE_TEST_RESULTS_ARTIFACT_URL:-}"
             if [ -n "$artifact_url" ]; then
               summary_args+=("-u" "$artifact_url")
             fi

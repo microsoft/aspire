@@ -23,6 +23,17 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void GetRecordAspireCliVersionCommand_IsBestEffort()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool(includePrerelease: true);
+
+        var command = CliE2EAutomatorHelpers.GetRecordAspireCliVersionCommand(strategy, "VER", "BASE_VER");
+
+        Assert.Contains("if mkdir -p \"$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\" && ", command);
+        Assert.Contains("} > \"$CLI_VERSION_RECORD\"; then echo \"CLI_VERSION_RECORDED:$CLI_VERSION_RECORD\"; else echo \"CLI_VERSION_RECORD_FAILED:$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\"; fi; fi", command);
+    }
+
+    [Fact]
     public void Detect_ReturnsLocalArchive_WhenArchiveDirIsSet()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");

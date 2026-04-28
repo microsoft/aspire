@@ -297,7 +297,7 @@ internal static class CliE2EAutomatorHelpers
             "but got a different version. This may indicate the wrong CLI binary was installed.");
     }
 
-    private static string GetRecordAspireCliVersionCommand(
+    internal static string GetRecordAspireCliVersionCommand(
         CliInstallStrategy strategy,
         string versionVariableName,
         string baseVersionVariableName)
@@ -307,7 +307,7 @@ internal static class CliE2EAutomatorHelpers
 
         return
             "if [ -n \"${ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR:-}\" ]; then " +
-            "mkdir -p \"$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\" && " +
+            "if mkdir -p \"$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\" && " +
             "CLI_VERSION_RECORD=\"$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR/$(date +%s%N)-$$.env\" && " +
             "{ " +
             $"printf '%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg($"test={testName}")}; " +
@@ -316,8 +316,11 @@ internal static class CliE2EAutomatorHelpers
             $"printf '%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg($"expected={requestedVersion}")}; " +
             $"printf 'version=%s\\n' \"${versionVariableName}\"; " +
             $"printf 'baseVersion=%s\\n' \"${baseVersionVariableName}\"; " +
-            "} > \"$CLI_VERSION_RECORD\" && " +
+            "} > \"$CLI_VERSION_RECORD\"; then " +
             "echo \"CLI_VERSION_RECORDED:$CLI_VERSION_RECORD\"; " +
+            "else " +
+            "echo \"CLI_VERSION_RECORD_FAILED:$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\"; " +
+            "fi; " +
             "fi";
     }
 
