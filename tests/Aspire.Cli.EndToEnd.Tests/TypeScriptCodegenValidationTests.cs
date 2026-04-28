@@ -15,6 +15,8 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 {
+    private const string RuntimeErrorOutputFileName = "runtime-error-output.txt";
+
     public static TheoryData<string> AlternativeToolchains => new()
     {
         "bun",
@@ -106,6 +108,106 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         {
             throw new InvalidOperationException("aspire.ts does not contain addSqlServer from Aspire.Hosting.SqlServer");
         }
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireRunWithTypeScriptRuntimeErrorEmitsConciseOutput()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            strategy,
+            output,
+            variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
+            mountDockerSocket: false,
+            workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, """
+            import { createBuilder } from './.modules/aspire.js';
+
+            const builder = await createBuilder();
+
+            builder
+                .addContainer("host", "nginx")
+                .withHttpEndpoint({ port: 8080, env: "PORT" })
+                .withHttpHealthCheck({ path: "/" })
+                .withIconName("ServerConnector")
+                .withDefinitelyMissingRuntimeMethod();
+
+            await builder.build().run();
+            """);
+
+        var expectedPrompt = counter.Value;
+        await auto.TypeAsync($"(set -o pipefail; aspire run 2>&1 | tee {RuntimeErrorOutputFileName})");
+        await auto.EnterAsync();
+
+        var sawRuntimeErrorSummary = false;
+        var sawMissingMethod = false;
+        var sawSourceLocation = false;
+        var sawErrorPrompt = false;
+
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            sawRuntimeErrorSummary |= snapshot.ContainsText("TypeScript AppHost failed.");
+            sawMissingMethod |= snapshot.ContainsText("TypeError: withDefinitelyMissingRuntimeMethod is not a function");
+            sawSourceLocation |= snapshot.ContainsText("apphost.ts:");
+
+            var errorPrompt = new CellPatternSearcher()
+                .FindPattern(expectedPrompt.ToString())
+                .RightText(" ERR:");
+            sawErrorPrompt = errorPrompt.Search(snapshot).Count > 0;
+
+            return sawRuntimeErrorSummary && sawMissingMethod && sawSourceLocation && sawErrorPrompt;
+        }, timeout: TimeSpan.FromMinutes(3), description: "waiting for concise TypeScript runtime error output");
+        counter.Increment();
+
+        await auto.TypeAsync($"grep -F 'TypeScript AppHost failed.' {RuntimeErrorOutputFileName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
+
+        await auto.TypeAsync($"grep -F 'TypeError: withDefinitelyMissingRuntimeMethod is not a function' {RuntimeErrorOutputFileName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
+
+        await auto.TypeAsync($"grep -F 'apphost.ts:' {RuntimeErrorOutputFileName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
+
+        await auto.TypeAsync($"if grep -F 'Uncaught Exception:' {RuntimeErrorOutputFileName}; then exit 1; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
+
+        await auto.TypeAsync($"if grep -F 'builder.addContainer(...)' {RuntimeErrorOutputFileName}; then exit 1; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
