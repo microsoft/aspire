@@ -108,7 +108,6 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
             description: "agent init prompt after aspire new");
         await auto.WaitAsync(500);
         await auto.TypeAsync("y");
-        await auto.EnterAsync();
 
         // Agent init: skill location - select Claude Code
         await auto.WaitUntilAsync(
