@@ -168,7 +168,7 @@ public class AzureCognitiveServicesProjectResource :
             {
                 throw new InvalidOperationException(
                     $"The container registry configured for the Azure Cognitive Services project '{Name}' is not an Azure Container Registry. " +
-                    $"Only Azure Container Registry resources are supported. Use '.WithContainerRegistry()' to configure an Azure Container Registry.");
+                    $"Only Azure Container Registry resources are supported. Use '.WithAzureContainerRegistry()' to configure an Azure Container Registry.");
             }
 
             return azureRegistry;
