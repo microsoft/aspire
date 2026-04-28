@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
@@ -67,5 +68,61 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.EnterAsync();
 
         await pendingRun;
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task LatestCliCanStartStableChannelAppHost()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        const string projectName = "StableAppHost";
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter, channel: "stable");
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
+        var appHostSdkVersion = GetAppHostSdkVersion(appHostPath);
+        if (appHostSdkVersion.Contains('-', StringComparison.Ordinal) ||
+            appHostSdkVersion.Contains('+', StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Expected stable Aspire.AppHost.Sdk version, got '{appHostSdkVersion}' in {appHostPath}.");
+        }
+
+        output.WriteLine($"Stable AppHost SDK version: {appHostSdkVersion}");
+
+        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    private static string GetAppHostSdkVersion(string appHostPath)
+    {
+        if (!File.Exists(appHostPath))
+        {
+            throw new FileNotFoundException($"Expected AppHost file to exist: {appHostPath}", appHostPath);
+        }
+
+        var appHostContent = File.ReadAllText(appHostPath);
+        var match = Regex.Match(appHostContent, @"(?m)^#:\s*sdk\s+Aspire\.AppHost\.Sdk@(?<version>\S+)\s*$");
+        return match.Success
+            ? match.Groups["version"].Value
+            : throw new InvalidOperationException($"Could not find Aspire.AppHost.Sdk directive in {appHostPath}.");
     }
 }

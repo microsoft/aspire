@@ -138,6 +138,97 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Creates a C# empty AppHost using the direct <c>aspire new aspire-empty</c> command.
+    /// Handles CLI versions where C# is implicit and newer versions that prompt for the AppHost language.
+    /// </summary>
+    internal static async Task AspireNewCSharpEmptyAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        SequenceCounter counter,
+        string? outputPath = null,
+        string? channel = null,
+        bool useLocalhostTld = false,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+        var output = string.IsNullOrWhiteSpace(outputPath) ? projectName : outputPath;
+        var channelArgument = string.IsNullOrWhiteSpace(channel)
+            ? string.Empty
+            : $" --channel {AspireCliShellCommandHelpers.QuoteBashArg(channel)}";
+        var localhostTldValue = useLocalhostTld ? "true" : "false";
+        var command =
+            $"aspire new aspire-empty --name {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} " +
+            $"--output {AspireCliShellCommandHelpers.QuoteBashArg(output)}" +
+            $"{channelArgument} --localhost-tld {localhostTldValue}";
+
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+
+        var languagePrompt = new CellPatternSearcher()
+            .Find("Which language would you like to use?");
+        var agentInitPrompt = new CellPatternSearcher()
+            .Find("configure AI agent environments");
+
+        var result = AspireNewEmptyAppHostResult.None;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            if (languagePrompt.Search(snapshot).Count > 0)
+            {
+                result = AspireNewEmptyAppHostResult.LanguagePrompt;
+                return true;
+            }
+
+            if (agentInitPrompt.Search(snapshot).Count > 0)
+            {
+                result = AspireNewEmptyAppHostResult.AgentInitPrompt;
+                return true;
+            }
+
+            var successPrompt = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+            if (successPrompt.Search(snapshot).Count > 0)
+            {
+                result = AspireNewEmptyAppHostResult.SuccessPrompt;
+                return true;
+            }
+
+            var errorPrompt = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" ERR:");
+            if (errorPrompt.Search(snapshot).Count > 0)
+            {
+                result = AspireNewEmptyAppHostResult.ErrorPrompt;
+                return true;
+            }
+
+            return false;
+        }, timeout: effectiveTimeout, description: "C# empty AppHost creation prompt or completion");
+
+        switch (result)
+        {
+            case AspireNewEmptyAppHostResult.LanguagePrompt:
+                await auto.EnterAsync();
+                await auto.DeclineAgentInitPromptAsync(counter, effectiveTimeout);
+                return;
+
+            case AspireNewEmptyAppHostResult.AgentInitPrompt:
+                await auto.DeclineAgentInitPromptAsync(counter, effectiveTimeout);
+                return;
+
+            case AspireNewEmptyAppHostResult.SuccessPrompt:
+                counter.Increment();
+                return;
+
+            case AspireNewEmptyAppHostResult.ErrorPrompt:
+                throw new InvalidOperationException($"aspire new failed while creating C# empty AppHost project '{projectName}'.");
+
+            default:
+                throw new InvalidOperationException($"Unexpected aspire new result while creating C# empty AppHost project '{projectName}': {result}.");
+        }
+    }
+
+    /// <summary>
     /// Handles <c>aspire add</c> completing directly or stopping on a version selection prompt.
     /// </summary>
     internal static async Task WaitForAspireAddSuccessAsync(
@@ -834,5 +925,14 @@ internal static class CliE2EAutomatorHelpers
     private static bool ShouldCaptureWorkspaceDiagnostics()
     {
         return CliE2ETestHelpers.IsRunningInCI || ShouldPreserveLocalWorkspace();
+    }
+
+    private enum AspireNewEmptyAppHostResult
+    {
+        None,
+        LanguagePrompt,
+        AgentInitPrompt,
+        SuccessPrompt,
+        ErrorPrompt
     }
 }
