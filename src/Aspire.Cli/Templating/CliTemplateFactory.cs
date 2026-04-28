@@ -139,7 +139,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.PythonStarter,
-                "Starter App (FastAPI/React, TypeScript AppHost)",
+                TemplatingStrings.AspirePyStarter_Description,
                 projectName => $"./{projectName}",
                 cmd =>
                 {
