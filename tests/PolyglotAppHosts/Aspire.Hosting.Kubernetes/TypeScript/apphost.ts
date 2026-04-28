@@ -8,13 +8,15 @@ const helmChartVersion = await builder.addParameter('helm-chart-version');
 
 const kubernetes = await builder.addKubernetesEnvironment('kube');
 
-await kubernetes.withHelm(async (helm) => {
-    await helm.withNamespace('validation-namespace');
-    await helm.withReleaseName('validation-release');
-    await helm.withChartVersion('1.2.3');
-    await helm.withNamespaceFromParameter(helmNamespace);
-    await helm.withReleaseNameFromParameter(helmReleaseName);
-    await helm.withChartVersionFromParameter(helmChartVersion);
+await kubernetes.withHelm({
+    configure: async (helm) => {
+        await helm.withNamespace('validation-namespace');
+        await helm.withReleaseName('validation-release');
+        await helm.withChartVersion('1.2.3');
+        await helm.withNamespaceFromParameter(helmNamespace);
+        await helm.withReleaseNameFromParameter(helmReleaseName);
+        await helm.withChartVersionFromParameter(helmChartVersion);
+    },
 });
 
 await kubernetes.withProperties(async (environment) => {
