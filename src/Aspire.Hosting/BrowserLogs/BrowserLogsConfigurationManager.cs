@@ -16,6 +16,7 @@ internal sealed class BrowserLogsConfigurationManager(
     IConfiguration configuration,
     IInteractionService interactionService,
     IUserSecretsManager userSecretsManager,
+    DistributedApplicationModel applicationModel,
     BrowserLogsConfigurationStore configurationStore,
     ResourceNotificationService resourceNotificationService,
     ILogger<BrowserLogsConfigurationManager> logger)
@@ -49,7 +50,7 @@ internal sealed class BrowserLogsConfigurationManager(
                 PrimaryButtonText = CommandStrings.ConfigureTrackedBrowserSaveButton,
                 ShowDismiss = true,
                 EnableMessageMarkdown = true,
-                ValidationCallback = ValidateInputsAsync
+                ValidationCallback = context => ValidateInputsAsync(resource, context)
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -59,10 +60,13 @@ internal sealed class BrowserLogsConfigurationManager(
         }
 
         var selected = BrowserLogsConfigurationSelection.FromInputs(result.Data);
+        var resolvedConfigurations = ResolveEffectiveConfigurations(resource, selected);
         Apply(resource, selected);
 
-        var savedConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
-        await PublishConfigurationSnapshotAsync(resource, savedConfiguration).ConfigureAwait(false);
+        foreach (var (browserLogsResource, browserConfiguration) in resolvedConfigurations)
+        {
+            await PublishConfigurationSnapshotAsync(browserLogsResource, browserConfiguration).ConfigureAwait(false);
+        }
 
         var scopeName = selected.Scope == BrowserLogsConfigurationScope.Resource
             ? resource.ParentResource.Name
@@ -255,19 +259,22 @@ internal sealed class BrowserLogsConfigurationManager(
         return profile.DirectoryName;
     }
 
-    private Task ValidateInputsAsync(InputsDialogValidationContext context)
+    private Task ValidateInputsAsync(BrowserLogsResource resource, InputsDialogValidationContext context)
     {
         var inputs = context.Inputs;
         var browser = inputs[BrowserInputName];
+        var hasValidationErrors = false;
         if (string.IsNullOrWhiteSpace(browser.Value))
         {
             context.AddValidationError(browser, CommandStrings.ConfigureTrackedBrowserBrowserRequired);
+            hasValidationErrors = true;
         }
 
         var userDataMode = inputs[UserDataModeInputName];
         if (!Enum.TryParse<BrowserUserDataMode>(userDataMode.Value, ignoreCase: true, out var parsedUserDataMode))
         {
             context.AddValidationError(userDataMode, CommandStrings.ConfigureTrackedBrowserUserDataModeRequired);
+            hasValidationErrors = true;
         }
 
         var profile = inputs[ProfileInputName];
@@ -276,15 +283,75 @@ internal sealed class BrowserLogsConfigurationManager(
             !string.Equals(profile.Value, BrowserDefaultProfileValue, StringComparison.Ordinal))
         {
             context.AddValidationError(profile, CommandStrings.ConfigureTrackedBrowserProfileRequiresShared);
+            hasValidationErrors = true;
         }
 
         var saveToUserSecrets = inputs[SaveToUserSecretsInputName];
         if (IsSaveToUserSecretsRequested(inputs) && !userSecretsManager.IsAvailable)
         {
             context.AddValidationError(saveToUserSecrets, CommandStrings.ConfigureTrackedBrowserUserSecretsUnavailable);
+            hasValidationErrors = true;
+        }
+
+        if (!hasValidationErrors)
+        {
+            try
+            {
+                _ = ResolveEffectiveConfigurations(resource, BrowserLogsConfigurationSelection.FromInputs(inputs));
+            }
+            catch (InvalidOperationException ex)
+            {
+                context.AddValidationError(userDataMode, ex.Message);
+            }
         }
 
         return Task.CompletedTask;
+    }
+
+    private List<(BrowserLogsResource Resource, BrowserConfiguration Configuration)> ResolveEffectiveConfigurations(
+        BrowserLogsResource commandResource,
+        BrowserLogsConfigurationSelection selected)
+    {
+        var selectedConfiguration = ToBrowserConfiguration(selected);
+        IEnumerable<BrowserLogsResource> resources = selected.Scope == BrowserLogsConfigurationScope.Global
+            ? applicationModel.Resources.OfType<BrowserLogsResource>()
+            : [commandResource];
+
+        return [.. resources.Select(resource =>
+            (resource, ResolveEffectiveConfiguration(resource, commandResource, selected, selectedConfiguration)))];
+    }
+
+    private BrowserConfiguration ResolveEffectiveConfiguration(
+        BrowserLogsResource resource,
+        BrowserLogsResource commandResource,
+        BrowserLogsConfigurationSelection selected,
+        BrowserConfiguration selectedConfiguration)
+    {
+        var (resourceConfiguration, globalConfiguration) = configurationStore.GetConfigurations(resource.ParentResource.Name);
+        if (selected.Scope == BrowserLogsConfigurationScope.Global)
+        {
+            globalConfiguration = selectedConfiguration;
+        }
+        else if (ReferenceEquals(resource, commandResource))
+        {
+            resourceConfiguration = selectedConfiguration;
+        }
+
+        return BrowserConfiguration.Resolve(
+            configuration,
+            resource.ParentResource.Name,
+            resource.ExplicitConfigurationValues,
+            resourceConfiguration,
+            globalConfiguration);
+    }
+
+    private BrowserConfiguration ToBrowserConfiguration(BrowserLogsConfigurationSelection selected)
+    {
+        return new BrowserConfiguration(
+            selected.Browser,
+            selected.Profile,
+            selected.UserDataMode,
+            configuration["AppHost:PathSha256"]);
     }
 
     private void Apply(BrowserLogsResource resource, BrowserLogsConfigurationSelection selected)
@@ -309,14 +376,7 @@ internal sealed class BrowserLogsConfigurationManager(
             }
         }
 
-        configurationStore.Set(
-            selected.Scope,
-            resource.ParentResource.Name,
-            new BrowserConfiguration(
-                selected.Browser,
-                selected.Profile,
-                selected.UserDataMode,
-                configuration["AppHost:PathSha256"]));
+        configurationStore.Set(selected.Scope, resource.ParentResource.Name, ToBrowserConfiguration(selected));
     }
 
     private void SaveValue(string key, string value)

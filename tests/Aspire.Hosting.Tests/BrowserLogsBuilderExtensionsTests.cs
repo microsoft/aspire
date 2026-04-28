@@ -561,6 +561,115 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
+    public async Task WithBrowserLogs_ConfigureCommandRefreshesAllBrowserLogsResourcesForGlobalSettings()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var interactionService = new TestInteractionService();
+        var userSecretsManager = new RecordingUserSecretsManager();
+        builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
+        builder.Services.AddSingleton<IInteractionService>(interactionService);
+        builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        var admin = builder.AddResource(new TestHttpResource("admin"))
+            .WithHttpEndpoint(targetPort: 8081)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8081))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+        admin.WithBrowserLogs();
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResources = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().ToArray();
+        var webBrowserLogsResource = browserLogsResources.Single(resource => resource.ParentResource.Name == "web");
+        var adminBrowserLogsResource = browserLogsResources.Single(resource => resource.ParentResource.Name == "admin");
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(webBrowserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+
+        interaction.Inputs["scope"].Value = "global";
+        interaction.Inputs["browser"].Value = "chrome";
+        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Isolated);
+        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await commandTask.DefaultTimeout();
+
+        Assert.True(result.Success);
+
+        await app.ResourceNotifications.WaitForResourceAsync(
+            adminBrowserLogsResource.Name,
+            resourceEvent =>
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserPropertyName, "chrome") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.UserDataModePropertyName, nameof(BrowserUserDataMode.Isolated)) &&
+                DoesNotHaveProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ProfilePropertyName)).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_ConfigureCommandValidatesEffectiveConfigurationBeforeSaving()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var interactionService = new TestInteractionService();
+        var userSecretsManager = new RecordingUserSecretsManager();
+        builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
+        builder.Services.AddSingleton<IInteractionService>(interactionService);
+        builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(profile: "Default");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+
+        interaction.Inputs["scope"].Value = "resource";
+        interaction.Inputs["browser"].Value = "chrome";
+        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Isolated);
+        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await commandTask.DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Contains("Profiles can only be selected", result.Message, StringComparison.Ordinal);
+        Assert.Empty(userSecretsManager.Secrets);
+        Assert.Empty(userSecretsManager.DeletedSecrets);
+
+        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
+        Assert.Equal(BrowserUserDataMode.Shared, effectiveConfiguration.UserDataMode);
+        Assert.Equal("Default", effectiveConfiguration.Profile);
+    }
+
+    [Fact]
     public async Task WithBrowserLogs_CaptureScreenshotCommandReturnsArtifactResult()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
