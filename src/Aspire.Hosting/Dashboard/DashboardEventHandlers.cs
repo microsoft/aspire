@@ -534,23 +534,20 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         PopulateDashboardUrls(context);
 
-        if (options.OtlpHttpEndpointUrl != null)
+        // Use explicitly defined allowed origins if configured.
+        var allowedOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
+
+        // If allowed origins are not configured then calculate allowed origins from endpoints.
+        if (string.IsNullOrEmpty(allowedOrigins))
         {
-            // Use explicitly defined allowed origins if configured.
-            var allowedOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
+            var model = context.ExecutionContext.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+            allowedOrigins = GetAllowedOriginsFromResourceEndpoints(model);
+        }
 
-            // If allowed origins are not configured then calculate allowed origins from endpoints.
-            if (string.IsNullOrEmpty(allowedOrigins))
-            {
-                var model = context.ExecutionContext.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
-                allowedOrigins = GetAllowedOriginsFromResourceEndpoints(model);
-            }
-
-            if (!string.IsNullOrEmpty(allowedOrigins))
-            {
-                context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedOriginsKeyName.EnvVarName] = allowedOrigins;
-                context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedHeadersKeyName.EnvVarName] = "*";
-            }
+        if (!string.IsNullOrEmpty(allowedOrigins))
+        {
+            context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedOriginsKeyName.EnvVarName] = allowedOrigins;
+            context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedHeadersKeyName.EnvVarName] = "*";
         }
 
         // Configure frontend browser token
