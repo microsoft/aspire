@@ -614,7 +614,8 @@ public class ResourceNotificationTests
     public async Task WithHidden_AlwaysHidden()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resourceBuilder = builder.AddResource(new CustomResource("myResource")).WithHidden();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHidden();
 
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
 
@@ -627,7 +628,8 @@ public class ResourceNotificationTests
     public async Task WithHiddenOnCompletion_HidesOnSuccessfulCompletion()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resourceBuilder = builder.AddResource(new CustomResource("myResource")).WithHiddenOnCompletion();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion();
 
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
 
@@ -636,15 +638,34 @@ public class ResourceNotificationTests
         Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 1));
         Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 1));
 
-        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited));
-        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished));
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 0));
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 0));
+    }
+
+    [Fact]
+    public async Task WithHiddenOnCompletion_HidesOnSuccessfulCompletionWithCustomExitCodes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion(123,456,789);
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Running));
+
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 1));
+        Assert.False(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 1));
+
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Exited, exitCode: 456));
+        Assert.True(await PublishAndGetIsHiddenAsync(notificationService, resourceBuilder, KnownResourceStates.Finished, exitCode: 456));
     }
 
     [Fact]
     public async Task WithHiddenOnCompletion_WithCustomExitCode_HidesOnMatchingCode()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resourceBuilder = builder.AddResource(new CustomResource("myResource")).WithHiddenOnCompletion(5);
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion(5);
 
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
 
@@ -657,7 +678,8 @@ public class ResourceNotificationTests
     public async Task WithHiddenOnCompletion_WithCustomExitCodes_HidesOnAnyMatchingCode()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resourceBuilder = builder.AddResource(new CustomResource("myResource")).WithHiddenOnCompletion(3, 7);
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion(3, 7);
 
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
 
@@ -670,7 +692,8 @@ public class ResourceNotificationTests
     public async Task WithHiddenOnCompletion_BecomesVisibleOnRestart()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resourceBuilder = builder.AddResource(new CustomResource("myResource")).WithHiddenOnCompletion();
+        var resourceBuilder = builder.AddResource(new CustomResource("myResource"))
+            .WithHiddenOnCompletion();
 
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
 
