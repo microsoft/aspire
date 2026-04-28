@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.TypeSystem;
 
 /// <summary>
@@ -17,6 +19,7 @@ public sealed class AtsTypeRef
     /// <summary>
     /// Gets or sets the CLR type reference for direct type access.
     /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)]
     public Type? ClrType { get; init; }
 
     /// <summary>
@@ -359,6 +362,7 @@ public sealed class AtsTypeInfo
     /// <summary>
     /// Gets or sets the CLR type reference for direct type access.
     /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)]
     public Type? ClrType { get; init; }
 
     /// <summary>
