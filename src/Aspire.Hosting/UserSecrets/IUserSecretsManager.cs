@@ -37,6 +37,14 @@ public interface IUserSecretsManager
     bool TrySetSecret(string name, string value);
 
     /// <summary>
+    /// Attempts to delete a user secret value synchronously.
+    /// </summary>
+    /// <param name="name">The name of the secret.</param>
+    /// <returns>True if the secret was deleted successfully; otherwise, false.</returns>
+    [AspireExport(Description = "Attempts to delete a user secret value")]
+    bool TryDeleteSecret(string name);
+
+    /// <summary>
     /// Gets a secret value if it exists in configuration, or sets it using the value generator if it doesn't.
     /// </summary>
     /// <param name="configuration">The configuration manager to check and update.</param>

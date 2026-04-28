@@ -29,7 +29,9 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
     internal static BrowserConfiguration Resolve(
         IConfiguration configuration,
         string resourceName,
-        BrowserConfigurationOverrides overrides)
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration = null,
+        BrowserConfiguration? globalRuntimeConfiguration = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
@@ -40,17 +42,9 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
         // Resolution order is explicit argument -> resource-specific config -> global browser-log config -> default.
         // Resolve user-data mode before browser so the browser default can prefer Edge for shared state and Chrome for
         // disposable isolated state.
-        var resolvedProfile = overrides.Profile
-            ?? resourceSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey]
-            ?? browserLogsSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey];
-        var resolvedUserDataMode = overrides.UserDataMode
-            ?? ParseUserDataMode(resourceSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey])
-            ?? ParseUserDataMode(browserLogsSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey])
-            ?? DefaultUserDataMode;
-        var resolvedBrowser = overrides.Browser
-            ?? resourceSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey]
-            ?? browserLogsSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey]
-            ?? GetDefaultBrowser(resolvedUserDataMode);
+        var resolvedProfile = ResolveProfile(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
+        var resolvedUserDataMode = ResolveUserDataMode(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
+        var resolvedBrowser = ResolveBrowser(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection, resolvedUserDataMode);
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
         {
@@ -77,8 +71,7 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
 
         // Stable per-AppHost key sourced from DistributedApplicationBuilder. Only Isolated mode actually needs it
         // (its user-data path includes the AppHost segment), but it is always captured here so the registry never
-        // has to re-read configuration. Same SHA value is used by FileDeploymentStateManager for analogous
-        // per-AppHost persistent state.
+        // has to re-read configuration. The same SHA value is used for other per-AppHost persisted state.
         var appHostKey = configuration["AppHost:PathSha256"];
 
         return new BrowserConfiguration(resolvedBrowser, resolvedProfile, resolvedUserDataMode, appHostKey);
@@ -138,9 +131,102 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
 
     private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) =>
         GetDefaultBrowser(userDataMode, ChromiumBrowserResolver.TryResolveExecutable);
+
+    private static string? ResolveProfile(
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration,
+        BrowserConfiguration? globalRuntimeConfiguration,
+        IConfigurationSection resourceSection,
+        IConfigurationSection browserLogsSection)
+    {
+        if (explicitValues.Profile is not null)
+        {
+            return explicitValues.Profile;
+        }
+
+        if (resourceRuntimeConfiguration is { } resourceRuntime)
+        {
+            return resourceRuntime.Profile;
+        }
+
+        if (resourceSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey] is { } resourceProfile)
+        {
+            return resourceProfile;
+        }
+
+        if (globalRuntimeConfiguration is { } globalRuntime)
+        {
+            return globalRuntime.Profile;
+        }
+
+        return browserLogsSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey];
+    }
+
+    private static BrowserUserDataMode ResolveUserDataMode(
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration,
+        BrowserConfiguration? globalRuntimeConfiguration,
+        IConfigurationSection resourceSection,
+        IConfigurationSection browserLogsSection)
+    {
+        if (explicitValues.UserDataMode is { } explicitUserDataMode)
+        {
+            return explicitUserDataMode;
+        }
+
+        if (resourceRuntimeConfiguration is { } resourceRuntime)
+        {
+            return resourceRuntime.UserDataMode;
+        }
+
+        if (ParseUserDataMode(resourceSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey]) is { } resourceUserDataMode)
+        {
+            return resourceUserDataMode;
+        }
+
+        if (globalRuntimeConfiguration is { } globalRuntime)
+        {
+            return globalRuntime.UserDataMode;
+        }
+
+        return ParseUserDataMode(browserLogsSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey])
+            ?? DefaultUserDataMode;
+    }
+
+    private static string ResolveBrowser(
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration,
+        BrowserConfiguration? globalRuntimeConfiguration,
+        IConfigurationSection resourceSection,
+        IConfigurationSection browserLogsSection,
+        BrowserUserDataMode resolvedUserDataMode)
+    {
+        if (explicitValues.Browser is not null)
+        {
+            return explicitValues.Browser;
+        }
+
+        if (resourceRuntimeConfiguration is { } resourceRuntime)
+        {
+            return resourceRuntime.Browser;
+        }
+
+        if (resourceSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey] is { } resourceBrowser)
+        {
+            return resourceBrowser;
+        }
+
+        if (globalRuntimeConfiguration is { } globalRuntime)
+        {
+            return globalRuntime.Browser;
+        }
+
+        return browserLogsSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey]
+            ?? GetDefaultBrowser(resolvedUserDataMode);
+    }
 }
 
 /// <summary>
-/// Explicit browser configuration values supplied by the resource builder.
+/// Browser configuration values explicitly supplied by the resource builder.
 /// </summary>
-internal readonly record struct BrowserConfigurationOverrides(string? Browser, string? Profile, BrowserUserDataMode? UserDataMode);
+internal readonly record struct BrowserConfigurationExplicitValues(string? Browser, string? Profile, BrowserUserDataMode? UserDataMode);

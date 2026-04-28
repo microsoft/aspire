@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
+
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -37,6 +39,7 @@ public static class BrowserLogsBuilderExtensions
     internal const string LastErrorPropertyName = "Last error";
     internal const string LastSessionPropertyName = "Last session";
     internal const string OpenTrackedBrowserCommandName = "open-tracked-browser";
+    internal const string ConfigureTrackedBrowserCommandName = "configure-tracked-browser";
     internal const string CaptureScreenshotCommandName = "capture-screenshot";
     private static readonly JsonSerializerOptions s_commandResultJsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -120,15 +123,17 @@ public static class BrowserLogsBuilderExtensions
         ThrowIfBlankWhenSpecified(profile, nameof(profile));
 
         builder.ApplicationBuilder.Services.TryAddSingleton<IBrowserLogsSessionManager, BrowserLogsSessionManager>();
+        builder.ApplicationBuilder.Services.TryAddSingleton<BrowserLogsConfigurationStore>();
+        builder.ApplicationBuilder.Services.TryAddSingleton<BrowserLogsConfigurationManager>();
 
         var parentResource = builder.Resource;
-        var configurationOverrides = new BrowserConfigurationOverrides(browser, profile, userDataMode);
-        var initialConfiguration = BrowserConfiguration.Resolve(builder.ApplicationBuilder.Configuration, parentResource.Name, configurationOverrides);
+        var explicitConfigurationValues = new BrowserConfigurationExplicitValues(browser, profile, userDataMode);
+        var initialConfiguration = BrowserConfiguration.Resolve(builder.ApplicationBuilder.Configuration, parentResource.Name, explicitConfigurationValues);
         var browserLogsResource = new BrowserLogsResource(
             $"{parentResource.Name}-browser-logs",
             parentResource,
             initialConfiguration,
-            configurationOverrides);
+            explicitConfigurationValues);
         browserLogsResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         builder.ApplicationBuilder.AddResource(browserLogsResource)
@@ -150,7 +155,8 @@ public static class BrowserLogsBuilderExtensions
                     try
                     {
                         var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
-                        var currentConfiguration = browserLogsResource.ResolveCurrentConfiguration(configuration);
+                        var configurationStore = context.ServiceProvider.GetRequiredService<BrowserLogsConfigurationStore>();
+                        var currentConfiguration = browserLogsResource.ResolveCurrentConfiguration(configuration, configurationStore);
                         var url = ResolveBrowserUrl(parentResource);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         await sessionManager.StartSessionAsync(browserLogsResource, currentConfiguration, context.ResourceName, url, context.CancellationToken).ConfigureAwait(false);
@@ -189,6 +195,34 @@ public static class BrowserLogsBuilderExtensions
                         }
 
                         return ResourceCommandState.Disabled;
+                    }
+                })
+            .WithCommand(
+                ConfigureTrackedBrowserCommandName,
+                CommandStrings.ConfigureTrackedBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var configurationManager = context.ServiceProvider.GetRequiredService<BrowserLogsConfigurationManager>();
+                        return await configurationManager.ConfigureAsync(browserLogsResource, context.CancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                new CommandOptions
+                {
+                    Description = CommandStrings.ConfigureTrackedBrowserDescription,
+                    IconName = "Settings",
+                    IconVariant = IconVariant.Regular,
+                    UpdateState = context =>
+                    {
+                        var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                        return interactionService.IsAvailable
+                            ? ResourceCommandState.Enabled
+                            : ResourceCommandState.Disabled;
                     }
                 })
             .WithCommand(

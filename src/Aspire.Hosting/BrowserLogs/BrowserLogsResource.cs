@@ -10,15 +10,23 @@ internal sealed class BrowserLogsResource(
     string name,
     IResourceWithEndpoints parentResource,
     BrowserConfiguration initialConfiguration,
-    BrowserConfigurationOverrides configurationOverrides)
+    BrowserConfigurationExplicitValues explicitConfigurationValues)
     : Resource(name)
 {
     public IResourceWithEndpoints ParentResource { get; } = parentResource;
 
     public BrowserConfiguration InitialConfiguration { get; } = initialConfiguration;
 
-    public BrowserConfigurationOverrides ConfigurationOverrides { get; } = configurationOverrides;
+    public BrowserConfigurationExplicitValues ExplicitConfigurationValues { get; } = explicitConfigurationValues;
 
-    public BrowserConfiguration ResolveCurrentConfiguration(IConfiguration configuration) =>
-        BrowserConfiguration.Resolve(configuration, ParentResource.Name, ConfigurationOverrides);
+    public BrowserConfiguration ResolveCurrentConfiguration(IConfiguration configuration, BrowserLogsConfigurationStore? configurationStore = null)
+    {
+        var (resourceConfiguration, globalConfiguration) = configurationStore?.GetConfigurations(ParentResource.Name) ?? default;
+        return BrowserConfiguration.Resolve(
+            configuration,
+            ParentResource.Name,
+            ExplicitConfigurationValues,
+            resourceConfiguration,
+            globalConfiguration);
+    }
 }

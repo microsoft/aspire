@@ -18,6 +18,22 @@ namespace Aspire.Hosting;
 // Layout (Windows shown; macOS/Linux mirror the same shape under the OS-appropriate data root):
 //   %LocalAppData%\Aspire\BrowserData\shared\<browser>                              (Shared)
 //   %LocalAppData%\Aspire\BrowserData\isolated\<AppHost:PathSha256>\<browser>       (Isolated)
+//     Local State                                                                  Chromium user-data metadata
+//     Default\                                                                     default profile directory
+//       Preferences
+//       Cookies
+//       ...
+//     Profile 1\                                                                   additional profile directory
+//       Preferences
+//       Cookies
+//       ...
+//     Profile 2\
+//       ...
+//
+// Chromium calls the outer <browser> folder a user data directory. Profiles are subdirectories inside that user
+// data directory. The stable command-line value for --profile-directory is the directory name ("Default",
+// "Profile 1", ...), not the display name the user sees in the browser. Display names live in the user-data-root
+// "Local State" file under profile.info_cache, keyed by the profile directory name.
 //
 // Both paths are persistent. AppHost shutdown does not delete them and does not close the browser. The next
 // AppHost run reads the adoption sidecar and connects to the existing browser via CDP.
@@ -29,7 +45,7 @@ internal static class BrowserUserDataPathResolver
     // sub-directories.
     private const int AppHostShaSegmentLength = 16;
 
-    public static string Resolve(BrowserConfiguration configuration)
+    public static string Resolve(BrowserConfiguration configuration, bool createDirectory = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configuration.Browser);
 
@@ -43,7 +59,11 @@ internal static class BrowserUserDataPathResolver
             _ => throw new ArgumentOutOfRangeException(nameof(configuration), configuration.UserDataMode, null)
         };
 
-        Directory.CreateDirectory(path);
+        if (createDirectory)
+        {
+            Directory.CreateDirectory(path);
+        }
+
         return path;
     }
 
