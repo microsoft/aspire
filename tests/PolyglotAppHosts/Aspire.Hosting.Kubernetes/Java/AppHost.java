@@ -10,9 +10,9 @@ void main() throws Exception {
             helm.withNamespace("validation-namespace");
             helm.withReleaseName("validation-release");
             helm.withChartVersion("1.2.3");
-            helm.withNamespaceFromParameter(helmNamespace);
-            helm.withReleaseNameFromParameter(helmReleaseName);
-            helm.withChartVersionFromParameter(helmChartVersion);
+            helm.withNamespace(helmNamespace);
+            helm.withReleaseName(helmReleaseName);
+            helm.withChartVersion(helmChartVersion);
         });
         kubernetes.withProperties((environment) -> {
             environment.setHelmChartName("validation-kubernetes");

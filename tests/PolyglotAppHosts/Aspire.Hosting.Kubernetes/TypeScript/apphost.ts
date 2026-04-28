@@ -13,9 +13,9 @@ await kubernetes.withHelm({
         await helm.withNamespace('validation-namespace');
         await helm.withReleaseName('validation-release');
         await helm.withChartVersion('1.2.3');
-        await helm.withNamespaceFromParameter(helmNamespace);
-        await helm.withReleaseNameFromParameter(helmReleaseName);
-        await helm.withChartVersionFromParameter(helmChartVersion);
+        await helm.withNamespace(helmNamespace);
+        await helm.withReleaseName(helmReleaseName);
+        await helm.withChartVersion(helmChartVersion);
     },
 });
 

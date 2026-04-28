@@ -14,9 +14,9 @@ with create_builder() as builder:
         helm.with_namespace("validation-namespace")
         helm.with_release_name("validation-release")
         helm.with_chart_version("1.2.3")
-        helm.with_namespace_from_parameter(helm_namespace)
-        helm.with_release_name_from_parameter(helm_release_name)
-        helm.with_chart_version_from_parameter(helm_chart_version)
+        helm.with_namespace(helm_namespace)
+        helm.with_release_name(helm_release_name)
+        helm.with_chart_version(helm_chart_version)
 
     kubernetes.with_helm(configure_helm)
     kubernetes.with_properties()
