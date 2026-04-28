@@ -2352,13 +2352,13 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineSt
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(source any, options ...*WithReferenceOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()
@@ -4037,13 +4037,13 @@ func (s *cSharpAppResource) WithPipelineStepFactory(stepName string, callback fu
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *cSharpAppResource) WithReference(source any, options ...*WithReferenceOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()
@@ -7163,13 +7163,13 @@ func (s *containerResource) WithPipelineStepFactory(stepName string, callback fu
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *containerResource) WithReference(source any, options ...*WithReferenceOptions) ContainerResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()
@@ -7729,13 +7729,13 @@ func (s *distributedApplicationBuilder) AddExecutable(name string, command strin
 }
 
 // AddExternalService adds an external service resource
-// Allowed types for parameter url: string, string, ParameterResource.
+// Allowed types for parameter url: string, ParameterResource.
 func (s *distributedApplicationBuilder) AddExternalService(name string, url any) ExternalServiceResource {
 	if s.err != nil { return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	switch url.(type) {
-	case string, string, ParameterResource:
+	case string, ParameterResource:
 	default:
-		err := fmt.Errorf("aspire: AddExternalService: parameter %q must be one of [string, string, ParameterResource], got %T", "url", url)
+		err := fmt.Errorf("aspire: AddExternalService: parameter %q must be one of [string, ParameterResource], got %T", "url", url)
 		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	ctx := context.Background()
@@ -10139,13 +10139,13 @@ func (s *dotnetToolResource) WithPipelineStepFactory(stepName string, callback f
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *dotnetToolResource) WithReference(source any, options ...*WithReferenceOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()
@@ -12694,13 +12694,13 @@ func (s *executableResource) WithPipelineStepFactory(stepName string, callback f
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *executableResource) WithReference(source any, options ...*WithReferenceOptions) ExecutableResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()
@@ -17300,13 +17300,13 @@ func (s *projectResource) WithPipelineStepFactory(stepName string, callback func
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *projectResource) WithReference(source any, options ...*WithReferenceOptions) ProjectResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()
@@ -20472,13 +20472,13 @@ func (s *testDatabaseResource) WithPipelineStepFactory(stepName string, callback
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *testDatabaseResource) WithReference(source any, options ...*WithReferenceOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()
@@ -22725,13 +22725,13 @@ func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
 }
 
 // WithReference adds a reference to another resource
-// Allowed types for parameter source: Resource, EndpointReference, string, string.
+// Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *testRedisResource) WithReference(source any, options ...*WithReferenceOptions) TestRedisResource {
 	if s.err != nil { return s }
 	switch source.(type) {
-	case Resource, EndpointReference, string, string:
+	case Resource, EndpointReference, string:
 	default:
-		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string], got %T", "source", source)
 		s.setErr(err); return s
 	}
 	ctx := context.Background()

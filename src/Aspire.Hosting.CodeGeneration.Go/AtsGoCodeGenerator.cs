@@ -1652,9 +1652,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         foreach (var p in GetUnionParameters(capability))
         {
             var paramName = GetLocalIdentifier(p.Name);
-            var allowed = p.Type!.UnionTypes is { Count: > 0 } types
-                ? string.Join(", ", types.Select(u => MapTypeRefToGo(u, false)))
-                : "any";
+            var allowed = GetUnionAllowedTypes(p.Type!);
             WriteLine($"{indent}switch {paramName}.(type) {{");
             WriteLine($"{indent}case {allowed}:");
             WriteLine($"{indent}default:");
@@ -1671,11 +1669,24 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     {
         foreach (var p in GetUnionParameters(capability))
         {
-            var allowed = p.Type!.UnionTypes is { Count: > 0 } types
-                ? string.Join(", ", types.Select(u => MapTypeRefToGo(u, false)))
-                : "any";
+            var allowed = GetUnionAllowedTypes(p.Type!);
             WriteLine($"// Allowed types for parameter {p.Name}: {allowed}.");
         }
+    }
+
+    private string GetUnionAllowedTypes(AtsTypeRef typeRef)
+    {
+        if (typeRef.UnionTypes is not { Count: > 0 } types)
+        {
+            return "any";
+        }
+
+        var allowedTypes = types
+            .Select(type => MapTypeRefToGo(type, isOptional: false))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return allowedTypes.Length > 0 ? string.Join(", ", allowedTypes) : "any";
     }
 
     /// <summary>
