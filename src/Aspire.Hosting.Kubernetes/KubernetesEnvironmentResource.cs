@@ -4,8 +4,12 @@
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes.Extensions;
+using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -218,6 +222,22 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 steps.AddRange(engineSteps);
             }
 
+            // TLS bootstrap step — creates self-signed placeholder secrets after Helm deploy
+            // for any Ingress/Gateway with TLS configured, if the secret doesn't already exist.
+            var tlsSecrets = CollectTlsSecrets(model, environment);
+            if (tlsSecrets.Count > 0)
+            {
+                var tlsBootstrapStep = new PipelineStep
+                {
+                    Name = $"tls-bootstrap-{environment.Name}",
+                    Description = "Creates self-signed bootstrap TLS secrets if they don't already exist",
+                    Action = ctx => BootstrapTlsSecretsAsync(ctx, environment, tlsSecrets)
+                };
+                tlsBootstrapStep.DependsOn($"helm-deploy-{environment.Name}");
+                tlsBootstrapStep.RequiredBy(WellKnownPipelineSteps.Deploy);
+                steps.Add(tlsBootstrapStep);
+            }
+
             // Expand deployment target steps for compute resources (including dashboard if enabled)
             var resources = environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard
                 ? [.. model.GetComputeResources(), dashboard]
@@ -377,6 +397,23 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 ContainerRegistry = containerRegistry
             });
         }
+
+        // Build deployment target lookup for endpoint resolution
+        var targetEnv = (IComputeEnvironmentResource?)OwningComputeEnvironment ?? this;
+        var deploymentTargets = new Dictionary<IResource, KubernetesResource>();
+        foreach (var resource in appModel.Resources)
+        {
+            if (resource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget is KubernetesResource k8sResource)
+            {
+                deploymentTargets[resource] = k8sResource;
+            }
+        }
+
+        // Process Ingress resources
+        ProcessIngressResources(appModel, deploymentTargets, logger);
+
+        // Process Gateway API resources
+        ProcessGatewayResources(appModel, deploymentTargets, logger);
     }
 
     private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
@@ -410,6 +447,498 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
                 return Task.CompletedTask;
             }));
+        }
+    }
+
+    private void ProcessIngressResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger)
+    {
+        var ingressResources = model.Resources
+            .OfType<KubernetesIngressResource>()
+            .Where(i => i.Parent == this);
+
+        foreach (var ingressResource in ingressResources)
+        {
+            if (ingressResource.Routes.Count == 0 && ingressResource.DefaultBackend is null)
+            {
+                logger.LogWarning("Ingress '{IngressName}' has no routes or default backend configured. Skipping.", ingressResource.Name);
+                continue;
+            }
+
+            var ingress = BuildIngressObject(ingressResource, deploymentTargets, logger);
+            if (ingress is not null)
+            {
+                ingressResource.GeneratedIngress = ingress;
+            }
+        }
+    }
+
+    private static Ingress? BuildIngressObject(
+        KubernetesIngressResource ingressResource,
+        Dictionary<IResource, KubernetesResource> deploymentTargets,
+        ILogger logger)
+    {
+        var ingress = new Ingress
+        {
+            Metadata =
+            {
+                Name = ingressResource.Name.ToKubernetesResourceName(),
+            }
+        };
+
+        if (ingressResource.IngressClassName is not null)
+        {
+            ingress.Spec.IngressClassName = ingressResource.IngressClassName;
+        }
+
+        foreach (var (key, value) in ingressResource.IngressAnnotations)
+        {
+            ingress.Metadata.Annotations[key] = value;
+        }
+
+        var routesByHost = ingressResource.Routes.GroupBy(r => r.Host ?? string.Empty);
+
+        foreach (var hostGroup in routesByHost)
+        {
+            var rule = new IngressRuleV1();
+            if (!string.IsNullOrEmpty(hostGroup.Key))
+            {
+                rule.Host = hostGroup.Key;
+            }
+
+            foreach (var route in hostGroup)
+            {
+                var backend = ResolveIngressBackend(route.Endpoint, deploymentTargets, ingressResource.Name, logger);
+                if (backend is null)
+                {
+                    continue;
+                }
+
+                rule.Http.Paths.Add(new HttpIngressPathV1
+                {
+                    Path = route.Path,
+                    PathType = route.PathType.ToKubernetesString(),
+                    Backend = backend
+                });
+            }
+
+            if (rule.Http.Paths.Count > 0)
+            {
+                ingress.Spec.Rules.Add(rule);
+            }
+        }
+
+        if (ingressResource.DefaultBackend is not null)
+        {
+            var defaultBackend = ResolveIngressBackend(ingressResource.DefaultBackend.Endpoint, deploymentTargets, ingressResource.Name, logger);
+            if (defaultBackend is not null)
+            {
+                ingress.Spec.DefaultBackend = defaultBackend;
+            }
+        }
+
+        foreach (var tls in ingressResource.TlsConfigs)
+        {
+            var tlsEntry = new IngressTLSV1
+            {
+                SecretName = tls.SecretName,
+            };
+
+            foreach (var host in tls.Hosts)
+            {
+                tlsEntry.Hosts.Add(host);
+            }
+
+            ingress.Spec.Tls.Add(tlsEntry);
+        }
+
+        // Auto-generate rules for TLS hosts that don't have explicit routes.
+        if (ingress.Spec.DefaultBackend is not null)
+        {
+            var hostsWithRules = new HashSet<string>(
+                ingress.Spec.Rules
+                    .Where(r => r.Host is not null)
+                    .Select(r => r.Host!),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var tls in ingressResource.TlsConfigs)
+            {
+                foreach (var host in tls.Hosts)
+                {
+                    if (!hostsWithRules.Contains(host))
+                    {
+                        ingress.Spec.Rules.Add(new IngressRuleV1
+                        {
+                            Host = host,
+                            Http = new HttpIngressRuleValueV1
+                            {
+                                Paths =
+                                {
+                                    new HttpIngressPathV1
+                                    {
+                                        Path = "/",
+                                        PathType = IngressPathType.Prefix.ToKubernetesString(),
+                                        Backend = new IngressBackendV1
+                                        {
+                                            Service = new IngressServiceBackendV1
+                                            {
+                                                Name = ingress.Spec.DefaultBackend.Service.Name,
+                                                Port = new ServiceBackendPortV1
+                                                {
+                                                    Name = ingress.Spec.DefaultBackend.Service.Port.Name,
+                                                    Number = ingress.Spec.DefaultBackend.Service.Port.Number
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        if (ingress.Spec.Rules.Count == 0 && ingress.Spec.DefaultBackend is null)
+        {
+            logger.LogWarning("Ingress '{IngressName}' produced no valid rules or default backend. Skipping.", ingressResource.Name);
+            return null;
+        }
+
+        return ingress;
+    }
+
+    private static IngressBackendV1? ResolveIngressBackend(
+        EndpointReference endpointRef,
+        Dictionary<IResource, KubernetesResource> deploymentTargets,
+        string ingressName,
+        ILogger logger)
+    {
+        var targetResource = endpointRef.Resource;
+
+        if (!deploymentTargets.TryGetValue(targetResource, out var k8sResource))
+        {
+            logger.LogWarning(
+                "Ingress '{IngressName}' references endpoint on resource '{ResourceName}' which has no Kubernetes deployment target. Skipping this route.",
+                ingressName, targetResource.Name);
+            return null;
+        }
+
+        var endpointName = endpointRef.EndpointName;
+        if (!k8sResource.EndpointMappings.TryGetValue(endpointName, out var mapping))
+        {
+            logger.LogWarning(
+                "Ingress '{IngressName}' references endpoint '{EndpointName}' on resource '{ResourceName}' but no matching endpoint mapping was found. Skipping this route.",
+                ingressName, endpointName, targetResource.Name);
+            return null;
+        }
+
+        return new IngressBackendV1
+        {
+            Service = new IngressServiceBackendV1
+            {
+                Name = k8sResource.Service?.Metadata.Name ?? targetResource.Name.ToServiceName(),
+                Port = new ServiceBackendPortV1
+                {
+                    Name = mapping.Name
+                }
+            }
+        };
+    }
+
+    private void ProcessGatewayResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger)
+    {
+        var gatewayResources = model.Resources
+            .OfType<KubernetesGatewayResource>()
+            .Where(g => g.Parent == this);
+
+        foreach (var gatewayResource in gatewayResources)
+        {
+            if (gatewayResource.Routes.Count == 0)
+            {
+                logger.LogWarning("Gateway '{GatewayName}' has no routes configured. Skipping.", gatewayResource.Name);
+                continue;
+            }
+
+            BuildGatewayObjects(gatewayResource, deploymentTargets, logger);
+        }
+    }
+
+    private static void BuildGatewayObjects(
+        KubernetesGatewayResource gatewayResource,
+        Dictionary<IResource, KubernetesResource> deploymentTargets,
+        ILogger logger)
+    {
+        var gatewayName = gatewayResource.Name.ToKubernetesResourceName();
+
+        var gateway = new GatewayV1
+        {
+            Metadata = { Name = gatewayName }
+        };
+
+        if (gatewayResource.GatewayClassName is not null)
+        {
+            gateway.Spec.GatewayClassName = gatewayResource.GatewayClassName;
+        }
+
+        foreach (var (key, value) in gatewayResource.GatewayAnnotations)
+        {
+            gateway.Metadata.Annotations[key] = value;
+        }
+
+        gateway.Spec.Listeners.Add(new GatewayListenerV1
+        {
+            Name = "http",
+            Protocol = "HTTP",
+            Port = 80,
+            AllowedRoutes = new GatewayAllowedRoutesV1
+            {
+                Namespaces = new GatewayRouteNamespacesV1 { From = "Same" }
+            }
+        });
+
+        var tlsListenerIndex = 0;
+        foreach (var tls in gatewayResource.TlsConfigs)
+        {
+            foreach (var host in tls.Hosts)
+            {
+                var listenerName = tlsListenerIndex == 0 ? "https" : $"https-{tlsListenerIndex}";
+                tlsListenerIndex++;
+
+                gateway.Spec.Listeners.Add(new GatewayListenerV1
+                {
+                    Name = listenerName,
+                    Protocol = "HTTPS",
+                    Port = 443,
+                    Hostname = host,
+                    Tls = new GatewayTlsConfigV1
+                    {
+                        Mode = "Terminate",
+                        CertificateRefs = { new GatewayCertificateRefV1 { Name = tls.SecretName } }
+                    },
+                    AllowedRoutes = new GatewayAllowedRoutesV1
+                    {
+                        Namespaces = new GatewayRouteNamespacesV1 { From = "Same" }
+                    }
+                });
+            }
+        }
+
+        gatewayResource.GeneratedGateway = gateway;
+
+        var routesByHost = gatewayResource.Routes.GroupBy(r => r.Host ?? string.Empty);
+
+        foreach (var hostGroup in routesByHost)
+        {
+            var routeName = string.IsNullOrEmpty(hostGroup.Key)
+                ? $"{gatewayName}-route"
+                : $"{gatewayName}-{hostGroup.Key.Replace(".", "-")}-route";
+
+            var httpRoute = new HttpRouteV1
+            {
+                Metadata = { Name = routeName }
+            };
+
+            httpRoute.Spec.ParentRefs.Add(new HttpRouteParentRefV1 { Name = gatewayName });
+
+            if (!string.IsNullOrEmpty(hostGroup.Key))
+            {
+                httpRoute.Spec.Hostnames.Add(hostGroup.Key);
+            }
+
+            foreach (var route in hostGroup)
+            {
+                var backendRef = ResolveGatewayBackendRef(route.Endpoint, deploymentTargets, gatewayResource.Name, logger);
+                if (backendRef is null)
+                {
+                    continue;
+                }
+
+                var pathType = route.PathType switch
+                {
+                    IngressPathType.Exact => "Exact",
+                    IngressPathType.Prefix => "PathPrefix",
+                    IngressPathType.ImplementationSpecific => "PathPrefix",
+                    _ => throw new ArgumentOutOfRangeException(nameof(gatewayResource), route.PathType, "Unknown path type.")
+                };
+
+                var rule = new HttpRouteRuleV1();
+                rule.Matches.Add(new HttpRouteMatchV1
+                {
+                    Path = new HttpRoutePathMatchV1
+                    {
+                        Type = pathType,
+                        Value = route.Path
+                    }
+                });
+                rule.BackendRefs.Add(backendRef);
+                httpRoute.Spec.Rules.Add(rule);
+            }
+
+            if (httpRoute.Spec.Rules.Count > 0)
+            {
+                gatewayResource.GeneratedHttpRoutes.Add(httpRoute);
+            }
+        }
+    }
+
+    private static HttpRouteBackendRefV1? ResolveGatewayBackendRef(
+        EndpointReference endpointRef,
+        Dictionary<IResource, KubernetesResource> deploymentTargets,
+        string gatewayName,
+        ILogger logger)
+    {
+        var targetResource = endpointRef.Resource;
+
+        if (!deploymentTargets.TryGetValue(targetResource, out var k8sResource))
+        {
+            logger.LogWarning(
+                "Gateway '{GatewayName}' references endpoint on resource '{ResourceName}' which has no Kubernetes deployment target. Skipping this route.",
+                gatewayName, targetResource.Name);
+            return null;
+        }
+
+        var endpointName = endpointRef.EndpointName;
+        if (!k8sResource.EndpointMappings.TryGetValue(endpointName, out var mapping))
+        {
+            logger.LogWarning(
+                "Gateway '{GatewayName}' references endpoint '{EndpointName}' on resource '{ResourceName}' but no matching endpoint mapping was found. Skipping this route.",
+                gatewayName, endpointName, targetResource.Name);
+            return null;
+        }
+
+        var portValue = mapping.ServicePort ?? mapping.Port;
+        if (!int.TryParse(portValue.Value?.ToString(), out var portNumber))
+        {
+            portNumber = 8080;
+        }
+
+        return new HttpRouteBackendRefV1
+        {
+            Name = k8sResource.Service?.Metadata.Name ?? targetResource.Name.ToServiceName(),
+            Port = portNumber
+        };
+    }
+
+    private static HashSet<(string SecretName, string Hostname)> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
+    {
+        var tlsSecrets = new HashSet<(string SecretName, string Hostname)>();
+
+        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        {
+            foreach (var tls in gateway.TlsConfigs)
+            {
+                foreach (var host in tls.Hosts)
+                {
+                    tlsSecrets.Add((tls.SecretName, host));
+                }
+            }
+        }
+
+        foreach (var ingress in model.Resources.OfType<KubernetesIngressResource>().Where(i => i.Parent == environment))
+        {
+            foreach (var tls in ingress.TlsConfigs)
+            {
+                foreach (var host in tls.Hosts)
+                {
+                    tlsSecrets.Add((tls.SecretName, host));
+                }
+            }
+        }
+
+        return tlsSecrets;
+    }
+
+    private static async Task BootstrapTlsSecretsAsync(
+        PipelineStepContext context,
+        KubernetesEnvironmentResource environment,
+        HashSet<(string SecretName, string Hostname)> tlsSecrets)
+    {
+        var @namespace = "default";
+        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
+        {
+            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(resolvedNs))
+            {
+                @namespace = resolvedNs;
+            }
+        }
+
+        foreach (var (secretName, hostname) in tlsSecrets)
+        {
+            var checkArgs = $"get secret {secretName} --namespace {@namespace}";
+            if (environment.KubeConfigPath is not null)
+            {
+                checkArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+            }
+
+            var (checkResult, checkDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            {
+                Arguments = checkArgs,
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true,
+                OnOutputData = _ => { },
+                OnErrorData = _ => { }
+            });
+
+            await using (checkDisposable.ConfigureAwait(false))
+            {
+                var result = await checkResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                if (result.ExitCode == 0)
+                {
+                    context.Logger.LogInformation("TLS secret '{SecretName}' already exists, skipping bootstrap.", secretName);
+                    continue;
+                }
+            }
+
+            context.Logger.LogInformation("Creating bootstrap TLS secret '{SecretName}' for '{Hostname}'.", secretName, hostname);
+
+            using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var request = new CertificateRequest($"CN={hostname}", ecdsa, HashAlgorithmName.SHA256);
+            using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
+
+            var certPem = cert.ExportCertificatePem();
+            var keyPem = ecdsa.ExportECPrivateKeyPem();
+
+            var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-bootstrap");
+            try
+            {
+                var certPath = Path.Combine(tempDir.FullName, "tls.crt");
+                var keyPath = Path.Combine(tempDir.FullName, "tls.key");
+                await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
+                await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
+
+                var createArgs = $"create secret tls {secretName} --cert=\"{certPath}\" --key=\"{keyPath}\" --namespace {@namespace}";
+                if (environment.KubeConfigPath is not null)
+                {
+                    createArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var (createResult, createDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = createArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                });
+
+                await using (createDisposable.ConfigureAwait(false))
+                {
+                    var createExitResult = await createResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (createExitResult.ExitCode != 0)
+                    {
+                        context.Logger.LogWarning("Failed to create bootstrap TLS secret '{SecretName}' (exit code {ExitCode}).", secretName, createExitResult.ExitCode);
+                    }
+                    else
+                    {
+                        context.Logger.LogInformation("Bootstrap TLS secret '{SecretName}' created for '{Hostname}'. Replace with a real cert via cert-manager or manually.", secretName, hostname);
+                    }
+                }
+            }
+            finally
+            {
+                try { tempDir.Delete(recursive: true); } catch { }
+            }
         }
     }
 }

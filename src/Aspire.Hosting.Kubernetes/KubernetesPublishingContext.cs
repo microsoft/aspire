@@ -116,6 +116,26 @@ internal sealed class KubernetesPublishingContext(
             }
         }
 
+        // Write Ingress resources as standalone templates.
+        foreach (var ingressResource in resources.OfType<KubernetesIngressResource>())
+        {
+            if (ingressResource.Parent == environment && ingressResource.GeneratedIngress is { } generatedIngress)
+            {
+                await WriteKubernetesTemplatesForResource(ingressResource, [generatedIngress]).ConfigureAwait(false);
+            }
+        }
+
+        // Write Gateway API resources (Gateway + HTTPRoutes) as standalone templates.
+        foreach (var gatewayResource in resources.OfType<KubernetesGatewayResource>())
+        {
+            if (gatewayResource.Parent == environment && gatewayResource.GeneratedGateway is { } generatedGateway)
+            {
+                var gatewayObjects = new List<BaseKubernetesResource> { generatedGateway };
+                gatewayObjects.AddRange(gatewayResource.GeneratedHttpRoutes);
+                await WriteKubernetesTemplatesForResource(gatewayResource, gatewayObjects).ConfigureAwait(false);
+            }
+        }
+
         await WriteKubernetesHelmChartAsync(environment).ConfigureAwait(false);
         await WriteKubernetesHelmValuesAsync().ConfigureAwait(false);
     }
