@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
     <PackageTags>aspire ats typesystem polyglot</PackageTags>
     <Description>Aspire Type System (ATS) APIs for Aspire polyglot support.</Description>
   </PropertyGroup>
