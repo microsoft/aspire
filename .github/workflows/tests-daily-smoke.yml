@@ -50,20 +50,46 @@ jobs:
           dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
             --no-build \
             -- \
-            --filter-class "*.SmokeTests" \
+            --report-trx \
+            --report-trx-filename "DailyCliSmoke.trx" \
+            --results-directory ${{ github.workspace }}/testresults \
+            --filter-class "*SmokeTests" \
             --filter-not-trait "quarantined=true" \
             --filter-not-trait "outerloop=true" \
             --hangdump --hangdump-type none --hangdump-timeout 15m
 
-      - name: Upload test recordings
+      - name: Upload logs and test results
+        id: upload-logs
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: smoke-test-recordings-${{ inputs.quality || 'dev' }}
+          name: smoke-test-results-${{ inputs.quality || 'dev' }}
           path: |
-            testresults/recordings/*.cast
+            testresults/**
             **/TestResults/**/*.log
           if-no-files-found: ignore
+
+      - name: Generate test results summary
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ -d "${{ github.workspace }}/testresults" ]; then
+            summary_args=(
+              run
+              --project
+              "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj"
+              --
+              "${{ github.workspace }}/testresults"
+            )
+
+            artifact_url="${{ steps.upload-logs.outputs.artifact-url }}"
+            if [ -n "$artifact_url" ]; then
+              summary_args+=("-u" "$artifact_url")
+            fi
+
+            dotnet "${summary_args[@]}"
+          fi
 
   create-issue-on-failure:
     name: Create Issue on Failure
