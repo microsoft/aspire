@@ -1,4 +1,4 @@
----
+﻿---
 apiVersion: "v1"
 kind: "ConfigMap"
 metadata:
@@ -10,4 +10,7 @@ metadata:
 data:
   OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.ServiceA.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
   ASPNETCORE_FORWARDEDHEADERS_ENABLED: "{{ .Values.config.ServiceA.ASPNETCORE_FORWARDEDHEADERS_ENABLED }}"
-  HTTP_PORTS: "{{ .Values.parameters.ServiceA.port_http }}"
+  HTTP_PORTS: "{{ .Values.parameters.ServiceA.port_http | int | toString }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.ServiceA.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.ServiceA.OTEL_EXPORTER_OTLP_PROTOCOL }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.ServiceA.OTEL_SERVICE_NAME }}"

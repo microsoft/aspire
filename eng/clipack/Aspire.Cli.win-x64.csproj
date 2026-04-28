@@ -2,6 +2,9 @@
   <PropertyGroup>
     <CliRuntime>win-x64</CliRuntime>
     <CliPlatformType>Windows</CliPlatformType>
+
+    <!-- IMAGE_FILE_MACHINE_AMD64 -->
+    <PEExpectedMachine>8664</PEExpectedMachine>
   </PropertyGroup>
 
   <Import Project="Common.projitems" />

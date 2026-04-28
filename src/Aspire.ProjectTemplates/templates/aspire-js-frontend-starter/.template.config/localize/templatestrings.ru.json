@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "Целевая среда net9.0",
   "symbols/Framework/choices/net10.0/description": "Целевая платформа .NET 10.0",
   "symbols/UseRedisCache/displayName": "_Использовать Redis для кэширования (требуется поддерживаемая среда выполнения контейнера)",
-  "symbols/UseRedisCache/description": "Определяет, следует ли настраивать приложение с целью использования Redis для кэширования. Для локального запуска требуется поддерживаемая среда выполнения контейнера. Дополнительные сведения см. на странице https://aka.ms/dotnet/aspire/containers.",
+  "symbols/UseRedisCache/description": "Определяет, следует ли настраивать приложение с целью использования Redis для кэширования. Для локального запуска требуется поддерживаемая среда выполнения контейнера. Дополнительные сведения см. на странице https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP OTLP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP службы ресурсов в файле launchSettings.json проекта AppHost.",

@@ -98,8 +98,17 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
     }
 
-    public async Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default)
+    public async Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
+        // Check binding first — if a CLI arg was explicitly provided, return it immediately
+        // without prompting through either the extension or console path.
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided && value is not null)
+        {
+            _consoleInteractionService.ValidateResolvedStringValue(value, required, validator, binding!.SymbolDisplayName);
+            return value;
+        }
+
         if (_extensionPromptEnabled)
         {
             var tcs = new TaskCompletionSource<string>();
@@ -122,12 +131,12 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                         else
                         {
                             // Fallback to regular prompt for older extension versions
-                            result = await Backchannel.PromptForStringAsync(promptText.RemoveSpectreFormatting(), defaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                            result = await Backchannel.PromptForStringAsync(promptText.RemoveSpectreFormatting(), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
                         }
                     }
                     else
                     {
-                        result = await Backchannel.PromptForStringAsync(promptText.RemoveSpectreFormatting(), defaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                        result = await Backchannel.PromptForStringAsync(promptText.RemoveSpectreFormatting(), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
                     }
 
                     tcs.SetResult(result);
@@ -142,12 +151,19 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.PromptForStringAsync(promptText, defaultValue, validator, isSecret, required, cancellationToken).ConfigureAwait(false);
+            return await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    public async Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default)
+    public async Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided && value is not null)
+        {
+            _consoleInteractionService.ValidateResolvedStringValue(value, required, validator, binding!.SymbolDisplayName);
+            return value;
+        }
+
         if (_extensionPromptEnabled)
         {
             var hasFilePickersCapability = await Backchannel.HasCapabilityAsync(KnownCapabilities.FilePickers, _cancellationToken).ConfigureAwait(false);
@@ -160,7 +176,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
                 {
                     try
                     {
-                        var result = await Backchannel.PromptForFilePathAsync(promptText.RemoveSpectreFormatting(), defaultValue, directory, _cancellationToken).ConfigureAwait(false);
+                        var result = await Backchannel.PromptForFilePathAsync(promptText.RemoveSpectreFormatting(), binding?.DefaultValue, directory, _cancellationToken).ConfigureAwait(false);
                         tcs.SetResult(result);
                     }
                     catch (Exception ex)
@@ -192,14 +208,20 @@ internal class ExtensionInteractionService : IExtensionInteractionService
             }
 
             // Fall back to string prompt for older extensions without file picker support
-            return await PromptForStringAsync(promptText, defaultValue, validator, isSecret: false, required, cancellationToken).ConfigureAwait(false);
+            return await PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken).ConfigureAwait(false);
         }
 
-        return await _consoleInteractionService.PromptForFilePathAsync(promptText, defaultValue, validator, directory, required, cancellationToken).ConfigureAwait(false);
+        return await _consoleInteractionService.PromptForFilePathAsync(promptText, validator, directory, required, binding, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)
+    public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided)
+        {
+            return value;
+        }
+
         if (_extensionPromptEnabled)
         {
             var tcs = new TaskCompletionSource<bool>();
@@ -208,7 +230,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
             {
                 try
                 {
-                    var result = await Backchannel.ConfirmAsync(promptText.RemoveSpectreFormatting(), defaultValue, _cancellationToken).ConfigureAwait(false);
+                    var result = await Backchannel.ConfirmAsync(promptText.RemoveSpectreFormatting(), binding?.DefaultValue ?? false, _cancellationToken).ConfigureAwait(false);
                     tcs.SetResult(result);
                 }
                 catch (Exception ex)
@@ -225,13 +247,19 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.ConfirmAsync(promptText, defaultValue, cancellationToken);
+            return await _consoleInteractionService.PromptConfirmAsync(promptText, binding, cancellationToken);
         }
     }
 
     public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        CancellationToken cancellationToken = default) where T : notnull
+        PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
     {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided && value is not null)
+        {
+            return _consoleInteractionService.MatchChoiceOrThrow(value, binding!, choices, choiceFormatter);
+        }
+
         if (_extensionPromptEnabled)
         {
             var tcs = new TaskCompletionSource<T>();
@@ -257,13 +285,19 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, cancellationToken);
+            return await _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, cancellationToken);
         }
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull
+        IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
     {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided && value is not null)
+        {
+            return _consoleInteractionService.MatchChoicesOrThrow(value, binding!, choices, choiceFormatter);
+        }
+
         if (_extensionPromptEnabled)
         {
             var tcs = new TaskCompletionSource<IReadOnlyList<T>>();
@@ -291,7 +325,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, cancellationToken);
+            return await _consoleInteractionService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, cancellationToken);
         }
     }
 

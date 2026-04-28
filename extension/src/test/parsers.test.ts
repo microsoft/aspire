@@ -95,7 +95,7 @@ suite('AppHostResourceParser registry', () => {
 
     test('getParserForDocument returns JS/TS parser for .ts AppHost file', () => {
         const doc = createMockDocument(
-            'import { createBuilder } from "@aspire/sdk";\nbuilder.addRedis("cache");',
+            'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache");',
             '/test/apphost.ts'
         );
         const parser = getParserForDocument(doc);
@@ -1013,7 +1013,7 @@ suite('JsTsAppHostParser', () => {
     test('detects AppHost via ES import from @aspire', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'import { createBuilder } from "@aspire/sdk";\nconst builder = createBuilder();',
+            'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();',
             '/test/apphost.ts'
         );
         assert.strictEqual(parser.isAppHostFile(doc), true);
@@ -1078,7 +1078,7 @@ suite('JsTsAppHostParser', () => {
     test('parses single addRedis call with double quotes', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'import { createBuilder } from "@aspire/sdk";\nbuilder.addRedis("cache");',
+            'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache");',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1090,7 +1090,7 @@ suite('JsTsAppHostParser', () => {
     test('parses single addRedis call with single quotes', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            "import { createBuilder } from '@aspire/sdk';\nbuilder.addRedis('cache');",
+            "import { createBuilder } from '@aspire/sdk';\nawait builder.addRedis('cache');",
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1103,10 +1103,10 @@ suite('JsTsAppHostParser', () => {
         const doc = createMockDocument(
             [
                 'import { createBuilder } from "@aspire/sdk";',
-                'const builder = createBuilder();',
-                'builder.addRedis("cache");',
-                'builder.addPostgres("db");',
-                'builder.addProject("api");',
+                'const builder = await createBuilder();',
+                'await builder.addRedis("cache");',
+                'await builder.addPostgres("db");',
+                'await builder.addProject("api");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1123,7 +1123,7 @@ suite('JsTsAppHostParser', () => {
     test('parses chained calls', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'import { createBuilder } from "@aspire/sdk";\nbuilder.addRedis("cache").withEndpoint(6379);',
+            'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache").withEndpoint(6379);',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1136,8 +1136,8 @@ suite('JsTsAppHostParser', () => {
         const doc = createMockDocument(
             [
                 'import { createBuilder } from "@aspire/sdk";',
-                'builder.addRedis(  "spaced"  );',
-                'builder.addPostgres(',
+                'await builder.addRedis(  "spaced"  );',
+                'await builder.addPostgres(',
                 '    "multiline"',
                 ');',
             ].join('\n'),
@@ -1153,13 +1153,13 @@ suite('JsTsAppHostParser', () => {
 
     test('range starts at the dot before method name', () => {
         const parser = getJsTsParser();
-        const line = 'builder.addRedis("cache");';
+        const line = 'await builder.addRedis("cache");';
         const doc = createMockDocument(line, '/test/apphost.ts');
         const resources = parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
-        // ".addRedis("cache"" starts at index 7 (the dot)
+        // ".addRedis("cache"" starts at index 13 (the dot after "await builder")
         assert.strictEqual(resources[0].range.start.line, 0);
-        assert.strictEqual(resources[0].range.start.character, 7);
+        assert.strictEqual(resources[0].range.start.character, 13);
     });
 
     test('range is on correct line for multi-line file', () => {
@@ -1169,7 +1169,7 @@ suite('JsTsAppHostParser', () => {
                 'import { createBuilder } from "@aspire/sdk";',
                 '',
                 '// comment',
-                'builder.addRedis("cache");',
+                'await builder.addRedis("cache");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1183,7 +1183,7 @@ suite('JsTsAppHostParser', () => {
     test('statementStartLine equals range line for single-line call', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'import { createBuilder } from "@aspire/sdk";\nconst cache = builder.addRedis("cache");',
+            'import { createBuilder } from "@aspire/sdk";\nconst cache = await builder.addRedis("cache");',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1197,7 +1197,7 @@ suite('JsTsAppHostParser', () => {
             [
                 'import { createBuilder } from "@aspire/sdk";',
                 '',
-                'const cache = builder',
+                'const cache = await builder',
                 '    .addRedis("cache")',
                 '    .withLifetime("persistent");',
             ].join('\n'),
@@ -1206,7 +1206,7 @@ suite('JsTsAppHostParser', () => {
         const resources = parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
         assert.strictEqual(resources[0].range.start.line, 3, '.addRedis is on line 3');
-        assert.strictEqual(resources[0].statementStartLine, 2, 'statement starts on line 2 (const cache = builder)');
+        assert.strictEqual(resources[0].statementStartLine, 2, 'statement starts on line 2 (const cache = await builder)');
     });
 
     test('statementStartLine works with multiple multi-line resources', () => {
@@ -1215,10 +1215,10 @@ suite('JsTsAppHostParser', () => {
             [
                 'import { createBuilder } from "@aspire/sdk";',
                 '',
-                'const cache = builder',
+                'const cache = await builder',
                 '    .addRedis("cache");',
                 '',
-                'const db = builder',
+                'const db = await builder',
                 '    .addPostgres("postgres");',
             ].join('\n'),
             '/test/apphost.ts'
@@ -1271,7 +1271,7 @@ suite('JsTsAppHostParser', () => {
     test('returns empty array for file with no add* calls', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'import { createBuilder } from "@aspire/sdk";\nconst builder = createBuilder();',
+            'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1301,9 +1301,9 @@ suite('JsTsAppHostParser', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
-                '// builder.addRedis("commented-cache");',
-                '/* builder.addPostgres("block-commented"); */',
-                'builder.addRedis("real-cache");',
+                '// await builder.addRedis("commented-cache");',
+                '/* await builder.addPostgres("block-commented"); */',
+                'await builder.addRedis("real-cache");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1316,7 +1316,7 @@ suite('JsTsAppHostParser', () => {
     test('does not match template literal arguments', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'builder.addRedis(`cache`);',
+            'await builder.addRedis(`cache`);',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1326,23 +1326,23 @@ suite('JsTsAppHostParser', () => {
     test('range end position is correct', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'builder.addRedis("cache"',
+            'await builder.addRedis("cache"',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
-        // .addRedis("cache" = 17 chars starting at index 7, so end = 7 + 17 = 24
+        // .addRedis("cache" = 17 chars starting at index 13, so end = 13 + 17 = 30
         assert.strictEqual(resources[0].range.end.line, 0);
-        assert.strictEqual(resources[0].range.end.character, 24);
+        assert.strictEqual(resources[0].range.end.character, 30);
     });
 
     test('parses resource names with hyphens and underscores', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
             [
-                'builder.addRedis("my-cache");',
-                'builder.addPostgres("my_db");',
-                'builder.addRabbitMQ("event-bus-01");',
+                'await builder.addRedis("my-cache");',
+                'await builder.addPostgres("my_db");',
+                'await builder.addRabbitMQ("event-bus-01");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1356,7 +1356,7 @@ suite('JsTsAppHostParser', () => {
     test('case-insensitive match for add* methods', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'builder.AddRedis("upper");\nbuilder.addRedis("lower");',
+            'await builder.AddRedis("upper");\nawait builder.addRedis("lower");',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1370,7 +1370,7 @@ suite('JsTsAppHostParser', () => {
         const parser = getJsTsParser();
         // Mismatched quotes should NOT be parsed (the regex requires matching quote chars)
         const doc = createMockDocument(
-            'builder.addRedis("cache\');',
+            'await builder.addRedis("cache\');',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1400,22 +1400,22 @@ suite('JsTsAppHostParser', () => {
             [
                 'import { createBuilder } from "@aspire/sdk";',
                 '',
-                'const builder = createBuilder();',
+                'const builder = await createBuilder();',
                 '',
-                'const cache = builder.addRedis("cache");',
+                'const cache = await builder.addRedis("cache");',
                 '',
-                'const db = builder.addPostgres("postgres")',
+                'const db = await builder.addPostgres("postgres")',
                 '    .addDatabase("catalogdb");',
                 '',
-                'const api = builder.addProject("catalogapi")',
+                'const api = await builder.addProject("catalogapi")',
                 '    .withReference(cache)',
                 '    .withReference(db);',
                 '',
-                'builder.addProject("webfrontend")',
+                'await builder.addProject("webfrontend")',
                 '    .withExternalHttpEndpoints()',
                 '    .withReference(api);',
                 '',
-                'builder.build().run();',
+                'await builder.build().run();',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1446,7 +1446,7 @@ suite('JsTsAppHostParser', () => {
                 '    throw new Error("This should not work");',
                 '}',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1470,7 +1470,7 @@ suite('JsTsAppHostParser', () => {
                 '    }',
                 '}',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1491,7 +1491,7 @@ suite('JsTsAppHostParser', () => {
                 '    console.log("world");',
                 '}',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1512,7 +1512,7 @@ suite('JsTsAppHostParser', () => {
                 '}',
                 '',
                 '// Add nginx container',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1533,7 +1533,7 @@ suite('JsTsAppHostParser', () => {
                 '}',
                 '',
                 '/* Add nginx container */',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1557,7 +1557,7 @@ suite('JsTsAppHostParser', () => {
                 '/* Block comment',
                 ' * continuation',
                 ' */',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1578,7 +1578,7 @@ suite('JsTsAppHostParser', () => {
                 '}',
                 '',
                 '// Add nginx',
-                'const nginx = builder',
+                'const nginx = await builder',
                 '    .addContainer("nginx", "nginx")',
                 '    .withEndpoint(80);',
             ].join('\n'),
@@ -1600,7 +1600,7 @@ suite('JsTsAppHostParser', () => {
                 '    throw new Error("fail");',
                 '}',
                 '',
-                'const nginx = builder',
+                'const nginx = await builder',
                 '    .addContainer("nginx", "nginx")',
                 '    .withEndpoint(80);',
             ].join('\n'),
@@ -1608,7 +1608,7 @@ suite('JsTsAppHostParser', () => {
         );
         const resources = parser.parseResources(doc);
         assert.strictEqual(resources.length, 1);
-        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start at const nginx = builder, not inside the if block');
+        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start at const nginx = await builder, not inside the if block');
     });
 
     test('statementStartLine not affected by preceding try/catch block', () => {
@@ -1626,7 +1626,7 @@ suite('JsTsAppHostParser', () => {
                 '    console.error(e);',
                 '}',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1643,7 +1643,7 @@ suite('JsTsAppHostParser', () => {
                 '',
                 'if (false) { throw new Error("fail"); }',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1660,7 +1660,7 @@ suite('JsTsAppHostParser', () => {
                 '',
                 'if (true) { }',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1680,7 +1680,7 @@ suite('JsTsAppHostParser', () => {
                 '    console.log(i);',
                 '}',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1700,14 +1700,14 @@ suite('JsTsAppHostParser', () => {
                 '    throw new Error("fail");',
                 '}',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
                 '',
                 'if (true)',
                 '{',
                 '    console.log("ok");',
                 '}',
                 '',
-                'builder.addRedis("cache");',
+                'await builder.addRedis("cache");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1727,7 +1727,7 @@ suite('JsTsAppHostParser', () => {
                 '{',
                 '    throw new Error("fail");',
                 '} // end if',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1742,7 +1742,7 @@ suite('JsTsAppHostParser', () => {
             [
                 'import { createBuilder } from "@aspire/sdk";',
                 '',
-                'const catalogDb = builder.addPostgres("postgres")',
+                'const catalogDb = await builder.addPostgres("postgres")',
                 '    .withPgAdmin((resource) => {',
                 '        resource.someConfig();',
                 '    })',
@@ -1764,7 +1764,7 @@ suite('JsTsAppHostParser', () => {
             [
                 'import { createBuilder } from "@aspire/sdk";',
                 '',
-                'const db = builder.addPostgres("postgres")',
+                'const db = await builder.addPostgres("postgres")',
                 '    .runAsContainer((c) => {',
                 '        c.withLifetime("persistent");',
                 '    })',
@@ -1791,7 +1791,7 @@ suite('JsTsAppHostParser', () => {
                 '    doSomethingElse();',
                 '}',
                 '',
-                'builder.addContainer("nginx", "nginx");',
+                'await builder.addContainer("nginx", "nginx");',
             ].join('\n'),
             '/test/apphost.ts'
         );
@@ -1818,7 +1818,7 @@ suite('JsTsAppHostParser', () => {
     test('classifies addRedis as resource, not pipelineStep', () => {
         const parser = getJsTsParser();
         const doc = createMockDocument(
-            'import { createBuilder } from "@aspire/sdk";\nbuilder.addRedis("cache");',
+            'import { createBuilder } from "@aspire/sdk";\nawait builder.addRedis("cache");',
             '/test/apphost.ts'
         );
         const resources = parser.parseResources(doc);
@@ -1842,9 +1842,9 @@ suite('JsTsAppHostParser', () => {
         const doc = createMockDocument(
             [
                 'import { createBuilder } from "@aspire/sdk";',
-                'const cache = builder.addRedis("cache");',
+                'const cache = await builder.addRedis("cache");',
                 'builder.pipeline.addStep("deploy", async (ctx) => { });',
-                'const db = builder.addPostgres("pg");',
+                'const db = await builder.addPostgres("pg");',
             ].join('\n'),
             '/test/apphost.ts'
         );

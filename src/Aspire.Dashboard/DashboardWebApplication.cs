@@ -401,9 +401,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 _logger.LogWarning("OTLP server is unsecured. Untrusted apps can send telemetry to the dashboard. For more information, visit https://go.microsoft.com/fwlink/?linkid=2267030");
             }
 
+            _logger.LogDebug("Dashboard API disabled: {ApiDisabled}", _dashboardOptionsMonitor.CurrentValue.Api.Disabled.GetValueOrDefault());
+
             // Only show API security warning if API is enabled and unsecured
             // API runs on the frontend endpoint (no separate accessor needed)
-            if (_dashboardOptionsMonitor.CurrentValue.Api.Enabled.GetValueOrDefault() &&
+            if (!_dashboardOptionsMonitor.CurrentValue.Api.Disabled.GetValueOrDefault() &&
                 _dashboardOptionsMonitor.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured)
             {
                 _logger.LogWarning("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.");

@@ -19,6 +19,8 @@
   <ItemGroup>
 
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
+    <Compile Include="$(TestsSharedDir)\TestPipelineActivityReporter.cs" />
+    <Compile Include="$(TestsSharedDir)\InMemoryDeploymentStateManager.cs" />
   </ItemGroup>
   
 </Project>

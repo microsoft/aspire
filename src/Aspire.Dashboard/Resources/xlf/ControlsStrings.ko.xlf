@@ -93,18 +93,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearAllResources">
-        <source>Remove all</source>
-        <target state="translated">모두 제거</target>
+        <source>Remove all telemetry</source>
+        <target state="needs-review-translation">모두 제거</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
-        <source>Remove for resource</source>
-        <target state="translated">리소스 제거</target>
+        <source>Remove telemetry for resource</source>
+        <target state="needs-review-translation">리소스 제거</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
-        <source>Remove for {0}</source>
-        <target state="translated">{0} 제거</target>
+        <source>Remove telemetry for {0}</source>
+        <target state="needs-review-translation">{0} 제거</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
@@ -357,6 +357,11 @@
         <target state="translated">페이지 도구 모음</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterSetValueAction">
+        <source>Click to set parameter value</source>
+        <target state="new">Click to set parameter value</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterValueNotSet">
         <source>Value not set</source>
         <target state="translated">값이 설정되지 않음</target>
@@ -435,6 +440,11 @@
       <trans-unit id="ResourceDetailsResourceHeader">
         <source>Resource</source>
         <target state="translated">리소스</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsStateDescriptionHeader">
+        <source>State details</source>
+        <target state="new">State details</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">

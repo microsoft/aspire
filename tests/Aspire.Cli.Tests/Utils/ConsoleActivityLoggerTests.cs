@@ -17,7 +17,8 @@ public class ConsoleActivityLoggerTests
         {
             Ansi = color ? AnsiSupport.Yes : AnsiSupport.No,
             ColorSystem = color ? ColorSystemSupport.TrueColor : ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(new StringWriter(output))
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
         });
         console.Profile.Width = width ?? int.MaxValue;
 

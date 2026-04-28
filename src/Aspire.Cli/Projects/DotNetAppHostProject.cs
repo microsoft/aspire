@@ -332,7 +332,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         if (isSingleFileAppHost)
         {
-            ConfigureSingleFileEnvironment(effectiveAppHostFile, env);
+            ConfigureSingleFileRunEnvironment(effectiveAppHostFile, env, args: context.UnmatchedTokens);
         }
 
         // Start the apphost - the runner will signal the backchannel when ready
@@ -362,17 +362,89 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private static void ConfigureSingleFileEnvironment(FileInfo appHostFile, Dictionary<string, string> env)
+    internal static void ConfigureSingleFileRunEnvironment(
+        FileInfo appHostFile,
+        Dictionary<string, string> env,
+        IReadOnlyDictionary<string, string?>? inheritedEnvironmentVariables = null,
+        string[]? args = null)
     {
         var runJsonFilePath = appHostFile.FullName[..^2] + "run.json";
         if (!File.Exists(runJsonFilePath))
         {
-            env["ASPNETCORE_ENVIRONMENT"] = "Development";
-            env["DOTNET_ENVIRONMENT"] = "Development";
-            env["ASPNETCORE_URLS"] = "https://localhost:17193;http://localhost:15069";
-            env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:21293";
-            env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:22086";
+            AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(
+                env,
+                AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
+                inheritedEnvironmentVariables,
+                args);
+            ApplyDefaultSingleFileEndpoints(env);
         }
+    }
+
+    internal static void ConfigureSingleFilePublishEnvironment(
+        FileInfo appHostFile,
+        Dictionary<string, string> env,
+        IReadOnlyDictionary<string, string?>? inheritedEnvironmentVariables = null,
+        string[]? args = null)
+    {
+        if (!TryApplySingleFileLaunchProfileEnvironmentVariables(appHostFile, env))
+        {
+            ApplyDefaultSingleFileEndpoints(env);
+        }
+
+        AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(
+            env,
+            AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            inheritedEnvironmentVariables,
+            args);
+    }
+
+    private static bool TryApplySingleFileLaunchProfileEnvironmentVariables(
+        FileInfo appHostFile,
+        Dictionary<string, string> env)
+    {
+        var profiles = AspireConfigFile.ReadApphostRunProfiles(appHostFile.FullName[..^2] + "run.json");
+        AspireConfigProfile? profile;
+
+        if (profiles?.TryGetValue("https", out var httpsProfile) == true)
+        {
+            profile = httpsProfile;
+        }
+        else
+        {
+            profile = profiles?.Values.FirstOrDefault();
+        }
+
+        if (profile is null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(profile.ApplicationUrl))
+        {
+            env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+        }
+
+        if (profile.EnvironmentVariables is not null)
+        {
+            foreach (var (key, value) in profile.EnvironmentVariables)
+            {
+                if (AppHostEnvironmentDefaults.IsEnvironmentVariableName(key))
+                {
+                    continue;
+                }
+
+                env[key] = value;
+            }
+        }
+
+        return true;
+    }
+
+    private static void ApplyDefaultSingleFileEndpoints(IDictionary<string, string> env)
+    {
+        env["ASPNETCORE_URLS"] = "https://localhost:17193;http://localhost:15069";
+        env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:21293";
+        env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:22086";
     }
 
     /// <inheritdoc />
@@ -461,7 +533,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         if (isSingleFileAppHost)
         {
-            ConfigureSingleFileEnvironment(effectiveAppHostFile, env);
+            ConfigureSingleFilePublishEnvironment(effectiveAppHostFile, env, args: context.Arguments);
         }
 
         return await _runner.RunAsync(
@@ -502,7 +574,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public async Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
     {
-        var result = await _projectUpdater.UpdateProjectAsync(context.AppHostFile, context.Channel, cancellationToken);
+        var result = await _projectUpdater.UpdateProjectAsync(context, cancellationToken);
         return new UpdatePackagesResult { UpdatesApplied = result.UpdatedApplied };
     }
 

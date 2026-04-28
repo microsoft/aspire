@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.CognitiveServices;
@@ -38,6 +40,11 @@ public static class AzureOpenAIExtensions
 
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
+            var azureResource = (AzureOpenAIResource)infrastructure.AspireResource;
+
+            // Check if this Azure OpenAI has a private endpoint (via annotation)
+            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
             var cogServicesAccount = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -55,7 +62,9 @@ public static class AzureOpenAIExtensions
                     Properties = new CognitiveServicesAccountProperties()
                     {
                         CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = ServiceAccountPublicNetworkAccess.Enabled,
+                        PublicNetworkAccess = hasPrivateEndpoint
+                            ? ServiceAccountPublicNetworkAccess.Disabled
+                            : ServiceAccountPublicNetworkAccess.Enabled,
                         // Disable local auth for AOAI since managed identity is used
                         DisableLocalAuth = true
                     },
@@ -246,7 +255,7 @@ public static class AzureOpenAIExtensions
     /// <param name="roles">The Azure OpenAI roles to be assigned (for example, <see cref="AzureOpenAIRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureOpenAIRole"/> value.</exception>
-    [AspireExport("withCognitiveServicesRoleAssignments", Description = "Assigns Cognitive Services roles to a resource")]
+    [AspireExport("withCognitiveServicesRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Cognitive Services roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureOpenAIResource> target,

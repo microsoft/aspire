@@ -30,7 +30,7 @@ internal sealed class CodeGenerationService
     }
 
     /// <summary>
-    /// Gets the ATS capabilities, types, and diagnostics.
+    /// Gets the ATS capabilities, types, exported values, and diagnostics.
     /// </summary>
     /// <param name="assemblyNames">
     /// An optional list of assembly names used to scope the returned capabilities and types to those
@@ -59,6 +59,7 @@ internal sealed class CodeGenerationService
                 HandleTypes = context.HandleTypes.Select(MapHandleType).ToList(),
                 DtoTypes = context.DtoTypes.Select(MapDtoType).ToList(),
                 EnumTypes = context.EnumTypes.Select(MapEnumType).ToList(),
+                ExportedValues = context.ExportedValues.Select(MapExportedValue).ToList(),
                 Diagnostics = context.Diagnostics.Select(MapDiagnostic).ToList()
             };
 
@@ -148,6 +149,14 @@ internal sealed class CodeGenerationService
         Values = t.Values.ToList()
     };
 
+    private static ExportedValueResponse MapExportedValue(AtsExportedValueInfo value) => new()
+    {
+        PathSegments = value.PathSegments.ToList(),
+        Type = MapTypeRef(value.Type),
+        Value = value.Value?.DeepClone(),
+        Description = value.Description
+    };
+
     private static DiagnosticResponse MapDiagnostic(AtsDiagnostic d) => new()
     {
         Severity = d.Severity.ToString(),
@@ -203,6 +212,7 @@ internal sealed class CapabilitiesResponse
     public List<HandleTypeResponse> HandleTypes { get; set; } = [];
     public List<DtoTypeResponse> DtoTypes { get; set; } = [];
     public List<EnumTypeResponse> EnumTypes { get; set; } = [];
+    public List<ExportedValueResponse> ExportedValues { get; set; } = [];
     public List<DiagnosticResponse> Diagnostics { get; set; } = [];
 }
 
@@ -284,6 +294,14 @@ internal sealed class EnumTypeResponse
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public List<string> Values { get; set; } = [];
+}
+
+internal sealed class ExportedValueResponse
+{
+    public List<string> PathSegments { get; set; } = [];
+    public TypeRefResponse Type { get; set; } = null!;
+    public System.Text.Json.Nodes.JsonNode? Value { get; set; }
+    public string? Description { get; set; }
 }
 
 internal sealed class DiagnosticResponse

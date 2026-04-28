@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// This class encapsulates the properties and options related to a network in a Docker Compose file.
 /// It includes configurations such as driver type, options, labels, IPAM settings, and more.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Network : NamedComposeMember
 {

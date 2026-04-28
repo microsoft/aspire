@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -533,7 +534,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to add.</param>
     /// <param name="value">The string value to assign to the connection property.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    [AspireExport("withConnectionPropertyValue", Description = "Adds a connection property with a string value")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the unified withConnectionProperty export.")]
     internal static IResourceBuilder<T> WithConnectionPropertyValueExport<T>(
         this IResourceBuilder<T> builder,
         string name,
@@ -714,24 +715,25 @@ public static class ResourceBuilderExtensions
 
                 if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ServiceDiscovery))
                 {
-                    // Use the endpoint's scheme (not name) in the service discovery key so that
-                    // .NET service discovery can correctly match the scheme segment to the URI scheme.
-                    var scheme = endpoint.Scheme;
-                    if (!schemeIndexTracker.TryGetValue(scheme, out var index))
+                    // Use the endpoint's scheme for "http" and "https" endpoint names to handle
+                    // TLS upgrades correctly. For all other endpoint names, use the endpoint name
+                    // so that .NET service discovery's named endpoint resolution can match them.
+                    var schemeKey = endpoint.IsHttpSchemeNamedEndpoint ? endpoint.Scheme : endpointName;
+                    if (!schemeIndexTracker.TryGetValue(schemeKey, out var index))
                     {
                         index = 0;
                     }
 
                     // Find the next unused index for this scheme in case of collisions with other callbacks.
-                    var key = $"services__{serviceName}__{scheme}__{index}";
+                    var key = $"services__{serviceName}__{schemeKey}__{index}";
                     while (context.EnvironmentVariables.ContainsKey(key))
                     {
                         index++;
-                        key = $"services__{serviceName}__{scheme}__{index}";
+                        key = $"services__{serviceName}__{schemeKey}__{index}";
                     }
 
                     context.EnvironmentVariables[key] = endpoint;
-                    schemeIndexTracker[scheme] = index + 1;
+                    schemeIndexTracker[schemeKey] = index + 1;
                 }
             }
         };
@@ -776,6 +778,31 @@ public static class ResourceBuilderExtensions
     [AspireExport(Description = "Adds a reference to another resource")]
     internal static IResourceBuilder<TDestination> WithReference<TDestination>(
         this IResourceBuilder<TDestination> builder,
+        [AspireUnion(typeof(IResourceBuilder<IResource>), typeof(EndpointReference), typeof(string), typeof(Uri))] object source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(source);
+
+        return source switch
+        {
+            IResourceBuilder<IResource> resourceBuilder => WithReferenceResource(builder, resourceBuilder, connectionName, optional, name),
+            EndpointReference endpointReference when connectionName is null && !optional && name is null => builder.WithReference(endpointReference),
+            EndpointReference => throw new InvalidOperationException("Endpoint references do not support connectionName, optional, or name options."),
+            Uri uri when connectionName is null && !optional && name is not null => builder.WithReference(name, uri),
+            Uri => throw new InvalidOperationException("URI references require the name option and do not support connectionName or optional."),
+            string uriString when connectionName is null && !optional && name is not null => builder.WithReference(name, CreateUri(uriString)),
+            string => throw new InvalidOperationException("URI references require the name option and do not support connectionName or optional."),
+            _ => throw new ArgumentException("Source must be a resource builder, endpoint reference, or URI string.", nameof(source))
+        };
+    }
+
+    // Preserve the historical dispatcher signature for internal reflection-based tests.
+    internal static IResourceBuilder<TDestination> WithReference<TDestination>(
+        this IResourceBuilder<TDestination> builder,
         IResourceBuilder<IResource> source,
         string? connectionName = null,
         bool optional = false,
@@ -785,6 +812,17 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(source);
 
+        return WithReferenceResource(builder, source, connectionName, optional, name);
+    }
+
+    private static IResourceBuilder<TDestination> WithReferenceResource<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName,
+        bool optional,
+        string? name)
+        where TDestination : IResourceWithEnvironment
+    {
         if (TryDispatchCustomWithReference(builder, source, connectionName, optional, name, out var customDispatch))
         {
             return customDispatch;
@@ -846,6 +884,16 @@ public static class ResourceBuilderExtensions
         }
 
         throw new InvalidOperationException($"The resource '{source.Resource.Name}' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.");
+    }
+
+    private static Uri CreateUri(string uriString)
+    {
+        if (!Uri.TryCreate(uriString, UriKind.RelativeOrAbsolute, out var uri))
+        {
+            throw new InvalidOperationException($"The URI '{uriString}' is invalid.");
+        }
+
+        return uri;
     }
 
     private static bool TryDispatchCustomWithReference<TDestination>(
@@ -1072,7 +1120,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the service.</param>
     /// <param name="uri">The uri of the service.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withReferenceUri", Description = "Adds a reference to a URI")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, string name, Uri uri)
         where TDestination : IResourceWithEnvironment
     {
@@ -1125,7 +1173,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="externalService">The external service.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withReferenceExternalService", Description = "Adds a reference to an external service")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts can use the generic withReference dispatcher with an ExternalServiceResource builder.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<ExternalServiceResource> externalService)
         where TDestination : IResourceWithEnvironment
     {
@@ -1201,7 +1249,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="endpointReference">The endpoint from which to extract the url.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withReferenceEndpoint", Description = "Adds a reference to an endpoint")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, EndpointReference endpointReference)
         where TDestination : IResourceWithEnvironment
     {
@@ -1279,9 +1327,9 @@ public static class ResourceBuilderExtensions
     ///                        });
     /// </code>
     /// </example>
-    /// <para>This method is not available in polyglot app hosts. Use the parameter-based overload instead.</para>
+    /// <para>This method is not available in polyglot app hosts. Use the callback-based endpoint mutation export instead.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "EndpointAnnotation has read-only properties AllocatedEndpointSnapshot and AllAllocatedEndpoints that are not ATS-compatible. Callback-free variant is exported.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEndpointCallback export, which exposes EndpointUpdateContext instead of EndpointAnnotation.")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "<Pending>")]
     public static IResourceBuilder<T> WithEndpoint<T>(this IResourceBuilder<T> builder, [EndpointName] string endpointName, Action<EndpointAnnotation> callback, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
@@ -1316,6 +1364,45 @@ public static class ResourceBuilderExtensions
         return builder;
     }
 
+    [AspireExport(Description = "Updates a named endpoint via callback")]
+    internal static IResourceBuilder<T> WithEndpointCallback<T>(this IResourceBuilder<T> builder, [EndpointName] string endpointName, Action<EndpointUpdateContext> callback, bool createIfNotExists = true) where T : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpointName);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithEndpoint(endpointName, endpoint => callback(new EndpointUpdateContext(endpoint)), createIfNotExists);
+    }
+
+    [AspireExport(Description = "Updates an HTTP endpoint via callback")]
+    internal static IResourceBuilder<T> WithHttpEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithWellKnownEndpointCallback(callback, name ?? "http", createIfNotExists, static (resourceBuilder, endpointName) => resourceBuilder.WithHttpEndpoint(name: endpointName));
+    }
+
+    [AspireExport(Description = "Updates an HTTPS endpoint via callback")]
+    internal static IResourceBuilder<T> WithHttpsEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithWellKnownEndpointCallback(callback, name ?? "https", createIfNotExists, static (resourceBuilder, endpointName) => resourceBuilder.WithHttpsEndpoint(name: endpointName));
+    }
+
+    private static IResourceBuilder<T> WithWellKnownEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, string endpointName, bool createIfNotExists, Action<IResourceBuilder<T>, string> createEndpoint) where T : IResourceWithEndpoints
+    {
+        if (createIfNotExists &&
+            !builder.Resource.Annotations.OfType<EndpointAnnotation>().Any(endpoint => string.Equals(endpoint.Name, endpointName, StringComparisons.EndpointAnnotationName)))
+        {
+            createEndpoint(builder, endpointName);
+        }
+
+        return builder.WithEndpoint(endpointName, endpoint => callback(new EndpointUpdateContext(endpoint)), createIfNotExists: false);
+    }
+
     /// <summary>
     /// Exposes an endpoint on a resource. A reference to this endpoint can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
     /// The endpoint name will be the scheme name if not specified.
@@ -1338,6 +1425,42 @@ public static class ResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        // Resolve the endpoint name using the same logic as EndpointAnnotation:
+        // name ?? scheme ?? protocol.ToString().ToLowerInvariant()
+        var resolvedScheme = scheme ?? (protocol ?? ProtocolType.Tcp).ToString().ToLowerInvariant();
+        var resolvedName = name ?? resolvedScheme;
+
+        var existing = builder.Resource.Annotations.OfType<EndpointAnnotation>()
+            .FirstOrDefault(sb => string.Equals(sb.Name, resolvedName, StringComparisons.EndpointAnnotationName));
+
+        if (existing is not null)
+        {
+            // Update the existing endpoint — null values mean "don't change"
+            if (port is not null)
+            {
+                existing.Port = port;
+            }
+            if (targetPort is not null)
+            {
+                existing.TargetPort = targetPort;
+            }
+            if (isExternal is not null)
+            {
+                existing.IsExternal = isExternal.Value;
+            }
+
+            // Only apply isProxied when explicitly set to false — the default is true,
+            // so false is always intentional and safe to apply.
+            if (!isProxied)
+            {
+                existing.IsProxied = false;
+            }
+
+            ConfigureEndpointEnvironmentVariable(builder, existing, env);
+
+            return builder;
+        }
+
         // Endpoints for a Container will be consumed from localhost network by default, but the same EndpointAnnotation
         // can also be resolved in the context of container-to-container communication by using the target port
         // and the container name as the host. This is why we only set the context network to localhost,
@@ -1352,25 +1475,41 @@ public static class ResourceBuilderExtensions
             isProxied: isProxied,
             networkID: KnownNetworkIdentifiers.LocalhostNetwork);
 
-        if (builder.Resource.Annotations.OfType<EndpointAnnotation>().Any(sb => string.Equals(sb.Name, annotation.Name, StringComparisons.EndpointAnnotationName)))
-        {
-            throw new DistributedApplicationException($"Endpoint with name '{annotation.Name}' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking");
-        }
-
-        // Set the environment variable on the resource
-        if (env is not null && builder.Resource is IResourceWithEndpoints resourceWithEndpoints and IResourceWithEnvironment)
-        {
-            annotation.TargetPortEnvironmentVariable = env;
-
-            var endpointReference = new EndpointReference(resourceWithEndpoints, annotation, KnownNetworkIdentifiers.LocalhostNetwork);
-
-            builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
-            {
-                context.EnvironmentVariables[env] = endpointReference.Property(EndpointProperty.TargetPort);
-            }));
-        }
+        ConfigureEndpointEnvironmentVariable(builder, annotation, env);
 
         return builder.WithAnnotation(annotation);
+    }
+
+    /// <summary>
+    /// Configures the environment variable callback for an endpoint's target port.
+    /// If a callback already exists (from a prior call), the annotation's
+    /// <see cref="EndpointAnnotation.TargetPortEnvironmentVariable"/> is updated
+    /// and the existing callback will pick up the new name at evaluation time.
+    /// </summary>
+    private static void ConfigureEndpointEnvironmentVariable<T>(IResourceBuilder<T> builder, EndpointAnnotation endpointAnnotation, string? env) where T : IResourceWithEndpoints
+    {
+        if (env is null || builder.Resource is not IResourceWithEndpoints resourceWithEndpoints || builder.Resource is not IResourceWithEnvironment)
+        {
+            return;
+        }
+
+        var previousEnv = endpointAnnotation.TargetPortEnvironmentVariable;
+        endpointAnnotation.TargetPortEnvironmentVariable = env;
+
+        // Only add a new callback if there wasn't one before. When there was a
+        // previous env, the existing callback already captures the annotation and
+        // reads TargetPortEnvironmentVariable at evaluation time.
+        if (previousEnv is not null)
+        {
+            return;
+        }
+
+        var endpointReference = new EndpointReference(resourceWithEndpoints, endpointAnnotation, KnownNetworkIdentifiers.LocalhostNetwork);
+
+        builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
+        {
+            context.EnvironmentVariables[endpointAnnotation.TargetPortEnvironmentVariable!] = endpointReference.Property(EndpointProperty.TargetPort);
+        }));
     }
 
     /// <summary>
@@ -1388,7 +1527,10 @@ public static class ResourceBuilderExtensions
     /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="DistributedApplicationException">Throws an exception if an endpoint with the same name already exists on the specified resource.</exception>
-    /// <remarks>This method is not available in polyglot app hosts. Use the overload with ProtocolType parameter instead.</remarks>
+    /// <remarks>
+    /// <para>This method is not available in polyglot app hosts. Use the overload with ProtocolType parameter instead.</para>
+    /// <para>If an endpoint with the same name already exists, the existing endpoint is updated with any non-null parameter values.</para>
+    /// </remarks>
     [AspireExportIgnore(Reason = "Subset of the full WithEndpoint overload which is already exported.")]
     public static IResourceBuilder<T> WithEndpoint<T>(this IResourceBuilder<T> builder, int? port, int? targetPort, string? scheme, [EndpointName] string? name, string? env, bool isProxied, bool? isExternal) where T : IResourceWithEndpoints
     {
@@ -1396,7 +1538,8 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Exposes an HTTP endpoint on a resource. This endpoint reference can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
+    /// Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists.
+    /// This endpoint reference can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
     /// The endpoint name will be "http" if not specified.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
@@ -1407,7 +1550,10 @@ public static class ResourceBuilderExtensions
     /// <param name="env">An optional name of the environment variable to inject.</param>
     /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <exception cref="DistributedApplicationException">Throws an exception if an endpoint with the same name already exists on the specified resource.</exception>
+    /// <remarks>
+    /// If an endpoint with the same name already exists on the resource, the existing endpoint is updated
+    /// with any non-null parameter values. Parameters left as <see langword="null"/> will not modify the existing endpoint's values.
+    /// </remarks>
     [AspireExport(Description = "Adds an HTTP endpoint")]
     public static IResourceBuilder<T> WithHttpEndpoint<T>(this IResourceBuilder<T> builder, int? port = null, int? targetPort = null, [EndpointName] string? name = null, string? env = null, bool isProxied = true) where T : IResourceWithEndpoints
     {
@@ -1417,7 +1563,8 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Exposes an HTTPS endpoint on a resource. This endpoint reference can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
+    /// Exposes an HTTPS endpoint on a resource, or updates the existing HTTPS endpoint if one with the same name already exists.
+    /// This endpoint reference can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
     /// The endpoint name will be "https" if not specified.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
@@ -1428,7 +1575,10 @@ public static class ResourceBuilderExtensions
     /// <param name="env">An optional name of the environment variable to inject.</param>
     /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <exception cref="DistributedApplicationException">Throws an exception if an endpoint with the same name already exists on the specified resource.</exception>
+    /// <remarks>
+    /// If an endpoint with the same name already exists on the resource, the existing endpoint is updated
+    /// with any non-null parameter values. Parameters left as <see langword="null"/> will not modify the existing endpoint's values.
+    /// </remarks>
     [AspireExport(Description = "Adds an HTTPS endpoint")]
     public static IResourceBuilder<T> WithHttpsEndpoint<T>(this IResourceBuilder<T> builder, int? port = null, int? targetPort = null, [EndpointName] string? name = null, string? env = null, bool isProxied = true) where T : IResourceWithEndpoints
     {
@@ -1559,7 +1709,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withUrlsCallback", Description = "Customizes displayed URLs via callback")]
+    [AspireExport(Description = "Customizes displayed URLs via callback")]
     public static IResourceBuilder<T> WithUrls<T>(this IResourceBuilder<T> builder, Action<ResourceUrlsCallbackContext> callback)
         where T : IResource
     {
@@ -1621,7 +1771,7 @@ public static class ResourceBuilderExtensions
     ///                       .WithUrl("/home", "Home");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds or modifies displayed URLs")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
     public static IResourceBuilder<T> WithUrl<T>(this IResourceBuilder<T> builder, string url, string? displayText = null)
         where T : IResource
     {
@@ -1647,6 +1797,24 @@ public static class ResourceBuilderExtensions
 
         // Treat as a static URL
         return builder.WithAnnotation(new ResourceUrlAnnotation { Url = url, DisplayText = displayText });
+    }
+
+    [AspireExport("withUrl", Description = "Adds or modifies displayed URLs")]
+    internal static IResourceBuilder<T> WithUrlForPolyglot<T>(
+        this IResourceBuilder<T> builder,
+        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object url,
+        string? displayText = null)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(url);
+
+        return url switch
+        {
+            string urlString => builder.WithUrl(urlString, displayText),
+            ReferenceExpression expression => builder.WithUrl(expression, displayText),
+            _ => throw new ArgumentException("URL must be a string or a reference expression.", nameof(url))
+        };
     }
 
     /// <summary>
@@ -1685,7 +1853,7 @@ public static class ResourceBuilderExtensions
     /// Use this method to add a URL to be displayed for the resource.<br/>
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
     /// </remarks>
-    [AspireExport("withUrlExpression", Description = "Adds a URL using a reference expression")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withUrl dispatcher export.")]
     public static IResourceBuilder<T> WithUrl<T>(this IResourceBuilder<T> builder, ReferenceExpression url, string? displayText = null)
         where T : IResource
     {
@@ -1788,7 +1956,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withUrlForEndpointFactory", Description = "Adds a URL for a specific endpoint via factory callback")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the Action<ResourceUrlAnnotation> overload for withUrlForEndpoint.")]
     public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, string endpointName, Func<EndpointReference, ResourceUrlAnnotation> callback)
         where T : IResourceWithEndpoints
     {
@@ -1921,13 +2089,27 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("waitForResource", MethodName = "waitFor", Description = "Waits for another resource to be ready")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
     public static IResourceBuilder<T> WaitFor<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(dependency);
 
         return WaitForCore(builder, dependency, waitBehavior: null, addRelationship: true);
+    }
+
+    [AspireExport("waitFor", Description = "Waits for another resource to be ready")]
+    internal static IResourceBuilder<T> WaitForForPolyglot<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<IResource> dependency,
+        WaitBehavior? waitBehavior = null) where T : IResourceWithWaitSupport
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(dependency);
+
+        return waitBehavior is null
+            ? builder.WaitFor(dependency)
+            : builder.WaitFor(dependency, waitBehavior.Value);
     }
 
     /// <summary>
@@ -1964,7 +2146,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("waitForWithBehavior", Description = "Waits for another resource with specific behavior")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitFor dispatcher export.")]
     public static IResourceBuilder<T> WaitFor<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, WaitBehavior waitBehavior) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -2029,13 +2211,27 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("waitForResourceStart", MethodName = "waitForStart", Description = "Waits for another resource to start")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
     public static IResourceBuilder<T> WaitForStart<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(dependency);
 
         return WaitForStartCore(builder, dependency, waitBehavior: null, addRelationship: true);
+    }
+
+    [AspireExport("waitForStart", Description = "Waits for another resource to start")]
+    internal static IResourceBuilder<T> WaitForStartForPolyglot<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<IResource> dependency,
+        WaitBehavior? waitBehavior = null) where T : IResourceWithWaitSupport
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(dependency);
+
+        return waitBehavior is null
+            ? builder.WaitForStart(dependency)
+            : builder.WaitForStart(dependency, waitBehavior.Value);
     }
 
     /// <summary>
@@ -2070,7 +2266,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("waitForStartWithBehavior", Description = "Waits for another resource to start with specific behavior")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal waitForStart dispatcher export.")]
     public static IResourceBuilder<T> WaitForStart<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, WaitBehavior waitBehavior) where T : IResourceWithWaitSupport
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -2559,7 +2755,8 @@ public static class ResourceBuilderExtensions
     /// </para>
     /// <para>
     /// The <see cref="HttpCommandOptions.GetCommandResult"/> callback will be invoked after the response is received to determine the result of the command invocation. If this callback
-    /// is not specified, the command will be considered succesful if the response status code is in the 2xx range.
+    /// is not specified, the command will be considered successful if the response status code is in the 2xx range. Set
+    /// <see cref="HttpCommandOptions.ResultMode"/> to flow the HTTP response body back to the command caller.
     /// </para>
     /// <example>
     /// Adds a command to the project resource that when invoked sends an HTTP POST request to the path <c>/clear-cache</c>.
@@ -2592,7 +2789,7 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Func<HttpRequestMessage> is not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "Use the ATS-specific withHttpCommand export.")]
     public static IResourceBuilder<TResource> WithHttpCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string path,
@@ -2651,7 +2848,8 @@ public static class ResourceBuilderExtensions
     /// </para>
     /// <para>
     /// The <see cref="HttpCommandOptions.GetCommandResult"/> callback will be invoked after the response is received to determine the result of the command invocation. If this callback
-    /// is not specified, the command will be considered succesful if the response status code is in the 2xx range.
+    /// is not specified, the command will be considered successful if the response status code is in the 2xx range. Set
+    /// <see cref="HttpCommandOptions.ResultMode"/> to flow the HTTP response body back to the command caller.
     /// </para>
     /// <example>
     /// Adds commands to a project resource that when invoked sends an HTTP POST request to an endpoint on a separate load generator resource, to generate load against the
@@ -2667,7 +2865,7 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Func<EndpointReference> delegate — not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "Use the ATS-specific withHttpCommand export.")]
     public static IResourceBuilder<TResource> WithHttpCommand<TResource>(
         this IResourceBuilder<TResource> builder,
         string path,
@@ -2727,9 +2925,10 @@ public static class ResourceBuilderExtensions
                     };
                     await commandOptions.PrepareRequest(requestContext).ConfigureAwait(false);
                 }
+                HttpResponseMessage? response = null;
                 try
                 {
-                    var response = await httpClient.SendAsync(request, context.CancellationToken).ConfigureAwait(false);
+                    response = await httpClient.SendAsync(request, context.CancellationToken).ConfigureAwait(false);
                     if (commandOptions.GetCommandResult is not null)
                     {
                         var resultContext = new HttpCommandResultContext
@@ -2744,18 +2943,146 @@ public static class ResourceBuilderExtensions
                         return await commandOptions.GetCommandResult(resultContext).ConfigureAwait(false);
                     }
 
-                    return response.IsSuccessStatusCode
-                        ? CommandResults.Success()
-                        : CommandResults.Failure($"Request failed with status code {response.StatusCode}");
+                    return await GetDefaultHttpCommandResultAsync(response, commandOptions, context.CancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     return CommandResults.Failure(ex);
                 }
+                finally
+                {
+                    response?.Dispose();
+                }
             },
             commandOptions);
 
         return builder;
+    }
+
+    [AspireExport("withHttpCommand", Description = "Adds an HTTP resource command")]
+    internal static IResourceBuilder<TResource> WithHttpCommandExport<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string path,
+        string displayName,
+        HttpCommandExportOptions? options = null)
+        where TResource : IResourceWithEndpoints
+        => builder.WithHttpCommand(
+            path,
+            displayName,
+            options?.EndpointName,
+            options?.CommandName,
+            CreateHttpCommandOptions(options));
+
+    private static HttpCommandOptions? CreateHttpCommandOptions(HttpCommandExportOptions? exportOptions)
+    {
+        if (exportOptions is null)
+        {
+            return null;
+        }
+
+        return new HttpCommandOptions
+        {
+            Description = exportOptions.Description,
+            ConfirmationMessage = exportOptions.ConfirmationMessage,
+            IconName = exportOptions.IconName,
+            IconVariant = exportOptions.IconVariant,
+            IsHighlighted = exportOptions.IsHighlighted,
+            Method = !string.IsNullOrWhiteSpace(exportOptions.MethodName) ? new HttpMethod(exportOptions.MethodName) : null,
+            ResultMode = exportOptions.ResultMode
+        };
+    }
+
+    internal static async Task<ExecuteCommandResult> GetDefaultHttpCommandResultAsync(HttpResponseMessage response, HttpCommandOptions commandOptions, CancellationToken cancellationToken)
+    {
+        var errorMessage = response.IsSuccessStatusCode
+            ? null
+            : $"Request failed with status code {response.StatusCode}";
+
+        if (TryGetHttpCommandResultFormat(commandOptions.ResultMode, response.Content?.Headers.ContentType, out var resultFormat) &&
+            response.Content is not null)
+        {
+            var result = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(result))
+            {
+                return errorMessage is null
+                    ? new ExecuteCommandResult { Success = true, Data = new CommandResultData { Value = result, Format = resultFormat } }
+                    : CommandResults.Failure(errorMessage, result, resultFormat);
+            }
+        }
+
+        return errorMessage is null
+            ? CommandResults.Success()
+            : CommandResults.Failure(errorMessage);
+    }
+
+    private static bool TryGetHttpCommandResultFormat(HttpCommandResultMode resultMode, MediaTypeHeaderValue? contentType, out CommandResultFormat resultFormat)
+    {
+        resultFormat = default;
+
+        switch (resultMode)
+        {
+            case HttpCommandResultMode.None:
+                return false;
+            case HttpCommandResultMode.Json:
+                resultFormat = CommandResultFormat.Json;
+                return true;
+            case HttpCommandResultMode.Text:
+                resultFormat = CommandResultFormat.Text;
+                return true;
+            case HttpCommandResultMode.Auto:
+                return TryInferHttpCommandResultFormat(contentType, out resultFormat);
+            default:
+                throw new InvalidOperationException($"Unsupported {nameof(HttpCommandResultMode)} value '{resultMode}'.");
+        }
+    }
+
+    internal static bool TryInferHttpCommandResultFormat(MediaTypeHeaderValue? contentType, out CommandResultFormat resultFormat)
+    {
+        switch (GetKnownHttpCommandResultContentType(contentType))
+        {
+            case KnownHttpCommandResultContentType.Json:
+                resultFormat = CommandResultFormat.Json;
+                return true;
+            case KnownHttpCommandResultContentType.Text:
+                resultFormat = CommandResultFormat.Text;
+                return true;
+            default:
+                resultFormat = default;
+                return false;
+        }
+    }
+
+    private static KnownHttpCommandResultContentType GetKnownHttpCommandResultContentType(MediaTypeHeaderValue? contentType)
+    {
+        var mediaType = contentType?.MediaType;
+
+        if (string.IsNullOrEmpty(mediaType))
+        {
+            return KnownHttpCommandResultContentType.None;
+        }
+
+        if (mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase) ||
+            mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase))
+        {
+            return KnownHttpCommandResultContentType.Json;
+        }
+
+        if (mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) ||
+            mediaType.Equals("application/xml", StringComparison.OrdinalIgnoreCase) ||
+            mediaType.EndsWith("+xml", StringComparison.OrdinalIgnoreCase) ||
+            mediaType.Equals("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
+        {
+            return KnownHttpCommandResultContentType.Text;
+        }
+
+        return KnownHttpCommandResultContentType.None;
+    }
+
+    private enum KnownHttpCommandResultContentType
+    {
+        None,
+        Json,
+        Text
     }
 
     /// <summary>
@@ -3744,7 +4071,6 @@ public static class ResourceBuilderExtensions
     /// The callback receives a <see cref="ContainerImagePushOptionsCallbackContext"/> that provides access to the resource
     /// and the <see cref="ContainerImagePushOptions"/> that can be modified.
     /// Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     /// <example>
     /// Configure a custom image name and tag for a container resource:
@@ -3758,7 +4084,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    [AspireExportIgnore(Reason = "ContainerImagePushOptionsCallbackContext exposes IResource — not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Action<ContainerImagePushOptionsCallbackContext> callback)
@@ -3784,7 +4110,6 @@ public static class ResourceBuilderExtensions
     /// The callback receives a <see cref="ContainerImagePushOptionsCallbackContext"/> that provides access to the resource
     /// and the <see cref="ContainerImagePushOptions"/> that can be modified.
     /// Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     /// <example>
     /// Configure image options asynchronously by retrieving values from configuration:
@@ -3799,7 +4124,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-    [AspireExportIgnore(Reason = "ContainerImagePushOptionsCallbackContext exposes IResource — not usable from polyglot hosts.")]
+[AspireExport(Description = "Sets image push options via callback")]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
         this IResourceBuilder<T> builder,
         Func<ContainerImagePushOptionsCallbackContext, Task> callback)

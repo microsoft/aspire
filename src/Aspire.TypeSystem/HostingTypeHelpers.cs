@@ -17,6 +17,9 @@ public static class HostingTypeNames
     /// <summary>Full name of the AspireDtoAttribute type.</summary>
     public const string AspireDtoAttribute = "Aspire.Hosting.AspireDtoAttribute";
 
+    /// <summary>Full name of the AspireValueAttribute type.</summary>
+    public const string AspireValueAttribute = "Aspire.Hosting.AspireValueAttribute";
+
     /// <summary>Full name of the AspireUnionAttribute type.</summary>
     public const string AspireUnionAttribute = "Aspire.Hosting.AspireUnionAttribute";
 

@@ -45,17 +45,16 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
-    public void AddAzureEnvironment_InRunMode_DoesNotAddToResources()
+    public void AddAzureEnvironment_InRunMode_AddsHiddenResourceToModel()
     {
-        // Arrange
         var builder = CreateBuilder(isRunMode: true);
 
-        // Act
         var resourceBuilder = builder.AddAzureEnvironment();
 
-        // Assert
         Assert.NotNull(resourceBuilder);
-        Assert.Empty(builder.Resources.OfType<AzureEnvironmentResource>());
+        var resource = Assert.Single(builder.Resources.OfType<AzureEnvironmentResource>());
+        Assert.True(resource.TryGetLastAnnotation<ResourceSnapshotAnnotation>(out var snapshot));
+        Assert.True(snapshot.InitialSnapshot.IsHidden);
     }
 
     [Fact]

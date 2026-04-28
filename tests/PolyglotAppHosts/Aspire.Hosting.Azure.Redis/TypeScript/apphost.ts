@@ -8,7 +8,7 @@ const accessKeyCache = await builder.addAzureManagedRedis("cache-access-key");
 const containerCache = await builder.addAzureManagedRedis("cache-container");
 
 await accessKeyCache.withAccessKeyAuthentication();
-await accessKeyCache.withAccessKeyAuthenticationWithKeyVault(keyVault);
+await accessKeyCache.withAccessKeyAuthentication({ keyVaultBuilder: keyVault });
 
 await containerCache.runAsContainer({
     configureContainer: async (container) => {
@@ -16,24 +16,24 @@ await containerCache.runAsContainer({
     }
 });
 
-const _connectionString = await cache.connectionStringExpression.get();
-const _hostName = await cache.hostName.get();
-const _nameOutputReference = await cache.nameOutputReference.get();
-const _resourceId = await cache.id.get();
-const _port = await cache.port.get();
-const _uri = await cache.uriExpression.get();
-const _useAccessKeyAuthentication: boolean = await cache.useAccessKeyAuthentication.get();
+const _connectionString = await cache.connectionStringExpression();
+const _hostName = await cache.hostName();
+const _nameOutputReference = await cache.nameOutputReference();
+const _resourceId = await cache.id();
+const _port = await cache.port();
+const _uri = await cache.uriExpression();
+const _useAccessKeyAuthentication: boolean = await cache.useAccessKeyAuthentication();
 
-const _accessKeyConnectionString = await accessKeyCache.connectionStringExpression.get();
-const _accessKeyHostName = await accessKeyCache.hostName.get();
-const _accessKeyPassword = await accessKeyCache.password.get();
-const _accessKeyUri = await accessKeyCache.uriExpression.get();
-const _usesAccessKeyAuthentication: boolean = await accessKeyCache.useAccessKeyAuthentication.get();
+const _accessKeyConnectionString = await accessKeyCache.connectionStringExpression();
+const _accessKeyHostName = await accessKeyCache.hostName();
+const _accessKeyPassword = await accessKeyCache.password();
+const _accessKeyUri = await accessKeyCache.uriExpression();
+const _usesAccessKeyAuthentication: boolean = await accessKeyCache.useAccessKeyAuthentication();
 
-const _containerConnectionString = await containerCache.connectionStringExpression.get();
-const _containerHostName = await containerCache.hostName.get();
-const _containerPort = await containerCache.port.get();
-const _containerPassword = await containerCache.password.get();
-const _containerUri = await containerCache.uriExpression.get();
+const _containerConnectionString = await containerCache.connectionStringExpression();
+const _containerHostName = await containerCache.hostName();
+const _containerPort = await containerCache.port();
+const _containerPassword = await containerCache.password();
+const _containerUri = await containerCache.uriExpression();
 
 await builder.build().run();

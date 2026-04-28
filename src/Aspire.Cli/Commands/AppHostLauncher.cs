@@ -10,7 +10,9 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -25,6 +27,8 @@ internal sealed class AppHostLauncher(
     CliExecutionContext executionContext,
     IInteractionService interactionService,
     IAuxiliaryBackchannelMonitor backchannelMonitor,
+    ICliHostEnvironment hostEnvironment,
+    AspireCliTelemetry telemetry,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
@@ -83,17 +87,25 @@ internal sealed class AppHostLauncher(
         IEnumerable<string> additionalArgs,
         CancellationToken cancellationToken)
     {
-        // In JSON mode, avoid interactive prompts to keep stdout parseable.
-        var multipleAppHostBehavior = format == OutputFormat.Json
+        // In JSON mode or non-interactive mode, avoid interactive prompts.
+        var multipleAppHostBehavior = format == OutputFormat.Json || !hostEnvironment.SupportsInteractiveInput
             ? MultipleAppHostProjectsFoundBehavior.Throw
             : MultipleAppHostProjectsFoundBehavior.Prompt;
 
         // Failure mode 1: Project not found
-        var searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
-            passedAppHostProjectFile,
-            multipleAppHostBehavior,
-            createSettingsFile: false,
-            cancellationToken);
+        AppHostProjectSearchResult searchResult;
+        try
+        {
+            searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
+                passedAppHostProjectFile,
+                multipleAppHostBehavior,
+                createSettingsFile: false,
+                cancellationToken);
+        }
+        catch (ProjectLocatorException ex)
+        {
+            return BaseCommand.HandleProjectLocatorException(ex, interactionService, telemetry);
+        }
 
         var effectiveAppHostFile = searchResult.SelectedProjectFile;
 
@@ -244,7 +256,8 @@ internal sealed class AppHostLauncher(
                 executablePath,
                 childArgs,
                 executionContext.WorkingDirectory.FullName,
-                IsExtensionEnvironmentVariable);
+                IsExtensionEnvironmentVariable,
+                new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" });
         }
         catch (Exception ex)
         {
@@ -328,7 +341,7 @@ internal sealed class AppHostLauncher(
             }
         }
 
-        interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedRight, string.Format(
+        interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedLeft, string.Format(
             CultureInfo.CurrentCulture,
             RunCommandStrings.CheckLogsForDetails,
             childLogFile));

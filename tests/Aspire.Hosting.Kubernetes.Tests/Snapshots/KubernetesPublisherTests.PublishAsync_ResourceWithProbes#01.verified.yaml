@@ -1,22 +1,22 @@
----
+﻿---
 apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
-  name: "project1-deployment"
+  name: "myapp-deployment"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "project1"
+    app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
   template:
     metadata:
       labels:
         app.kubernetes.io/name: "aspire-hosting-tests"
-        app.kubernetes.io/component: "project1"
+        app.kubernetes.io/component: "myapp"
         app.kubernetes.io/instance: "{{ .Release.Name }}"
     spec:
       containers:
-        - image: "{{ .Values.parameters.project1.project1_image }}"
+        - image: "mcr.microsoft.com/dotnet/aspnet:8.0"
           livenessProbe:
             failureThreshold: 3
             successThreshold: 1
@@ -24,32 +24,32 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 1
             httpGet:
-              scheme: "https"
+              scheme: "http"
               path: "/health"
-              port: {{ .Values.parameters.project1.port_https | int }}
-          name: "project1"
+              port: 8080
+          name: "myapp"
           readinessProbe:
             failureThreshold: 3
             successThreshold: 1
-            initialDelaySeconds: 60
+            initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 1
             httpGet:
-              scheme: "https"
+              scheme: "http"
               path: "/ready"
-              port: {{ .Values.parameters.project1.port_https | int }}
+              port: 8080
           envFrom:
             - configMapRef:
-                name: "project1-config"
+                name: "myapp-config"
           ports:
-            - name: "https"
+            - name: "http"
               protocol: "TCP"
-              containerPort: {{ .Values.parameters.project1.port_https | int }}
+              containerPort: 8080
           imagePullPolicy: "IfNotPresent"
   selector:
     matchLabels:
       app.kubernetes.io/name: "aspire-hosting-tests"
-      app.kubernetes.io/component: "project1"
+      app.kubernetes.io/component: "myapp"
       app.kubernetes.io/instance: "{{ .Release.Name }}"
   replicas: 1
   revisionHistoryLimit: 3

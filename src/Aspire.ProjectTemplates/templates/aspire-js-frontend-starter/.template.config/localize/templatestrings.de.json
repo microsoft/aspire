@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "Ziel-Net9.0",
   "symbols/Framework/choices/net10.0/description": "Ziel.-NET10.0",
   "symbols/UseRedisCache/displayName": "_Use Redis für die Zwischenspeicherung (erfordert eine unterstützte Container-Runtime)",
-  "symbols/UseRedisCache/description": "Konfiguriert, ob die Anwendung für die Verwendung von Redis für die Zwischenspeicherung eingerichtet werden soll. Erfordert eine unterstützte Containerruntime für die lokale Ausführung. Weitere Informationen finden Sie unter https://aka.ms/dotnet/aspire/containers.",
+  "symbols/UseRedisCache/description": "Konfiguriert, ob die Anwendung für die Verwendung von Redis für die Zwischenspeicherung eingerichtet werden soll. Erfordert eine unterstützte Containerruntime für die lokale Ausführung. Weitere Informationen finden Sie unter https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Portnummer, die für den HTTP-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll.",
   "symbols/appHostOtlpHttpPort/description": "Portnummer, die für den OTLP-HTTP-Endpunkt in launchSettings.json des AppHost-Projekts verwendet werden soll.",
   "symbols/appHostResourceHttpPort/description": "Portnummer, die für den HTTP-Endpunkt des Ressourcendiensts in launchSettings.json des AppHost-Projekts verwendet werden soll.",

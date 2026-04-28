@@ -1132,7 +1132,8 @@ public class AzureContainerAppsTests
 
         using var app = builder.Build();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("The endpoint(s) 'foo' specify an unsupported transport. The supported transports are 'http', 'http2', and 'tcp'.", ex.Message);
     }
@@ -1153,7 +1154,8 @@ public class AzureContainerAppsTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("Multiple external endpoints are not supported", ex.Message);
     }
@@ -1172,7 +1174,8 @@ public class AzureContainerAppsTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("External non-HTTP(s) endpoints are not supported", ex.Message);
     }
@@ -1192,7 +1195,8 @@ public class AzureContainerAppsTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("HTTP(s) and TCP endpoints cannot be mixed", ex.Message);
     }

@@ -174,4 +174,13 @@
   <data name="PlaywrightCliInstaller_InstalledWithMirrorWarnings" xml:space="preserve">
     <value>Installed Playwright CLI (some locations failed to mirror).</value>
   </data>
+  <data name="InitCommand_WorkspaceRootOptionDescription" xml:space="preserve">
+    <value>Path to the workspace root directory</value>
+  </data>
+  <data name="InitCommand_SkillLocationsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</value>
+  </data>
+  <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</value>
+  </data>
 </root>
