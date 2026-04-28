@@ -241,6 +241,51 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PsCommand_JsonFormat_DoesNotFetchSdkVersionFromV1Connection()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            SupportsV2 = false,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234
+            },
+            AppHostInfoResponse = new GetAppHostInfoResponse
+            {
+                Pid = "1234",
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                AspireHostVersion = "9.9.9"
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = string.Join(string.Empty, textWriter.Logs);
+        using var document = JsonDocument.Parse(jsonOutput);
+        Assert.Equal(1, document.RootElement.GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, document.RootElement[0].GetProperty("sdkVersion").ValueKind);
+    }
+
+    [Fact]
     public async Task PsCommand_JsonFormat_ReturnsAnonymousDashboardUrl()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -359,6 +404,46 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         var normalizedOutput = output.Replace(Environment.NewLine, string.Empty, StringComparison.Ordinal);
         Assert.Contains("SDK", normalizedOutput, StringComparison.Ordinal);
         Assert.Contains("9.9.9", normalizedOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PsCommand_TableFormat_DisplaysDashWhenSdkVersionIsUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            SupportsV2 = false,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = appHostPath,
+                ProcessId = 1234
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.DisableAnsi = true;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var output = string.Join(Environment.NewLine, textWriter.Logs);
+        Assert.Contains("SDK", output, StringComparison.Ordinal);
+        Assert.Contains(" - ", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -590,9 +675,12 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             await clientSocket.ConnectAsync((IPEndPoint)_listener.LocalEndpoint).DefaultTimeout();
             var serverSocket = await acceptTask.DefaultTimeout();
             var serverStream = new NetworkStream(serverSocket, ownsSocket: true);
-            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(serverStream, serverStream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()), _target);
+            var messageHandler = new HeaderDelimitedMessageHandler(serverStream, serverStream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
+            var rpc = new JsonRpc(messageHandler, _target);
             rpc.StartListening();
             _disposables.Add(rpc);
+            _disposables.Add(messageHandler);
+            _disposables.Add(serverStream);
 
             return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, clientSocket).DefaultTimeout();
         }

@@ -166,16 +166,19 @@ internal sealed class PsCommand : BaseCommand
 
             try
             {
-                var v2Info = await connection.GetAppHostInfoV2Async(cancellationToken).ConfigureAwait(false);
-                if (v2Info is not null)
+                if (connection.SupportsV2)
                 {
-                    sdkVersion = NormalizeSdkVersion(v2Info.AspireHostVersion);
-                    appHostPath = string.IsNullOrWhiteSpace(v2Info.AppHostPath) ? appHostPath : v2Info.AppHostPath;
-                    cliPid = v2Info.CliProcessId ?? cliPid;
-
-                    if (int.TryParse(v2Info.Pid, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPid))
+                    var v2Info = await connection.GetAppHostInfoV2Async(cancellationToken).ConfigureAwait(false);
+                    if (v2Info is not null)
                     {
-                        appHostPid = parsedPid;
+                        sdkVersion = NormalizeSdkVersion(v2Info.AspireHostVersion);
+                        appHostPath = string.IsNullOrWhiteSpace(v2Info.AppHostPath) ? appHostPath : v2Info.AppHostPath;
+                        cliPid = v2Info.CliProcessId ?? cliPid;
+
+                        if (int.TryParse(v2Info.Pid, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPid))
+                        {
+                            appHostPid = parsedPid;
+                        }
                     }
                 }
             }
@@ -270,7 +273,7 @@ internal sealed class PsCommand : BaseCommand
 
             table.AddRow(
                 Markup.Escape(shortPath),
-                Markup.Escape(appHost.SdkVersion ?? string.Empty),
+                Markup.Escape(appHost.SdkVersion ?? "-"),
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
                 dashboard);
