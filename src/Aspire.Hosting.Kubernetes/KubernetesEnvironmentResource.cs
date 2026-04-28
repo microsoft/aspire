@@ -364,6 +364,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             });
         }
 
+        // Build deployment target lookup for endpoint resolution
+        var deploymentTargets = new Dictionary<IResource, KubernetesResource>();
+
         foreach (var r in appModel.GetComputeResources())
         {
             // Skip resources that are explicitly targeted to a different compute environment.
@@ -397,17 +400,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 ComputeEnvironment = computeEnvForAnnotation,
                 ContainerRegistry = containerRegistry
             });
-        }
 
-        // Build deployment target lookup for endpoint resolution
-        var targetEnv = (IComputeEnvironmentResource?)OwningComputeEnvironment ?? this;
-        var deploymentTargets = new Dictionary<IResource, KubernetesResource>();
-        foreach (var resource in appModel.Resources)
-        {
-            if (resource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget is KubernetesResource k8sResource)
-            {
-                deploymentTargets[resource] = k8sResource;
-            }
+            deploymentTargets[r] = serviceResource;
         }
 
         // Process Ingress resources
