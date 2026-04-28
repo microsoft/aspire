@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ClientModel;
 using System.Collections.Immutable;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
@@ -12,7 +13,10 @@ using Azure.AI.Projects.Agents;
 using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Polly;
+using Polly.Retry;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -31,6 +35,8 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
 {
     private const string BeforeStartStepName = "before-start";
     private const string RunModeAzureProvisionStepName = "run-mode-azure-provision";
+    private const int ProjectEndpointReadinessMaxRetryAttempts = 11;
+    private static readonly TimeSpan s_projectEndpointReadinessDelay = TimeSpan.FromSeconds(5);
     private readonly List<IFoundryTool> _tools = [];
 
     /// <summary>
@@ -82,7 +88,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
                 Description = $"Deploys prompt agent {Name}.",
                 Action = async (stepCtx) =>
                 {
-                    var version = await DeployAsync(Project, stepCtx, stepCtx.CancellationToken).ConfigureAwait(false);
+                    var version = await DeployAsync(Project, stepCtx, logRetry: null, stepCtx.CancellationToken).ConfigureAwait(false);
                     stepCtx.ReportingStep.Log(LogLevel.Information,
                         new MarkdownString($"Successfully deployed **{Name}** as Prompt Agent (version {version.Version})"));
                     Version.Set(version.Version);
@@ -135,7 +141,8 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
     /// <summary>
     /// Gets the list of tool resources attached to this agent.
     /// </summary>
-    public IReadOnlyList<FoundryToolResource> Tools => _tools.OfType<FoundryToolResource>().ToArray();
+    [AspireExportIgnore(Reason = "IFoundryTool is a .NET extensibility point and is not ATS-compatible.")]
+    public IReadOnlyList<IFoundryTool> Tools => _tools;
 
     /// <summary>
     /// Adds a tool resource to this prompt agent.
@@ -187,7 +194,11 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
     /// <summary>
     /// Deploys the prompt agent to the given Microsoft Foundry project.
     /// </summary>
-    private async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, PipelineStepContext context, CancellationToken cancellationToken)
+    private async Task<ProjectsAgentVersion> DeployAsync(
+        AzureCognitiveServicesProjectResource project,
+        PipelineStepContext? context,
+        Action<string>? logRetry,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -199,13 +210,41 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
 
         var options = await ToProjectsAgentVersionCreationOptionsAsync(context, cancellationToken).ConfigureAwait(false);
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
-        var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
-            Name,
-            options,
-            cancellationToken: cancellationToken
-        ).ConfigureAwait(false);
 
-        return result.Value;
+        var retryPipeline = new ResiliencePipelineBuilder<ProjectsAgentVersion>()
+            .AddRetry(new RetryStrategyOptions<ProjectsAgentVersion>
+            {
+                Delay = s_projectEndpointReadinessDelay,
+                MaxRetryAttempts = ProjectEndpointReadinessMaxRetryAttempts,
+                ShouldHandle = new PredicateBuilder<ProjectsAgentVersion>()
+                    .Handle<ClientResultException>(IsProjectEndpointNotReady),
+                OnRetry = retry =>
+                {
+                    var retryMessage = $"Foundry project endpoint for '{project.Name}' is not ready yet. Retrying prompt agent deployment in {s_projectEndpointReadinessDelay.TotalSeconds:n0} seconds ({retry.AttemptNumber + 1}/{ProjectEndpointReadinessMaxRetryAttempts}).";
+                    if (context is not null)
+                    {
+                        context.ReportingStep.Log(LogLevel.Warning, retryMessage);
+                    }
+                    else
+                    {
+                        logRetry?.Invoke(retryMessage);
+                    }
+
+                    return ValueTask.CompletedTask;
+                }
+            })
+            .Build();
+
+        return await retryPipeline.ExecuteAsync(async ct =>
+        {
+            var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
+                Name,
+                options,
+                cancellationToken: ct
+            ).ConfigureAwait(false);
+
+            return result.Value;
+        }, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -244,20 +283,63 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
         _tools.Add(tool);
     }
 
-    private async Task DeployBeforeStartAsync(PipelineStepContext context)
+    private static bool IsProjectEndpointNotReady(ClientResultException ex) =>
+        ex.Status == 404 &&
+        (ex.Message.Contains("Subdomain does not map to a resource", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("The project does not exist", StringComparison.OrdinalIgnoreCase));
+
+    internal void StartRunModeDeployment(InitializeResourceEvent @event, CancellationToken cancellationToken)
+    {
+        StartRunModeDeployment(@event.Services, @event.Notifications, @event.Logger, cancellationToken);
+    }
+
+    private Task DeployBeforeStartAsync(PipelineStepContext context)
     {
         if (!context.ExecutionContext.IsRunMode)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
-        var loggerService = context.Services.GetRequiredService<ResourceLoggerService>();
-        var logger = loggerService.GetLogger(this);
+        StartRunModeDeployment(
+            context.Services,
+            context.Services.GetRequiredService<ResourceNotificationService>(),
+            context.Services.GetRequiredService<ResourceLoggerService>().GetLogger(this),
+            context.CancellationToken);
 
+        return Task.CompletedTask;
+    }
+
+    private void StartRunModeDeployment(
+        IServiceProvider services,
+        ResourceNotificationService notificationService,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var lifetime = services.GetRequiredService<IHostApplicationLifetime>();
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.ApplicationStopping);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await DeployForRunModeAsync(services, notificationService, logger, linkedCts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                linkedCts.Dispose();
+            }
+        }, CancellationToken.None);
+    }
+
+    private async Task DeployForRunModeAsync(
+        IServiceProvider services,
+        ResourceNotificationService notificationService,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            foreach (var tool in Tools)
+            foreach (var tool in Tools.OfType<FoundryToolResource>())
             {
                 await notificationService.PublishUpdateAsync(tool, s => s with
                 {
@@ -270,7 +352,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
                 State = new("Waiting for project", KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
 
-            await WaitForProjectAndToolsAsync(notificationService, context.CancellationToken).ConfigureAwait(false);
+            await WaitForProjectAndToolsAsync(notificationService, cancellationToken).ConfigureAwait(false);
 
             await notificationService.PublishUpdateAsync(this, s => s with
             {
@@ -279,12 +361,12 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
 
             logger.LogInformation("Deploying prompt agent '{AgentName}' to Foundry project '{ProjectName}'...", Name, Project.Name);
 
-            var version = await DeployAsync(Project, context, context.CancellationToken).ConfigureAwait(false);
+            var version = await DeployAsync(Project, context: null, message => logger.LogWarning("{Message}", message), cancellationToken).ConfigureAwait(false);
             Version.Set(version.Version);
 
             logger.LogInformation("Successfully deployed prompt agent '{AgentName}' (version {Version})", Name, version.Version);
 
-            foreach (var tool in Tools)
+            foreach (var tool in Tools.OfType<FoundryToolResource>())
             {
                 await notificationService.PublishUpdateAsync(tool, s => s with
                 {
@@ -292,8 +374,8 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
                 }).ConfigureAwait(false);
             }
 
-            var configuration = context.Services.GetRequiredService<IConfiguration>();
-            var portalUrls = await BuildPortalUrlsAsync(configuration, context.CancellationToken).ConfigureAwait(false);
+            var configuration = services.GetRequiredService<IConfiguration>();
+            var portalUrls = await BuildPortalUrlsAsync(configuration, cancellationToken).ConfigureAwait(false);
 
             await notificationService.PublishUpdateAsync(this, s => s with
             {
@@ -301,7 +383,10 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
                 Urls = portalUrls
             }).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
         {
             logger.LogError(ex, "Failed to deploy prompt agent '{AgentName}'", Name);
 
@@ -309,8 +394,6 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
             {
                 State = new("Failed to deploy", KnownResourceStateStyles.Error)
             }).ConfigureAwait(false);
-
-            throw;
         }
     }
 
