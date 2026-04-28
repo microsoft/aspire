@@ -162,7 +162,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.GoStarter,
-                "Starter App (Go API + Redis)",
+                "Starter App (Go API + Redis, Go AppHost)",
                 projectName => $"./{projectName}",
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyGoStarterTemplateAsync,

@@ -12,7 +12,21 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
+	helmNamespace := builder.AddParameter("helm-namespace")
+	helmReleaseName := builder.AddParameter("helm-release-name")
+	helmChartVersion := builder.AddParameter("helm-chart-version")
+
 	kubernetes := builder.AddKubernetesEnvironment("kube")
+	kubernetes.WithHelm(&aspire.WithHelmOptions{
+		Configure: func(helm aspire.HelmChartOptions) {
+			helm.WithNamespace("validation-namespace")
+			helm.WithReleaseName("validation-release")
+			helm.WithChartVersion("1.2.3")
+			helm.WithNamespace(helmNamespace)
+			helm.WithReleaseName(helmReleaseName)
+			helm.WithChartVersion(helmChartVersion)
+		},
+	})
 	kubernetes.WithProperties(func(environment aspire.KubernetesEnvironmentResource) {
 		environment.SetHelmChartName("validation-kubernetes")
 		_, _ = environment.HelmChartName()
