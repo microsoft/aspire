@@ -156,7 +156,6 @@ jobs:
                 $(Build.SourcesDirectory)/eng/clipack/Aspire.Cli.${{ targetRid }}.csproj
                 -t:_PackCliTool
                 /p:Configuration=$(_BuildConfig)
-                /p:CliToolPreBuiltBinaryPath=$(Build.SourcesDirectory)/artifacts/bin/Aspire.Cli.${{ targetRid }}/$(_BuildConfig)/net10.0/aspire.exe
                 /p:ContinuousIntegrationBuild=true
                 /bl:$(Build.Arcade.LogsPath)PackCliTool.binlog
                 ${{ parameters.extraBuildArgs }}
@@ -169,7 +168,6 @@ jobs:
                 $(Build.SourcesDirectory)/eng/clipack/Aspire.Cli.${{ targetRid }}.csproj
                 -t:_PackCliTool
                 /p:Configuration=$(_BuildConfig)
-                /p:CliToolPreBuiltBinaryPath=$(Build.SourcesDirectory)/artifacts/bin/Aspire.Cli.${{ targetRid }}/$(_BuildConfig)/net10.0/aspire
                 /p:ContinuousIntegrationBuild=true
                 /bl:$(Build.Arcade.LogsPath)PackCliTool.binlog
                 ${{ parameters.extraBuildArgs }}

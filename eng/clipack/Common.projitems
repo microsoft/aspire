@@ -134,6 +134,7 @@
   <Target Name="_PackCliTool">
     <Error Condition="'$(CliRuntime)' == ''" Text="CliRuntime must be set before packing the CLI tool." />
     <Error Condition="'$(CliToolPreBuiltBinaryPath)' == ''" Text="CliToolPreBuiltBinaryPath must be set to the signed NativeAOT CLI binary before packing the CLI tool." />
+    <Message Importance="High" Text="Packing CLI tool for $(CliRuntime) from '$(CliToolPreBuiltBinaryPath)'." />
     <Error Condition="!Exists('$(CliToolPreBuiltBinaryPath)')" Text="CliToolPreBuiltBinaryPath does not exist: '$(CliToolPreBuiltBinaryPath)'." />
 
     <PropertyGroup>
