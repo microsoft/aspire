@@ -24,7 +24,7 @@ public static class AzureKubernetesIngressExtensions
     /// <para>
     /// This method delegates to the inner <see cref="KubernetesEnvironmentResource"/> of the AKS
     /// environment. To use an AKS-specific ingress controller (e.g., Azure Application Gateway
-    /// for Containers), call <see cref="KubernetesIngressExtensions.WithIngressClass"/> with the
+    /// for Containers), call <see cref="KubernetesIngressExtensions.WithIngressClass(IResourceBuilder{KubernetesIngressResource}, string)"/> with the
     /// appropriate class name.
     /// </para>
     /// </remarks>
