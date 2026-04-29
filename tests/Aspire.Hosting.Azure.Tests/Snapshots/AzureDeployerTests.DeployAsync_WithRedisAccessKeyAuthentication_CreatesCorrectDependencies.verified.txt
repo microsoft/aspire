@@ -249,7 +249,7 @@ Step: publish-azure634f9
 
 Step: publish-manifest
     Description: Publishes the Aspire application model as a JSON manifest file.
-    Dependencies: ✓ validate-build-only-container-references
+    Dependencies: none
 
 Step: publish-prereq
     Description: Prerequisite step that runs before any publish operations.
@@ -649,11 +649,10 @@ If targeting 'publish-azure634f9':
     [2] publish-azure634f9
 
 If targeting 'publish-manifest':
-  Direct dependencies: validate-build-only-container-references
-  Total steps: 2
+  Direct dependencies: none
+  Total steps: 1
   Execution order:
-    [0] validate-build-only-container-references
-    [1] publish-manifest
+    [0] publish-manifest
 
 If targeting 'publish-prereq':
   Direct dependencies: process-parameters, validate-build-only-container-references

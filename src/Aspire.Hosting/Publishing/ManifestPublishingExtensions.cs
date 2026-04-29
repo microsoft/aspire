@@ -16,8 +16,6 @@ namespace Aspire.Hosting.Publishing;
 /// </summary>
 internal static class ManifestPublishingExtensions
 {
-    internal const string PublishManifestStepName = "publish-manifest";
-
     /// <summary>
     /// Adds a step to the pipeline that publishes an Aspire manifest file.
     /// </summary>
@@ -28,7 +26,7 @@ internal static class ManifestPublishingExtensions
     {
         var step = new PipelineStep
         {
-            Name = PublishManifestStepName,
+            Name = "publish-manifest",
             Description = "Publishes the Aspire application model as a JSON manifest file.",
             Action = async context =>
             {
