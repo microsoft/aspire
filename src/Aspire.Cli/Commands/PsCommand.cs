@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,6 +14,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -235,18 +237,38 @@ internal sealed class PsCommand : BaseCommand
             return null;
         }
 
-        var plusIndex = sdkVersion.IndexOf('+');
-        if (plusIndex > 0)
+        if (SemVersion.TryParse(sdkVersion, SemVersionStyles.Strict, out var semVersion))
         {
-            sdkVersion = sdkVersion[..plusIndex];
+            return semVersion.WithoutMetadata().ToString();
         }
 
-        if (Version.TryParse(sdkVersion, out var version) && version.Revision == 0)
+        if (TryTrimTrailingZeroVersionSegment(sdkVersion, out var normalizedSdkVersion) &&
+            SemVersion.TryParse(normalizedSdkVersion, SemVersionStyles.Strict, out semVersion))
         {
-            return FormattableString.Invariant($"{version.Major}.{version.Minor}.{version.Build}");
+            return semVersion.WithoutMetadata().ToString();
         }
 
         return sdkVersion;
+    }
+
+    private static bool TryTrimTrailingZeroVersionSegment(string sdkVersion, [NotNullWhen(true)] out string? normalizedSdkVersion)
+    {
+        var suffixIndex = sdkVersion.IndexOfAny(['-', '+']);
+        var versionCore = suffixIndex >= 0 ? sdkVersion[..suffixIndex] : sdkVersion;
+        var suffix = suffixIndex >= 0 ? sdkVersion[suffixIndex..] : string.Empty;
+        var versionParts = versionCore.Split('.');
+
+        if (versionParts is [var major, var minor, var patch, "0"] &&
+            int.TryParse(major, NumberStyles.None, CultureInfo.InvariantCulture, out _) &&
+            int.TryParse(minor, NumberStyles.None, CultureInfo.InvariantCulture, out _) &&
+            int.TryParse(patch, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+        {
+            normalizedSdkVersion = $"{major}.{minor}.{patch}{suffix}";
+            return true;
+        }
+
+        normalizedSdkVersion = null;
+        return false;
     }
 
     private void DisplayTable(List<AppHostDisplayInfo> appHosts)
