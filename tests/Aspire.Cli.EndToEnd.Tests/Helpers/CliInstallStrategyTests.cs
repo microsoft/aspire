@@ -348,6 +348,52 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void DotnetToolSmokeTests_ThrowsWhenPublishedFeedFallbackHasNoSelector()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_QUALITY", null));
+
+        var exception = Assert.Throws<InvalidOperationException>(DotnetToolSmokeTests.GetDotnetToolStrategy);
+
+        Assert.Contains("ASPIRE_E2E_QUALITY", exception.Message);
+    }
+
+    [Fact]
+    public void DotnetToolSmokeTests_UsesPublishedFeedWhenQualityIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_QUALITY", "staging"));
+
+        var strategy = DotnetToolSmokeTests.GetDotnetToolStrategy();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.True(strategy.IncludePrerelease);
+        Assert.Null(strategy.Version);
+    }
+
+    [Fact]
+    public void DotnetToolSmokeTests_UsesPublishedFeedWhenVersionIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("BUILT_NUGETS_PATH", null),
+            ("ASPIRE_E2E_VERSION", "13.3.0"),
+            ("ASPIRE_E2E_QUALITY", null));
+
+        var strategy = DotnetToolSmokeTests.GetDotnetToolStrategy();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Equal("13.3.0", strategy.Version);
+        Assert.False(strategy.IncludePrerelease);
+    }
+
+    [Fact]
     public void ConfigureContainer_MountsNupkgSourceForDotnetToolLocalSource()
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");

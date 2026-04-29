@@ -67,7 +67,6 @@ jobs:
       - name: Upload logs and test results
         id: upload-logs
         if: always()
-        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: smoke-test-results-${{ inputs.quality || 'dev' }}
