@@ -16,7 +16,7 @@ function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
 
 export const nodeDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'node',
-    debugAdapter: 'node',
+    debugAdapter: 'pwa-node',
     extensionId: null,
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => {
         if (isNodeLaunchConfiguration(launchConfiguration)) {
@@ -33,7 +33,8 @@ export const nodeDebuggerExtension: ResourceDebuggerExtension = {
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
-        debugConfiguration.type = 'node';
+        debugConfiguration.type = 'pwa-node';
+        debugConfiguration.outputCapture = 'std';
 
         // Use working_directory for cwd if available
         if (launchConfig.working_directory) {

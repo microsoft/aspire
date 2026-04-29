@@ -90,12 +90,12 @@ class DotNetService implements IDotNetService {
                 if (code === 0) {
                     // if build succeeds, simply return. otherwise throw to trigger error handling
                     if (stderrOutput) {
-                        reject(new Error(stderrOutput));
+                        reject(createErrorWithStreamedDebugConsoleOutput(stderrOutput));
                     } else {
                         resolve();
                     }
                 } else {
-                    reject(new Error(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
+                    reject(createErrorWithStreamedDebugConsoleOutput(buildFailedForProjectWithError(projectFile, stdoutOutput || stderrOutput || `Exit code ${code}`)));
                 }
             });
         });
@@ -189,6 +189,13 @@ function getRunApiConfigFromOutput(runApiOutput: string): RunApiOutput {
         executablePath: parsed.ExecutablePath,
         env: parsed.EnvironmentVariables
     };
+}
+
+function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
+    const error = new Error(message) as Error & { debugConsoleOutputAlreadyWritten?: boolean };
+    error.debugConsoleOutputAlreadyWritten = true;
+
+    return error;
 }
 
 export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {

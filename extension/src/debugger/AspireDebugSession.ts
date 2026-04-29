@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import * as fs from "fs";
-import { createDebugAdapterTracker, AppHostRestartHandler } from "./adapterTracker";
+import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
 import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
@@ -185,7 +185,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         },
         stderrCallback: (data) => {
           for (const line of trimMessage(data)) {
-            this.sendMessageWithEmoji("❌", line, false);
+            this.sendMessageWithEmoji("❌", line, false, 'stderr');
           }
         },
         errorCallback: (error) => {
@@ -223,13 +223,13 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
-  createDebugAdapterTrackerCore(debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler) {
+  createDebugAdapterTrackerCore(debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler) {
     if (this._trackedDebugAdapters.includes(debugAdapter)) {
       return;
     }
 
     this._trackedDebugAdapters.push(debugAdapter);
-    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, onAppHostRestartRequested));
+    this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, onAppHostRestartRequested, onAppHostOutput));
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
@@ -255,7 +255,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             return true; // suppress VS Code's child restart
           }
           return false;
-        }
+        },
+        (output, category) => this.sendMessage(output, false, category)
       );
 
       let appHostArgs: string[];
@@ -322,8 +323,13 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       this._disposables.push(disposable);
     }
     catch (err) {
-      extensionLogOutputChannel.error(`Error starting AppHost debug session: ${err}`);
-      vscode.window.showErrorMessage(String(err));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorDetails = err instanceof Error ? (err.stack ?? err.message) : String(err);
+      extensionLogOutputChannel.error(`Error starting AppHost debug session: ${errorDetails}`);
+      if (!isErrorWithStreamedDebugConsoleOutput(err)) {
+        this.sendMessageWithEmoji("❌", errorDetails, true, 'stderr');
+      }
+      vscode.window.showErrorMessage(errorMessage);
       this.dispose();
     }
   }
@@ -510,8 +516,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._onDidSendMessage.fire(event);
   }
 
-  sendMessageWithEmoji(emoji: string, message: string, addNewLine: boolean = true) {
-    this.sendMessage(`${emoji}  ${message}`, addNewLine);
+  sendMessageWithEmoji(emoji: string, message: string, addNewLine: boolean = true, category: 'stdout' | 'stderr' = 'stdout') {
+    this.sendMessage(`${emoji}  ${message}`, addNewLine, category);
   }
 
   sendMessage(message: string, addNewLine: boolean = true, category: 'stdout' | 'stderr' = 'stdout') {
@@ -529,4 +535,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   notifyAppHostStartupCompleted() {
     extensionLogOutputChannel.info(`AppHost startup completed and dashboard is running.`);
   }
+}
+
+function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
+  return err instanceof Error && (err as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten === true;
 }

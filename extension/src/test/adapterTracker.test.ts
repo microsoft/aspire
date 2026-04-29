@@ -245,6 +245,54 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('apphost output events are mirrored to output callback', async () => {
+        const outputCallback = sinon.stub();
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', undefined, outputCallback);
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker({
+            ...debugSession,
+            configuration: {
+                ...debugSession.configuration,
+                isApphost: true
+            }
+        });
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'output',
+            body: {
+                category: 'stderr',
+                output: 'tsx compile error\n'
+            }
+        });
+
+        assert.strictEqual(outputCallback.calledOnceWith('tsx compile error\n', 'stderr'), true);
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+
+        disposable.dispose();
+    });
+
+    test('resource output events are not mirrored to output callback', async () => {
+        const outputCallback = sinon.stub();
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', undefined, outputCallback);
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'output',
+            body: {
+                category: 'stderr',
+                output: 'resource error\n'
+            }
+        });
+
+        assert.strictEqual(outputCallback.called, false);
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+
+        disposable.dispose();
+    });
+
     test('does not send notification if debug session lacks runId', async () => {
         // Create session without proper configuration
         const invalidSession = {
