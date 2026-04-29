@@ -4,7 +4,6 @@
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -1494,87 +1493,6 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(promptedForVersion);
         Assert.Equal(cliVersion, selectedPackageVersion);
-    }
-
-    [Fact]
-    public async Task AddCommand_WithLocalHive_PrefersCurrentCliVersion()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
-        hivesDir.Create();
-        hivesDir.CreateSubdirectory("local").CreateSubdirectory("packages");
-
-        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
-        var cliVersion = VersionHelper.GetDefaultSdkVersion();
-        var selectedPackageVersion = string.Empty;
-        var promptedForVersion = false;
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.AddCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
-                prompter.PromptForIntegrationVersionCallback = (packages) =>
-                {
-                    promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in the local hive.");
-                };
-
-                return prompter;
-            };
-
-            options.ProjectLocatorFactory = _ => new TestProjectLocator
-            {
-                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                    Task.FromResult(new AppHostProjectSearchResult(appHostProjectFile, [appHostProjectFile]))
-            };
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
-                {
-                    var implicitPackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "implicit",
-                        Version = "13.2.2"
-                    };
-
-                    var localHivePackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "local-hive",
-                        Version = cliVersion
-                    };
-
-                    return nugetSource is null
-                        ? (0, new[] { implicitPackage })
-                        : (0, new[] { localHivePackage });
-                };
-
-                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
-                {
-                    selectedPackageVersion = packageVersion;
-                    return 0;
-                };
-
-                return runner;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add redis");
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(0, exitCode);
-        Assert.False(promptedForVersion);
-        Assert.Equal(cliVersion, selectedPackageVersion);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
     }
 }
 
