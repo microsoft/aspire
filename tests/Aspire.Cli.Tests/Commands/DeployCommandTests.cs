@@ -386,7 +386,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
         var error = Assert.Single(interactionService.Errors);
-        Assert.Equal(string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOptions, inputName, "--input", "--param"), error);
+        var expectedError = PipelineCommandInputManager.IsParameterInput(inputName)
+            ? string.Format(InteractionServiceStrings.NonInteractiveRequiredParameterMissingWithOption, PipelineCommandInputManager.GetParameterName(inputName), "--param")
+            : string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, inputName, "--input");
+        Assert.Equal(expectedError, error);
 
         static async IAsyncEnumerable<PublishingActivity> GetPromptActivities(string inputName, [EnumeratorCancellation] CancellationToken cancellationToken)
         {

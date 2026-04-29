@@ -1536,7 +1536,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
         var error = Assert.Single(consoleService.DisplayedErrors);
         Assert.Equal(
-            string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOptions, "text-prompt-1", "--input", "--param"),
+            string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, "text-prompt-1", "--input"),
             error);
     }
 

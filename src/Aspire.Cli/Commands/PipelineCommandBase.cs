@@ -421,7 +421,16 @@ internal abstract class PipelineCommandBase : BaseCommand
             // Send terminal progress bar stop sequence on exception
             StopTerminalProgressBar();
             Telemetry.RecordError("A required pipeline input was not provided in non-interactive mode.", ex);
-            var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOptions, ex.SymbolDisplayName, s_inputOption.Name, s_paramOption.Name);
+            string errorMessage;
+            if (PipelineCommandInputManager.IsParameterInput(ex.SymbolDisplayName))
+            {
+                var paramName = PipelineCommandInputManager.GetParameterName(ex.SymbolDisplayName);
+                errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredParameterMissingWithOption, paramName, s_paramOption.Name);
+            }
+            else
+            {
+                errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, ex.SymbolDisplayName, s_inputOption.Name);
+            }
             InteractionService.DisplayError(errorMessage);
             if (publishContext?.OutputCollector is { } outputCollector)
             {

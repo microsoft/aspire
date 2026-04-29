@@ -23,7 +23,7 @@ internal sealed class PipelineCommandInputManager
     private readonly IAnsiConsole _ansiConsole;
 
     private Dictionary<string, string> _providedInputs = new(StringComparers.InteractionInputName);
-    private Dictionary<string, string> _providedParams = new(StringComparers.InteractionInputName);
+    private Dictionary<string, string> _providedParams = new(StringComparers.ResourceName);
 
     public PipelineCommandInputManager(
         CliExecutionContext executionContext,
@@ -40,7 +40,19 @@ internal sealed class PipelineCommandInputManager
     public void LoadProvidedValues(string[]? inputOptions, string[]? paramOptions)
     {
         _providedInputs = ParseOptions(inputOptions, StringComparers.InteractionInputName, InputsEnvVarPrefix, "--input");
-        _providedParams = ParseOptions(paramOptions, StringComparers.InteractionInputName, ParametersEnvVarPrefix, "--param");
+        _providedParams = ParseOptions(paramOptions, StringComparers.ResourceName, ParametersEnvVarPrefix, "--param");
+    }
+
+    public static bool IsParameterInput(string? inputName)
+    {
+        return inputName is not null && inputName.StartsWith(ParameterInputNamePrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string GetParameterName(string inputName)
+    {
+        return inputName.StartsWith(ParameterInputNamePrefix, StringComparison.OrdinalIgnoreCase)
+            ? inputName[ParameterInputNamePrefix.Length..]
+            : inputName;
     }
 
     public bool IsInputProvided(string inputName)
