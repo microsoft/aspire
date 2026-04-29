@@ -30,7 +30,7 @@ internal interface IBrowserLogsCdpConnection : IAsyncDisposable
     Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken);
 }
 
-// Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsCdpProtocol, while page lifecycle and
+// Owns one browser-level CDP transport. Protocol parsing stays in BrowserLogsCdpProtocol, while page lifecycle and
 // reconnection policy stay in BrowserPageSession.
 internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
 {
@@ -51,14 +51,14 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
     private readonly ConcurrentDictionary<long, IPendingCommand> _pendingCommands = new();
     private readonly Task _receiveLoop;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
-    private readonly WebSocket _webSocket;
+    private readonly IBrowserLogsCdpTransport _transport;
     private long _nextCommandId;
 
-    private BrowserLogsCdpConnection(WebSocket webSocket, Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler, ILogger<BrowserLogsSessionManager> logger)
+    private BrowserLogsCdpConnection(IBrowserLogsCdpTransport transport, Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler, ILogger<BrowserLogsSessionManager> logger)
     {
         _eventHandler = eventHandler;
         _logger = logger;
-        _webSocket = webSocket;
+        _transport = transport;
         _receiveLoop = Task.Run(ReceiveLoopAsync);
     }
 
@@ -90,7 +90,18 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
         // Keep-alives make transport failures show up in the receive loop instead of only on the next CDP command.
         connector.SetKeepAliveInterval(s_keepAliveInterval);
         await connector.ConnectAsync(webSocketUri, cancellationToken).ConfigureAwait(false);
-        return new BrowserLogsCdpConnection(connector.DetachConnectedWebSocket(), eventHandler, logger);
+        return Create(
+            new BrowserLogsWebSocketCdpTransport(connector.DetachConnectedWebSocket(), s_closeTimeout),
+            eventHandler,
+            logger);
+    }
+
+    internal static BrowserLogsCdpConnection Create(
+        IBrowserLogsCdpTransport transport,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserLogsSessionManager> logger)
+    {
+        return new BrowserLogsCdpConnection(transport, eventHandler, logger);
     }
 
     public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
@@ -193,19 +204,10 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
 
         try
         {
-            if (_webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
-            {
-                using var closeCts = new CancellationTokenSource(s_closeTimeout);
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disposed", closeCts.Token).ConfigureAwait(false);
-            }
+            await _transport.DisposeAsync().ConfigureAwait(false);
         }
         catch
         {
-            _webSocket.Abort();
-        }
-        finally
-        {
-            _webSocket.Dispose();
         }
 
         try
@@ -248,9 +250,9 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
             await _sendLock.WaitAsync(sendCts.Token).ConfigureAwait(false);
             try
             {
-                // ClientWebSocket does not allow overlapping sends, so startup, reconnect, and shutdown all share
-                // this serialized path.
-                await _webSocket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, sendCts.Token).ConfigureAwait(false);
+                // Browser-level CDP transports are serialized so startup, reconnect, screenshot, and shutdown never
+                // interleave command frames on the same connection.
+                await _transport.SendAsync(payload, sendCts.Token).ConfigureAwait(false);
             }
             finally
             {
@@ -271,32 +273,13 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
 
     private async Task ReceiveLoopAsync()
     {
-        var buffer = new byte[16 * 1024];
-        using var messageBuffer = new MemoryStream();
         Exception? terminalException = null;
 
         try
         {
-            while (!_disposeCts.IsCancellationRequested && _webSocket.State is WebSocketState.Open or WebSocketState.CloseSent)
+            while (!_disposeCts.IsCancellationRequested)
             {
-                var result = await _webSocket.ReceiveAsync(buffer, _disposeCts.Token).ConfigureAwait(false);
-                if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    terminalException = CreateUnexpectedConnectionClosureException(result);
-                    break;
-                }
-
-                // Large CDP events can span multiple websocket frames. Buffer until EndOfMessage so protocol parsing
-                // always sees one complete JSON message, matching the frames observed from a real browser.
-                messageBuffer.Write(buffer, 0, result.Count);
-                if (!result.EndOfMessage)
-                {
-                    continue;
-                }
-
-                var frame = messageBuffer.ToArray();
-                messageBuffer.SetLength(0);
-
+                var frame = await _transport.ReceiveAsync(_disposeCts.Token).ConfigureAwait(false);
                 _logger.LogTrace("Tracked browser protocol <- {Frame}", BrowserLogsCdpProtocol.DescribeFrame(frame));
 
                 try
@@ -357,22 +340,6 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
         {
             await _eventHandler(protocolEvent).ConfigureAwait(false);
         }
-    }
-
-    private static InvalidOperationException CreateUnexpectedConnectionClosureException(WebSocketReceiveResult result)
-    {
-        // Preserve the remote close details; they become the reconnect/resource-log diagnostics when CDP drops.
-        if (result.CloseStatus is { } closeStatus)
-        {
-            if (!string.IsNullOrWhiteSpace(result.CloseStatusDescription))
-            {
-                return new InvalidOperationException($"Browser debug connection closed by the remote endpoint with status '{closeStatus}' ({(int)closeStatus}): {result.CloseStatusDescription}");
-            }
-
-            return new InvalidOperationException($"Browser debug connection closed by the remote endpoint with status '{closeStatus}' ({(int)closeStatus}).");
-        }
-
-        return new InvalidOperationException("Browser debug connection closed by the remote endpoint without a close status.");
     }
 
     private interface IPendingCommand
@@ -462,5 +429,146 @@ internal sealed class ClientWebSocketConnector : IClientWebSocketConnector
         var webSocket = _webSocket;
         ObjectDisposedException.ThrowIf(webSocket is null, this);
         return webSocket;
+    }
+}
+
+// Transport abstraction for browser-level CDP frames. WebSocket uses complete text messages; Chromium pipe uses
+// NUL-delimited JSON. Keeping framing here lets BrowserLogsCdpConnection own command correlation independent of launch
+// transport.
+internal interface IBrowserLogsCdpTransport : IAsyncDisposable
+{
+    Task SendAsync(ReadOnlyMemory<byte> frame, CancellationToken cancellationToken);
+
+    Task<byte[]> ReceiveAsync(CancellationToken cancellationToken);
+}
+
+internal sealed class BrowserLogsWebSocketCdpTransport(WebSocket webSocket, TimeSpan closeTimeout) : IBrowserLogsCdpTransport
+{
+    private readonly TimeSpan _closeTimeout = closeTimeout;
+    private readonly WebSocket _webSocket = webSocket;
+
+    public async Task SendAsync(ReadOnlyMemory<byte> frame, CancellationToken cancellationToken)
+    {
+        await _webSocket.SendAsync(frame, WebSocketMessageType.Text, endOfMessage: true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<byte[]> ReceiveAsync(CancellationToken cancellationToken)
+    {
+        var buffer = new byte[16 * 1024];
+        using var messageBuffer = new MemoryStream();
+
+        while (true)
+        {
+            var result = await _webSocket.ReceiveAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                throw CreateUnexpectedConnectionClosureException(result);
+            }
+
+            // Large CDP events can span multiple websocket frames. Buffer until EndOfMessage so protocol parsing
+            // always sees one complete JSON message, matching the frames observed from a real browser.
+            messageBuffer.Write(buffer, 0, result.Count);
+            if (result.EndOfMessage)
+            {
+                return messageBuffer.ToArray();
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                using var closeCts = new CancellationTokenSource(_closeTimeout);
+                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disposed", closeCts.Token).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            _webSocket.Abort();
+        }
+        finally
+        {
+            _webSocket.Dispose();
+        }
+    }
+
+    private static InvalidOperationException CreateUnexpectedConnectionClosureException(WebSocketReceiveResult result)
+    {
+        // Preserve the remote close details; they become the reconnect/resource-log diagnostics when CDP drops.
+        if (result.CloseStatus is { } closeStatus)
+        {
+            if (!string.IsNullOrWhiteSpace(result.CloseStatusDescription))
+            {
+                return new InvalidOperationException($"Browser debug connection closed by the remote endpoint with status '{closeStatus}' ({(int)closeStatus}): {result.CloseStatusDescription}");
+            }
+
+            return new InvalidOperationException($"Browser debug connection closed by the remote endpoint with status '{closeStatus}' ({(int)closeStatus}).");
+        }
+
+        return new InvalidOperationException("Browser debug connection closed by the remote endpoint without a close status.");
+    }
+}
+
+internal sealed class BrowserLogsPipeCdpTransport(Stream readStream, Stream writeStream) : IBrowserLogsCdpTransport
+{
+    private const byte FrameTerminator = 0;
+    private const int ReadBufferSize = 16 * 1024;
+    private static readonly byte[] s_frameTerminator = [FrameTerminator];
+
+    private readonly byte[] _readBuffer = new byte[ReadBufferSize];
+    private readonly Stream _readStream = readStream;
+    private readonly Stream _writeStream = writeStream;
+    private int _readBufferCount;
+    private int _readBufferOffset;
+
+    public async Task SendAsync(ReadOnlyMemory<byte> frame, CancellationToken cancellationToken)
+    {
+        await _writeStream.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
+        await _writeStream.WriteAsync(s_frameTerminator, cancellationToken).ConfigureAwait(false);
+        await _writeStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<byte[]> ReceiveAsync(CancellationToken cancellationToken)
+    {
+        using var messageBuffer = new MemoryStream();
+
+        while (true)
+        {
+            if (_readBufferOffset == _readBufferCount)
+            {
+                _readBufferOffset = 0;
+                _readBufferCount = await _readStream.ReadAsync(_readBuffer, cancellationToken).ConfigureAwait(false);
+                if (_readBufferCount == 0)
+                {
+                    throw new EndOfStreamException("Browser debug pipe closed.");
+                }
+            }
+
+            var terminatorIndex = Array.IndexOf(_readBuffer, FrameTerminator, _readBufferOffset, _readBufferCount - _readBufferOffset);
+            if (terminatorIndex >= 0)
+            {
+                messageBuffer.Write(_readBuffer, _readBufferOffset, terminatorIndex - _readBufferOffset);
+                _readBufferOffset = terminatorIndex + 1;
+                return messageBuffer.ToArray();
+            }
+
+            messageBuffer.Write(_readBuffer, _readBufferOffset, _readBufferCount - _readBufferOffset);
+            _readBufferOffset = _readBufferCount;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await _writeStream.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            await _readStream.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

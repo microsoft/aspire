@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.Extensions.Logging;
+
 namespace Aspire.Hosting;
 
 // A browser instance/process boundary that one or more tracked log sessions can share. A host either owns the
@@ -27,6 +29,13 @@ internal interface IBrowserHost : IAsyncDisposable
     // host was disposed, or recovery gave up. Transient CDP socket loss is intentionally not modeled as host
     // termination because sessions can reconnect and reattach to their targets.
     Task Termination { get; }
+
+    // Opens a browser-level CDP connection for a page session. WebSocket-backed hosts create a new connection for each
+    // session; pipe-backed hosts can override this seam to return a shared/multiplexed connection.
+    Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserLogsSessionManager> logger,
+        CancellationToken cancellationToken);
 
     // Creates a page/tab owned by one tracked browser-log session. The returned session owns only that page target;
     // disposing it must never close the browser process. Host implementations hide CDP event fanout and recovery

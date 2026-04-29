@@ -5,6 +5,7 @@
 
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
@@ -117,6 +118,12 @@ public class BrowserLogsRunningSessionTests
         public bool Disposed { get; private set; }
 
         public TestBrowserPageSession? PageSession { get; private set; }
+
+        public Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
+            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            ILogger<BrowserLogsSessionManager> logger,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<IBrowserPageSession> CreatePageSessionAsync(
             string sessionId,

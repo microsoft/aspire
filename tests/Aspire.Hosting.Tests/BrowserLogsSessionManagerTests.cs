@@ -653,6 +653,12 @@ public class BrowserLogsSessionManagerTests
 
         public Task Termination { get; } = Task.CompletedTask;
 
+        public Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
+            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            ILogger<BrowserLogsSessionManager> logger,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<IBrowserPageSession> CreatePageSessionAsync(
             string sessionId,
             Uri url,

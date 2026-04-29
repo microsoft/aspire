@@ -38,6 +38,14 @@ internal abstract class BrowserHost(
 
     public abstract Task Termination { get; }
 
+    public virtual async Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserLogsSessionManager> logger,
+        CancellationToken cancellationToken)
+    {
+        return await BrowserLogsCdpConnection.ConnectAsync(DebugEndpoint, eventHandler, logger, cancellationToken).ConfigureAwait(false);
+    }
+
     public Task<IBrowserPageSession> CreatePageSessionAsync(
         string sessionId,
         Uri url,
