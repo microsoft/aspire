@@ -372,14 +372,14 @@ internal sealed class AddCommand : BaseCommand
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionNotFoundForPackage, selectedPackage.Package.Id, preferredVersion));
         }
 
-        // When local build hives are present, prefer the package that exactly matches the installed
+        // When PR hives are present, prefer the package that exactly matches the installed
         // CLI/SDK version so template- and add-generated projects stay on the same build.
-        var localBuildChannelPackageVersions = packageVersions
+        var prChannelPackageVersions = packageVersions
             .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
             .ToArray();
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(
-            localBuildChannelPackageVersions,
+            prChannelPackageVersions,
             p => p.Package.Version,
             out var cliVersionPackage,
             channelName: null,
