@@ -253,4 +253,8 @@
     <value>Available values: {0}</value>
     <comment>{0} is a comma-separated list of valid values</comment>
   </data>
+  <data name="NonInteractiveRequiredInputMissing" xml:space="preserve">
+    <value>Required input {0} was not provided in non-interactive mode.</value>
+    <comment>{0} is the input/argument display name like 'registryendpoint' or '--publisher'</comment>
+  </data>
 </root>

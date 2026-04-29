@@ -742,7 +742,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input text-prompt-1=production");
+        var result = command.Parse("publish --param text-prompt-1=production");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -776,7 +776,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input secret-prompt-1=SecurePassword123!");
+        var result = command.Parse("publish --param secret-prompt-1=SecurePassword123!");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -812,7 +812,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input choice-prompt-1=us-east-1");
+        var result = command.Parse("publish --param choice-prompt-1=us-east-1");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -847,7 +847,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Provide value with different casing
-        var result = command.Parse("publish --input choice-prompt-1=US-EAST-1");
+        var result = command.Parse("publish --param choice-prompt-1=US-EAST-1");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -877,7 +877,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input bool-prompt-1=true");
+        var result = command.Parse("publish --param bool-prompt-1=true");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -907,7 +907,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input number-prompt-1=3");
+        var result = command.Parse("publish --param number-prompt-1=3");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -947,7 +947,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input app-name=MyApp --input environment=prod --input enable-logging=false");
+        var result = command.Parse("publish --param app-name=MyApp --param environment=prod --param enable-logging=false");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -971,7 +971,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
 
-        // Set up interactive response since --input won't match
+        // Set up interactive response since --param won't match
         consoleService.SetupStringPromptResponse("interactive-value");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -985,13 +985,13 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        // Provide --input with a name that doesn't match any prompt
-        var result = command.Parse("publish --input wrong-name=value");
+        // Provide --param with a name that doesn't match any prompt
+        var result = command.Parse("publish --param wrong-name=value");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
 
-        // The interactive prompt should have been called since --input didn't match
+        // The interactive prompt should have been called since --param didn't match
         Assert.Single(consoleService.StringPromptCalls);
 
         Assert.Single(promptBackchannel.CompletedPrompts);
@@ -1023,7 +1023,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input choice-prompt-1=invalid-region");
+        var result = command.Parse("publish --param choice-prompt-1=invalid-region");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should fail with MissingRequiredArgument (NonInteractiveException is caught by BaseCommand)
@@ -1051,7 +1051,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input bool-prompt-1=maybe");
+        var result = command.Parse("publish --param bool-prompt-1=maybe");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.NotEqual(0, exitCode);
@@ -1078,7 +1078,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("publish --input number-prompt-1=notanumber");
+        var result = command.Parse("publish --param number-prompt-1=notanumber");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.NotEqual(0, exitCode);
@@ -1106,7 +1106,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Value contains = signs (common in connection strings)
-        var result = command.Parse("publish --input conn-string=Server=localhost;Database=MyApp");
+        var result = command.Parse("publish --param conn-string=Server=localhost;Database=MyApp");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -1122,7 +1122,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        // Two sequential prompts — one will be answered via --input, the other interactively
+        // Two sequential prompts — one will be answered via --param, the other interactively
         promptBackchannel.AddPrompt("text-prompt-1", "App Name", InputTypes.Text, "Enter app name:", isRequired: true);
         promptBackchannel.AddPrompt("text-prompt-2", "Region", InputTypes.Text, "Enter region:", isRequired: true);
 
@@ -1140,8 +1140,8 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        // Only provide --input for the first prompt
-        var result = command.Parse("publish --input text-prompt-1=MyApp");
+        // Only provide --param for the first prompt
+        var result = command.Parse("publish --param text-prompt-1=MyApp");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
@@ -1418,3 +1418,4 @@ internal static class InputTypes
     public const string Boolean = "boolean";
     public const string Number = "number";
 }
+

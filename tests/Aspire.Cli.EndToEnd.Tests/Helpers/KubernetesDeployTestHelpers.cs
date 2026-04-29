@@ -302,6 +302,36 @@ internal static class KubernetesDeployTestHelpers
     }
 
     /// <summary>
+    /// Runs <c>aspire deploy</c> in non-interactive mode, passing pipeline input values via
+    /// repeated <c>--input name=value</c> arguments.
+    /// </summary>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="counter">Sequence counter for prompt tracking.</param>
+    /// <param name="inputs">
+    /// Ordered list of (inputName, value) tuples to pass as <c>--input name=value</c>.
+    /// </param>
+    /// <param name="outputDir">Optional output directory for publish artifacts.</param>
+    internal static async Task AspireDeployNonInteractiveAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        IReadOnlyList<(string InputName, string Value)> inputs,
+        string? outputDir = null)
+    {
+        var outputArg = outputDir is not null ? $" -o {outputDir}" : string.Empty;
+        var inputArgs = inputs.Count > 0
+            ? string.Join(" ", inputs.Select(i => $"--input {i.InputName}={i.Value}"))
+            : string.Empty;
+        var command = inputArgs.Length > 0
+            ? $"aspire deploy --non-interactive{outputArg} {inputArgs}"
+            : $"aspire deploy --non-interactive{outputArg}";
+
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(10));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>
     /// Verifies a K8s deployment by port-forwarding and curling the test endpoint.
     /// Returns the curl output for assertion.
     /// </summary>
