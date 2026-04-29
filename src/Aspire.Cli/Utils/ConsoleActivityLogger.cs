@@ -689,7 +689,6 @@ internal sealed class ConsoleActivityLogger
                     highlightedLine = $"[dim]{highlightedLine}[/]";
                 }
 
-
                 var markup = new StringBuilder();
                 markup.Append("[dim]").Append(time).Append("[/] ");
                 markup.Append('[').Append(stepColor).Append(']').Append('(').Append(displayKey).Append(")[/] ");

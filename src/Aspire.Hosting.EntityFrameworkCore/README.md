@@ -206,9 +206,7 @@ var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContex
     .PublishAsAzureContainerAppJob(); // requires Aspire.Hosting.Azure.AppContainers
 ```
 
-The container app job runs once per manual invocation and stops. Trigger it as part of your
-deployment step (`az containerapp job start`) or let it run on a schedule with
-`PublishAsScheduledAzureContainerAppJob("0 0 * * *")`.
+The container app job runs once per manual invocation and stops.
 
 **Docker Compose** — tell Compose not to restart the container after it exits:
 
@@ -243,11 +241,11 @@ var apiMigrations = api.AddEFMigrations("api-migrations", "MyApp.Data.MyDbContex
 ```
 
 This writes the platform-native executable to `<publish-output>/efmigrations/<name>[.exe]` and
-does not add any compute resource to the deployment manifest. Execute the bundle from wherever
-your deployment flow already has database credentials, for example:
+does not add any compute resource to the deployment manifest. Execute the bundle when appropriate
+for your deployment flow:
 
 ```bash
-./<publish-output>/efmigrations/api-migrations --connection "$CONNECTION_STRING" --prefix-output
+./<publish-output>/efmigrations/api-migrations --connection "$CONNECTION_STRING" --verbove
 ```
 
 Similarly you can use `PublishAsMigrationScript()` if you also want a raw SQL script produced.
