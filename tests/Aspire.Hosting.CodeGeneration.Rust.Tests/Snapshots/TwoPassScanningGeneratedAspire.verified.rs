@@ -6382,6 +6382,16 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Gets the specified property expression of the endpoint
+    pub fn property(&self, property: EndpointProperty) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("property".to_string(), serde_json::to_value(&property).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.property", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
+    }
+
     /// Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.
     pub fn get_tls_value(&self, enabled_value: ReferenceExpression, disabled_value: ReferenceExpression) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -17542,4 +17552,3 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
     let handle: Handle = serde_json::from_value(result)?;
     Ok(IDistributedApplicationBuilder::new(handle, client))
 }
-

@@ -6871,6 +6871,19 @@ func (s *EndpointReference) GetValueAsync(cancellationToken *CancellationToken) 
 	return result.(*string), nil
 }
 
+// Property gets the specified property expression of the endpoint
+func (s *EndpointReference) Property(property EndpointProperty) (*EndpointReferenceExpression, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["property"] = SerializeValue(property)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.property", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointReferenceExpression), nil
+}
+
 // GetTlsValue gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.
 func (s *EndpointReference) GetTlsValue(enabledValue *ReferenceExpression, disabledValue *ReferenceExpression) (*ReferenceExpression, error) {
 	reqArgs := map[string]any{
@@ -19946,4 +19959,3 @@ func CreateBuilder(options *CreateBuilderOptions) (*IDistributedApplicationBuild
 	}
 	return result.(*IDistributedApplicationBuilder), nil
 }
-
