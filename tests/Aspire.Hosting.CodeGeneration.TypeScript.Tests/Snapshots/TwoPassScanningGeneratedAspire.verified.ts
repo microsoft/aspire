@@ -2460,7 +2460,6 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    /** Gets the specified property expression of the endpoint */
     async property(property: EndpointProperty): Promise<EndpointReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, property };
         return await this._client.invokeCapability<EndpointReferenceExpression>(
@@ -2469,7 +2468,6 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    /** Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise. */
     async getTlsValue(enabledValue: ReferenceExpression, disabledValue: ReferenceExpression): Promise<ReferenceExpression> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, enabledValue, disabledValue };
         return await this._client.invokeCapability<ReferenceExpression>(
@@ -2555,12 +2553,10 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
         return this._promise.then(obj => obj.getValueAsync(options));
     }
 
-    /** Gets the specified property expression of the endpoint */
     property(property: EndpointProperty): Promise<EndpointReferenceExpression> {
         return this._promise.then(obj => obj.property(property));
     }
 
-    /** Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise. */
     getTlsValue(enabledValue: ReferenceExpression, disabledValue: ReferenceExpression): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.getTlsValue(enabledValue, disabledValue));
     }
@@ -33435,3 +33431,4 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints', (handle, client) => new ResourceWithEndpointsImpl(handle as IResourceWithEndpointsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport', (handle, client) => new ResourceWithWaitSupportImpl(handle as IResourceWithWaitSupportHandle, client));
+
