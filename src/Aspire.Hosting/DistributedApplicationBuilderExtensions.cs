@@ -107,6 +107,5 @@ public static class DistributedApplicationBuilderExtensions
         resourceBuilder = builder.CreateResourceBuilder(typedResource);
         return true;
     }
-
 }
 
