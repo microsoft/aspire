@@ -450,7 +450,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             var resourceNames = string.Join("', '", unconsumedBuildOnlyContainers.Select(resource => resource.Name));
             throw new DistributedApplicationException(
                 $"Build-only container resource(s) '{resourceNames}' are not consumed by another resource and won't participate in publish or deploy. " +
-                $"Reference them from another resource using 'PublishWithContainerFiles' or 'PublishWithStaticFiles', or suppress this validation for the app by calling 'builder.DisableBuildOnlyContainerValidation()'.");
+                $"Reference them from another resource, for example using 'PublishWithContainerFiles' or 'PublishWithStaticFiles', or suppress this validation for the app by calling 'builder.Pipeline.DisableBuildOnlyContainerValidation()'.");
         }
     }
 
