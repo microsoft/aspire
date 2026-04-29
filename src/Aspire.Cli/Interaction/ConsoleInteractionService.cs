@@ -542,7 +542,7 @@ internal class ConsoleInteractionService : IInteractionService
 
             if (key.Key == ConsoleKey.Enter || key.KeyChar is '\r' or '\n')
             {
-                MessageConsole.WriteLine(yesChoice.ToString()); // Echo the default choice
+                MessageConsole.WriteLine((defaultValue ? yesChoice : noChoice).ToString()); // Echo the default choice
                 return defaultValue;
             }
 
