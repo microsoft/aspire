@@ -529,34 +529,32 @@ internal class ConsoleInteractionService : IInteractionService
     private async Task<bool> PromptConfirmWithSingleKeyAsync(string promptText, char yesChoice, char noChoice, bool defaultValue, CancellationToken cancellationToken)
     {
         MessageConsole.Markup(promptText);
-        MessageConsole.Write($" [{yesChoice}/{noChoice}] ");
+        MessageConsole.Markup($" [blue][[{yesChoice}/{noChoice}]][/]: ");
 
         while (true)
         {
-            var key = await MessageConsole.Input.ReadKeyAsync(intercept: true, cancellationToken);
-            if (key is null)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (await MessageConsole.Input.ReadKeyAsync(intercept: true, cancellationToken) is not { } key)
             {
-                MessageConsole.WriteLine();
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.Enter || key.KeyChar is '\r' or '\n')
+            {
+                MessageConsole.WriteLine(yesChoice.ToString()); // Echo the default choice
                 return defaultValue;
             }
 
-            if (key.Value.Key == ConsoleKey.Enter || key.Value.KeyChar is '\r' or '\n')
+            if (char.ToLowerInvariant(key.KeyChar) == char.ToLowerInvariant(yesChoice))
             {
-                MessageConsole.WriteLine();
-                return defaultValue;
-            }
-
-            if (key.Value.Key == ConsoleKey.Y || key.Value.KeyChar is 'y' or 'Y')
-            {
-                var echoedChoice = key.Value.KeyChar is 'y' or 'Y' ? key.Value.KeyChar : yesChoice;
-                MessageConsole.WriteLine(echoedChoice.ToString());
+                MessageConsole.WriteLine(key.KeyChar.ToString());
                 return true;
             }
 
-            if (key.Value.Key == ConsoleKey.N || key.Value.KeyChar is 'n' or 'N')
+            if (char.ToLowerInvariant(key.KeyChar) == char.ToLowerInvariant(noChoice))
             {
-                var echoedChoice = key.Value.KeyChar is 'n' or 'N' ? key.Value.KeyChar : noChoice;
-                MessageConsole.WriteLine(echoedChoice.ToString());
+                MessageConsole.WriteLine(key.KeyChar.ToString());
                 return false;
             }
         }
