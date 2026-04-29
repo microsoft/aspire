@@ -487,11 +487,11 @@ internal static class Hex1bAutomatorTestHelpers
                 .RightText(" ERR:");
             errorPromptFound = errorSearcher.Search(s).Count > 0;
             return errorPromptFound;
-        }, timeout: effectiveTimeout, description: $"agent init prompt or success prompt [{counter.Value} OK] $");
+        }, timeout: effectiveTimeout, description: $"agent init prompt, success prompt [{counter.Value} OK] $, or error prompt [{counter.Value} ERR:*] $");
 
         if (errorPromptFound)
         {
-            throw new InvalidOperationException($"Command failed while waiting for agent init prompt or success prompt [{counter.Value} OK].");
+            throw new InvalidOperationException($"Command failed with error prompt [{counter.Value} ERR:*] while waiting for the agent init prompt or success prompt.");
         }
 
         if (!agentInitFound)
