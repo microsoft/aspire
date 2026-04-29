@@ -43,8 +43,9 @@ namespace Aspire.Cli.Processes;
 // │         │ bInheritHandles=TRUE (required to assign hStdOutput to NUL)   │
 // │         │ and restrict inheritance to ONLY the NUL handle — so the      │
 // │         │ grandchild inherits nothing useful. Child stdout/stderr go to │
-// │         │ the NUL device. This is the same approach used by Docker's    │
-// │         │ Windows container runtime (microsoft/hcsshim).                │
+// │         │ the NUL device. The detached flag combination matches         │
+// │         │ established Windows daemonization patterns used by tools such │
+// │         │ as libuv/Node.js and GitHub CLI.                              │
 // │         │                                                               │
 // │ Linux / │ Process.Start with RedirectStandard{Output,Error} = true,     │
 // │ macOS   │ then immediately close the parent's read-end pipe streams.    │
