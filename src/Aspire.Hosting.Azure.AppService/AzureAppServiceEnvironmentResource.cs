@@ -51,7 +51,7 @@ public class AzureAppServiceEnvironmentResource :
                 Name = $"prepare-azure-app-service-{name}",
                 Description = $"Prepares Azure App Service deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 

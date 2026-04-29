@@ -200,6 +200,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 Name = $"prepare-deployment-targets-{Name}",
                 Description = $"Prepares Kubernetes deployment targets for {Name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 

@@ -1,4 +1,4 @@
-[  
+﻿[  
 PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 =====================================
 
@@ -15,9 +15,9 @@ This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
   1. azure-prepare-resources
-  2. prepare-azure-container-apps-env
-  3. validate-azure-container-apps
-  4. validate-compute-environments
+  2. validate-compute-environments
+  3. prepare-azure-container-apps-env
+  4. validate-azure-container-apps
   5. before-start
   6. process-parameters
   7. build-prereq
@@ -139,7 +139,7 @@ Step: login-to-acr-env-acr
 
 Step: prepare-azure-container-apps-env
     Description: Prepares Azure Container Apps deployment targets for env.
-    Dependencies: ✓ azure-prepare-resources
+    Dependencies: ✓ azure-prepare-resources, ✓ validate-compute-environments
     Resource: env (AzureContainerAppEnvironmentResource)
 
 Step: print-api-summary
@@ -465,10 +465,10 @@ If targeting 'login-to-acr-env-acr':
     [5] login-to-acr-env-acr
 
 If targeting 'prepare-azure-container-apps-env':
-  Direct dependencies: azure-prepare-resources
-  Total steps: 2
+  Direct dependencies: azure-prepare-resources, validate-compute-environments
+  Total steps: 3
   Execution order:
-    [0] azure-prepare-resources
+    [0] azure-prepare-resources | validate-compute-environments (parallel)
     [1] prepare-azure-container-apps-env
 
 If targeting 'print-api-summary':
