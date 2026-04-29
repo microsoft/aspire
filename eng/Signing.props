@@ -77,9 +77,9 @@
     <ItemsToSign Include="$(ArtifactsPackagesDir)**\aspire-cli-*.tar.gz" />
     <ItemsToSign Include="$(RepoRoot)eng\scripts\get-aspire-cli.ps1" Condition="$([System.OperatingSystem]::IsWindows())" />
 
-    <!-- Sign the NativeAOT CLI binary before _PackCliTool places it into the dotnet-tool nupkg. -->
-    <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Cli.*\**\aspire.exe" />
-    <ItemsToSign Condition="!$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Cli.*/**/aspire" />
+    <!-- Sign only the final NativeAOT CLI publish output; CLI archives are signed separately. -->
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Cli.*\**\publish\aspire.exe" />
+    <ItemsToSign Condition="!$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Cli.*/**/publish/aspire" />
 
     <!-- Sign the aspire-managed binary at its publish output path (before it gets packed into the bundle archive) -->
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />

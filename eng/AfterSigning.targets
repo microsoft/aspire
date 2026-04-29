@@ -9,7 +9,7 @@
        which depends on those projects being included in the build. -->
   <Target Name="_PackCliDotnetToolAfterPack"
           BeforeTargets="Pack"
-          Condition="'$(SkipNativeBuild)' != 'true' and '$(BuildBundleDepsOnly)' != 'true' and '$(SkipBundleDeps)' != 'true'">
+          Condition="'$(SkipNativeBuild)' != 'true' and '$(BuildBundleDepsOnly)' != 'true'">
     <ItemGroup>
       <_CliToolPackRid Include="$(TargetRids.Split(':'))" />
       <_CliToolPackProject Include="@(_CliToolPackRid -> '$(RepoRoot)eng\clipack\Aspire.Cli.%(Identity).csproj')" />
