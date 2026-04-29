@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure.DurableTask;
@@ -10,6 +11,7 @@ namespace Aspire.Hosting.Azure.DurableTask;
 /// and a connection string for Durable Task orchestration scheduling.
 /// </summary>
 /// <param name="name">The unique resource name.</param>
+[Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DurableTaskSchedulerResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithConnectionString
 {
     /// <summary>
@@ -44,9 +46,7 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
             };
         }
 
-#pragma warning disable ASPIREDURABLETASK001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         throw new InvalidOperationException($"Unable to resolve the Durable Task Scheduler connection string. Configure the scheduler using {nameof(DurableTaskResourceExtensions.RunAsEmulator)}() or {nameof(DurableTaskResourceExtensions.RunAsExisting)}(connectionString) before accessing {nameof(ConnectionStringExpression)}.");
-#pragma warning restore ASPIREDURABLETASK001
     }
 
     private ReferenceExpression CreateDashboardEndpoint()
