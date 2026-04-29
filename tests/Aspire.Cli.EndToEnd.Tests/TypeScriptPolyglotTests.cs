@@ -235,7 +235,10 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
                 await builder.build().run();
             }
 
-            void main();
+            main().catch((error: unknown) => {
+                console.error(error);
+                process.exitCode = 1;
+            });
             """;
 
         File.WriteAllText(appHostPath, newContent);
@@ -316,7 +319,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         var appHostContent = File.ReadAllText(Path.Combine(projectRoot, "apphost.ts"));
         Assert.Contains("async function main()", appHostContent);
-        Assert.Contains("void main();", appHostContent);
+        Assert.Contains("main().catch((error: unknown) =>", appHostContent);
+        Assert.Contains("process.exitCode = 1;", appHostContent);
 
         await auto.TypeAsync("npm run aspire:build");
         await auto.EnterAsync();

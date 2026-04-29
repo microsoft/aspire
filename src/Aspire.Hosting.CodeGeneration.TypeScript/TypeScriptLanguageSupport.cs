@@ -83,7 +83,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 await builder.build().run();
             }
 
-            void main();
+            main().catch((error: unknown) => {
+                console.error(error);
+                process.exitCode = 1;
+            });
             """;
 
         files[PackageJsonFileName] = CreatePackageJson(request);
@@ -104,7 +107,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 },
               },
               rules: {
-                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true, ignoreVoid: true }],
+                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
               },
             });
             """;

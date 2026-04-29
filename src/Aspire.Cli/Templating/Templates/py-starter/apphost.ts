@@ -32,4 +32,7 @@ async function main() {
     await builder.build().run();
 }
 
-void main();
+main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+});
