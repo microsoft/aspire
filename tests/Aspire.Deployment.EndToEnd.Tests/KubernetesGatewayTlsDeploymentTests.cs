@@ -157,10 +157,19 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
             // Verify ALB controller is running and GatewayClass exists
-            output.WriteLine("Step 6: Verifying ALB controller and GatewayClass...");
-            await auto.TypeAsync("kubectl get pods -n kube-system | grep alb-controller && kubectl get gatewayclass azure-alb-external");
+            // The ALB controller pods may still be initializing after cluster creation,
+            // so poll until they are running and the GatewayClass is available.
+            output.WriteLine("Step 6: Waiting for ALB controller and GatewayClass...");
+            await auto.TypeAsync(
+                "for i in $(seq 1 60); do " +
+                "READY=$(kubectl get pods -n kube-system -l app=alb-controller -o jsonpath='{.items[0].status.phase}' 2>/dev/null); " +
+                "[ \"$READY\" = \"Running\" ] && kubectl get gatewayclass azure-alb-external >/dev/null 2>&1 && " +
+                "echo 'ALB controller running and GatewayClass available' && break; " +
+                "echo \"Attempt $i: ALB controller status=$READY, waiting...\"; sleep 10; done && " +
+                "kubectl get pods -n kube-system | grep alb-controller && " +
+                "kubectl get gatewayclass azure-alb-external");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
 
             // Create ApplicationLoadBalancer CRD using the add-on's auto-created subnet
             output.WriteLine("Step 7: Creating ApplicationLoadBalancer...");
