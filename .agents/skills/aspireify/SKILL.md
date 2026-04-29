@@ -5,7 +5,7 @@ description: "One-time skill for completing Aspire initialization in an existing
 
 # Aspireify
 
-This is a **one-time setup skill**. It completes the Aspire initialization that `aspire init` started. After this skill finishes successfully, it should be deleted — the evergreen `aspire` skill handles ongoing AppHost work.
+This is a **one-time setup skill**. It completes the Aspire initialization that `aspire init` started. After this skill finishes successfully, the evergreen `aspire` skill handles ongoing AppHost work. Do not delete this skill unless the user explicitly asks.
 
 Keep this as **one skill with context-specific references**. Load the reference files that match the repo you discover instead of trying to keep every edge case in the main document.
 
@@ -182,6 +182,10 @@ If a web search, documentation page, or blog post tells you to install the workl
 ### Do not change existing project target frameworks
 
 **Do not modify `<TargetFramework>` in any existing service project.** If a service targets `net8.0`, leave it on `net8.0`. The Aspire AppHost can orchestrate services on older TFMs without any changes. Only the AppHost itself needs the Aspire-supported TFM.
+
+### Check version control before mutating projects
+
+Before editing AppHost or service project files, check whether the workspace is under git (`git rev-parse --is-inside-work-tree`) and inspect `git status` when it is. Do not overwrite unrelated user changes. If there is no git repository, warn the user that this skill will make project mutations and summarize the intended files/areas before proceeding.
 
 ### Use the latest stable Aspire SDK
 
@@ -685,8 +689,8 @@ Ensure both the AppHost and ServiceDefaults projects appear.
 After successful validation:
 
 1. **Leave the AppHost running** — the user gets a fully running app with the dashboard open. Do not call `aspire stop`.
-2. **Delete this skill** — remove the `aspireify/` skill directory from all locations where it was installed (check `.agents/skills/`, `.github/skills/`, `.claude/skills/`)
-3. Confirm the evergreen `aspire` skill is present for ongoing AppHost work
+2. Confirm the evergreen `aspire` skill is present for ongoing AppHost work.
+3. Do not delete the `aspireify/` skill directory unless the user explicitly asks.
 
 ## Key rules
 
