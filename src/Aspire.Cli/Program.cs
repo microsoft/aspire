@@ -64,8 +64,9 @@ public class Program
     /// <param name="ConsoleLogLevel">The console log level if specified via --log-level or --debug.</param>
     /// <param name="DebugMode">Whether --debug or -d was specified.</param>
     /// <param name="LogsDirectory">The directory where log files are stored.</param>
-    /// <param name="LogFilePath">The full path to the current session's log file.</param>
-    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath);
+    /// <param name="LogFilePath">The full path to the current session's log file, or null when file logging is disabled.</param>
+    /// <param name="NoLogFile">Whether --no-log-file was specified to disable file logging.</param>
+    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string? LogFilePath, bool NoLogFile);
 
     /// <summary>
     /// Holds the objects created during early CLI startup, before DI is available.
@@ -98,11 +99,16 @@ public class Program
         if (args is not null && args.Length > 0)
         {
             // Check for --debug or -d (backward compatibility)
-            debugMode = args.Any(a => a == "--debug" || a == "-d");
+            debugMode = args.TakeWhile(a => a != "--").Any(a => a == "--debug" || a == "-d");
 
             // Check for --log-level or -l
             for (var i = 0; i < args.Length; i++)
             {
+                if (args[i] == "--")
+                {
+                    break;
+                }
+
                 if ((args[i] == "--log-level" || args[i] == "-l") && i + 1 < args.Length)
                 {
                     if (Enum.TryParse<LogLevel>(args[i + 1], ignoreCase: true, out var parsedLevel))
@@ -121,9 +127,12 @@ public class Program
         }
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(), "logs");
-        var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var noLogFile = HasNoLogFileOption(args);
+        var logFilePath = noLogFile
+            ? null
+            : ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
-        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
+        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath, noLogFile);
     }
 
     /// <summary>
@@ -151,6 +160,32 @@ public class Program
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Returns whether <c>--no-log-file</c> appears before the command delimiter (<c>--</c>).
+    /// </summary>
+    private static bool HasNoLogFileOption(string[]? args)
+    {
+        if (args is null)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--")
+            {
+                break;
+            }
+
+            if (args[i] == CommonOptionNames.NoLogFile)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string GetGlobalSettingsPath(ILogger logger)
@@ -201,7 +236,7 @@ public class Program
     /// Sets up OpenTelemetry logging, file logging, console logging, log-level filters,
     /// and MCP console logging based on command-line arguments.
     /// </summary>
-    /// <returns>A tuple containing the configured <see cref="ILoggerFactory"/> and the <see cref="FileLoggerProvider"/> used for file logging.</returns>
+    /// <returns>A tuple containing the configured <see cref="ILoggerFactory"/> and the <see cref="FileLoggerProvider"/>.</returns>
     internal static (ILoggerFactory LoggerFactory, FileLoggerProvider FileLoggerProvider) CreateLoggerFactory(string[] args, CliLoggingOptions loggingOptions, IStartupErrorWriter errorWriter)
     {
         var consoleLogLevel = loggingOptions.ConsoleLogLevel;
@@ -211,8 +246,12 @@ public class Program
 
         var extensionEndpoint = Environment.GetEnvironmentVariable(KnownConfigNames.ExtensionEndpoint);
 
-        // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
+        var fileLoggerProvider = loggingOptions switch
+        {
+            { NoLogFile: true } => FileLoggerProvider.CreateNull(),
+            { LogFilePath: { } logFilePath } => new FileLoggerProvider(logFilePath, errorWriter),
+            _ => throw new InvalidOperationException("A log file path is required when file logging is enabled.")
+        };
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -223,7 +262,7 @@ public class Program
                 logging.IncludeScopes = true;
             });
 
-            // Always capture complete CLI session details to disk for diagnostics
+            // Capture complete CLI session details when file logging is enabled.
             builder.AddProvider(fileLoggerProvider);
 
             // Configure log-level filters based on --log-level or --debug
@@ -553,7 +592,7 @@ public class Program
         return new DirectoryInfo(sdksPath);
     }
 
-    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath)
+    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string? logFilePath)
     {
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         var hivesDirectory = GetHivesDirectory();

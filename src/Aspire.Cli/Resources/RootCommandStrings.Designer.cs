@@ -147,6 +147,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Disable writing CLI logs to a file..
+        /// </summary>
+        public static string NoLogFileArgumentDescription {
+            get {
+                return ResourceManager.GetString("NoLogFileArgumentDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Run the command in non-interactive mode, disabling all interactive prompts and spinners..
         /// </summary>
         public static string NonInteractiveArgumentDescription {

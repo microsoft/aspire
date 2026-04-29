@@ -127,9 +127,19 @@
         <target state="translated">無法建置專案。請參閱 {0} 中的記錄</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeBuiltWithoutLogFile">
+        <source>The project could not be built.</source>
+        <target state="new">The project could not be built.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectCouldNotBeCreated">
         <source>The app could not be created. See logs at {0}</source>
         <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreatedWithoutLogFile">
+        <source>The app could not be created.</source>
+        <target state="new">The app could not be created.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">

@@ -9,6 +9,10 @@ import { extensionLogOutputChannel } from './logging';
 const execFileAsync = promisify(execFile);
 const fsAccessAsync = promisify(fs.access);
 
+let cachedCliPathResults = new WeakMap<CliPathDependencies, CliPathResolutionResult>();
+let pendingCliPathResolutions = new WeakMap<CliPathDependencies, Promise<CliPathResolutionResult>>();
+let cliPathCacheGeneration = 0;
+
 /**
  * Gets the default installation paths for the Aspire CLI, in priority order.
  *
@@ -132,6 +136,71 @@ const defaultDependencies: CliPathDependencies = {
 };
 
 /**
+ * Clears the cached CLI path so the next resolveCliPath call re-probes.
+ */
+export function clearCliPathCache(): void {
+    cliPathCacheGeneration++;
+    cachedCliPathResults = new WeakMap<CliPathDependencies, CliPathResolutionResult>();
+    pendingCliPathResolutions = new WeakMap<CliPathDependencies, Promise<CliPathResolutionResult>>();
+}
+
+function shouldMutateConfiguration(cacheGeneration: number): boolean {
+    return cacheGeneration === cliPathCacheGeneration;
+}
+
+function setCachedResultIfCurrent(deps: CliPathDependencies, result: CliPathResolutionResult, cacheGeneration: number): CliPathResolutionResult {
+    if (cacheGeneration === cliPathCacheGeneration) {
+        cachedCliPathResults.set(deps, result);
+    }
+
+    return result;
+}
+
+async function resolveCliPathCore(deps: CliPathDependencies, cacheGeneration: number): Promise<CliPathResolutionResult> {
+    const configuredPath = deps.getConfiguredPath();
+    const defaultPaths = deps.getDefaultPaths();
+
+    // 1. Check if user has configured a custom path (not one of the defaults)
+    if (configuredPath && !defaultPaths.includes(configuredPath)) {
+        const isValid = await deps.tryExecute(configuredPath);
+        if (isValid) {
+            return setCachedResultIfCurrent(deps, { cliPath: configuredPath, available: true, source: 'configured' }, cacheGeneration);
+        }
+
+        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
+        // Continue to check other locations
+    }
+
+    // 2. Check if CLI is on PATH
+    const onPath = await deps.isOnPath();
+    if (onPath) {
+        // If we previously auto-set the path to a default install location, clear it
+        // since PATH is now working
+        if (defaultPaths.includes(configuredPath) && shouldMutateConfiguration(cacheGeneration)) {
+            extensionLogOutputChannel.info('Clearing aspireCliExecutablePath setting since CLI is on PATH');
+            await deps.setConfiguredPath('');
+        }
+
+        return setCachedResultIfCurrent(deps, { cliPath: 'aspire', available: true, source: 'path' }, cacheGeneration);
+    }
+
+    // 3. Check default installation paths (~/.aspire/bin first, then ~/.dotnet/tools)
+    const foundPath = await deps.findAtDefaultPath();
+    if (foundPath) {
+        // Update the setting so future invocations use this path
+        if (configuredPath !== foundPath && shouldMutateConfiguration(cacheGeneration)) {
+            extensionLogOutputChannel.info('Updating aspireCliExecutablePath setting to use default install location');
+            await deps.setConfiguredPath(foundPath);
+        }
+
+        return setCachedResultIfCurrent(deps, { cliPath: foundPath, available: true, source: 'default-install' }, cacheGeneration);
+    }
+
+    // 4. CLI not found anywhere. Don't cache so we re-probe next time.
+    return { cliPath: 'aspire', available: false, source: 'not-found' };
+}
+
+/**
  * Resolves the Aspire CLI path, checking multiple locations in order:
  * 1. User-configured path in VS Code settings
  * 2. System PATH
@@ -144,45 +213,28 @@ const defaultDependencies: CliPathDependencies = {
  * the setting is cleared to prefer PATH.
  */
 export async function resolveCliPath(deps: CliPathDependencies = defaultDependencies): Promise<CliPathResolutionResult> {
-    const configuredPath = deps.getConfiguredPath();
-    const defaultPaths = deps.getDefaultPaths();
+    const cacheGeneration = cliPathCacheGeneration;
 
-    // 1. Check if user has configured a custom path (not one of the defaults)
-    if (configuredPath && !defaultPaths.includes(configuredPath)) {
-        const isValid = await deps.tryExecute(configuredPath);
-        if (isValid) {
-            return { cliPath: configuredPath, available: true, source: 'configured' };
-        }
-
-        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
-        // Continue to check other locations
+    const cachedResult = cachedCliPathResults.get(deps);
+    if (cachedResult) {
+        return cachedResult;
     }
 
-    // 2. Check if CLI is on PATH
-    const onPath = await deps.isOnPath();
-    if (onPath) {
-        // If we previously auto-set the path to a default install location, clear it
-        // since PATH is now working
-        if (defaultPaths.includes(configuredPath)) {
-            extensionLogOutputChannel.info('Clearing aspireCliExecutablePath setting since CLI is on PATH');
-            await deps.setConfiguredPath('');
-        }
-
-        return { cliPath: 'aspire', available: true, source: 'path' };
+    const pendingResolution = pendingCliPathResolutions.get(deps);
+    if (pendingResolution) {
+        return pendingResolution;
     }
 
-    // 3. Check default installation paths (~/.aspire/bin first, then ~/.dotnet/tools)
-    const foundPath = await deps.findAtDefaultPath();
-    if (foundPath) {
-        // Update the setting so future invocations use this path
-        if (configuredPath !== foundPath) {
-            extensionLogOutputChannel.info('Updating aspireCliExecutablePath setting to use default install location');
-            await deps.setConfiguredPath(foundPath);
+    const resolution = resolveCliPathCore(deps, cacheGeneration);
+    pendingCliPathResolutions.set(deps, resolution);
+
+    const clearPending = () => {
+        if (pendingCliPathResolutions.get(deps) === resolution) {
+            pendingCliPathResolutions.delete(deps);
         }
+    };
 
-        return { cliPath: foundPath, available: true, source: 'default-install' };
-    }
+    void resolution.then(clearPending, clearPending);
 
-    // 4. CLI not found anywhere
-    return { cliPath: 'aspire', available: false, source: 'not-found' };
+    return resolution;
 }

@@ -162,6 +162,11 @@
         <target state="translated">无法运行该项目。请参阅 {0} 处的日志</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeRunWithoutLogFile">
+        <source>The project could not be run.</source>
+        <target state="new">The project could not be run.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Resource">
         <source>Resource</source>
         <target state="translated">资源</target>

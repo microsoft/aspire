@@ -243,7 +243,10 @@ internal class ExecCommand : BaseCommand
                 if (result != 0)
                 {
                     InteractionService.DisplayLines(runOutputCollector.GetLines());
-                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.ProjectCouldNotBeRun, ExecutionContext.LogFilePath));
+                    InteractionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                        RunCommandStrings.ProjectCouldNotBeRun,
+                        RunCommandStrings.ProjectCouldNotBeRunWithoutLogFile,
+                        ExecutionContext.LogFilePath));
                     return result;
                 }
                 else
@@ -254,7 +257,10 @@ internal class ExecCommand : BaseCommand
             else
             {
                 InteractionService.DisplayLines(runOutputCollector.GetLines());
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.ProjectCouldNotBeRun, ExecutionContext.LogFilePath));
+                InteractionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                    RunCommandStrings.ProjectCouldNotBeRun,
+                    RunCommandStrings.ProjectCouldNotBeRunWithoutLogFile,
+                    ExecutionContext.LogFilePath));
                 return ExitCodeConstants.FailedToDotnetRunAppHost;
             }
         }

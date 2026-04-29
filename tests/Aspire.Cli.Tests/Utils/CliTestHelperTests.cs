@@ -21,7 +21,7 @@ public class CliTestHelperTests(ITestOutputHelper outputHelper)
             using (var provider = services.BuildServiceProvider())
             {
                 var fileLoggerProvider = provider.GetRequiredService<FileLoggerProvider>();
-                logFilePath = fileLoggerProvider.LogFilePath;
+                logFilePath = Assert.IsType<string>(fileLoggerProvider.LogFilePath);
 
                 Assert.True(File.Exists(logFilePath), $"Log file should exist at {logFilePath}");
                 Assert.StartsWith(Path.Combine(workspacePath, ".aspire", "logs"), logFilePath);

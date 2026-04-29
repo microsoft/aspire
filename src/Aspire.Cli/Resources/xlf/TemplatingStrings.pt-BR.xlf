@@ -142,6 +142,11 @@
         <target state="translated">Falha na criação do projeto com código de saída {0}. Ver logs em {1}</target>
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
+      <trans-unit id="ProjectCreationFailedWithoutLogFile">
+        <source>Project creation failed with exit code {0}.</source>
+        <target state="new">Project creation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
+      </trans-unit>
       <trans-unit id="PromptForTFMOptions_Description">
         <source>Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net.</source>
         <target state="translated">Configura se será criado um projeto para testes de integração usando MSTest, NUnit ou xUnit.net.</target>
@@ -171,6 +176,11 @@
         <source>The template installation failed with exit code {0}. See logs at {1}</source>
         <target state="translated">A instalação do modelo falhou com o código de saída {0}. Ver logs em {1}</target>
         <note>{0} is a number, {1} is the log file path</note>
+      </trans-unit>
+      <trans-unit id="TemplateInstallationFailedWithoutLogFile">
+        <source>The template installation failed with exit code {0}.</source>
+        <target state="new">The template installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>

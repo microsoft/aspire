@@ -142,6 +142,11 @@
         <target state="translated">{0} 종료 코드를 이용하여 프로젝트 만들기에 실패했습니다. {1}에서 로그 보기</target>
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
+      <trans-unit id="ProjectCreationFailedWithoutLogFile">
+        <source>Project creation failed with exit code {0}.</source>
+        <target state="new">Project creation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
+      </trans-unit>
       <trans-unit id="PromptForTFMOptions_Description">
         <source>Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net.</source>
         <target state="translated">MSTest, NUnit, xUnit.net을 사용하여 통합 테스트용 프로젝트를 만들지 여부를 구성합니다.</target>
@@ -171,6 +176,11 @@
         <source>The template installation failed with exit code {0}. See logs at {1}</source>
         <target state="translated">{0} 종료 코드를 이용한 템플릿 설치에 실패했습니다. {1}에서 로그 보기</target>
         <note>{0} is a number, {1} is the log file path</note>
+      </trans-unit>
+      <trans-unit id="TemplateInstallationFailedWithoutLogFile">
+        <source>The template installation failed with exit code {0}.</source>
+        <target state="new">The template installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>

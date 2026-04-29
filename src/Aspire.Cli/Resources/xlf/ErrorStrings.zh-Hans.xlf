@@ -172,6 +172,11 @@
         <target state="translated">由于生成错误，无法分析项目。请参阅 {0} 处的日志</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeAnalyzedWithoutLogFile">
+        <source>The project could not be analyzed due to a build error.</source>
+        <target state="new">The project could not be analyzed due to a build error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectFileDoesntExist">
         <source>Project file does not exist.</source>
         <target state="translated">项目文件不存在。</target>

@@ -142,6 +142,11 @@
         <target state="translated">项目创建失败，退出代码为 {0}。请参阅 {1} 处的日志</target>
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
+      <trans-unit id="ProjectCreationFailedWithoutLogFile">
+        <source>Project creation failed with exit code {0}.</source>
+        <target state="new">Project creation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
+      </trans-unit>
       <trans-unit id="PromptForTFMOptions_Description">
         <source>Configures whether to create a project for integration tests using MSTest, NUnit, or xUnit.net.</source>
         <target state="translated">配置是使用 MSTest、NUnit 还是 xUnit.net 来创建集成测试的项目。</target>
@@ -171,6 +176,11 @@
         <source>The template installation failed with exit code {0}. See logs at {1}</source>
         <target state="translated">模板安装失败，退出代码为 {0}。请参阅 {1} 处的日志</target>
         <note>{0} is a number, {1} is the log file path</note>
+      </trans-unit>
+      <trans-unit id="TemplateInstallationFailedWithoutLogFile">
+        <source>The template installation failed with exit code {0}.</source>
+        <target state="new">The template installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>

@@ -158,7 +158,10 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var polyglotResult = await CreatePolyglotAppHostAsync(languageInfo, cancellationToken);
             if (polyglotResult != 0)
             {
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
+                InteractionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                    InteractionServiceStrings.ProjectCouldNotBeCreated,
+                    InteractionServiceStrings.ProjectCouldNotBeCreatedWithoutLogFile,
+                    ExecutionContext.LogFilePath));
                 return polyglotResult;
             }
 
@@ -203,7 +206,10 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         if (initResult != 0)
         {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
+            InteractionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                InteractionServiceStrings.ProjectCouldNotBeCreated,
+                InteractionServiceStrings.ProjectCouldNotBeCreatedWithoutLogFile,
+                ExecutionContext.LogFilePath));
             return initResult;
         }
 

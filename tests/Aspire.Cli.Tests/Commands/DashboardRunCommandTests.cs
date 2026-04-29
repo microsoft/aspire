@@ -87,6 +87,27 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void RenderDashboardSummary_ExcludesLogsLabelFromWidth_WhenLogFilePathIsNull()
+    {
+        var interactionService = new TestInteractionService();
+        var dashboardInfo = new DashboardRunCommand.DashboardInfo(
+            DashboardUrl: "http://localhost:18888",
+            OtlpGrpcUrl: "http://localhost:4317",
+            OtlpHttpUrl: "http://localhost:4318");
+
+        var width = DashboardRunCommand.RenderDashboardSummary(interactionService, dashboardInfo, logFilePath: null);
+
+        Assert.Equal(
+            new[]
+            {
+                DashboardCommandStrings.DashboardLabel,
+                DashboardCommandStrings.OtlpGrpcLabel,
+                DashboardCommandStrings.OtlpHttpLabel
+            }.Max(s => s.Length) + 1,
+            width);
+    }
+
+    [Fact]
     public void DashboardRunCommand_SkipsDefaultWhenEnvVarIsSet()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

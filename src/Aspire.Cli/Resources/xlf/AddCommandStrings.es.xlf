@@ -47,6 +47,11 @@
         <target state="translated">La instalación del paquete falló con el código de salida {0}. Consulte los registros en {1}</target>
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
+      <trans-unit id="PackageInstallationFailedWithoutLogFile">
+        <source>The package installation failed with exit code {0}.</source>
+        <target state="new">The package installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
+      </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file to add the integration to</source>
         <target state="needs-review-translation">La ruta al archivo del proyecto al que se agregará la integración.</target>

@@ -306,9 +306,9 @@ internal sealed class DashboardRunCommand : BaseCommand
         };
     }
 
-    private void RenderDashboardSummary(DashboardInfo info, string logFilePath)
+    internal static int RenderDashboardSummary(IInteractionService interactionService, DashboardInfo info, string? logFilePath)
     {
-        _interactionService.DisplayEmptyLine();
+        interactionService.DisplayEmptyLine();
         var grid = new Grid();
         grid.AddColumn();
         grid.AddColumn();
@@ -318,7 +318,11 @@ internal sealed class DashboardRunCommand : BaseCommand
         var otlpHttpLabel = DashboardCommandStrings.OtlpHttpLabel;
         var logsLabel = DashboardCommandStrings.LogsLabel;
 
-        var labels = new List<string> { dashboardLabel, otlpGrpcLabel, otlpHttpLabel, logsLabel };
+        var labels = new List<string> { dashboardLabel, otlpGrpcLabel, otlpHttpLabel };
+        if (logFilePath is not null)
+        {
+            labels.Add(logsLabel);
+        }
 
         var longestLabelLength = labels.Max(s => s.Length) + 1; // +1 for colon
         grid.Columns[0].Width = longestLabelLength;
@@ -343,12 +347,16 @@ internal sealed class DashboardRunCommand : BaseCommand
         grid.AddRow(Text.Empty, Text.Empty);
 
         // Logs row
-        grid.AddRow(
-            new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(logFilePath));
+        if (logFilePath is not null)
+        {
+            grid.AddRow(
+                new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
+                new Text(logFilePath));
+        }
 
         var padder = new Padder(grid, new Padding(3, 0));
-        _interactionService.DisplayRenderable(padder);
+        interactionService.DisplayRenderable(padder);
+        return longestLabelLength;
     }
 
     private async Task<int> ExecuteForegroundAsync(string managedPath, List<string> dashboardArgs, DashboardInfo dashboardInfo, IDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
@@ -447,7 +455,7 @@ internal sealed class DashboardRunCommand : BaseCommand
                 : DashboardCommandStrings.DashboardStartTimedOut;
 
             _interactionService.DisplayError(exitMessage);
-            _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            CommandInteractionHelpers.DisplaySeeLogsMessage(_interactionService, ExecutionContext.LogFilePath);
 
             if (!process.HasExited)
             {
@@ -458,7 +466,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
 
         // Dashboard is ready.
-        RenderDashboardSummary(dashboardInfo, ExecutionContext.LogFilePath);
+        RenderDashboardSummary(_interactionService, dashboardInfo, ExecutionContext.LogFilePath);
         _interactionService.DisplayEmptyLine();
 
         try

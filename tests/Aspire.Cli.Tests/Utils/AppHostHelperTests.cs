@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
@@ -27,6 +29,22 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var dir = Path.GetDirectoryName(socketPrefix);
         Assert.NotNull(dir);
         Assert.EndsWith("backchannels", dir);
+    }
+
+    [Fact]
+    public void GetProjectCouldNotBeAnalyzedMessage_UsesLogPathWhenAvailable()
+    {
+        var message = AppHostHelper.GetProjectCouldNotBeAnalyzedMessage("/tmp/cli.log");
+
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectCouldNotBeAnalyzed, "/tmp/cli.log"), message);
+    }
+
+    [Fact]
+    public void GetProjectCouldNotBeAnalyzedMessage_UsesNoLogFileMessageWhenLogPathMissing()
+    {
+        var message = AppHostHelper.GetProjectCouldNotBeAnalyzedMessage(null);
+
+        Assert.Equal(ErrorStrings.ProjectCouldNotBeAnalyzedWithoutLogFile, message);
     }
 
     [Fact]

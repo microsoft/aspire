@@ -501,7 +501,11 @@ internal class DotNetTemplateFactory(
             if (templateInstallResult.ExitCode != 0)
             {
                 interactionService.DisplayLines(templateInstallCollector.GetLines());
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, templateInstallResult.ExitCode, executionContext.LogFilePath));
+                interactionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                    TemplatingStrings.TemplateInstallationFailed,
+                    TemplatingStrings.TemplateInstallationFailedWithoutLogFile,
+                    executionContext.LogFilePath,
+                    templateInstallResult.ExitCode));
                 return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
             }
 
@@ -540,7 +544,11 @@ internal class DotNetTemplateFactory(
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode, executionContext.LogFilePath));
+                interactionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                    TemplatingStrings.ProjectCreationFailed,
+                    TemplatingStrings.ProjectCreationFailedWithoutLogFile,
+                    executionContext.LogFilePath,
+                    newProjectExitCode));
                 return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
             }
 

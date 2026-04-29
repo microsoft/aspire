@@ -162,6 +162,11 @@
         <target state="translated">無法執行專案。請參閱 {0} 中的記錄</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeRunWithoutLogFile">
+        <source>The project could not be run.</source>
+        <target state="new">The project could not be run.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Resource">
         <source>Resource</source>
         <target state="translated">資源</target>

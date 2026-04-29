@@ -282,7 +282,11 @@ internal sealed class AddCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PackageInstallationFailed, ExitCodeConstants.FailedToAddPackage, ExecutionContext.LogFilePath));
+                InteractionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                    AddCommandStrings.PackageInstallationFailed,
+                    AddCommandStrings.PackageInstallationFailedWithoutLogFile,
+                    ExecutionContext.LogFilePath,
+                    ExitCodeConstants.FailedToAddPackage));
                 return ExitCodeConstants.FailedToAddPackage;
             }
 

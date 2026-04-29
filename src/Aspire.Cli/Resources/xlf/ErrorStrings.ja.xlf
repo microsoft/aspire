@@ -172,6 +172,11 @@
         <target state="translated">ビルド エラーのため、プロジェクトを分析できませんでした。{0} でログを表示する</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeAnalyzedWithoutLogFile">
+        <source>The project could not be analyzed due to a build error.</source>
+        <target state="new">The project could not be analyzed due to a build error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectFileDoesntExist">
         <source>Project file does not exist.</source>
         <target state="translated">プロジェクト ファイルが存在しません。</target>

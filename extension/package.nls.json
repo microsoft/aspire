@@ -66,6 +66,7 @@
 	"aspire-vscode.strings.aspireTerminalName": "Aspire terminal",
 	"aspire-vscode.strings.rpcServerError": "RPC server error: {0}.",
 	"aspire-vscode.strings.aspireOutputChannelName": "Aspire Extension",
+	"aspire-vscode.strings.aspireCliLogsChannelName": "Aspire Extension - CLI Logs",
 	"aspire-vscode.strings.fieldRequired": "This field is required.",
   "aspire-vscode.strings.runProject": "Run {0}",
 	"aspire-vscode.strings.debugProject": "Debug {0}",

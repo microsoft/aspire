@@ -205,6 +205,10 @@
     <value>The template installation failed with exit code {0}. See logs at {1}</value>
     <comment>{0} is a number, {1} is the log file path</comment>
   </data>
+  <data name="TemplateInstallationFailedWithoutLogFile" xml:space="preserve">
+    <value>The template installation failed with exit code {0}.</value>
+    <comment>{0} is a number</comment>
+  </data>
   <data name="UsingProjectTemplatesVersion" xml:space="preserve">
     <value>Using project templates version: {0}</value>
   </data>
@@ -214,6 +218,10 @@
   <data name="ProjectCreationFailed" xml:space="preserve">
     <value>Project creation failed with exit code {0}. See logs at {1}</value>
     <comment>{0} is a number, {1} is the log file path</comment>
+  </data>
+  <data name="ProjectCreationFailedWithoutLogFile" xml:space="preserve">
+    <value>Project creation failed with exit code {0}.</value>
+    <comment>{0} is a number</comment>
   </data>
   <data name="ProjectCreatedSuccessfully" xml:space="preserve">
     <value>Project created successfully in {0}.</value>

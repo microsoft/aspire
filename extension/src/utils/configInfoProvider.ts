@@ -45,7 +45,8 @@ export async function getConfigInfo(terminalProvider: AspireTerminalProvider): P
                 vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
                 resolve(null);
             },
-            noExtensionVariables: true
+            noExtensionVariables: true,
+            logToCliOutputChannel: true
         });
     });
 }

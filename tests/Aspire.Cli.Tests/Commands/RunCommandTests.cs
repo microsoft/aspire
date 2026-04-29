@@ -7,6 +7,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -1513,6 +1514,80 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.Errors);
         Assert.Contains("--custom-arg", result.UnmatchedTokens);
         Assert.Contains("value", result.UnmatchedTokens);
+    }
+
+    [Fact]
+    public void DisplaySeeLogsMessage_DisplaysMessage_WhenLogFilePathIsAvailable()
+    {
+        var interactionService = new TestInteractionService();
+
+        CommandInteractionHelpers.DisplaySeeLogsMessage(interactionService, "aspire.log");
+
+        var message = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.PageFacingUp, message.Emoji);
+        Assert.Contains("aspire.log", message.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DisplaySeeLogsMessage_DoesNotDisplayMessage_WhenLogFilePathIsNull()
+    {
+        var interactionService = new TestInteractionService();
+
+        CommandInteractionHelpers.DisplaySeeLogsMessage(interactionService, logFilePath: null);
+
+        Assert.Empty(interactionService.DisplayedMessages);
+    }
+
+    [Fact]
+    public void FormatMessageWithOptionalLogFile_UsesLogFileMessage_WhenLogFilePathIsAvailable()
+    {
+        var message = CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+            InteractionServiceStrings.ProjectCouldNotBeBuilt,
+            InteractionServiceStrings.ProjectCouldNotBeBuiltWithoutLogFile,
+            logFilePath: "aspire.log");
+
+        Assert.Equal("The project could not be built. See logs at aspire.log", message);
+    }
+
+    [Fact]
+    public void FormatMessageWithOptionalLogFile_UsesNoLogFileMessage_WhenLogFilePathIsNull()
+    {
+        var message = CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+            InteractionServiceStrings.ProjectCouldNotBeBuilt,
+            InteractionServiceStrings.ProjectCouldNotBeBuiltWithoutLogFile,
+            logFilePath: null);
+
+        Assert.Equal("The project could not be built.", message);
+        Assert.DoesNotContain("See logs", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FormatMessageWithOptionalLogFile_PreservesOtherFormatArguments_WhenLogFilePathIsNull()
+    {
+        var message = CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+            AddCommandStrings.PackageInstallationFailed,
+            AddCommandStrings.PackageInstallationFailedWithoutLogFile,
+            logFilePath: null,
+            ExitCodeConstants.FailedToAddPackage);
+
+        Assert.Equal($"The package installation failed with exit code {ExitCodeConstants.FailedToAddPackage}.", message);
+        Assert.DoesNotContain("See logs", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RenderAppHostSummary_ExcludesLogsLabelFromWidth_WhenLogFilePathIsNull()
+    {
+        var interactionService = new TestInteractionService();
+
+        var width = RunCommand.RenderAppHostSummary(
+            interactionService,
+            appHostRelativePath: "AppHost.csproj",
+            dashboardUrl: null,
+            codespacesUrl: null,
+            logFilePath: null,
+            isExtensionHost: true);
+
+        Assert.Equal(RunCommandStrings.AppHost.Length + 1, width);
     }
 
     [Fact]

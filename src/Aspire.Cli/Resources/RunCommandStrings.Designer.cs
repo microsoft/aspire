@@ -134,6 +134,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectCouldNotBeRun", resourceCulture);
             }
         }
+
+        public static string ProjectCouldNotBeRunWithoutLogFile {
+            get {
+                return ResourceManager.GetString("ProjectCouldNotBeRunWithoutLogFile", resourceCulture);
+            }
+        }
         
         public static string Dashboard {
             get {

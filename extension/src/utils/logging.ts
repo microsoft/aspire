@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { aspireOutputChannelName } from '../loc/strings';
+import { aspireCliLogsChannelName, aspireOutputChannelName } from '../loc/strings';
 
 export const extensionLogOutputChannel: vscode.LogOutputChannel = vscode.window.createOutputChannel(aspireOutputChannelName, { log: true });
+export const cliLogsOutputChannel: vscode.OutputChannel = vscode.window.createOutputChannel(aspireCliLogsChannelName);
 
 export async function logAsyncOperation<T>(beforeMessage: string, afterMessage: (result: T) => string, operation: () => Promise<T>): Promise<T> {
     extensionLogOutputChannel.info( beforeMessage);

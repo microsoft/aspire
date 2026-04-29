@@ -176,7 +176,7 @@ internal static class TelemetryCommandHelpers
     /// When <c>true</c>, a missing Dashboard API is a hard error.
     /// When <c>false</c>, a missing Dashboard API is non-fatal and the method returns success with <c>null</c> base URL and token.
     /// </param>
-    /// <param name="logFilePath">The path to the current session's log file, displayed alongside errors.</param>
+    /// <param name="logFilePath">The path to the current session's log file, displayed alongside errors when available.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="DashboardApiResult"/> with the resolved connection and dashboard API info.</returns>
     public static async Task<DashboardApiResult> GetDashboardApiAsync(
@@ -188,7 +188,7 @@ internal static class TelemetryCommandHelpers
         string? dashboardUrl,
         string? apiKey,
         bool requireDashboard,
-        string logFilePath,
+        string? logFilePath,
         CancellationToken cancellationToken)
     {
         // Validate mutual exclusivity of --apphost and --dashboard-url
@@ -315,7 +315,7 @@ internal static class TelemetryCommandHelpers
     public static void DisplayTelemetryError(
         IInteractionService interactionService,
         TelemetryErrorInfo errorInfo,
-        string logFilePath)
+        string? logFilePath)
     {
         interactionService.DisplayError(errorInfo.Error);
 
@@ -324,7 +324,7 @@ internal static class TelemetryCommandHelpers
             interactionService.DisplayMessage(KnownEmojis.Information, hint);
         }
 
-        interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, logFilePath));
+        CommandInteractionHelpers.DisplaySeeLogsMessage(interactionService, logFilePath);
     }
 
     /// <summary>

@@ -295,11 +295,29 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The project could not be built..
+        /// </summary>
+        public static string ProjectCouldNotBeBuiltWithoutLogFile {
+            get {
+                return ResourceManager.GetString("ProjectCouldNotBeBuiltWithoutLogFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The app could not be created. See logs at {0}.
         /// </summary>
         public static string ProjectCouldNotBeCreated {
             get {
                 return ResourceManager.GetString("ProjectCouldNotBeCreated", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The app could not be created..
+        /// </summary>
+        public static string ProjectCouldNotBeCreatedWithoutLogFile {
+            get {
+                return ResourceManager.GetString("ProjectCouldNotBeCreatedWithoutLogFile", resourceCulture);
             }
         }
         

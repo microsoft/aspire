@@ -172,6 +172,11 @@
         <target state="translated">빌드 오류로 인해 프로젝트를 분석할 수 없습니다. {0}에서 로그 보기</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeAnalyzedWithoutLogFile">
+        <source>The project could not be analyzed due to a build error.</source>
+        <target state="new">The project could not be analyzed due to a build error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectFileDoesntExist">
         <source>Project file does not exist.</source>
         <target state="translated">프로젝트 파일이 없습니다.</target>

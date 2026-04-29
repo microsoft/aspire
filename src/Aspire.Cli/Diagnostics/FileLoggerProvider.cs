@@ -19,16 +19,31 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 {
     private const int MaxQueuedMessages = 1024;
 
-    private readonly string _logFilePath;
+    private readonly string? _logFilePath;
     private readonly StreamWriter? _writer;
     private readonly Channel<string>? _channel;
     private readonly Task? _writerTask;
     private bool _disposed;
 
     /// <summary>
-    /// Gets the path to the log file.
+    /// Gets the path to the log file, or null when file logging is disabled.
     /// </summary>
-    public string LogFilePath => _logFilePath;
+    public string? LogFilePath => _logFilePath;
+
+    /// <summary>
+    /// Creates a no-op <see cref="FileLoggerProvider"/> that does not create or write to any file.
+    /// </summary>
+    internal static FileLoggerProvider CreateNull()
+    {
+        return new FileLoggerProvider();
+    }
+
+    private FileLoggerProvider()
+    {
+        _logFilePath = null;
+        _writer = null;
+        _channel = null;
+    }
 
     /// <summary>
     /// Generates a unique, chronologically-sortable log file name.

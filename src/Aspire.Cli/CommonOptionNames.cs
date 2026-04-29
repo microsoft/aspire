@@ -20,6 +20,7 @@ internal static class CommonOptionNames
     public const string NonInteractive = "--non-interactive";
     public const string WaitForDebugger = "--wait-for-debugger";
     public const string CliWaitForDebugger = "--cli-wait-for-debugger";
+    public const string NoLogFile = "--no-log-file";
 
     /// <summary>
     /// Options that represent informational commands (e.g. --version, --help) which should

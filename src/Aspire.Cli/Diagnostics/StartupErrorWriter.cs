@@ -32,10 +32,10 @@ internal interface IStartupErrorWriter : IDisposable
 internal sealed class StartupErrorWriter : IStartupErrorWriter
 {
     private readonly IAnsiConsole _errorConsole;
-    private readonly string _logFilePath;
+    private readonly string? _logFilePath;
     private bool _hasOutput;
 
-    public StartupErrorWriter(string logFilePath)
+    public StartupErrorWriter(string? logFilePath)
     {
         _logFilePath = logFilePath;
         _errorConsole = AnsiConsole.Create(new AnsiConsoleSettings
@@ -58,7 +58,7 @@ internal sealed class StartupErrorWriter : IStartupErrorWriter
 
     public void Dispose()
     {
-        if (!_hasOutput || !File.Exists(_logFilePath))
+        if (!_hasOutput || _logFilePath is null || !File.Exists(_logFilePath))
         {
             return;
         }

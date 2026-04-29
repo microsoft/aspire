@@ -394,7 +394,10 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             if (!resolveResult.Success)
             {
                 InteractionService.DisplayError(resolveResult.ErrorMessage);
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
+                InteractionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                    InteractionServiceStrings.ProjectCouldNotBeCreated,
+                    InteractionServiceStrings.ProjectCouldNotBeCreatedWithoutLogFile,
+                    ExecutionContext.LogFilePath));
                 return ExitCodeConstants.InvalidCommand;
             }
 

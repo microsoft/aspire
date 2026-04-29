@@ -52,6 +52,11 @@ The Aspire CLI collects usage data. It is collected by Microsoft and is used to 
 Read more about Aspire CLI telemetry: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
+      <trans-unit id="NoLogFileArgumentDescription">
+        <source>Disable writing CLI logs to a file</source>
+        <target state="new">Disable writing CLI logs to a file</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
         <target state="needs-review-translation">Suprima a faixa de inicialização e o aviso de telemetria.</target>

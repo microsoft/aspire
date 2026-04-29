@@ -172,6 +172,9 @@
   <data name="ProjectCouldNotBeRun" xml:space="preserve">
     <value>The project could not be run. See logs at {0}</value>
   </data>
+  <data name="ProjectCouldNotBeRunWithoutLogFile" xml:space="preserve">
+    <value>The project could not be run.</value>
+  </data>
   <data name="Dashboard" xml:space="preserve">
     <value>Dashboard</value>
   </data>

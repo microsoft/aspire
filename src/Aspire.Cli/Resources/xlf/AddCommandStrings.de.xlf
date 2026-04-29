@@ -47,6 +47,11 @@
         <target state="translated">Die Paketinstallation ist mit dem Exitcode {0} fehlgeschlagen. Protokolle unter {1} anzeigen.</target>
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
+      <trans-unit id="PackageInstallationFailedWithoutLogFile">
+        <source>The package installation failed with exit code {0}.</source>
+        <target state="new">The package installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
+      </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file to add the integration to</source>
         <target state="needs-review-translation">Der Pfad zur Projektdatei, der die Integration hinzugefügt werden soll.</target>

@@ -138,6 +138,9 @@
   <data name="NoLogoArgumentDescription" xml:space="preserve">
     <value>Suppress the startup banner and telemetry notice</value>
   </data>
+  <data name="NoLogFileArgumentDescription" xml:space="preserve">
+    <value>Disable writing CLI logs to a file</value>
+  </data>
   <data name="WaitForDebuggerArgumentDescription" xml:space="preserve">
     <value>Wait for a debugger to attach before executing the command</value>
   </data>

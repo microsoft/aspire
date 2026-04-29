@@ -28,6 +28,9 @@
     <trans-unit id="aspire-vscode.strings.aspireOutputChannelName">
       <source xml:lang="en">Aspire Extension</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireCliLogsChannelName">
+      <source xml:lang="en">Aspire Extension - CLI Logs</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireHostingSdkVersion">
       <source xml:lang="en">Aspire Hosting SDK Version: {0}.</source>
     </trans-unit>

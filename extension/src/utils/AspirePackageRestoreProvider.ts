@@ -189,6 +189,7 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
                 const proc = spawnCliProcess(this._terminalProvider, cliPath, ['restore'], {
                     workingDirectory: configDir,
                     noExtensionVariables: true,
+                    logToCliOutputChannel: true,
                     exitCallback: code => {
                         if (settled) { return; }
                         settled = true;

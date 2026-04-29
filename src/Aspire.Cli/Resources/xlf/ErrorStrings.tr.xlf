@@ -172,6 +172,11 @@
         <target state="translated">Proje bir derleme hatası nedeniyle analiz edilemedi. {0} adresinde günlüklere bakın</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeAnalyzedWithoutLogFile">
+        <source>The project could not be analyzed due to a build error.</source>
+        <target state="new">The project could not be analyzed due to a build error.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectFileDoesntExist">
         <source>Project file does not exist.</source>
         <target state="translated">Proje dosyası mevcut değil.</target>

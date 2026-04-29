@@ -47,6 +47,11 @@
         <target state="translated">套件安裝失敗，結束代碼為 {0}。請參閱 {1} 中的記錄</target>
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
+      <trans-unit id="PackageInstallationFailedWithoutLogFile">
+        <source>The package installation failed with exit code {0}.</source>
+        <target state="new">The package installation failed with exit code {0}.</target>
+        <note>{0} is a number</note>
+      </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file to add the integration to</source>
         <target state="needs-review-translation">要新增整合的專案檔路徑。</target>

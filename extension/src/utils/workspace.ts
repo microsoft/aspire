@@ -204,6 +204,7 @@ export async function checkForExistingAppHostPathInWorkspace(terminalProvider: A
                 }
             },
             noExtensionVariables: true,
+            logToCliOutputChannel: true,
             workingDirectory: rootFolder.uri.fsPath
         });
     })

@@ -223,6 +223,7 @@ export class AppHostDataRepository {
 
             this._getAppHostsProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
+                logToCliOutputChannel: true,
                 workingDirectory: rootFolder.uri.fsPath,
                 lineCallback: (line) => {
                     try {
@@ -276,6 +277,7 @@ export class AppHostDataRepository {
             this._describeReceivedData = false;
             this._describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
+                logToCliOutputChannel: true,
                 lineCallback: (line) => {
                     this._handleDescribeLine(line);
                 },
@@ -481,6 +483,7 @@ export class AppHostDataRepository {
 
         spawnCliProcess(this._terminalProvider, cliPath, args, {
             noExtensionVariables: true,
+            logToCliOutputChannel: true,
             stdoutCallback: (data) => { stdout += data; },
             stderrCallback: (data) => { stderr += data; },
             exitCallback: (code) => {

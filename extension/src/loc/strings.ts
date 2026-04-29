@@ -21,6 +21,7 @@ export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI V
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
+export const aspireCliLogsChannelName = vscode.l10n.t('Aspire Extension - CLI Logs');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
 export const debugProject = (projectName: string) => vscode.l10n.t('Debug {0}', projectName);

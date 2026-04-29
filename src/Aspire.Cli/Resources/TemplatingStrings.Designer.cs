@@ -322,6 +322,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Project creation failed with exit code {0}..
+        /// </summary>
+        public static string ProjectCreationFailedWithoutLogFile {
+            get {
+                return ResourceManager.GetString("ProjectCreationFailedWithoutLogFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Select a test framework.
         /// </summary>
         public static string PromptForTFM_Prompt {
@@ -372,6 +381,15 @@ namespace Aspire.Cli.Resources {
         public static string TemplateInstallationFailed {
             get {
                 return ResourceManager.GetString("TemplateInstallationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The template installation failed with exit code {0}..
+        /// </summary>
+        public static string TemplateInstallationFailedWithoutLogFile {
+            get {
+                return ResourceManager.GetString("TemplateInstallationFailedWithoutLogFile", resourceCulture);
             }
         }
 

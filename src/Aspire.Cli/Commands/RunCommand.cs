@@ -268,7 +268,10 @@ internal sealed class RunCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeBuilt, ExecutionContext.LogFilePath));
+                InteractionService.DisplayError(CommandInteractionHelpers.FormatMessageWithOptionalLogFile(
+                    InteractionServiceStrings.ProjectCouldNotBeBuilt,
+                    InteractionServiceStrings.ProjectCouldNotBeBuiltWithoutLogFile,
+                    ExecutionContext.LogFilePath));
                 return await pendingRun;
             }
 
@@ -423,8 +426,7 @@ internal sealed class RunCommand : BaseCommand
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
-            // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            CommandInteractionHelpers.DisplaySeeLogsMessage(InteractionService, ExecutionContext.LogFilePath);
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
         catch (ConnectionLostException) when (isExtensionHost)
@@ -439,8 +441,7 @@ internal sealed class RunCommand : BaseCommand
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
-            // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            CommandInteractionHelpers.DisplaySeeLogsMessage(InteractionService, ExecutionContext.LogFilePath);
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
         finally
@@ -478,7 +479,7 @@ internal sealed class RunCommand : BaseCommand
     /// <param name="appHostRelativePath">The relative path to the AppHost file.</param>
     /// <param name="dashboardUrl">The dashboard URL with login token, or null if not available.</param>
     /// <param name="codespacesUrl">The codespaces URL with login token, or null if not in codespaces.</param>
-    /// <param name="logFilePath">The full path to the log file.</param>
+    /// <param name="logFilePath">The full path to the log file, or <see langword="null"/> to omit the logs row.</param>
     /// <param name="pid">The process ID to display, or null to omit the PID row.</param>
     /// <param name="isExtensionHost">Whether the AppHost is running in the Aspire extension.</param>
     /// <returns>The column width used, for subsequent grid additions.</returns>
@@ -487,7 +488,7 @@ internal sealed class RunCommand : BaseCommand
         string appHostRelativePath,
         string? dashboardUrl,
         string? codespacesUrl,
-        string logFilePath,
+        string? logFilePath,
         bool isExtensionHost,
         int? pid = null)
     {
@@ -502,10 +503,14 @@ internal sealed class RunCommand : BaseCommand
         var pidLabel = RunCommandStrings.ProcessId;
 
         // Calculate column width based on labels that will actually be displayed
-        var labels = new List<string> { appHostLabel, logsLabel };
+        var labels = new List<string> { appHostLabel };
         if (!isExtensionHost)
         {
             labels.Add(dashboardLabel);
+        }
+        if (logFilePath is not null)
+        {
+            labels.Add(logsLabel);
         }
         if (pid.HasValue)
         {
@@ -546,9 +551,12 @@ internal sealed class RunCommand : BaseCommand
         }
 
         // Logs row
-        grid.AddRow(
-            new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(logFilePath));
+        if (logFilePath is not null)
+        {
+            grid.AddRow(
+                new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
+                new Text(logFilePath));
+        }
 
         // PID row (if provided)
         if (pid.HasValue)

@@ -149,6 +149,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string PackageInstallationFailedWithoutLogFile
+        {
+            get
+            {
+                return ResourceManager.GetString("PackageInstallationFailedWithoutLogFile", resourceCulture);
+            }
+        }
+
         public static string PackageAddedSuccessfully
         {
             get
