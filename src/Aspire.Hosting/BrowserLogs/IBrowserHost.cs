@@ -15,11 +15,10 @@ internal interface IBrowserHost : IAsyncDisposable
 
     BrowserHostOwnership Ownership { get; }
 
-    // The CDP browser-level WebSocket endpoint. Stable for the lifetime of the host.
-    Uri DebugEndpoint { get; }
+    // Browser-level WebSocket endpoint for attach/adoption hosts. Null for pipe-backed owned hosts, where CDP is only
+    // available through the private host-owned transport.
+    Uri? DebugEndpoint { get; }
 
-    // Null for Adopted hosts (we can't always discover the PID of a browser we didn't spawn) and may also become
-    // null for Owned hosts after the process has exited.
     int? ProcessId { get; }
 
     // Browser identification surfaced in dashboard properties. e.g. "Microsoft Edge", "Google Chrome".
@@ -30,8 +29,8 @@ internal interface IBrowserHost : IAsyncDisposable
     // termination because sessions can reconnect and reattach to their targets.
     Task Termination { get; }
 
-    // Opens a browser-level CDP connection for a page session. WebSocket-backed hosts create a new connection for each
-    // session; pipe-backed hosts can override this seam to return a shared/multiplexed connection.
+    // Opens a browser-level CDP connection for a page session. WebSocket-backed hosts create a new connection per
+    // session; pipe-backed hosts return a shared/multiplexed connection over the private CDP pipe owned by this AppHost.
     Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
         Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
@@ -80,10 +79,10 @@ internal enum BrowserPageSessionCompletionKind
 // releases a shared host, which keeps owned/adopted browser lifetime centralized in BrowserHostRegistry.
 internal sealed class BrowserHostLease : IAsyncDisposable
 {
-    // Lease release acquires the BrowserHostRegistry lock, which is held across CreateHostCoreAsync. Owned-browser
-    // startup waits up to s_browserEndpointTimeout (30s) for DevToolsActivePort, so the release timeout must exceed
-    // that worst case to avoid a release-cancellation that strands the registry reference count permanently
-    // incremented. We also swallow timeouts at the lease boundary so disposal of an owning session never throws.
+    // Lease release acquires the BrowserHostRegistry lock, which is held across CreateHostCoreAsync. Browser startup can
+    // be slow, so the release timeout must be long enough to avoid a release-cancellation that strands the registry
+    // reference count permanently incremented. We also swallow timeouts at the lease boundary so disposal of an owning
+    // session never throws.
     private static readonly TimeSpan s_releaseTimeout = TimeSpan.FromSeconds(60);
 
     private readonly Func<CancellationToken, ValueTask> _releaseAsync;
@@ -181,7 +180,7 @@ internal enum BrowserHostOwnership
     // We launched the browser process. Disposing the host kills the process and deletes our endpoint metadata.
     Owned,
 
-    // We connected to a browser someone else launched (typically the user's already-running browser). Disposing
-    // only closes our CDP connection and any tracked targets we created. The browser keeps running.
+    // We connected to a browser someone else launched. Disposing only closes our CDP connection and any tracked targets
+    // we created. The browser keeps running.
     Adopted,
 }

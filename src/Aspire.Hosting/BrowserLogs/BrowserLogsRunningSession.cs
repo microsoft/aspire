@@ -13,7 +13,7 @@ internal interface IBrowserLogsRunningSession
 
     string BrowserExecutable { get; }
 
-    Uri BrowserDebugEndpoint { get; }
+    Uri? BrowserDebugEndpoint { get; }
 
     BrowserHostOwnership BrowserHostOwnership { get; }
 
@@ -130,7 +130,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     public string BrowserExecutable => _browserExecutable ?? throw new InvalidOperationException("Browser executable is not available before the session starts.");
 
-    public Uri BrowserDebugEndpoint => _browserEndpoint ?? throw new InvalidOperationException("Browser debugging endpoint is not available before the session starts.");
+    public Uri? BrowserDebugEndpoint => _browserEndpoint;
 
     public BrowserHostOwnership BrowserHostOwnership => _browserHostOwnership ?? throw new InvalidOperationException("Browser host ownership is not available before the session starts.");
 
@@ -209,9 +209,10 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
         _resourceLogger.LogInformation(
-            "[{SessionId}] Resolving tracked browser host. User data mode: {UserDataMode}; browser: '{Browser}'; profile: '{Profile}'.",
+            "[{SessionId}] Resolving tracked browser host. User data mode: {UserDataMode}; browser process lifetime: {BrowserProcessLifetime}; browser: '{Browser}'; profile: '{Profile}'.",
             _sessionId,
             _configuration.UserDataMode,
+            _configuration.BrowserProcessLifetime,
             _configuration.Browser,
             _configuration.Profile ?? "(default)");
 
@@ -236,7 +237,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             _sessionId,
             browserHost.Ownership,
             _browserExecutable,
-            _browserEndpoint);
+            FormatDebugEndpoint(_browserEndpoint));
 
         try
         {
@@ -337,6 +338,9 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             await pageSession.DisposeAsync().ConfigureAwait(false);
         }
     }
+
+    private static string FormatDebugEndpoint(Uri? browserDebugEndpoint) =>
+        browserDebugEndpoint?.ToString() ?? "private CDP pipe";
 
     private async Task DisposeBrowserHostLeaseAsync()
     {

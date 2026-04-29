@@ -11,14 +11,15 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-// Bridges owned and adopted hosts by persisting and validating the browser-level CDP endpoint for a shared
-// user-data directory.
+// Supports WebSocket attach/adoption by persisting and validating the browser-level CDP endpoint for a shared user-data
+// directory.
 //
 // Why this exists:
-// - Chromium's singleton is keyed by the user data root, not by Aspire. If Aspire already launched a debug-enabled
-//   browser for that root, a later browser-log session should attach to it instead of starting another process.
+// - Chromium's singleton is keyed by the user data root, not by Aspire. If a WebSocket-based option already launched a
+//   debug-enabled browser for that root, a later browser-log session can attach to it instead of starting another
+//   process.
 // - Chromium's DevToolsActivePort file is only a launch-time hand-off file and isn't enough for cross-session adoption.
-//   We write our own sidecar with the exact browser identity and endpoint we proved during startup.
+//   This sidecar records the exact browser identity and endpoint proved during startup.
 // - The sidecar is intentionally treated as a hint. Users can close the browser, edit/delete files, or reuse ports, so
 //   every read revalidates schema, identity, PID liveness, endpoint reachability, and profile compatibility.
 internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager> logger)
@@ -288,7 +289,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
     }
 }
 
-// On-disk adoption hint written by an owned host. A matching file never proves adoption is safe by itself; it must be
+// On-disk adoption hint for WebSocket-backed hosts. A matching file never proves adoption is safe by itself; it must be
 // validated against the requested identity, profile, process, and /json/version endpoint first.
 internal sealed record BrowserDebugEndpointMetadata
 {
@@ -319,7 +320,7 @@ internal sealed record BrowserJsonVersionResponse
     public string? WebSocketDebuggerUrl { get; init; }
 }
 
-// Source-generated JSON context for the small metadata file exchanged between owned and adopted host paths and the
+// Source-generated JSON context for the small metadata file exchanged between WebSocket attach/adoption paths and the
 // Chromium /json/version probe response.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(BrowserDebugEndpointMetadata))]

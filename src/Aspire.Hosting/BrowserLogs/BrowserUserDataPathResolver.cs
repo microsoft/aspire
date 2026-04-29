@@ -35,8 +35,8 @@ namespace Aspire.Hosting;
 // "Profile 1", ...), not the display name the user sees in the browser. Display names live in the user-data-root
 // "Local State" file under profile.info_cache, keyed by the profile directory name.
 //
-// Both paths are persistent. AppHost shutdown does not delete them and does not close the browser. The next
-// AppHost run reads the adoption sidecar and connects to the existing browser via CDP.
+// Both paths are persistent. AppHost shutdown does not delete them, but the default pipe-backed browser process is
+// still owned by the current AppHost. WebSocket endpoint metadata is only for explicit attach/adoption paths.
 internal static class BrowserUserDataPathResolver
 {
     // SHA-256 prefix length used for the per-AppHost segment. AppHost:PathSha256 is the full hex-encoded

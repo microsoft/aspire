@@ -163,7 +163,7 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
-    public async Task BrowserHostRegistry_AdoptsValidatedSharedEndpointMetadata()
+    public async Task BrowserHostRegistry_AdoptsValidatedSharedEndpointMetadataWhenAdoptionIsEnabled()
     {
         var userDataDirectory = Directory.CreateTempSubdirectory();
         try
@@ -185,7 +185,8 @@ public class BrowserLogsSessionManagerTests
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
                 createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
-                createHostAsync: null);
+                createHostAsync: null,
+                enableEndpointMetadataAdoption: true);
 
             var lease = await registry.AcquireAsync(
                 new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared, AppHostKey: null),

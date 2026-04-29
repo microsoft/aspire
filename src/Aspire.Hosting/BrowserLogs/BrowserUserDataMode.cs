@@ -14,9 +14,8 @@ public enum BrowserUserDataMode
     /// </summary>
     /// <remarks>
     /// The directory lives under a well-known path (for example <c>%LocalAppData%\Aspire\BrowserData\shared\&lt;browser&gt;</c>
-    /// on Windows). When multiple AppHosts run concurrently, the second AppHost adopts the existing browser via the
-    /// Chrome DevTools Protocol instead of launching a new one. The browser is never closed automatically when an
-    /// AppHost exits.
+    /// on Windows). The directory is persistent across AppHost restarts, but the default tracked browser process is
+    /// owned by the AppHost that launched it.
     /// </remarks>
     Shared,
 
@@ -26,8 +25,8 @@ public enum BrowserUserDataMode
     /// </summary>
     /// <remarks>
     /// The directory is keyed on a stable hash of the AppHost project path (for example
-    /// <c>%LocalAppData%\Aspire\BrowserData\isolated\&lt;hash&gt;\&lt;browser&gt;</c> on Windows). The browser is never
-    /// closed automatically when the AppHost exits.
+    /// <c>%LocalAppData%\Aspire\BrowserData\isolated\&lt;hash&gt;\&lt;browser&gt;</c> on Windows). The directory persists across
+    /// runs, but the default tracked browser process is owned by the AppHost that launched it.
     /// </remarks>
     Isolated,
 }

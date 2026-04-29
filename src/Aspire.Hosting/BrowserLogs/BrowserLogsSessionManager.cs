@@ -88,6 +88,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
             resourceState.LastError = null;
             resourceState.LastProfile = configuration.Profile;
+            resourceState.LastBrowserProcessLifetime = configuration.BrowserProcessLifetime.ToString();
 
             var resourceLogger = _resourceLoggerService.GetLogger(resourceName);
             resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, configuration.Browser);
@@ -143,9 +144,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 await HandleSessionCompletedAsync(resource, resourceName, resourceState, session.SessionId, exitCode, error).ConfigureAwait(false);
             });
 
-            // The session snapshot intentionally stores both browser-level and page-level endpoints. In the dashboard,
-            // the browser endpoint explains what process was adopted/owned, while the page endpoint lets a developer
-            // inspect the exact target that is producing resource logs.
+            // WebSocket-backed sessions expose browser-level and page-level CDP endpoints for inspection. Pipe-backed
+            // sessions intentionally expose only a transport description because their CDP connection is private.
             resourceState.ActiveSessions[session.SessionId] = new ActiveBrowserSession(
                 session.SessionId,
                 configuration.AppHostKey,
@@ -495,6 +495,10 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
             : RemoveProperty(properties, BrowserLogsBuilderExtensions.ProfilePropertyName);
 
+        properties = resourceState.LastBrowserProcessLifetime is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName, resourceState.LastBrowserProcessLifetime)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName);
+
         return properties.SetResourcePropertyRange(propertyUpdates);
     }
 
@@ -546,7 +550,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 session.StartedAt,
                 session.TargetUrl.ToString(),
                 session.BrowserHostOwnership,
-                session.BrowserDebugEndpoint.ToString(),
+                FormatDebugEndpoint(session.BrowserDebugEndpoint),
                 GetPageDebugEndpoint(session.BrowserDebugEndpoint, session.TargetId),
                 session.TargetId))
             .ToArray();
@@ -554,8 +558,13 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         return JsonSerializer.Serialize(activeSessions, s_browserSessionPropertyJsonOptions);
     }
 
-    private static string GetPageDebugEndpoint(Uri browserDebugEndpoint, string targetId)
+    private static string? GetPageDebugEndpoint(Uri? browserDebugEndpoint, string targetId)
     {
+        if (browserDebugEndpoint is null)
+        {
+            return null;
+        }
+
         var builder = new UriBuilder(browserDebugEndpoint)
         {
             Path = $"/devtools/page/{targetId}"
@@ -585,6 +594,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         public string? LastBrowser { get; set; }
 
         public string? LastProfile { get; set; }
+
+        public string? LastBrowserProcessLifetime { get; set; }
     }
 
     private static string FormatProcessId(int? processId) =>
@@ -596,7 +607,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string Browser,
         string BrowserExecutable,
         string? Profile,
-        Uri BrowserDebugEndpoint,
+        Uri? BrowserDebugEndpoint,
         string BrowserHostOwnership,
         int? ProcessId,
         DateTime StartedAt,
@@ -615,8 +626,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string TargetUrl,
         string BrowserHostOwnership,
         string CdpEndpoint,
-        string PageCdpEndpoint,
+        string? PageCdpEndpoint,
         string TargetId);
+
+    private static string FormatDebugEndpoint(Uri? browserDebugEndpoint) =>
+        browserDebugEndpoint?.ToString() ?? "pipe";
 
     private sealed record PendingBrowserSession(
         string SessionId,

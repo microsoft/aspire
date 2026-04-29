@@ -70,6 +70,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.NotNull(snapshot.CreationTimeStamp);
         Assert.Contains(snapshot.Properties, property => property.Name == CustomResourceKnownProperties.Source && Equals(property.Value, "web"));
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName && Equals(property.Value, nameof(BrowserProcessLifetime.Session)));
         Assert.DoesNotContain(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ProfilePropertyName);
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName && Equals(property.Value, 0));
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ActiveSessionsPropertyName && Equals(property.Value, "None"));
@@ -85,8 +86,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Default";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey}"] = nameof(BrowserProcessLifetime.Session);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey}"] = nameof(BrowserProcessLifetime.Persistent);
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -105,10 +108,12 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         Assert.Equal("chrome", browserLogsResource.InitialConfiguration.Browser);
         Assert.Equal("Profile 1", browserLogsResource.InitialConfiguration.Profile);
+        Assert.Equal(BrowserProcessLifetime.Persistent, browserLogsResource.InitialConfiguration.BrowserProcessLifetime);
 
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ProfilePropertyName && Equals(property.Value, "Profile 1"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName && Equals(property.Value, nameof(BrowserProcessLifetime.Persistent)));
     }
 
     [Fact]
@@ -191,6 +196,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey}"] = nameof(BrowserProcessLifetime.Persistent);
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -202,7 +208,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "msedge", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
+        web.WithBrowserLogs(browser: "msedge", profile: "Default", userDataMode: BrowserUserDataMode.Shared, browserProcessLifetime: BrowserProcessLifetime.Session);
 
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
@@ -210,6 +216,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Equal("msedge", browserLogsResource.InitialConfiguration.Browser);
         Assert.Equal("Default", browserLogsResource.InitialConfiguration.Profile);
         Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+        Assert.Equal(BrowserProcessLifetime.Session, browserLogsResource.InitialConfiguration.BrowserProcessLifetime);
     }
 
     [Fact]
@@ -232,8 +239,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
         Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+        Assert.Equal(BrowserProcessLifetime.Session, browserLogsResource.InitialConfiguration.BrowserProcessLifetime);
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Shared)));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName && Equals(property.Value, nameof(BrowserProcessLifetime.Session)));
     }
 
     [Fact]
@@ -258,6 +267,30 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
         Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_ReadsBrowserProcessLifetimeFromConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey}"] = nameof(BrowserProcessLifetime.Persistent);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+
+        Assert.Equal(BrowserProcessLifetime.Persistent, browserLogsResource.InitialConfiguration.BrowserProcessLifetime);
     }
 
     [Fact]
@@ -334,6 +367,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Equal(browserLogsResource.Name, call.ResourceName);
         Assert.Equal("chrome", call.Configuration.Browser);
         Assert.Null(call.Configuration.Profile);
+        Assert.Equal(BrowserProcessLifetime.Session, call.Configuration.BrowserProcessLifetime);
         Assert.Equal(new Uri("http://localhost:8080", UriKind.Absolute), call.Url);
     }
 
@@ -373,6 +407,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             input => Assert.Equal("scope", input.Name),
             input => Assert.Equal("browser", input.Name),
             input => Assert.Equal("userDataMode", input.Name),
+            input => Assert.Equal("browserProcessLifetime", input.Name),
             input => Assert.Equal("profile", input.Name),
             input =>
             {
@@ -385,6 +420,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         interaction.Inputs["scope"].Value = "resource";
         interaction.Inputs["browser"].Value = "msedge";
         interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Shared);
+        interaction.Inputs["browserProcessLifetime"].Value = nameof(BrowserProcessLifetime.Persistent);
         interaction.Inputs["profile"].Value = "Default";
         interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
 
@@ -393,6 +429,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.True(result.Success);
         Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
         Assert.Equal(nameof(BrowserUserDataMode.Shared), userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"]);
+        Assert.Equal(nameof(BrowserProcessLifetime.Persistent), userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey}"]);
         Assert.Equal("Default", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"]);
 
         var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
@@ -400,6 +437,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
         Assert.Equal("msedge", effectiveConfiguration.Browser);
         Assert.Equal(BrowserUserDataMode.Shared, effectiveConfiguration.UserDataMode);
+        Assert.Equal(BrowserProcessLifetime.Persistent, effectiveConfiguration.BrowserProcessLifetime);
         Assert.Equal("Default", effectiveConfiguration.Profile);
     }
 

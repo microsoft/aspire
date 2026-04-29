@@ -31,9 +31,12 @@ internal sealed class BrowserLogsCdpConnectionMultiplexer : IAsyncDisposable
         _innerConnection = connectionFactory(DispatchEventAsync);
     }
 
+    public Task Completion => _innerConnection.Completion;
+
     public IBrowserLogsCdpConnection CreateConnection(Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        ThrowIfInnerConnectionCompleted();
 
         var subscriptionId = Interlocked.Increment(ref _nextSubscriptionId);
         var subscription = new Subscription(subscriptionId, eventHandler);
@@ -41,6 +44,7 @@ internal sealed class BrowserLogsCdpConnectionMultiplexer : IAsyncDisposable
         lock (_lock)
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            ThrowIfInnerConnectionCompleted();
             _subscriptions.Add(subscriptionId, subscription);
         }
 
@@ -108,6 +112,14 @@ internal sealed class BrowserLogsCdpConnectionMultiplexer : IAsyncDisposable
         lock (_lock)
         {
             return _subscriptions.Remove(subscription.Id);
+        }
+    }
+
+    private void ThrowIfInnerConnectionCompleted()
+    {
+        if (_innerConnection.Completion.IsCompleted)
+        {
+            throw new InvalidOperationException("Tracked browser CDP pipe is no longer active.");
         }
     }
 
