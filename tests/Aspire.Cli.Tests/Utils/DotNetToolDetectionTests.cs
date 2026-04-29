@@ -25,9 +25,10 @@ public class DotNetToolDetectionTests
     public void IsRunningAsDotNetTool_ReturnsTrueForCustomToolPathWithSiblingStore()
     {
         using var tempDirectory = new TestTempDirectory();
-        var processPath = Path.Combine(tempDirectory.Path, GetAspireExecutableName());
+        var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
+        var processPath = Path.Combine(toolPath, GetAspireExecutableName());
         var storeExecutablePath = Path.Combine(
-            tempDirectory.Path,
+            toolPath,
             ".store",
             "aspire.cli",
             "10.0.0",
@@ -38,11 +39,41 @@ public class DotNetToolDetectionTests
             "linux-x64",
             GetAspireExecutableName());
 
+        Directory.CreateDirectory(toolPath);
         Directory.CreateDirectory(Path.GetDirectoryName(storeExecutablePath)!);
         File.WriteAllText(processPath, string.Empty);
         File.WriteAllText(storeExecutablePath, string.Empty);
 
         Assert.True(DotNetToolDetection.IsRunningAsDotNetTool(processPath));
+        Assert.Equal($"dotnet tool update --tool-path \"{toolPath}\" Aspire.Cli", DotNetToolDetection.GetDotNetToolUpdateCommand(processPath));
+    }
+
+    [Fact]
+    public void GetDotNetToolUpdateCommand_ReturnsToolPathCommandForCustomToolStorePath()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
+        var processPath = Path.Combine(
+            toolPath,
+            ".store",
+            "aspire.cli",
+            "10.0.0",
+            "aspire.cli.linux-x64",
+            "10.0.0",
+            "tools",
+            "net10.0",
+            "linux-x64",
+            GetAspireExecutableName());
+
+        Assert.Equal($"dotnet tool update --tool-path \"{toolPath}\" Aspire.Cli", DotNetToolDetection.GetDotNetToolUpdateCommand(processPath));
+    }
+
+    [Theory]
+    [InlineData("/home/test/.dotnet/tools/aspire")]
+    [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/aspire.cli.linux-x64/10.0.0/tools/any/linux-x64/aspire")]
+    public void GetDotNetToolUpdateCommand_ReturnsGlobalCommandForGlobalToolPath(string processPath)
+    {
+        Assert.Equal("dotnet tool update -g Aspire.Cli", DotNetToolDetection.GetDotNetToolUpdateCommand(processPath));
     }
 
     [Fact]

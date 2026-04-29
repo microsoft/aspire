@@ -50,9 +50,7 @@ internal class CliUpdateNotifier(
 
         if (newerVersion is not null)
         {
-            var updateCommand = DotNetToolDetection.IsRunningAsDotNetTool()
-                ? "dotnet tool update -g Aspire.Cli"
-                : "aspire update";
+            var updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand() ?? "aspire update";
 
             interactionService.DisplayVersionUpdateNotification(newerVersion.ToString(), updateCommand);
         }

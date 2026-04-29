@@ -22,31 +22,66 @@ internal static class DotNetToolDetection
 
     internal static bool IsRunningAsDotNetTool()
     {
-        return IsRunningAsDotNetTool(s_processPathOverride.Value ?? Environment.ProcessPath);
+        return GetDotNetToolUpdateCommand() is not null;
     }
 
     internal static bool IsRunningAsDotNetTool(string? processPath)
     {
+        return GetDotNetToolUpdateCommand(processPath) is not null;
+    }
+
+    internal static string? GetDotNetToolUpdateCommand()
+    {
+        return GetDotNetToolUpdateCommand(s_processPathOverride.Value ?? Environment.ProcessPath);
+    }
+
+    internal static string? GetDotNetToolUpdateCommand(string? processPath)
+    {
         if (string.IsNullOrWhiteSpace(processPath))
         {
-            return false;
+            return null;
         }
 
         var parts = processPath
             .Replace('\\', '/')
             .Split('/', StringSplitOptions.RemoveEmptyEntries);
 
-        if (IsGlobalDotNetToolShimPath(parts) ||
-            ContainsDotNetToolStorePackagePath(parts) ||
-            HasSiblingDotNetToolStore(processPath))
+        if (IsGlobalDotNetToolShimPath(parts))
         {
-            return true;
+            return GetGlobalDotNetToolUpdateCommand();
         }
 
-        return false;
+        var storeIndex = GetDotNetToolStorePackagePathIndex(parts);
+        if (storeIndex is not null)
+        {
+            if (IsGlobalDotNetToolStorePath(parts, storeIndex.Value))
+            {
+                return GetGlobalDotNetToolUpdateCommand();
+            }
+
+            if (TryGetToolPathFromStorePath(processPath, out var toolPath))
+            {
+                return GetToolPathDotNetToolUpdateCommand(toolPath);
+            }
+
+            return null;
+        }
+
+        if (HasSiblingDotNetToolStore(processPath) &&
+            TryGetProcessDirectory(processPath, out var processDirectory))
+        {
+            return GetToolPathDotNetToolUpdateCommand(processDirectory);
+        }
+
+        return null;
     }
 
     private static bool ContainsDotNetToolStorePackagePath(string[] parts)
+    {
+        return GetDotNetToolStorePackagePathIndex(parts) is not null;
+    }
+
+    private static int? GetDotNetToolStorePackagePathIndex(string[] parts)
     {
         for (var i = 0; i < parts.Length; i++)
         {
@@ -57,11 +92,11 @@ internal static class DotNetToolDetection
 
             if (IsDotNetToolStorePackagePath(parts, i))
             {
-                return true;
+                return i;
             }
         }
 
-        return false;
+        return null;
     }
 
     private static bool IsGlobalDotNetToolShimPath(string[] parts)
@@ -78,6 +113,13 @@ internal static class DotNetToolDetection
         }
 
         return false;
+    }
+
+    private static bool IsGlobalDotNetToolStorePath(string[] parts, int storeIndex)
+    {
+        return storeIndex >= 2 &&
+            string.Equals(parts[storeIndex - 2], ".dotnet", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(parts[storeIndex - 1], "tools", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsDotNetToolStorePackagePath(string[] parts, int storeIndex)
@@ -151,6 +193,65 @@ internal static class DotNetToolDetection
         }
 
         return false;
+    }
+
+    private static bool TryGetProcessDirectory(string processPath, out string toolPath)
+    {
+        var processDirectory = Path.GetDirectoryName(NormalizeDirectorySeparators(processPath));
+        if (string.IsNullOrEmpty(processDirectory))
+        {
+            toolPath = string.Empty;
+            return false;
+        }
+
+        toolPath = processDirectory;
+        return true;
+    }
+
+    private static bool TryGetToolPathFromStorePath(string processPath, out string toolPath)
+    {
+        var currentDirectory = Path.GetDirectoryName(NormalizeDirectorySeparators(processPath));
+        while (!string.IsNullOrEmpty(currentDirectory))
+        {
+            if (string.Equals(Path.GetFileName(currentDirectory), ".store", StringComparison.OrdinalIgnoreCase))
+            {
+                var parentDirectory = Path.GetDirectoryName(currentDirectory);
+                if (!string.IsNullOrEmpty(parentDirectory))
+                {
+                    toolPath = parentDirectory;
+                    return true;
+                }
+
+                break;
+            }
+
+            currentDirectory = Path.GetDirectoryName(currentDirectory);
+        }
+
+        toolPath = string.Empty;
+        return false;
+    }
+
+    private static string NormalizeDirectorySeparators(string path)
+    {
+        return path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+    }
+
+    private static string GetGlobalDotNetToolUpdateCommand()
+    {
+        return "dotnet tool update -g Aspire.Cli";
+    }
+
+    private static string GetToolPathDotNetToolUpdateCommand(string toolPath)
+    {
+        return $"dotnet tool update --tool-path {QuoteCommandArgument(toolPath)} Aspire.Cli";
+    }
+
+    private static string QuoteCommandArgument(string argument)
+    {
+        return argument.Any(char.IsWhiteSpace) || argument.Contains('"', StringComparison.Ordinal)
+            ? $"\"{argument.Replace("\"", "\\\"", StringComparison.Ordinal)}\""
+            : argument;
     }
 
     private static bool IsAspireCliPackageId(string packageId, string toolRid)
