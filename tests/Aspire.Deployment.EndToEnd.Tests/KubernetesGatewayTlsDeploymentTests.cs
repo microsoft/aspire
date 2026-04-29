@@ -232,6 +232,8 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
                 "        gatewayHTTPRoute:\n" +
                 "          parentRefs:\n" +
                 "          - kind: Gateway\n" +
+                $"            name: ingress\n" +
+                $"            namespace: {k8sNamespace}\n" +
                 "EOF");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
