@@ -415,6 +415,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine($"{indent} */");
     }
 
+    private void WritePropertyDocComment(string indent, AtsCapabilityInfo? getter, AtsCapabilityInfo? setter)
+    {
+        var capability = getter is not null && (!string.IsNullOrWhiteSpace(getter.Description) || getter.IsObsolete)
+            ? getter
+            : setter;
+
+        if (capability is not null)
+        {
+            WriteCapabilityDocComment(indent, capability);
+        }
+    }
+
     private string? TryMapInterfaceInputTypeToTypeScript(AtsTypeRef typeRef)
     {
         List<string>? assignableWrapperTypes = null;
@@ -1334,6 +1346,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private void GenerateGetterOnlyPropertyPromiseSignature(string propertyName, AtsCapabilityInfo getter)
     {
         var returnType = GetGetterOnlyPropertyReturnType(getter.ReturnType);
+        WriteCapabilityDocComment("    ", getter);
         WriteLine($"    {propertyName}(): Promise<{returnType}>;");
     }
 
@@ -1351,6 +1364,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             {
                 var keyType = returnType.KeyType != null ? MapTypeRefToTypeScript(returnType.KeyType) : "string";
                 var valueType = returnType.ValueType != null ? MapTypeRefToTypeScript(returnType.ValueType) : "unknown";
+                WritePropertyDocComment("    ", getter, setter);
                 WriteLine($"    readonly {propertyName}: AspireDict<{keyType}, {valueType}>;");
                 return;
             }
@@ -1358,11 +1372,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             if (IsListType(returnType))
             {
                 var elementType = returnType.ElementType != null ? MapTypeRefToTypeScript(returnType.ElementType) : "unknown";
+                WritePropertyDocComment("    ", getter, setter);
                 WriteLine($"    readonly {propertyName}: AspireList<{elementType}>;");
                 return;
             }
         }
 
+        WritePropertyDocComment("    ", getter, setter);
         WriteLine($"    {propertyName}: {{");
 
         if (getter != null)
@@ -1431,6 +1447,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
 
+            WriteCapabilityDocComment("    ", capability);
             if (hasNonBuilderReturn)
             {
                 var returnType = MapTypeRefToTypeScript(capability.ReturnType);
@@ -1483,6 +1500,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
 
+            WriteCapabilityDocComment("    ", capability);
             if (hasNonBuilderReturn)
             {
                 var returnType = MapTypeRefToTypeScript(capability.ReturnType);
@@ -1512,6 +1530,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
+        WriteCapabilityDocComment("    ", capability);
         if (capability.ReturnType != null && _typesWithPromiseWrappers.Contains(capability.ReturnType.TypeId))
         {
             WriteLine($"    {methodName}({paramsString}): {GetPublicPromiseInterfaceName(capability.ReturnType.TypeId)};");
@@ -1716,7 +1735,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Generate a simple async method that returns the actual type
             var returnType = MapTypeRefToTypeScript(capability.ReturnType);
 
-            WriteCapabilityDocComment("    ", capability);
             Write($"    async {methodName}(");
             Write(publicParamsString);
             WriteLine($"): Promise<{returnType}> {{");
@@ -1800,7 +1818,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine();
 
         // Generate public fluent method (returns thenable wrapper)
-        WriteCapabilityDocComment("    ", capability);
         var promiseClass = $"{returnClassName}Promise";
         var promiseImplementationClass = GetImplementationPromiseClassName(returnClassName);
         Write($"    {methodName}(");
@@ -2049,7 +2066,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         foreach (var prop in getterOnlyProperties)
         {
             var returnType = GetGetterOnlyPropertyReturnType(prop.Getter!.ReturnType);
-            WriteCapabilityDocComment("    ", prop.Getter);
             WriteLine($"    {prop.PropertyName}(): Promise<{returnType}> {{");
             WriteLine($"        return this._promise.then(obj => obj.{prop.PropertyName}());");
             WriteLine("    }");
@@ -2098,8 +2114,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
             // Check if this method returns a non-builder type
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
-
-            WriteCapabilityDocComment("    ", capability);
 
             if (hasNonBuilderReturn)
             {
@@ -2777,12 +2791,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Determine the return type from getter
         string returnType = "unknown";
-        string? description = null;
 
         if (getter != null)
         {
             returnType = MapTypeRefToTypeScript(getter.ReturnType);
-            description = getter.Description;
 
             // Mutable dictionary/list properties stay as property accessors so callers can use
             // wrapper operations (for example, property.get()/set() or list/dict helpers)
@@ -2808,11 +2820,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
 
         // Generate property-like object for scalar types
-        if (!string.IsNullOrEmpty(description))
-        {
-            WriteLine($"    /** {description} */");
-        }
-
         WriteLine($"    {propertyName} = {{");
 
         // Generate get method
@@ -2880,11 +2887,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         var returnType = GetGetterOnlyPropertyReturnType(getter.ReturnType);
 
-        if (!string.IsNullOrEmpty(getter.Description))
-        {
-            WriteLine($"    /** {getter.Description} */");
-        }
-
         WriteLine($"    async {propertyName}(): Promise<{returnType}> {{");
         if (getter.ReturnType?.TypeId == AtsConstants.CancellationToken)
         {
@@ -2909,11 +2911,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var handleType = GetHandleTypeName(getter.ReturnType!.TypeId);
         var wrapperImplementationClassName = GetImplementationClassName(wrapperClassName);
-
-        if (!string.IsNullOrEmpty(getter.Description))
-        {
-            WriteLine($"    /** {getter.Description} */");
-        }
 
         WriteLine($"    async {propertyName}(): Promise<{wrapperClassName}> {{");
         WriteLine($"        const handle = await this._client.invokeCapability<{handleType}>(");
@@ -2952,11 +2949,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var handleType = GetHandleTypeName(getter.ReturnType!.TypeId);
         var wrapperImplementationClassName = GetImplementationClassName(wrapperClassName);
-
-        if (!string.IsNullOrEmpty(getter.Description))
-        {
-            WriteLine($"    /** {getter.Description} */");
-        }
 
         WriteLine($"    {propertyName} = {{");
         WriteLine($"        get: async (): Promise<{wrapperClassName}> => {{");
@@ -3026,11 +3018,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var typeId = $"'{getter.CapabilityId}'";
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
-        if (!string.IsNullOrEmpty(getter.Description))
-        {
-            WriteLine($"    /** {getter.Description} */");
-        }
-
         // Pass the getter capability ID so AspireDict can lazily fetch the actual dictionary handle.
         WriteLine($"    private _{propertyName}?: AspireDict<{keyType}, {valueType}>;");
         WriteLine($"    async {propertyName}(): Promise<AspireDict<{keyType}, {valueType}>> {{");
@@ -3066,10 +3053,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
         WriteLine($"    private _{propertyName}?: AspireDict<{keyType}, {valueType}>;");
-        if (!string.IsNullOrEmpty(getter.Description))
-        {
-            WriteLine($"    /** {getter.Description} */");
-        }
         WriteLine($"    get {propertyName}(): AspireDict<{keyType}, {valueType}> {{");
         WriteLine($"        if (!this._{propertyName}) {{");
         WriteLine($"            this._{propertyName} = new AspireDict<{keyType}, {valueType}>(");
@@ -3100,11 +3083,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var typeId = $"'{getter.CapabilityId}'";
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
-        if (!string.IsNullOrEmpty(getter.Description))
-        {
-            WriteLine($"    /** {getter.Description} */");
-        }
-
         // Pass the getter capability ID so AspireList can lazily fetch the actual list handle.
         WriteLine($"    private _{propertyName}?: AspireList<{elementType}>;");
         WriteLine($"    async {propertyName}(): Promise<AspireList<{elementType}>> {{");
@@ -3134,10 +3112,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
         WriteLine($"    private _{propertyName}?: AspireList<{elementType}>;");
-        if (!string.IsNullOrEmpty(getter.Description))
-        {
-            WriteLine($"    /** {getter.Description} */");
-        }
         WriteLine($"    get {propertyName}(): AspireList<{elementType}> {{");
         WriteLine($"        if (!this._{propertyName}) {{");
         WriteLine($"            this._{propertyName} = new AspireList<{elementType}>(");
@@ -3193,9 +3167,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var returnType = GetReturnTypeId(method) != null
             ? MapTypeRefToTypeScript(method.ReturnType)
             : "void";
-
-        // Generate JSDoc
-        WriteCapabilityDocComment("    ", method);
 
         // Generate async method
         Write($"    async {methodName}(");
@@ -3274,9 +3245,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Determine return type
         var returnType = MapTypeRefToTypeScript(capability.ReturnType);
-
-        // Generate JSDoc
-        WriteCapabilityDocComment("    ", capability);
 
         // Generate async method
         Write($"    async {methodName}(");
@@ -3372,9 +3340,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var returnPromiseWrapper = GetPromiseWrapperForReturnType(capability.ReturnType);
         var returnType = MapTypeRefToTypeScript(capability.ReturnType);
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
-
-        // Generate JSDoc
-        WriteCapabilityDocComment("    ", capability);
 
         // If return type has a Promise wrapper, generate internal + fluent pattern
         if (returnPromiseWrapper != null)
@@ -3584,7 +3549,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         foreach (var prop in getterOnlyProperties)
         {
             var returnType = GetGetterOnlyPropertyReturnType(prop.Getter!.ReturnType);
-            WriteCapabilityDocComment("    ", prop.Getter);
             WriteLine($"    {prop.PropertyName}(): Promise<{returnType}> {{");
             WriteLine($"        return this._promise.then(obj => obj.{prop.PropertyName}());");
             WriteLine("    }");
@@ -3636,8 +3600,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var returnPromiseWrapper = GetPromiseWrapperForReturnType(capability.ReturnType);
             var returnType = MapTypeRefToTypeScript(capability.ReturnType);
             var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
-
-            WriteCapabilityDocComment("    ", capability);
 
             if (returnPromiseWrapper != null)
             {
