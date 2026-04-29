@@ -16,6 +16,7 @@ function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
 
 export const nodeDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'node',
+    // Use js-debug's pwa-node adapter so outputCapture emits stdout/stderr DAP output events for dashboard log forwarding.
     debugAdapter: 'pwa-node',
     extensionId: null,
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => {
