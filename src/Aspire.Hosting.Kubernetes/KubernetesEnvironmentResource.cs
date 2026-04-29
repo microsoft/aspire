@@ -385,8 +385,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             });
         }
 
-        // Build deployment target lookup for endpoint resolution
-        var deploymentTargets = new Dictionary<IResource, KubernetesResource>();
+        // Build deployment target lookup for endpoint resolution.
+        // Use name-based equality so that endpoint references created through the
+        // TypeScript AppHost RPC bridge (which may use a different resource instance)
+        // resolve correctly.
+        var deploymentTargets = new Dictionary<IResource, KubernetesResource>(new ResourceNameComparer());
 
         foreach (var r in appModel.GetComputeResources())
         {
