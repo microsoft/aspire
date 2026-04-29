@@ -647,6 +647,9 @@ export namespace WellKnownPipelineSteps {
     /** The prerequisite step that runs before any push operations. */
     export const PushPrereq = "push-prereq";
 
+    /** The step that validates compute resources are assigned to unambiguous compute environments. */
+    export const ValidateComputeEnvironments = "validate-compute-environments";
+
 }
 
 export namespace WellKnownPipelineTags {

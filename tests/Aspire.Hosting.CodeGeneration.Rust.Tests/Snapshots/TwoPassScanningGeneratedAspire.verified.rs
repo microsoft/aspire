@@ -1020,6 +1020,11 @@ pub mod well_known_pipeline_steps {
         serde_json::from_value::<String>(serde_json::json!("push-prereq"))
             .expect("generated exported value should deserialize")
     }
+    /// The step that validates compute resources are assigned to unambiguous compute environments.
+    pub fn validate_compute_environments() -> String {
+        serde_json::from_value::<String>(serde_json::json!("validate-compute-environments"))
+            .expect("generated exported value should deserialize")
+    }
 }
 
 pub mod well_known_pipeline_tags {
