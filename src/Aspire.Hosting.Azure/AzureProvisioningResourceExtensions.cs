@@ -49,6 +49,25 @@ public static class AzureProvisioningResourceExtensions
     }
 
     /// <summary>
+    /// Replaces the generated Azure infrastructure with an Azure CDK JSON document.
+    /// </summary>
+    /// <param name="infrastructure">The infrastructure whose generated template should be replaced.</param>
+    /// <param name="infrastructureJson">The Azure CDK JSON document to use for the resource.</param>
+    /// <remarks>
+    /// This method is intended for polyglot app hosts that build or mutate Azure CDK object graphs and then pass the
+    /// serialized JSON document back to Aspire for deployment. C# app hosts should continue using Azure.Provisioning
+    /// types directly inside <see cref="ConfigureInfrastructure{T}(IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/>.
+    /// </remarks>
+    [AspireExport(Description = "Replaces the generated Azure infrastructure with an Azure CDK JSON document")]
+    public static void UseInfrastructureJson(this AzureResourceInfrastructure infrastructure, string infrastructureJson)
+    {
+        ArgumentNullException.ThrowIfNull(infrastructure);
+        ArgumentException.ThrowIfNullOrEmpty(infrastructureJson);
+
+        infrastructure.AspireResource.InfrastructureJsonOverride = infrastructureJson;
+    }
+
+    /// <summary>
     /// Gets or creates a <see cref="KeyVaultSecret"/> resource in the specified <see cref="AzureResourceInfrastructure"/>
     /// for the given <see cref="IAzureKeyVaultSecretReference"/>.
     /// <para>

@@ -26,6 +26,53 @@ public class AzureKeyVaultTests
     }
 
     [Fact]
+    public async Task ConfigureInfrastructure_WithInfrastructureJson_OverridesGeneratedBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var infrastructureJson = File.ReadAllText(GetPlaygroundInfrastructureJsonPath())
+            .Replace(
+                "\"enableRbacAuthorization\":{\"kind\":\"boolean\",\"value\":true}",
+                "\"enableRbacAuthorization\":{\"kind\":\"boolean\",\"value\":true},\"publicNetworkAccess\":{\"kind\":\"string\",\"value\":\"Disabled\"}",
+                StringComparison.Ordinal);
+        var mykv = builder.AddAzureKeyVault("mykv")
+            .ConfigureInfrastructure(infrastructure => infrastructure.UseInfrastructureJson(infrastructureJson));
+
+        var (_, bicep) = await AzureManifestUtils.GetManifestWithBicep(mykv.Resource);
+        var expectedBicep = """
+            @description('The location for the resource(s) to be deployed.')
+            param location string = resourceGroup().location
+
+            resource mykv 'Microsoft.KeyVault/vaults@2024-11-01' = {
+              name: take('mykv-${uniqueString(resourceGroup().id)}', 24)
+              location: location
+              tags: {
+                aspire-resource-name: 'mykv'
+              }
+              properties: {
+                tenantId: tenant().tenantId
+                sku: {
+                  family: 'A'
+                  name: 'standard'
+                }
+                enableRbacAuthorization: true
+                publicNetworkAccess: 'Disabled'
+              }
+            }
+
+            output vaultUri string = mykv.properties.vaultUri
+
+            output name string = mykv.name
+
+            output id string = mykv.id
+            """;
+
+        Assert.Equal(
+            expectedBicep.Replace("\r\n", "\n").TrimEnd(),
+            bicep.Replace("\r\n", "\n").TrimEnd());
+    }
+
+    [Fact]
     public async Task AddKeyVaultViaPublishMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -631,4 +678,10 @@ public class AzureKeyVaultTests
 
         Assert.Null(exception);
     }
+
+    private static string GetPlaygroundInfrastructureJsonPath() =>
+        Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "playground", "TypeScriptApps", "AzureCdkRoundtrip", "azure-cdk-validation", "AspireKeyVaultInfrastructure.json"));
 }

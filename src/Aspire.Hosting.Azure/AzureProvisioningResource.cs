@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
@@ -18,6 +17,8 @@ namespace Aspire.Hosting.Azure;
 public class AzureProvisioningResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureBicepResource(name, templateFile: $"{name}.module.bicep")
 {
+    internal string? InfrastructureJsonOverride { get; set; }
+
     /// <summary>
     /// Callback for configuring the Azure resources.
     /// </summary>
@@ -78,6 +79,8 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
     /// <inheritdoc/>
     public override BicepTemplateFile GetBicepTemplateFile(string? directory = null, bool deleteTemporaryFileOnDispose = true)
     {
+        InfrastructureJsonOverride = null;
+
         var infrastructure = new AzureResourceInfrastructure(this, Name);
 
         ConfigureInfrastructure(infrastructure);
@@ -87,11 +90,10 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         var generationPath = Directory.CreateTempSubdirectory("aspire").FullName;
         var moduleSourcePath = Path.Combine(generationPath, "main.bicep");
 
-        var plan = infrastructure.Build(ProvisioningBuildOptions);
-        var compilation = plan.Compile();
-        Debug.Assert(compilation.Count == 1);
-        var compiledBicep = compilation.First();
-        File.WriteAllText(moduleSourcePath, compiledBicep.Value);
+        var compiledBicep = InfrastructureJsonOverride is { } infrastructureJson
+            ? PolyglotInfrastructureJsonRenderer.RenderBicepTemplate(infrastructureJson)
+            : infrastructure.Build(ProvisioningBuildOptions).Compile().Single().Value;
+        File.WriteAllText(moduleSourcePath, compiledBicep);
 
         var moduleDestinationPath = Path.Combine(directory ?? generationPath, $"{Name}.module.bicep");
         File.Copy(moduleSourcePath, moduleDestinationPath, true);
