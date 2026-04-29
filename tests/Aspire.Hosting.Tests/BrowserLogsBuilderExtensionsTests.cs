@@ -561,6 +561,61 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
+    public async Task WithBrowserLogs_ConfigureCommandDoesNotApplyRuntimeSettingsWhenUserSecretSaveFails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var interactionService = new TestInteractionService();
+        var userSecretsManager = new RecordingUserSecretsManager();
+        builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Services.AddSingleton<IInteractionService>(interactionService);
+        builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
+
+        var userDataModeKey = $"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}";
+        userSecretsManager.FailingSetSecretNames.Add(userDataModeKey);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+
+        interaction.Inputs["scope"].Value = "resource";
+        interaction.Inputs["browser"].Value = "msedge";
+        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Isolated);
+        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await commandTask.DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Contains(userDataModeKey, result.Message, StringComparison.Ordinal);
+        Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
+        Assert.DoesNotContain(userDataModeKey, userSecretsManager.Secrets.Keys);
+
+        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
+        Assert.Equal("chrome", effectiveConfiguration.Browser);
+        Assert.Equal(BrowserUserDataMode.Shared, effectiveConfiguration.UserDataMode);
+        Assert.Null(effectiveConfiguration.Profile);
+    }
+
+    [Fact]
     public async Task WithBrowserLogs_ConfigureCommandRefreshesAllBrowserLogsResourcesForGlobalSettings()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -1844,12 +1899,21 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public HashSet<string> DeletedSecrets { get; } = new(StringComparer.Ordinal);
 
+        public HashSet<string> FailingSetSecretNames { get; } = new(StringComparer.Ordinal);
+
+        public HashSet<string> FailingDeleteSecretNames { get; } = new(StringComparer.Ordinal);
+
         public bool IsAvailable { get; init; } = true;
 
         public string FilePath => Path.Combine(AppContext.BaseDirectory, "test-secrets.json");
 
         public bool TrySetSecret(string name, string value)
         {
+            if (FailingSetSecretNames.Contains(name))
+            {
+                return false;
+            }
+
             Secrets[name] = value;
             DeletedSecrets.Remove(name);
             return true;
@@ -1857,6 +1921,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public bool TryDeleteSecret(string name)
         {
+            if (FailingDeleteSecretNames.Contains(name))
+            {
+                return false;
+            }
+
             Secrets.Remove(name);
             DeletedSecrets.Add(name);
             return true;

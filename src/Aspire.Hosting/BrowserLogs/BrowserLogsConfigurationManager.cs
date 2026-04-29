@@ -202,11 +202,12 @@ internal sealed class BrowserLogsConfigurationManager(
             [BrowserDefaultProfileValue] = CommandStrings.ConfigureTrackedBrowserDefaultProfileOption
         };
 
+        var disableProfileInput = true;
         if (Enum.TryParse<BrowserUserDataMode>(context.AllInputs[UserDataModeInputName].Value, ignoreCase: true, out var userDataMode) &&
             userDataMode == BrowserUserDataMode.Shared &&
             !string.IsNullOrWhiteSpace(browser))
         {
-            context.Input.Disabled = false;
+            disableProfileInput = false;
 
             try
             {
@@ -232,7 +233,6 @@ internal sealed class BrowserLogsConfigurationManager(
         }
         else
         {
-            context.Input.Disabled = true;
             context.Input.Value = BrowserDefaultProfileValue;
         }
 
@@ -242,6 +242,7 @@ internal sealed class BrowserLogsConfigurationManager(
         }
 
         context.Input.Options = [.. options.Select(static pair => new KeyValuePair<string, string>(pair.Key, pair.Value))];
+        context.Input.Disabled = disableProfileInput;
     }
 
     private static string FormatProfileOption(ChromiumBrowserProfile profile)
@@ -297,6 +298,8 @@ internal sealed class BrowserLogsConfigurationManager(
         {
             try
             {
+                // Resolve the final effective configuration so explicit WithBrowserLogs values are validated before
+                // applying runtime settings or mutating user secrets.
                 _ = ResolveEffectiveConfigurations(resource, BrowserLogsConfigurationSelection.FromInputs(inputs));
             }
             catch (InvalidOperationException ex)
@@ -362,6 +365,9 @@ internal sealed class BrowserLogsConfigurationManager(
 
         if (selected.SaveToUserSecrets)
         {
+            // IUserSecretsManager persists one key at a time, so a later failure can leave earlier secret mutations
+            // on disk. Only update the runtime store after every requested mutation succeeds, so the current AppHost
+            // never observes a partial save.
             SaveValue($"{configurationPrefix}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}", selected.Browser);
             SaveValue($"{configurationPrefix}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}", selected.UserDataMode.ToString());
 
