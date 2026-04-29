@@ -421,4 +421,58 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expected, formattedJson, ignoreLineEndingDifferences: true);
     }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_JsonOutput_WithTraceIdAndNoTrace_ReturnsEmptyArray()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var apiResponse = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = [] },
+            TotalCount = 0,
+            ReturnedCount = 0
+        };
+        var responseJson = JsonSerializer.Serialize(apiResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            if (url.Contains("/api/telemetry/traces/abc1234567890def"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --trace-id abc1234567890def --format json --dashboard-url http://localhost:18888");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
+        Assert.Equal("[]", jsonLine);
+    }
 }

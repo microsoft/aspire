@@ -156,8 +156,18 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         {
             var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
             var resourceSpans = apiResponse?.Data?.ResourceSpans;
-            Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allOtlpResources);
-            _interactionService.DisplayRawText(SharedAIHelpers.SerializeTraceToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
+            var traces = SharedAIHelpers.GetTracesFromOtlpData(resourceSpans);
+            var trace = traces.FirstOrDefault();
+            if (trace is null)
+            {
+                // Shouldn't happen since API would return 404 if trace not found.
+                _interactionService.DisplayRawText("[]", ConsoleOutput.Standard);
+            }
+            else
+            {
+                Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allOtlpResources);
+                _interactionService.DisplayRawText(SharedAIHelpers.SerializeTraceToJson(trace, getResourceName, dashboardUrl), ConsoleOutput.Standard);
+            }
         }
         else
         {

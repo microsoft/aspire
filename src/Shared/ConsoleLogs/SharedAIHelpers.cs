@@ -190,17 +190,15 @@ internal static class SharedAIHelpers
     }
 
     /// <summary>
-    /// Serializes a single trace from OTLP resource spans to a JSON string for CLI output.
+    /// Serializes a single trace DTO to JSON for CLI output.
     /// </summary>
     public static string SerializeTraceToJson(
-        IList<OtlpResourceSpansJson>? resourceSpans,
-        Func<IOtlpResource, string> getResourceName,
+        OtlpTraceDto traceDto,
+        Func<IOtlpResource, string>? getResourceName = null,
         string? dashboardBaseUrl = null)
     {
-        var traces = GetTracesFromOtlpData(resourceSpans);
-        var traceDto = traces.FirstOrDefault() ?? throw new InvalidOperationException("No trace found in OTLP data.");
         var context = new PromptContext(processValues: false);
-        return GetTraceDto(traceDto, context, getResourceName, dashboardBaseUrl)
+        return GetTraceDto(traceDto, context, getResourceName ?? (s => s.ResourceName), dashboardBaseUrl)
             .ToJsonString(s_jsonSerializerOptions);
     }
 
