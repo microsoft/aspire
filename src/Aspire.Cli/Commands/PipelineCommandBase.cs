@@ -395,6 +395,22 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             return pendingRun is { } && debugMode ? await pendingRun : ExitCodeConstants.FailedToBuildArtifacts;
         }
+        catch (NonInteractiveException ex)
+        {
+            // Send terminal progress bar stop sequence on exception
+            StopTerminalProgressBar();
+            Telemetry.RecordError("A required pipeline input was not provided in non-interactive mode.", ex);
+            var inputOptionDisplayName = s_inputOption.Name.StartsWith("--", StringComparison.Ordinal)
+                ? s_inputOption.Name
+                : $"--{s_inputOption.Name}";
+            var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, ex.SymbolDisplayName, inputOptionDisplayName);
+            InteractionService.DisplayError(errorMessage);
+            if (publishContext?.OutputCollector is { } outputCollector)
+            {
+                InteractionService.DisplayLines(outputCollector.GetLines());
+            }
+            return ExitCodeConstants.MissingRequiredArgument;
+        }
         catch (Exception ex)
         {
             // Send terminal progress bar stop sequence on exception
@@ -952,24 +968,24 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             InputType.Text => await InteractionService.PromptForStringAsync(
                 promptText,
-                binding: PromptBinding.CreateDefault(input.Value),
+                binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true),
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.SecretText => await InteractionService.PromptForStringAsync(
                 promptText,
-                binding: PromptBinding.CreateDefault(input.Value),
+                binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true),
                 isSecret: true,
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.Choice => await HandleSelectInputAsync(input, promptText, cancellationToken),
 
-            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value)), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
+            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value), input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
+            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true), required: input.Required, cancellationToken: cancellationToken)
         };
     }
 
@@ -977,7 +993,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     {
         if (input.Options is null || input.Options.Count == 0)
         {
-            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true), required: input.Required, cancellationToken: cancellationToken);
         }
 
         // If AllowCustomChoice is enabled then add an "Other" option to the list.
@@ -999,7 +1015,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         if (value == CustomChoiceValue)
         {
-            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value, suppressNonInteractiveErrorDisplay: true), required: input.Required, cancellationToken: cancellationToken);
         }
 
         AnsiConsole.MarkupLine($"{promptText} {displayText.EscapeMarkup()}");
@@ -1021,7 +1037,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         return await InteractionService.PromptForStringAsync(
             promptText,
-            binding: PromptBinding.CreateDefault(input.Value),
+            binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true),
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);

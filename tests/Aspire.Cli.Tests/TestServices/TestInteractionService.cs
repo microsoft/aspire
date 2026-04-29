@@ -42,6 +42,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
+    public List<string> Errors => DisplayedErrors;
     public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
 
@@ -77,7 +78,10 @@ internal sealed class TestInteractionService : IInteractionService
         {
             if (required && string.IsNullOrEmpty(value))
             {
-                DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, binding!.SymbolDisplayName));
+                if (binding is null || !binding.SuppressNonInteractiveErrorDisplay)
+                {
+                    DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, binding!.SymbolDisplayName));
+                }
                 throw new NonInteractiveException(binding.SymbolDisplayName);
             }
 
@@ -95,6 +99,16 @@ internal sealed class TestInteractionService : IInteractionService
         }
 
         StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
+
+        if (required && string.IsNullOrEmpty(binding?.DefaultValue) && _responses.Count == 0)
+        {
+            var symbolDisplayName = binding?.SymbolDisplayName ?? promptText;
+            if (binding is null || !binding.SuppressNonInteractiveErrorDisplay)
+            {
+                DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, symbolDisplayName));
+            }
+            throw new NonInteractiveException(symbolDisplayName);
+        }
 
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {

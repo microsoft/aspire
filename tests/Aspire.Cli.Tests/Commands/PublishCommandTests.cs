@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
@@ -116,6 +119,80 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
+    }
+
+    [Fact]
+    public async Task PublishCommandReturnsMissingRequiredArgumentWhenRequiredInputHasNoValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = _ => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0;
+                runner.GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                {
+                    return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                };
+                runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                {
+                    var backchannel = new TestAppHostBackchannel
+                    {
+                        GetPublishingActivitiesAsyncCallback = GetPromptActivities
+                    };
+
+                    backchannelCompletionSource?.SetResult(backchannel);
+                    await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
+        var error = Assert.Single(interactionService.Errors);
+        Assert.Equal(string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, "required-input", "--input"), error);
+
+        static async IAsyncEnumerable<PublishingActivity> GetPromptActivities([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+
+            yield return new PublishingActivity
+            {
+                Type = PublishingActivityTypes.Prompt,
+                Data = new PublishingActivityData
+                {
+                    Id = "missing-required-input",
+                    StatusText = "Enter required value:",
+                    CompletionState = CompletionStates.InProgress,
+                    StepId = "publish-step",
+                    Inputs =
+                    [
+                        new PublishingPromptInput
+                        {
+                            Name = "required-input",
+                            Label = "Required Input",
+                            InputType = "text",
+                            Required = true,
+                            Value = null
+                        }
+                    ]
+                }
+            };
+        }
     }
 
     [Fact]

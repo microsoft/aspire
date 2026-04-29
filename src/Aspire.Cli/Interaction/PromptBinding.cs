@@ -22,13 +22,15 @@ internal sealed class PromptBinding<T>
         string symbolDisplayName,
         Func<ParseResult, (bool WasProvided, T? Value)> resolver,
         T? defaultValue,
-        bool hasExplicitDefault)
+        bool hasExplicitDefault,
+        bool suppressNonInteractiveErrorDisplay)
     {
         _parseResult = parseResult;
         SymbolDisplayName = symbolDisplayName;
         _resolver = resolver;
         DefaultValue = defaultValue;
         HasExplicitDefault = hasExplicitDefault;
+        SuppressNonInteractiveErrorDisplay = suppressNonInteractiveErrorDisplay;
     }
 
     /// <summary>
@@ -50,6 +52,12 @@ internal sealed class PromptBinding<T>
     public bool HasExplicitDefault { get; }
 
     /// <summary>
+    /// Gets whether non-interactive validation should throw without writing an immediate
+    /// option-level error message. Use this when callers will handle and format a final error.
+    /// </summary>
+    public bool SuppressNonInteractiveErrorDisplay { get; }
+
+    /// <summary>
     /// Resolves the value from the parse result. Returns whether the symbol was explicitly
     /// provided by the user and the resolved value.
     /// </summary>
@@ -67,7 +75,7 @@ internal sealed class PromptBinding<T>
     /// Creates a new <see cref="PromptBinding{T}"/> with the same resolver but a different default value.
     /// </summary>
     public PromptBinding<T> WithDefault(T? newDefault) =>
-        new(_parseResult, SymbolDisplayName, _resolver, newDefault, hasExplicitDefault: true);
+        new(_parseResult, SymbolDisplayName, _resolver, newDefault, hasExplicitDefault: true, suppressNonInteractiveErrorDisplay: SuppressNonInteractiveErrorDisplay);
 }
 
 /// <summary>
@@ -87,24 +95,32 @@ internal static class PromptBinding
     }
 
     public static PromptBinding<T> Create<T>(ParseResult parseResult, Option<T> option) =>
-        new(parseResult, FormatOptionName(option), BuildOptionResolver(option), default, hasExplicitDefault: false);
+        new(parseResult, FormatOptionName(option), BuildOptionResolver(option), default, hasExplicitDefault: false, suppressNonInteractiveErrorDisplay: false);
 
     public static PromptBinding<T> Create<T>(ParseResult parseResult, Option<T> option, T defaultValue) =>
-        new(parseResult, FormatOptionName(option), BuildOptionResolver(option), defaultValue, hasExplicitDefault: true);
+        new(parseResult, FormatOptionName(option), BuildOptionResolver(option), defaultValue, hasExplicitDefault: true, suppressNonInteractiveErrorDisplay: false);
 
     /// <summary>
     /// Creates a <see cref="PromptBinding{T}"/> that uses <paramref name="interactiveDefault"/> as the
     /// default for interactive prompts but still requires the CLI option in non-interactive mode.
     /// </summary>
     public static PromptBinding<T> CreateWithInteractiveDefault<T>(ParseResult parseResult, Option<T> option, T interactiveDefault) =>
-        new(parseResult, FormatOptionName(option), BuildOptionResolver(option), interactiveDefault, hasExplicitDefault: false);
+        new(parseResult, FormatOptionName(option), BuildOptionResolver(option), interactiveDefault, hasExplicitDefault: false, suppressNonInteractiveErrorDisplay: false);
 
     /// <summary>
     /// Creates a <see cref="PromptBinding{T}"/> with only a default value and no CLI symbol binding.
     /// Use when there is no corresponding CLI option or argument for the prompt.
     /// </summary>
-    public static PromptBinding<T> CreateDefault<T>(T defaultValue) =>
-        new(null, string.Empty, static _ => (false, default), defaultValue, hasExplicitDefault: true);
+    public static PromptBinding<T> CreateDefault<T>(T defaultValue, bool suppressNonInteractiveErrorDisplay = false) =>
+        new(null, string.Empty, static _ => (false, default), defaultValue, hasExplicitDefault: true, suppressNonInteractiveErrorDisplay: suppressNonInteractiveErrorDisplay);
+
+    /// <summary>
+    /// Creates a <see cref="PromptBinding{T}"/> with only a default value and no CLI symbol binding.
+    /// Use when there is no corresponding CLI option or argument for the prompt, but you want to provide
+    /// a display name for error messages (e.g., the input name from a prompt activity).
+    /// </summary>
+    public static PromptBinding<T> CreateDefault<T>(T defaultValue, string symbolDisplayName, bool suppressNonInteractiveErrorDisplay = false) =>
+        new(null, symbolDisplayName, static _ => (false, default), defaultValue, hasExplicitDefault: true, suppressNonInteractiveErrorDisplay: suppressNonInteractiveErrorDisplay);
 
     /// <summary>
     /// Creates a <see cref="PromptBinding{T}"/> for a <c>bool?</c> option that resolves to the inverse of its value.
@@ -112,7 +128,7 @@ internal static class PromptBinding
     /// When not provided in non-interactive mode, defaults to <paramref name="defaultValue"/>.
     /// </summary>
     public static PromptBinding<bool> CreateInvertedBoolConfirm(ParseResult parseResult, Option<bool?> option, bool defaultValue) =>
-        new(parseResult, FormatOptionName(option), BuildResolver<bool?, bool>(option, value => value != true), defaultValue, hasExplicitDefault: true);
+        new(parseResult, FormatOptionName(option), BuildResolver<bool?, bool>(option, value => value != true), defaultValue, hasExplicitDefault: true, suppressNonInteractiveErrorDisplay: false);
 
     /// <summary>
     /// Creates a <see cref="PromptBinding{T}"/> for a <c>bool?</c> option that maps to Yes/No selection choices.
@@ -123,7 +139,7 @@ internal static class PromptBinding
     {
         trueValue ??= TemplatingStrings.Yes;
         falseValue ??= TemplatingStrings.No;
-        return new(parseResult, FormatOptionName(option), BuildResolver<bool?, string?>(option, value => value == true ? trueValue : falseValue), falseValue, hasExplicitDefault: true);
+        return new(parseResult, FormatOptionName(option), BuildResolver<bool?, string?>(option, value => value == true ? trueValue : falseValue), falseValue, hasExplicitDefault: true, suppressNonInteractiveErrorDisplay: false);
     }
 
     private static string FormatOptionName<T>(Option<T> option) => $"'{option.Name}'";
