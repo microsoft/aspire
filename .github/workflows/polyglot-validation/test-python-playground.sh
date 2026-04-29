@@ -50,9 +50,43 @@ echo ""
 
 FAILED=()
 PASSED=()
+SKIPPED=()
+
+# Packages that only produce prerelease versions (SuppressFinalPackageVersion=true) cannot be
+# restored when the build is stabilized, because aspire restore requests stable versions.
+# Skip these until the build infrastructure dynamically computes versions. See #15335.
+# The "Aspire.Hosting" entry is included because its aspire.config.json transitively depends on
+# Aspire.Hosting.Azure.Kubernetes, which is suppressed.
+SKIP_PREVIEW_ONLY=(
+    "Aspire.Hosting"
+    "Aspire.Hosting.Azure.Kusto"
+    "Aspire.Hosting.Foundry"
+    "Aspire.Hosting.Keycloak"
+    "Aspire.Hosting.Kubernetes"
+    "Aspire.Hosting.Maui"
+)
 
 for app_dir in "${APP_DIRS[@]}"; do
     integration_name="$(basename "$(dirname "$app_dir")")"
+
+    # Check if this integration is in the skip list
+    skip=false
+    for skip_pkg in "${SKIP_PREVIEW_ONLY[@]}"; do
+        if [ "$integration_name" = "$skip_pkg" ]; then
+            skip=true
+            break
+        fi
+    done
+
+    if [ "$skip" = true ]; then
+        echo "----------------------------------------"
+        echo "Testing: $integration_name"
+        echo "----------------------------------------"
+        echo "  -> Skipping (preview-only package, see #15335)"
+        SKIPPED+=("$integration_name")
+        echo ""
+        continue
+    fi
 
     echo "----------------------------------------"
     echo "Testing: $integration_name"
@@ -98,7 +132,7 @@ done
 
 echo ""
 echo "----------------------------------------"
-echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed out of ${#APP_DIRS[@]} AppHosts"
+echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed, ${#SKIPPED[@]} skipped out of ${#APP_DIRS[@]} AppHosts"
 echo "----------------------------------------"
 
 if [ ${#FAILED[@]} -gt 0 ]; then

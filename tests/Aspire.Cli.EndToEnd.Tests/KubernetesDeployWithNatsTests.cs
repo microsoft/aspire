@@ -17,6 +17,7 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
     private const string ProjectName = "K8sDeployTest";
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15335")]
     [CaptureWorkspaceOnFailure]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15789")]
     public async Task DeployK8sWithNats()

@@ -16,6 +16,7 @@ public sealed class KubernetesDeployWithSqlServerTests(ITestOutputHelper output)
     private const string ProjectName = "K8sDeployTest";
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15335")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployK8sWithSqlServer()
     {

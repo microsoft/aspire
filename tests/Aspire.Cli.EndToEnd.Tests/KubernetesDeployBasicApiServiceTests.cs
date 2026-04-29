@@ -16,6 +16,7 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
     private const string ProjectName = "K8sDeployTest";
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15335")]
     [CaptureWorkspaceOnFailure]
     public async Task DeployK8sBasicApiService()
     {

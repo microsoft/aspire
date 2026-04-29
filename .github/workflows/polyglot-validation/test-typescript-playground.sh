@@ -56,6 +56,7 @@ SKIPPED=()
 # restored when the build is stabilized, because aspire restore requests stable versions.
 # Skip these until the build infrastructure dynamically computes versions. See #15335.
 SKIP_PREVIEW_ONLY=(
+    "Aspire.Hosting"
     "Aspire.Hosting.Azure.Kusto"
     "Aspire.Hosting.Foundry"
     "Aspire.Hosting.Keycloak"
