@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(RepoRoot)src\Components\Aspire.Microsoft.DurableTask.AzureManaged\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Components\Aspire.Microsoft.DurableTask.AzureManaged\Aspire.Microsoft.DurableTask.AzureManaged.csproj" />
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
+  </ItemGroup>
+
+</Project>

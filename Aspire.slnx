@@ -22,6 +22,7 @@
     <Project Path="src/Components/Aspire.Microsoft.Azure.Cosmos/Aspire.Microsoft.Azure.Cosmos.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.Azure.StackExchangeRedis/Aspire.Microsoft.Azure.StackExchangeRedis.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.Data.SqlClient/Aspire.Microsoft.Data.SqlClient.csproj" />
+    <Project Path="src/Components/Aspire.Microsoft.DurableTask.AzureManaged/Aspire.Microsoft.DurableTask.AzureManaged.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.EntityFrameworkCore.Cosmos/Aspire.Microsoft.EntityFrameworkCore.Cosmos.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.EntityFrameworkCore.SqlServer/Aspire.Microsoft.EntityFrameworkCore.SqlServer.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.csproj" />
@@ -148,6 +149,10 @@
   <Folder Name="/playground/AzureFunctionsWithDts/">
     <Project Path="playground/AzureFunctionsWithDts/AzureFunctionsWithDts.AppHost/AzureFunctionsWithDts.AppHost.csproj" />
     <Project Path="playground/AzureFunctionsWithDts/AzureFunctionsWithDts.Functions/AzureFunctionsWithDts.Functions.csproj" />
+  </Folder>
+  <Folder Name="/playground/DurableTaskWorkerWithDts/">
+    <Project Path="playground/DurableTaskWorkerWithDts/DurableTaskWorkerWithDts.AppHost/DurableTaskWorkerWithDts.AppHost.csproj" />
+    <Project Path="playground/DurableTaskWorkerWithDts/DurableTaskWorkerWithDts.Worker/DurableTaskWorkerWithDts.Worker.csproj" />
   </Folder>
   <Folder Name="/playground/ProjectResourceExtensions/">
     <Project Path="playground/ProjectResourceExtensions/ProjectResourceExtensions.AppHost/ProjectResourceExtensions.AppHost.csproj" />
@@ -444,6 +449,7 @@
     <Project Path="tests/Aspire.Keycloak.Authentication.Tests/Aspire.Keycloak.Authentication.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Azure.Cosmos.Tests/Aspire.Microsoft.Azure.Cosmos.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Azure.StackExchangeRedis.Tests/Aspire.Microsoft.Azure.StackExchangeRedis.Tests.csproj" />
+    <Project Path="tests/Aspire.Microsoft.DurableTask.AzureManaged.Tests/Aspire.Microsoft.DurableTask.AzureManaged.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Data.SqlClient.Tests/Aspire.Microsoft.Data.SqlClient.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests/Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests.csproj" />

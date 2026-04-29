@@ -112,12 +112,26 @@ public static class DurableTaskResourceExtensions
     /// <param name="builder">The resource builder for the scheduler.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>The same <see cref="IResourceBuilder{DurableTaskSchedulerResource}"/> instance for chaining.</returns>
+    /// <remarks>
+    /// The Durable Task Scheduler emulator stores all orchestration and entity state in memory.
+    /// State is lost when the container is stopped. To preserve the container (and its in-memory state)
+    /// across application restarts, use <see cref="ContainerResourceBuilderExtensions.WithLifetime{T}(IResourceBuilder{T}, ContainerLifetime)"/>
+    /// with <see cref="ContainerLifetime.Persistent"/> in the <paramref name="configureContainer"/> callback.
+    /// </remarks>
     /// <example>
     /// Run the scheduler locally using the emulator:
     /// <code>
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var scheduler = builder.AddDurableTaskScheduler("scheduler")
     ///     .RunAsEmulator();
+    /// </code>
+    /// </example>
+    /// <example>
+    /// Persist the emulator container to preserve in-memory state across application restarts:
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler")
+    ///     .RunAsEmulator(c => c.WithLifetime(ContainerLifetime.Persistent));
     /// </code>
     /// </example>
     [AspireExport(Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
@@ -136,6 +150,7 @@ public static class DurableTaskResourceExtensions
         builder.WithHttpEndpoint(name: "grpc", targetPort: 8080)
                .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
+               .WithHttpHealthCheck(endpointName: "http", path: "/healthz", statusCode: 204)
                .WithHttpEndpoint(name: "dashboard", targetPort: 8082)
                .WithUrlForEndpoint("dashboard", c => c.DisplayText = "Scheduler Dashboard")
                .WithAnnotation(new ContainerImageAnnotation
@@ -281,4 +296,79 @@ public static class DurableTaskResourceExtensions
             IResourceBuilder<ParameterResource> parameter => builder.WithTaskHubName(parameter),
             _ => throw new ArgumentException($"Unexpected task hub name type: {taskHubName.GetType().Name}", nameof(taskHubName))
         };
+
+    /// <summary>
+    /// Modifies the host port that the Durable Task Scheduler emulator listens on for gRPC requests.
+    /// </summary>
+    /// <param name="builder">The emulator resource builder.</param>
+    /// <param name="port">Host port to use.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the emulator.</returns>
+    /// <example>
+    /// Set the gRPC host port:
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler")
+    ///     .RunAsEmulator(c => c.WithGrpcPort(18080));
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Sets the host port for gRPC requests on the Durable Task Scheduler emulator")]
+    public static IResourceBuilder<DurableTaskSchedulerEmulatorResource> WithGrpcPort(this IResourceBuilder<DurableTaskSchedulerEmulatorResource> builder, int port)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithEndpoint("grpc", endpoint =>
+        {
+            endpoint.Port = port;
+        });
+    }
+
+    /// <summary>
+    /// Modifies the host port that the Durable Task Scheduler emulator listens on for HTTP requests.
+    /// </summary>
+    /// <param name="builder">The emulator resource builder.</param>
+    /// <param name="port">Host port to use.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the emulator.</returns>
+    /// <example>
+    /// Set the HTTP host port:
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler")
+    ///     .RunAsEmulator(c => c.WithHttpPort(18081));
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Sets the host port for HTTP requests on the Durable Task Scheduler emulator")]
+    public static IResourceBuilder<DurableTaskSchedulerEmulatorResource> WithHttpPort(this IResourceBuilder<DurableTaskSchedulerEmulatorResource> builder, int port)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithEndpoint("http", endpoint =>
+        {
+            endpoint.Port = port;
+        });
+    }
+
+    /// <summary>
+    /// Modifies the host port that the Durable Task Scheduler emulator listens on for dashboard requests.
+    /// </summary>
+    /// <param name="builder">The emulator resource builder.</param>
+    /// <param name="port">Host port to use.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the emulator.</returns>
+    /// <example>
+    /// Set the dashboard host port:
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler")
+    ///     .RunAsEmulator(c => c.WithDashboardPort(18082));
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Sets the host port for dashboard requests on the Durable Task Scheduler emulator")]
+    public static IResourceBuilder<DurableTaskSchedulerEmulatorResource> WithDashboardPort(this IResourceBuilder<DurableTaskSchedulerEmulatorResource> builder, int port)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithEndpoint("dashboard", endpoint =>
+        {
+            endpoint.Port = port;
+        });
+    }
 }
