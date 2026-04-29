@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       runBaseline:
-        description: 'Run dotnet dev-certs https --trust first for comparison'
+        description: 'Run non-interactive dotnet dev-certs trust checks before the Import-Certificate probe'
         required: false
         type: boolean
         default: true
@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: dotnet --info
 
-      - name: Compare dotnet dev-certs trust baseline
+      - name: Run pre-import dotnet dev-certs checks
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.runBaseline }}
         shell: pwsh
         timeout-minutes: 5
@@ -65,25 +65,22 @@ jobs:
 
           $cleanOutput = dotnet dev-certs https --clean 2>&1 | ForEach-Object { $_.ToString() }
           $cleanExitCode = $LASTEXITCODE
-          $trustOutput = dotnet dev-certs https --trust 2>&1 | ForEach-Object { $_.ToString() }
-          $trustExitCode = $LASTEXITCODE
           $checkOutput = dotnet dev-certs https --check --trust 2>&1 | ForEach-Object { $_.ToString() }
           $checkExitCode = $LASTEXITCODE
+          $machineReadableOutput = dotnet dev-certs https --check-trust-machine-readable 2>&1 | ForEach-Object { $_.ToString() }
+          $machineReadableExitCode = $LASTEXITCODE
 
           [ordered]@{
             StoreLocation = "${{ matrix.storeLocation }}"
             CleanExitCode = $cleanExitCode
             CleanOutput = @($cleanOutput)
-            TrustExitCode = $trustExitCode
-            TrustOutput = @($trustOutput)
             CheckTrustExitCode = $checkExitCode
             CheckTrustOutput = @($checkOutput)
+            CheckTrustMachineReadableExitCode = $machineReadableExitCode
+            CheckTrustMachineReadableOutput = @($machineReadableOutput)
           } | ConvertTo-Json -Depth 6 | Set-Content -Path $baselinePath -Encoding UTF8
 
           Write-Host "Baseline result written to $baselinePath"
-          if ($trustExitCode -ne 0) {
-            Write-Warning "dotnet dev-certs https --trust failed with exit code $trustExitCode"
-          }
 
       - name: Reset dev certs before Import-Certificate probe
         if: always()

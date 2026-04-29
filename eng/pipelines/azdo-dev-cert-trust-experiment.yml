@@ -42,26 +42,23 @@ stages:
 
         $cleanOutput = & $dotnetPath dev-certs https --clean 2>&1 | ForEach-Object { $_.ToString() }
         $cleanExitCode = $LASTEXITCODE
-        $trustOutput = & $dotnetPath dev-certs https --trust 2>&1 | ForEach-Object { $_.ToString() }
-        $trustExitCode = $LASTEXITCODE
         $checkOutput = & $dotnetPath dev-certs https --check --trust 2>&1 | ForEach-Object { $_.ToString() }
         $checkExitCode = $LASTEXITCODE
+        $machineReadableOutput = & $dotnetPath dev-certs https --check-trust-machine-readable 2>&1 | ForEach-Object { $_.ToString() }
+        $machineReadableExitCode = $LASTEXITCODE
 
         [ordered]@{
           StoreLocation = "$(StoreLocation)"
           CleanExitCode = $cleanExitCode
           CleanOutput = @($cleanOutput)
-          TrustExitCode = $trustExitCode
-          TrustOutput = @($trustOutput)
           CheckTrustExitCode = $checkExitCode
           CheckTrustOutput = @($checkOutput)
+          CheckTrustMachineReadableExitCode = $machineReadableExitCode
+          CheckTrustMachineReadableOutput = @($machineReadableOutput)
         } | ConvertTo-Json -Depth 6 | Set-Content -Path $baselinePath -Encoding UTF8
 
         Write-Host "Baseline result written to $baselinePath"
-        if ($trustExitCode -ne 0) {
-          Write-Warning "dotnet dev-certs https --trust failed with exit code $trustExitCode"
-        }
-      displayName: Compare dotnet dev-certs trust baseline
+      displayName: Run pre-import dotnet dev-certs checks
       timeoutInMinutes: 5
       continueOnError: true
 
