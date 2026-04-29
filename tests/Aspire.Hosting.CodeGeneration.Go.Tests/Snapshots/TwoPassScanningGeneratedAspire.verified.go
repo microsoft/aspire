@@ -10149,6 +10149,18 @@ func NewIDistributedApplicationPipeline(handle *Handle, client *AspireClient) *I
 	}
 }
 
+// DisableBuildOnlyContainerValidation disables publish and deploy validation for unconsumed build-only containers.
+func (s *IDistributedApplicationPipeline) DisableBuildOnlyContainerValidation() (*IDistributedApplicationPipeline, error) {
+	reqArgs := map[string]any{
+		"pipeline": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IDistributedApplicationPipeline), nil
+}
+
 // AddStep adds a pipeline step to the application
 func (s *IDistributedApplicationPipeline) AddStep(stepName string, callback func(...any) any, dependsOn []string, requiredBy []string) error {
 	reqArgs := map[string]any{

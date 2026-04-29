@@ -6285,6 +6285,8 @@ class DistributedApplicationEventingPromiseImpl implements DistributedApplicatio
 
 export interface DistributedApplicationPipeline {
     toJSON(): MarshalledHandle;
+    /** Disables publish and deploy validation for unconsumed build-only containers. */
+    disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /** Adds a pipeline step to the application */
     addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise;
     /** Configures the application pipeline via a callback */
@@ -6292,6 +6294,8 @@ export interface DistributedApplicationPipeline {
 }
 
 export interface DistributedApplicationPipelinePromise extends PromiseLike<DistributedApplicationPipeline> {
+    /** Disables publish and deploy validation for unconsumed build-only containers. */
+    disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /** Adds a pipeline step to the application */
     addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise;
     /** Configures the application pipeline via a callback */
@@ -6310,6 +6314,20 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** @internal */
+    async _disableBuildOnlyContainerValidationInternal(): Promise<DistributedApplicationPipeline> {
+        const rpcArgs: Record<string, unknown> = { pipeline: this._handle };
+        const result = await this._client.invokeCapability<IDistributedApplicationPipelineHandle>(
+            'Aspire.Hosting/disableBuildOnlyContainerValidation',
+            rpcArgs
+        );
+        return new DistributedApplicationPipelineImpl(result, this._client);
+    }
+
+    disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise {
+        return new DistributedApplicationPipelinePromiseImpl(this._disableBuildOnlyContainerValidationInternal(), this._client);
+    }
 
     /** @internal */
     async _addStepInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[]): Promise<DistributedApplicationPipeline> {
@@ -6368,6 +6386,10 @@ class DistributedApplicationPipelinePromiseImpl implements DistributedApplicatio
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise {
+        return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.disableBuildOnlyContainerValidation()), this._client);
     }
 
     addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise {
