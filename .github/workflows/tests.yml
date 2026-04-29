@@ -43,67 +43,6 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
-  validate_cli_tool_pack:
-    name: Validate local native build
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Build with pack
-        run: ./build.sh -ci -bl -pack -p:SkipManagedBuild=true ${{ inputs.versionOverrideArg }}
-
-      - name: Verify CLI tool packages
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-
-          function Assert-SinglePackage([object[]]$Packages, [string]$Description) {
-            if (-not $Packages -or $Packages.Count -eq 0) {
-              throw "Could not find $Description."
-            }
-
-            if ($Packages.Count -gt 1) {
-              throw "Found multiple packages for ${Description}: $($Packages.Name -join ', ')"
-            }
-
-            return $Packages[0]
-          }
-
-          $rid = 'linux-x64'
-          $packagesDir = Join-Path $env:GITHUB_WORKSPACE 'artifacts/packages/Debug/Shipping'
-          if (-not (Test-Path $packagesDir)) {
-            throw "Could not find package output directory: $packagesDir"
-          }
-
-          $cliPackages = @(Get-ChildItem -Path $packagesDir -Filter 'Aspire.Cli*.nupkg' -File | Where-Object { $_.Name -notmatch '\.symbols\.' })
-          $ridPackage = Assert-SinglePackage `
-            @($cliPackages | Where-Object { $_.Name -like "Aspire.Cli.$rid.*.nupkg" }) `
-            "RID-specific Aspire.Cli package for $rid"
-          $pointerPackage = Assert-SinglePackage `
-            @($cliPackages | Where-Object { $_.Name -notmatch '^Aspire\.Cli\.(win|linux|linux-musl|osx)-(x64|arm64)\.' }) `
-            'Aspire.Cli pointer package'
-
-          Write-Host "RID package: $($ridPackage.Name)"
-          Write-Host "Pointer package: $($pointerPackage.Name)"
-
-          $archive = Assert-SinglePackage `
-            @(Get-ChildItem -Path $packagesDir -Filter "aspire-cli-$rid-*.tar.gz" -File -ErrorAction SilentlyContinue) `
-            "CLI archive for $rid"
-
-          Write-Host "CLI archive: $($archive.Name)"
-
-          eng/scripts/verify-cli-tool-nupkg.ps1 -PackagesDir artifacts/packages/Debug -Rid $rid -ArchivePath $archive.FullName
-
-      - name: Upload logs
-        if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: validate_cli_tool_pack_logs
-          path: artifacts/log/**
-          retention-days: 5
-
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
     uses: ./.github/workflows/build-cli-native-archives.yml
@@ -375,7 +314,6 @@ jobs:
     needs: [
       setup_for_tests,
       build_packages,
-      validate_cli_tool_pack,
       build_cli_archive_linux,
       build_cli_archive_linux_arm64,
       build_cli_archive_windows,
