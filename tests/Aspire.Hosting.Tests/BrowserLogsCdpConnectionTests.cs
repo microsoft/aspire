@@ -146,10 +146,148 @@ public class BrowserLogsCdpConnectionTests
         await pair.ServerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None).DefaultTimeout();
     }
 
+    [Fact]
+    public async Task CreateWithPipeTransport_UsesNullDelimitedFrames()
+    {
+        var appToBrowser = new Pipe();
+        var browserToApp = new Pipe();
+        await using var browserRead = appToBrowser.Reader.AsStream();
+        await using var browserWrite = browserToApp.Writer.AsStream();
+        var routedEventSource = new TaskCompletionSource<BrowserLogsCdpProtocolEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var connection = BrowserLogsCdpConnection.Create(
+            new BrowserLogsPipeCdpTransport(browserToApp.Reader.AsStream(), appToBrowser.Writer.AsStream()),
+            protocolEvent =>
+            {
+                routedEventSource.TrySetResult(protocolEvent);
+                return ValueTask.CompletedTask;
+            },
+            NullLogger<BrowserLogsSessionManager>.Instance);
+
+        var createTargetTask = connection.CreateTargetAsync(CancellationToken.None);
+        var command = ParseReceivedCommand(await ReceiveNullTerminatedFrameAsync(browserRead).DefaultTimeout());
+        Assert.Equal(BrowserLogsCdpProtocol.TargetCreateTargetMethod, command.Method);
+        Assert.Equal("about:blank", command.Url);
+
+        await SendNullTerminatedFramesAsync(
+            browserWrite,
+            """
+            {
+              "method": "Runtime.consoleAPICalled",
+              "sessionId": "target-session-1",
+              "params": {
+                "type": "log",
+                "args": []
+              }
+            }
+            """,
+            $$"""
+            {
+              "id": {{command.Id}},
+              "result": {
+                "targetId": "created-target"
+              }
+            }
+            """).DefaultTimeout();
+
+        var routedEvent = Assert.IsType<BrowserLogsConsoleApiCalledEvent>(await routedEventSource.Task.DefaultTimeout());
+        Assert.Equal("target-session-1", routedEvent.SessionId);
+        Assert.Equal("log", routedEvent.Parameters.Type);
+
+        var result = await createTargetTask.DefaultTimeout();
+        Assert.Equal("created-target", result.TargetId);
+    }
+
+    [Fact]
+    public async Task MultiplexerLeasesShareCommandsAndBroadcastEvents()
+    {
+        FakeSharedCdpConnection? innerConnection = null;
+        await using var multiplexer = new BrowserLogsCdpConnectionMultiplexer(
+            eventHandler =>
+            {
+                innerConnection = new FakeSharedCdpConnection(eventHandler);
+                return innerConnection;
+            },
+            NullLogger<BrowserLogsSessionManager>.Instance);
+
+        var firstEvents = new List<BrowserLogsCdpProtocolEvent>();
+        var secondEvents = new List<BrowserLogsCdpProtocolEvent>();
+        await using var firstConnection = multiplexer.CreateConnection(protocolEvent =>
+        {
+            firstEvents.Add(protocolEvent);
+            return ValueTask.CompletedTask;
+        });
+        await using var secondConnection = multiplexer.CreateConnection(protocolEvent =>
+        {
+            secondEvents.Add(protocolEvent);
+            return ValueTask.CompletedTask;
+        });
+
+        var result = await firstConnection.CreateTargetAsync(CancellationToken.None);
+        Assert.Equal("created-target", result.TargetId);
+        Assert.Equal(1, innerConnection!.CreateTargetCount);
+
+        var firstEvent = CreateConsoleEvent("target-session-1");
+        await innerConnection.RaiseEventAsync(firstEvent);
+        Assert.Same(firstEvent, Assert.Single(firstEvents));
+        Assert.Same(firstEvent, Assert.Single(secondEvents));
+
+        await firstConnection.DisposeAsync();
+        await firstConnection.Completion.DefaultTimeout();
+        Assert.False(innerConnection.Disposed);
+
+        var secondEvent = CreateConsoleEvent("target-session-2");
+        await innerConnection.RaiseEventAsync(secondEvent);
+        Assert.Single(firstEvents);
+        Assert.Equal(2, secondEvents.Count);
+        Assert.Same(secondEvent, secondEvents[1]);
+        Assert.False(secondConnection.Completion.IsCompleted);
+    }
+
+    [Fact]
+    public async Task MultiplexerFaultsOnlyFailingSubscriberWhenEventHandlerThrows()
+    {
+        FakeSharedCdpConnection? innerConnection = null;
+        await using var multiplexer = new BrowserLogsCdpConnectionMultiplexer(
+            eventHandler =>
+            {
+                innerConnection = new FakeSharedCdpConnection(eventHandler);
+                return innerConnection;
+            },
+            NullLogger<BrowserLogsSessionManager>.Instance);
+
+        await using var failingConnection = multiplexer.CreateConnection(_ => throw new InvalidOperationException("boom"));
+        var survivingEvents = new List<BrowserLogsCdpProtocolEvent>();
+        await using var survivingConnection = multiplexer.CreateConnection(protocolEvent =>
+        {
+            survivingEvents.Add(protocolEvent);
+            return ValueTask.CompletedTask;
+        });
+
+        var protocolEvent = CreateConsoleEvent("target-session-1");
+        await innerConnection!.RaiseEventAsync(protocolEvent);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => failingConnection.Completion.DefaultTimeout());
+        Assert.Equal("Tracked browser CDP event handler failed.", exception.Message);
+        Assert.Same(protocolEvent, Assert.Single(survivingEvents));
+        Assert.False(survivingConnection.Completion.IsCompleted);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => failingConnection.CreateTargetAsync(CancellationToken.None));
+    }
+
     private static async Task<ReceivedCommand> ReceiveCommandAsync(WebSocket socket)
     {
         using var document = await ReceiveJsonDocumentAsync(socket).DefaultTimeout();
-        var root = document.RootElement;
+        return ParseReceivedCommand(document.RootElement);
+    }
+
+    private static ReceivedCommand ParseReceivedCommand(byte[] json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return ParseReceivedCommand(document.RootElement);
+    }
+
+    private static ReceivedCommand ParseReceivedCommand(JsonElement root)
+    {
         var id = root.GetProperty("id").GetInt64();
         var method = root.GetProperty("method").GetString()!;
         var sessionId = root.TryGetProperty("sessionId", out var sessionIdElement)
@@ -172,6 +310,17 @@ public class BrowserLogsCdpConnectionTests
             : (bool?)null;
 
         return new ReceivedCommand(id, method, sessionId, targetId, url, format, fromSurface);
+    }
+
+    private static BrowserLogsConsoleApiCalledEvent CreateConsoleEvent(string sessionId)
+    {
+        return new BrowserLogsConsoleApiCalledEvent(
+            sessionId,
+            new BrowserLogsRuntimeConsoleApiCalledParameters
+            {
+                Type = "log",
+                Args = []
+            });
     }
 
     private static async Task<JsonDocument> ReceiveJsonDocumentAsync(WebSocket socket)
@@ -200,7 +349,104 @@ public class BrowserLogsCdpConnectionTests
         return socket.SendAsync(Encoding.UTF8.GetBytes(text), WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
     }
 
+    private static async Task<byte[]> ReceiveNullTerminatedFrameAsync(Stream stream)
+    {
+        using var frame = new MemoryStream();
+        var oneByte = new byte[1];
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(oneByte);
+            if (read == 0)
+            {
+                throw new EndOfStreamException("The stream closed before a null-terminated frame was received.");
+            }
+
+            if (oneByte[0] == 0)
+            {
+                return frame.ToArray();
+            }
+
+            frame.WriteByte(oneByte[0]);
+        }
+    }
+
+    private static async Task SendNullTerminatedFramesAsync(Stream stream, params string[] frames)
+    {
+        foreach (var frame in frames)
+        {
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(frame));
+            await stream.WriteAsync(new byte[] { 0 });
+        }
+
+        await stream.FlushAsync();
+    }
+
     private sealed record ReceivedCommand(long Id, string Method, string? SessionId, string? TargetId, string? Url, string? Format, bool? FromSurface);
+
+    private sealed class FakeSharedCdpConnection(Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler) : IBrowserLogsCdpConnection
+    {
+        private readonly TaskCompletionSource _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int CreateTargetCount { get; private set; }
+
+        public bool Disposed { get; private set; }
+
+        public Task Completion => _completionSource.Task;
+
+        public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
+        {
+            return eventHandler(protocolEvent);
+        }
+
+        public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
+        {
+            CreateTargetCount++;
+            return Task.FromResult(new BrowserLogsCreateTargetResult { TargetId = "created-target" });
+        }
+
+        public Task<BrowserLogsGetTargetsResult> GetTargetsAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new BrowserLogsGetTargetsResult { TargetInfos = [] });
+        }
+
+        public Task<BrowserLogsAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new BrowserLogsAttachToTargetResult { SessionId = "attached-session" });
+        }
+
+        public Task<BrowserLogsCommandAck> CloseTargetAsync(string targetId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(BrowserLogsCommandAck.Instance);
+        }
+
+        public Task<BrowserLogsCommandAck> EnableTargetDiscoveryAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(BrowserLogsCommandAck.Instance);
+        }
+
+        public Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new BrowserLogsCaptureScreenshotResult { Data = "image-data" });
+        }
+
+        public Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(BrowserLogsCommandAck.Instance);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            _completionSource.TrySetResult();
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private sealed class ConnectedClientWebSocketConnector(WebSocket webSocket) : IClientWebSocketConnector
     {

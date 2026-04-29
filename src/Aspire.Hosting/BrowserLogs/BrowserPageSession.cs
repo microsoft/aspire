@@ -7,7 +7,6 @@ namespace Aspire.Hosting;
 
 // Factory for browser-level CDP connections.
 internal delegate Task<IBrowserLogsCdpConnection> BrowserLogsCdpConnectionFactory(
-    Uri webSocketUri,
     Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
     ILogger<BrowserLogsSessionManager> logger,
     CancellationToken cancellationToken);
@@ -18,7 +17,7 @@ internal delegate Task<IBrowserLogsCdpConnection> BrowserLogsCdpConnectionFactor
 // reconnection loop.
 internal sealed class BrowserPageSession : IBrowserPageSession
 {
-    // Keep reconnects quick and local to transient websocket loss. A 200 ms cadence gives the browser a few chances to
+    // Keep reconnects quick and local to transient CDP connection loss. A 200 ms cadence gives the browser a few chances to
     // recover within the 5 s window without making the dashboard look healthy after the page is truly gone. Target close
     // uses a shorter 3 s budget because disposal should not block AppHost shutdown on an unresponsive browser.
     private static readonly TimeSpan s_connectionRecoveryDelay = TimeSpan.FromMilliseconds(200);
@@ -32,7 +31,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     private readonly IBrowserHost _host;
     // Serializes every operation that replaces, disposes, or sends a command through the current CDP connection.
     // Without this, screenshot capture can read a live connection reference while reconnect/dispose tears down that
-    // same websocket underneath it.
+    // same connection underneath it.
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly bool _reuseInitialBlankTarget;
@@ -141,8 +140,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
             sessionId,
             url,
             connectionDiagnostics,
-            static async (webSocketUri, eventHandler, logger, cancellationToken) =>
-                await BrowserLogsCdpConnection.ConnectAsync(webSocketUri, eventHandler, logger, cancellationToken).ConfigureAwait(false),
+            host.CreateCdpConnectionAsync,
             eventHandler,
             logger,
             timeProvider,
@@ -187,7 +185,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
         // Cancel first so any in-flight screenshot command holding _connectionLock is interrupted before disposal waits
         // for the lock. Once the lock is acquired, no new capture/reconnect can use the connection while the target is
-        // being closed and the websocket is being disposed.
+        // being closed and the connection is being disposed.
         await _connectionLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
@@ -231,7 +229,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
     private async Task ConnectAsync(bool createTarget, CancellationToken cancellationToken)
     {
-        // ConnectAsync is used for startup and reconnect. It swaps the current websocket, target attachment, and target
+        // ConnectAsync is used for startup and reconnect. It swaps the current CDP connection, target attachment, and target
         // session id as one critical section so command callers never observe a half-attached page session.
         await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -239,9 +237,9 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         {
             await DisposeConnectionCoreAsync().ConfigureAwait(false);
 
-            _connection = await _connectionFactory(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
+            _connection = await _connectionFactory(HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
             // Target discovery must be re-enabled for every browser-level connection, including reconnects. The
-            // subscription is attached to this websocket, not to the browser process, and it is what makes Chromium emit
+            // subscription is attached to this connection, not to the browser process, and it is what makes Chromium emit
             // targetDestroyed/targetCrashed/detachedFromTarget events that tell us whether the tracked tab is gone.
             await _connection.EnableTargetDiscoveryAsync(cancellationToken).ConfigureAwait(false);
 
@@ -255,7 +253,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
                 throw new InvalidOperationException("Tracked browser target id is not available.");
             }
 
-            // Reconnects reuse the existing target id. A transient websocket drop does not necessarily close the browser
+            // Reconnects reuse the existing target id. A transient CDP connection drop does not necessarily close the browser
             // tab, so recovering should reattach to the same page instead of opening a duplicate tab in the user's browser.
             var attachToTargetResult = await _connection.AttachToTargetAsync(_targetId, cancellationToken).ConfigureAwait(false);
             _targetSessionId = attachToTargetResult.SessionId
@@ -382,7 +380,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     {
         await DisposeConnectionAsync().ConfigureAwait(false);
 
-        // In a real browser the CDP websocket can disappear briefly while the tab keeps running (for example during
+        // In a real browser the CDP connection can disappear briefly while the tab keeps running (for example during
         // browser hiccups or network stack resets). Give it a short recovery window so logs continue without opening
         // another tab, but fail fast enough that the dashboard does not look healthy after the target is truly gone.
         var reconnectDeadline = _timeProvider.GetUtcNow() + s_connectionRecoveryTimeout;

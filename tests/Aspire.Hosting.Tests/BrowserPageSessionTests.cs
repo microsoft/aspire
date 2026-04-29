@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
@@ -53,7 +54,7 @@ public class BrowserPageSessionTests
             "session-0001",
             new Uri("https://localhost:5001/"),
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
-            CreateConnectionFactory(host, connection),
+            CreateConnectionFactory(connection),
             protocolEvent =>
             {
                 routedEvents.Add(protocolEvent);
@@ -111,7 +112,7 @@ public class BrowserPageSessionTests
             "session-0001",
             new Uri("https://localhost:5001/"),
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
-            CreateConnectionFactory(host, connection),
+            CreateConnectionFactory(connection),
             static _ => ValueTask.CompletedTask,
             NullLogger<BrowserLogsSessionManager>.Instance,
             TimeProvider.System,
@@ -151,7 +152,7 @@ public class BrowserPageSessionTests
             "session-0001",
             new Uri("https://localhost:5001/"),
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
-            CreateConnectionFactory(host, connection),
+            CreateConnectionFactory(connection),
             static _ => ValueTask.CompletedTask,
             NullLogger<BrowserLogsSessionManager>.Instance,
             TimeProvider.System,
@@ -181,7 +182,7 @@ public class BrowserPageSessionTests
             "session-0001",
             new Uri("https://localhost:5001/"),
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
-            CreateConnectionFactory(host, connection),
+            CreateConnectionFactory(connection),
             static _ => ValueTask.CompletedTask,
             NullLogger<BrowserLogsSessionManager>.Instance,
             TimeProvider.System,
@@ -219,7 +220,7 @@ public class BrowserPageSessionTests
             "session-0001",
             new Uri("https://localhost:5001/"),
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
-            CreateConnectionFactory(host, firstConnection, secondConnection),
+            CreateConnectionFactory(firstConnection, secondConnection),
             protocolEvent =>
             {
                 routedEvents.Add(protocolEvent);
@@ -266,12 +267,11 @@ public class BrowserPageSessionTests
         await session.DisposeAsync();
     }
 
-    private static BrowserLogsCdpConnectionFactory CreateConnectionFactory(TestBrowserHost host, params FakeBrowserLogsCdpConnection[] connections)
+    private static BrowserLogsCdpConnectionFactory CreateConnectionFactory(params FakeBrowserLogsCdpConnection[] connections)
     {
         var nextConnectionIndex = 0;
-        return (webSocketUri, eventHandler, _, _) =>
+        return (eventHandler, _, _) =>
         {
-            Assert.Equal(host.DebugEndpoint, webSocketUri);
             Assert.True(nextConnectionIndex < connections.Length);
             var connection = connections[nextConnectionIndex++];
             connection.SetEventHandler(eventHandler);
@@ -296,6 +296,12 @@ public class BrowserPageSessionTests
         public string BrowserDisplayName => "Test";
 
         public Task Termination => _terminationSource.Task;
+
+        public Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
+            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            ILogger<BrowserLogsSessionManager> logger,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<IBrowserPageSession> CreatePageSessionAsync(
             string sessionId,
