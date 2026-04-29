@@ -28,8 +28,8 @@ public static class DistributedApplicationPipelineExtensions
 
         pipeline.AddPipelineConfiguration(static context =>
         {
-            var validationStep = context.Steps.Single(step => step.Name == DistributedApplicationPipeline.ValidateBuildOnlyContainerReferencesStepName);
-            validationStep.RequiredBySteps.Clear();
+            var validationStep = context.Steps.SingleOrDefault(step => step.Name == DistributedApplicationPipeline.ValidateBuildOnlyContainerReferencesStepName);
+            validationStep?.RequiredBySteps.Clear();
             return Task.CompletedTask;
         });
 
