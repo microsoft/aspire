@@ -985,10 +985,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    [InlineData(null)]
-    public async Task Configuration_DisableAI_EnsureValueSetOnOptions(bool? value)
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(null, true)]
+    public async Task Configuration_DisableAI_EnsureValueSetOnOptions(bool? value, bool expectedAIDisabled)
     {
         // Arrange & Act
         var testCert = TelemetryTestHelpers.GenerateDummyCertificate();
@@ -1008,8 +1008,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         var aiContextProvider = app.Services.GetRequiredService<IAIContextProvider>();
 
         // Assert
-        Assert.Equal(value, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
-        Assert.Equal(!(value ?? false), aiContextProvider.Enabled);
+        Assert.Equal(expectedAIDisabled, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
+        Assert.Equal(!expectedAIDisabled, aiContextProvider.Enabled);
     }
 
     [Fact]
