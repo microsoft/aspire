@@ -246,6 +246,7 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter)
     {
         var expectedVersion = strategy.ExpectedVersion;
+        var recordVersionCommand = GetRecordAspireCliVersionCommand(strategy, "VER", "BASE_VER");
 
         if (expectedVersion is null)
         {
@@ -258,7 +259,10 @@ internal static class CliE2EAutomatorHelpers
             }
 
             // No version to verify — just log for diagnostics
-            await auto.LogAspireCliVersionAsync(counter);
+            await auto.TypeAsync(
+                $"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && echo \"$VER\" && {recordVersionCommand}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
             return;
         }
 
@@ -267,7 +271,8 @@ internal static class CliE2EAutomatorHelpers
             $"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && " +
             $"[ \"$BASE_VER\" = \"{expectedVersion}\" ] && " +
             $"echo \"CLI_VERSION_EXACT:$VER\" || " +
-            $"echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"");
+            $"echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"; " +
+            recordVersionCommand);
         await auto.EnterAsync();
 
         var foundExact = false;
@@ -290,6 +295,42 @@ internal static class CliE2EAutomatorHelpers
         Assert.True(foundExact,
             $"Aspire CLI version mismatch. Expected '{expectedVersion}' (from {strategy.Mode}) " +
             "but got a different version. This may indicate the wrong CLI binary was installed.");
+    }
+
+    internal static string GetRecordAspireCliVersionCommand(
+        CliInstallStrategy strategy,
+        string versionVariableName,
+        string baseVersionVariableName)
+    {
+        var requestedVersion = strategy.ExpectedVersion ?? strategy.Version ?? "";
+        var testName = GetCurrentTestName();
+
+        return
+            "if [ -n \"${ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR:-}\" ]; then " +
+            "if mkdir -p \"$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\" && " +
+            "CLI_VERSION_RECORD=\"$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR/$(date +%s%N)-$$.env\" && " +
+            "{ " +
+            $"printf '%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg($"test={testName}")}; " +
+            $"printf '%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg($"mode={strategy.Mode}")}; " +
+            $"printf '%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg($"strategy={strategy}")}; " +
+            $"printf '%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg($"expected={requestedVersion}")}; " +
+            $"printf 'version=%s\\n' \"${versionVariableName}\"; " +
+            $"printf 'baseVersion=%s\\n' \"${baseVersionVariableName}\"; " +
+            "} > \"$CLI_VERSION_RECORD\"; then " +
+            "echo \"CLI_VERSION_RECORDED:$CLI_VERSION_RECORD\"; " +
+            "else " +
+            "echo \"CLI_VERSION_RECORD_FAILED:$ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR\"; " +
+            "fi; " +
+            "fi";
+    }
+
+    private static string GetCurrentTestName()
+    {
+        var testCase = TestContext.Current.TestCase;
+
+        return testCase is null
+            ? "unknown"
+            : $"{testCase.TestClassName}.{testCase.TestMethodName}";
     }
 
     /// <summary>

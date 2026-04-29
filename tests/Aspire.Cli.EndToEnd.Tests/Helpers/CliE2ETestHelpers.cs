@@ -18,6 +18,8 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
+    internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
 
     /// <summary>
@@ -198,6 +200,14 @@ internal static class CliE2ETestHelpers
                 if (workspace is not null)
                 {
                     c.Volumes.Add($"{workspace.WorkspaceRoot.FullName}:/workspace/{workspace.WorkspaceRoot.Name}");
+                }
+
+                var cliVersionOutputDir = Environment.GetEnvironmentVariable(CliVersionOutputDirEnvironmentVariableName);
+                if (!string.IsNullOrEmpty(cliVersionOutputDir))
+                {
+                    Directory.CreateDirectory(cliVersionOutputDir);
+                    c.Volumes.Add($"{cliVersionOutputDir}:{ContainerCliVersionOutputDir}");
+                    c.Environment[CliVersionOutputDirEnvironmentVariableName] = ContainerCliVersionOutputDir;
                 }
 
                 if (additionalVolumes is not null)
