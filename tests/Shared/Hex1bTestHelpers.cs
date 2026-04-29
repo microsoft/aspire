@@ -494,11 +494,12 @@ internal static class Hex1bTestHelpers
 
             if (!useRedisCache)
             {
-                // Default is "Yes", navigate to "No"
-                builder.Key(Hex1bKey.DownArrow);
+                builder.Type("n");
             }
-
-            builder.Enter();
+            else
+            {
+                builder.Enter();
+            }
         }
 
         // Step 7: Test project prompt (only Starter)
