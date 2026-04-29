@@ -9,8 +9,10 @@
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <!--
       CS8002: Referenced assembly does not have a strong name
+      OPENAI001: OpenAI Responses API types are marked as preview/evaluation
+      OPENAICUA001: OpenAI computer-use API types are marked as preview/evaluation
     -->
-    <NoWarn>$(NoWarn);CS8002;ASPIRECOMPUTE001;ASPIREPIPELINES001;ASPIREAZURE001;ASPIREPIPELINES003;ASPIREINTERACTION001</NoWarn>
+    <NoWarn>$(NoWarn);CS8002;ASPIRECOMPUTE001;ASPIREPIPELINES001;ASPIREAZURE001;ASPIREPIPELINES003;ASPIREINTERACTION001;OPENAI001;OPENAICUA001;AAIP001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,6 +39,7 @@
     <PackageReference Include="Azure.Provisioning.ContainerRegistry" />
     <PackageReference Include="Microsoft.AI.Foundry.Local" />
     <PackageReference Include="Microsoft.Bcl.Memory" />
+    <PackageReference Include="Polly.Core" />
   </ItemGroup>
 
 </Project>

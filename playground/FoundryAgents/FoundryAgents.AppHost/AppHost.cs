@@ -24,6 +24,21 @@ var project = foundry.AddProject("proj-myproject")
     });
 var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
 
+// --- Prompt agent tools ---
+
+var search = builder.AddAzureSearch("search")
+    .ConfigureInfrastructure(infra =>
+    {
+        var searchService = infra.GetProvisionableResources()
+            .OfType<Azure.Provisioning.Search.SearchService>()
+            .Single();
+        searchService.SearchSkuName = Azure.Provisioning.Search.SearchServiceSkuName.Free;
+    });
+var aiSearchTool = project.AddAISearchTool("aisearch-tool", indexName: "default")
+    .WithReference(search);
+
+var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
+
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithUv()
     .WithReference(project).WithReference(chat).WaitFor(chat)
@@ -33,5 +48,30 @@ builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
     .WithHttpEndpoint(targetPort: 9000)
     .WithReference(project).WithReference(chat).WaitFor(chat)
     .PublishAsHostedAgent(project);
+
+// --- Prompt Agents ---
+
+var researchAgent = project.AddPromptAgent(chat, "research-agent",
+    instructions: """
+        You are a research assistant. When asked a question:
+        1. Use Bing grounding to search the web for current information
+        2. Use the code interpreter to analyze data or perform calculations
+        Always cite your sources and be thorough in your analysis.
+        """)
+    .WithTool(aiSearchTool)
+    .WithTool(codeInterpreter);
+
+var jokerAgent = project.AddPromptAgent(chat, "joker-agent",
+    instructions: """
+        You are a hilarious comedian. Tell jokes, be witty, and make people laugh.
+        If someone asks you to analyze something, use the code interpreter to
+        create funny charts or calculations about the topic.
+        """)
+    .WithTool(codeInterpreter);
+
+builder.AddProject<Projects.PromptAgentChat>("chat-app")
+    .WithExternalHttpEndpoints()
+    .WithReference(jokerAgent).WaitFor(jokerAgent)
+    .WithReference(researchAgent).WaitFor(researchAgent);
 
 builder.Build().Run();

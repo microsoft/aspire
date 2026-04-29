@@ -1017,9 +1017,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
         foreach (var handleType in handleTypes.OrderBy(t => t.ClassName, StringComparer.Ordinal))
         {
-            var baseClass = handleType.IsResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
             WriteLine($"/** Wrapper for {handleType.TypeId}. */");
-            WriteLine($"class {handleType.ClassName} extends {baseClass} {{");
+            WriteLine($"class {handleType.ClassName} extends {handleType.BaseClassName} {{");
             WriteLine($"    {handleType.ClassName}(Handle handle, AspireClient client) {{");
             WriteLine("        super(handle, client);");
             WriteLine("    }");
@@ -1906,6 +1905,12 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 g => g.Key,
                 g => g.Any(t => t.IsResourceBuilder),
                 StringComparer.Ordinal);
+        var handleTypeInfoMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.Ordinal);
         var results = new List<JavaHandleType>();
         foreach (var typeId in handleTypeIds)
         {
@@ -1916,7 +1921,21 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             }
 
             var className = _classNames[typeId];
-            results.Add(new JavaHandleType(typeId, className, isResourceBuilder));
+            var baseClassName = isResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
+
+            if (handleTypeInfoMap.TryGetValue(typeId, out var handleTypeInfo))
+            {
+                var exportedBaseType = handleTypeInfo.BaseTypeHierarchy
+                    .FirstOrDefault(baseType => !string.Equals(baseType.TypeId, typeId, StringComparison.Ordinal)
+                        && _classNames.ContainsKey(baseType.TypeId));
+
+                if (exportedBaseType is not null)
+                {
+                    baseClassName = _classNames[exportedBaseType.TypeId];
+                }
+            }
+
+            results.Add(new JavaHandleType(typeId, className, isResourceBuilder, baseClassName));
             if (isResourceBuilder)
             {
                 _resourceBuilderHandleClasses.Add(className);
@@ -2239,7 +2258,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         _writer.WriteLine(value);
     }
 
-    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder);
+    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder, string BaseClassName);
     private sealed record JavaMethodParameter(
         string Type,
         string Name,

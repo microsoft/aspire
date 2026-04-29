@@ -1461,7 +1461,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource. */
-public class CSharpAppResource extends ResourceBuilderBase {
+public class CSharpAppResource extends ProjectResource {
     CSharpAppResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -6337,7 +6337,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationResourceEventSubscription. */
-public class DistributedApplicationResourceEventSubscription extends HandleWrapperBase {
+public class DistributedApplicationResourceEventSubscription extends DistributedApplicationEventSubscription {
     DistributedApplicationResourceEventSubscription(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -6651,7 +6651,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource. */
-public class DotnetToolResource extends ResourceBuilderBase {
+public class DotnetToolResource extends ExecutableResource {
     DotnetToolResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -16591,7 +16591,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource. */
-public class TestDatabaseResource extends ResourceBuilderBase {
+public class TestDatabaseResource extends ContainerResource {
     TestDatabaseResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -18524,7 +18524,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource. */
-public class TestRedisResource extends ResourceBuilderBase {
+public class TestRedisResource extends ContainerResource {
     TestRedisResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -20550,7 +20550,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource. */
-public class TestVaultResource extends ResourceBuilderBase {
+public class TestVaultResource extends ContainerResource {
     TestVaultResource(Handle handle, AspireClient client) {
         super(handle, client);
     }

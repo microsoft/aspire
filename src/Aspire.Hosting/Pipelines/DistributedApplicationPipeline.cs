@@ -334,6 +334,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Action = _ => Task.CompletedTask
         });
 
+        _steps.Add(new PipelineStep
+        {
+            Name = "validate-compute-environments",
+            Description = "Validates compute resource bindings before startup.",
+            Action = static context =>
+            {
+                ValidateComputeEnvironmentBindings(context.Model);
+                return Task.CompletedTask;
+            },
+            RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+        });
+
         // Add a "destroy" aggregation step for teardown operations
         _steps.Add(new PipelineStep
         {
@@ -354,6 +366,36 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Description = "Prerequisite step that runs before any destroy operations.",
             Action = _ => Task.CompletedTask,
         });
+    }
+
+    private static void ValidateComputeEnvironmentBindings(DistributedApplicationModel model)
+    {
+        // With multiple compute environments there is no unambiguous default. Surface a clear
+        // error for any compute resource that hasn't been explicitly bound, rather than letting
+        // the environments' steps silently skip it (which would result in the resource
+        // never being deployed).
+
+        var computeEnvironments = model.Resources.OfType<IComputeEnvironmentResource>().ToList();
+        if (computeEnvironments.Count <= 1)
+        {
+            return;
+        }
+
+        var unboundResources = model.Resources
+            .OfType<IComputeResource>()
+            .Where(resource => resource.GetComputeEnvironment() is null)
+            .ToList();
+
+        if (unboundResources.Count == 0)
+        {
+            return;
+        }
+
+        var resourceNames = string.Join("', '", unboundResources.Select(resource => resource.Name));
+        var environmentNames = string.Join("', '", computeEnvironments.Select(environment => environment.Name));
+        throw new InvalidOperationException(
+            $"Compute resource(s) '{resourceNames}' are not assigned to a compute environment, but the model contains multiple compute environments ('{environmentNames}'). " +
+            $"Specify which environment each resource should target by calling 'WithComputeEnvironment' on the resource builder.");
     }
 
     public bool HasSteps => _steps.Count > 0;

@@ -2,8 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
+using Azure.AI.Projects.Agents;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -11,7 +10,7 @@ namespace Aspire.Hosting.Foundry;
 /// A configuration helper for hosted agents.
 /// </summary>
 /// <remarks>
-/// This type is used instead of <see cref="AgentVersionCreationOptions"/> to provide a strongly typed
+/// This type is used instead of <see cref="ProjectsAgentVersionCreationOptions"/> to provide a strongly typed
 /// configuration surface for hosted agent definitions. When used from polyglot app hosts, only the
 /// ATS-compatible properties are exported; Azure SDK-specific members remain .NET-only.
 /// </remarks>
@@ -42,14 +41,14 @@ public class HostedAgentConfiguration(string image)
     /// Tools available to the hosted agent.
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<AgentTool> Tools { get; init; } = [];
+    public IList<ProjectsAgentTool> Tools { get; init; } = [];
 
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(AgentCommunicationMethod.Responses, "v1")
+        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "v1")
     ];
 
     private decimal _cpu = 2.0m;
@@ -111,16 +110,17 @@ public class HostedAgentConfiguration(string image)
     public string Image { get; set; } = image;
 
     /// <summary>
-    /// Converts this configuration to an <see cref="AgentVersionCreationOptions"/> instance.
+    /// Converts this configuration to an <see cref="ProjectsAgentVersionCreationOptions"/> instance.
     /// </summary>
-    public AgentVersionCreationOptions ToAgentVersionCreationOptions()
+    public ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions()
     {
-        var def = new ImageBasedHostedAgentDefinition(
+        var def = new HostedAgentDefinition(
             ContainerProtocolVersions,
             cpu: CpuString,
-            memory: MemoryString,
-            image: Image
-        );
+            memory: MemoryString)
+        {
+            Image = Image
+        };
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;
@@ -133,7 +133,7 @@ public class HostedAgentConfiguration(string image)
         {
             def.EnvironmentVariables[envVar.Key] = envVar.Value;
         }
-        var options = new AgentVersionCreationOptions(def)
+        var options = new ProjectsAgentVersionCreationOptions(def)
         {
             Description = Description,
         };
