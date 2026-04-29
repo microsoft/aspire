@@ -71,11 +71,6 @@ internal static class TypeScriptAppHostToolchainResolver
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Pnpm, PnpmLockFileName, candidateDirectory);
             }
 
-            if (File.Exists(Path.Combine(candidateDirectory.FullName, PackageLockFileName)))
-            {
-                return CreateLockFileResolution(TypeScriptAppHostToolchain.Npm, PackageLockFileName, candidateDirectory);
-            }
-
             if (File.Exists(Path.Combine(candidateDirectory.FullName, YarnLockFileName)))
             {
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnLockFileName, candidateDirectory);
@@ -89,6 +84,11 @@ internal static class TypeScriptAppHostToolchainResolver
             if (Directory.Exists(Path.Combine(candidateDirectory.FullName, YarnDirectoryName)))
             {
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnDirectoryName, candidateDirectory);
+            }
+
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, PackageLockFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Npm, PackageLockFileName, candidateDirectory);
             }
         }
 

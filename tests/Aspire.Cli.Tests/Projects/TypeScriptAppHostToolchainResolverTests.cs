@@ -52,6 +52,20 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenPackageLockAndYarnLockExistInSameDirectory_ReturnsYarn()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package-lock.json"), "{}");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"), string.Empty);
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Yarn, resolution.Toolchain);
+        Assert.Equal($"yarn.lock found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
     public void Resolve_WhenYarnDirectoryExists_ReturnsYarn()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
