@@ -92,15 +92,15 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $scriptArgs = @(
-            '-StoreLocation', '${{ matrix.storeLocation }}',
-            '-DotNetPath', 'dotnet',
-            '-OutputDirectory', '${{ github.workspace }}\artifacts\dev-cert-trust-experiment\${{ matrix.storeLocation }}',
-            '-Clean'
-          )
+          $scriptArgs = @{
+            StoreLocation = '${{ matrix.storeLocation }}'
+            DotNetPath = 'dotnet'
+            OutputDirectory = '${{ github.workspace }}\artifacts\dev-cert-trust-experiment\${{ matrix.storeLocation }}'
+            Clean = $true
+          }
 
           if ('${{ inputs.keepCertificate }}' -eq 'true') {
-            $scriptArgs += '-KeepCertificate'
+            $scriptArgs['KeepCertificate'] = $true
           }
 
           & "${{ github.workspace }}\eng\scripts\trust-dev-cert-windows.ps1" @scriptArgs
