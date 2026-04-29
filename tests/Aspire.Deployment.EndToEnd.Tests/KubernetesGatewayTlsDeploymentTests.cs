@@ -293,9 +293,11 @@ builder.Build().Run();
 
             content = content.Replace(buildRunPattern, replacement);
 
+            // Add required pragmas and using directive at the top of the file
+            var topOfFile = "#pragma warning disable ASPIREPIPELINES001\n#pragma warning disable ASPIRECOMPUTE003\nusing Aspire.Hosting.Kubernetes;\n";
             if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
             {
-                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
+                content = topOfFile + content;
             }
 
             File.WriteAllText(appHostFilePath, content);
