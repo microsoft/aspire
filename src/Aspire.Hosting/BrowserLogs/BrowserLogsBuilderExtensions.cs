@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -18,6 +19,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Extension methods for adding tracked browser log resources to browser-based application resources.
 /// </summary>
+[Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class BrowserLogsBuilderExtensions
 {
     internal const string BrowserResourceType = "BrowserLogs";
@@ -31,9 +33,6 @@ public static class BrowserLogsBuilderExtensions
     internal const string UserDataModeConfigurationKey = "UserDataMode";
     internal const string UserDataModePropertyName = "User data mode";
     internal const BrowserUserDataMode DefaultUserDataMode = BrowserConfiguration.DefaultUserDataMode;
-    internal const string BrowserProcessLifetimeConfigurationKey = "BrowserProcessLifetime";
-    internal const string BrowserProcessLifetimePropertyName = "Browser process lifetime";
-    internal const BrowserProcessLifetime DefaultBrowserProcessLifetime = BrowserConfiguration.DefaultBrowserProcessLifetime;
     internal const string TargetUrlPropertyName = "Target URL";
     internal const string ActiveSessionsPropertyName = "Active sessions";
     internal const string BrowserSessionsPropertyName = "Browser sessions";
@@ -76,13 +75,6 @@ public static class BrowserLogsBuilderExtensions
     /// profile is never used. When not specified, the tracked browser uses the configured value from
     /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to <see cref="BrowserUserDataMode.Shared"/>.
     /// </param>
-    /// <param name="browserProcessLifetime">
-    /// Optional <see cref="BrowserProcessLifetime"/> that selects whether the pipe-created tracked browser process is
-    /// session-scoped and terminated with the AppHost (<see cref="BrowserProcessLifetime.Session"/>, the default), or
-    /// persistent and left running after the AppHost stops (<see cref="BrowserProcessLifetime.Persistent"/>). Persistent
-    /// browsers cannot continue streaming logs after the AppHost exits and cannot be reattached by a later AppHost
-    /// because the CDP pipe is private.
-    /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
     /// <remarks>
     /// <para>
@@ -100,15 +92,12 @@ public static class BrowserLogsBuilderExtensions
     /// endpoints when selecting the browser target URL.
     /// </para>
     /// <para>
-    /// Browser, profile, user data mode, and browser process lifetime settings can also be supplied from configuration
+    /// Browser, profile, and user data mode settings can also be supplied from configuration
     /// using <c>Aspire:Hosting:BrowserLogs:Browser</c>, <c>Aspire:Hosting:BrowserLogs:Profile</c>,
-    /// <c>Aspire:Hosting:BrowserLogs:UserDataMode</c>, and
-    /// <c>Aspire:Hosting:BrowserLogs:BrowserProcessLifetime</c>, or scoped to a specific resource with
+    /// and <c>Aspire:Hosting:BrowserLogs:UserDataMode</c>, or scoped to a specific resource with
     /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:Browser</c>,
     /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:Profile</c>, and
-    /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:UserDataMode</c>, and
-    /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:BrowserProcessLifetime</c>. Explicit method arguments
-    /// override configuration.
+    /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:UserDataMode</c>. Explicit method arguments override configuration.
     /// </para>
     /// </remarks>
     /// <example>
@@ -127,8 +116,7 @@ public static class BrowserLogsBuilderExtensions
         this IResourceBuilder<T> builder,
         string? browser = null,
         string? profile = null,
-        BrowserUserDataMode? userDataMode = null,
-        BrowserProcessLifetime? browserProcessLifetime = null)
+        BrowserUserDataMode? userDataMode = null)
         where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -140,7 +128,7 @@ public static class BrowserLogsBuilderExtensions
         builder.ApplicationBuilder.Services.TryAddSingleton<BrowserLogsConfigurationManager>();
 
         var parentResource = builder.Resource;
-        var explicitConfigurationValues = new BrowserConfigurationExplicitValues(browser, profile, userDataMode, browserProcessLifetime);
+        var explicitConfigurationValues = new BrowserConfigurationExplicitValues(browser, profile, userDataMode);
         var initialConfiguration = BrowserConfiguration.Resolve(builder.ApplicationBuilder.Configuration, parentResource.Name, explicitConfigurationValues);
         var browserLogsResource = new BrowserLogsResource(
             $"{parentResource.Name}-browser-logs",
@@ -306,8 +294,7 @@ public static class BrowserLogsBuilderExtensions
             [
                 new(CustomResourceKnownProperties.Source, resourceName),
                 new(BrowserPropertyName, configuration.Browser),
-                new(UserDataModePropertyName, configuration.UserDataMode.ToString()),
-                new(BrowserProcessLifetimePropertyName, configuration.BrowserProcessLifetime.ToString())
+                new(UserDataModePropertyName, configuration.UserDataMode.ToString())
             ];
 
             if (configuration.Profile is { } profile)

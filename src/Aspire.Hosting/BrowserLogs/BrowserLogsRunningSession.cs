@@ -209,10 +209,9 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
         _resourceLogger.LogInformation(
-            "[{SessionId}] Resolving tracked browser host. User data mode: {UserDataMode}; browser process lifetime: {BrowserProcessLifetime}; browser: '{Browser}'; profile: '{Profile}'.",
+            "[{SessionId}] Resolving tracked browser host. User data mode: {UserDataMode}; browser: '{Browser}'; profile: '{Profile}'.",
             _sessionId,
             _configuration.UserDataMode,
-            _configuration.BrowserProcessLifetime,
             _configuration.Browser,
             _configuration.Profile ?? "(default)");
 

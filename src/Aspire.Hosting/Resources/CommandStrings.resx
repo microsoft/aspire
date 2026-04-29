@@ -157,7 +157,7 @@
     <value>Open tracked browser</value>
   </data>
   <data name="ConfigureTrackedBrowserDescription" xml:space="preserve">
-    <value>Choose the browser, profile, process lifetime, and scope used by tracked browser sessions.</value>
+    <value>Choose the browser, profile, user data mode, and scope used by tracked browser sessions.</value>
   </data>
   <data name="ConfigureTrackedBrowserName" xml:space="preserve">
     <value>Configure tracked browser</value>
@@ -199,18 +199,6 @@
   <data name="ConfigureTrackedBrowserUserDataModeLabel" xml:space="preserve">
     <value>User data mode</value>
   </data>
-  <data name="ConfigureTrackedBrowserProcessLifetimeLabel" xml:space="preserve">
-    <value>Browser process lifetime</value>
-  </data>
-  <data name="ConfigureTrackedBrowserProcessLifetimeDescription" xml:space="preserve">
-    <value>Choose whether pipe-created tracked browsers are session-scoped and closed with the AppHost or persistent and left running. Persistent browsers stop streaming logs when the AppHost exits and cannot be reattached.</value>
-  </data>
-  <data name="ConfigureTrackedBrowserProcessLifetimeSessionOption" xml:space="preserve">
-    <value>Session</value>
-  </data>
-  <data name="ConfigureTrackedBrowserProcessLifetimePersistentOption" xml:space="preserve">
-    <value>Persistent</value>
-  </data>
   <data name="ConfigureTrackedBrowserProfileLabel" xml:space="preserve">
     <value>Profile</value>
   </data>
@@ -232,9 +220,6 @@
   </data>
   <data name="ConfigureTrackedBrowserProfileRequiresShared" xml:space="preserve">
     <value>Profiles can only be selected when user data mode is Shared.</value>
-  </data>
-  <data name="ConfigureTrackedBrowserProcessLifetimeRequired" xml:space="preserve">
-    <value>Browser process lifetime must be Session or Persistent.</value>
   </data>
   <data name="ConfigureTrackedBrowserSaveToUserSecretsLabel" xml:space="preserve">
     <value>Save to AppHost user secrets</value>

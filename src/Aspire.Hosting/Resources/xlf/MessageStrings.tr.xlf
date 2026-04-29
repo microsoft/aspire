@@ -32,11 +32,6 @@
         <target state="new">Endpoint '{0}' for resource '{1}' has not been allocated yet.</target>
         <note>{0} is the endpoint name, {1} is the resource name.</note>
       </trans-unit>
-      <trans-unit id="BrowserLogsInvalidBrowserProcessLifetimeConfiguration">
-        <source>Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</source>
-        <target state="new">Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</target>
-        <note>{0} is the configured value, {1} is the browser process lifetime configuration key, {2} and {3} are valid enum values.</note>
-      </trans-unit>
       <trans-unit id="BrowserLogsInvalidProfileMetadata">
         <source>Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</source>
         <target state="new">Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</target>

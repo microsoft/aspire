@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+
 using System.Globalization;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
@@ -19,20 +21,13 @@ internal readonly record struct BrowserConfiguration(
     string Browser,
     string? Profile,
     BrowserUserDataMode UserDataMode,
-    string? AppHostKey,
-    BrowserProcessLifetime BrowserProcessLifetime = BrowserProcessLifetime.Session)
+    string? AppHostKey)
 {
     /// <summary>
     /// The default mode points at an Aspire-managed persistent user data directory shared across every Aspire
     /// AppHost on the machine, so cookies, sign-ins, and extensions persist between runs.
     /// </summary>
     internal const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Shared;
-
-    /// <summary>
-    /// The default lifetime is session-scoped because private CDP pipes cannot be reattached by future AppHost
-    /// processes.
-    /// </summary>
-    internal const BrowserProcessLifetime DefaultBrowserProcessLifetime = BrowserProcessLifetime.Session;
 
     /// <summary>
     /// Resolves explicit method arguments, resource-scoped configuration, global configuration, and defaults.
@@ -55,7 +50,6 @@ internal readonly record struct BrowserConfiguration(
         // disposable isolated state.
         var resolvedProfile = ResolveProfile(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
         var resolvedUserDataMode = ResolveUserDataMode(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
-        var resolvedBrowserProcessLifetime = ResolveBrowserProcessLifetime(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
         var resolvedBrowser = ResolveBrowser(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection, resolvedUserDataMode);
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
@@ -86,7 +80,7 @@ internal readonly record struct BrowserConfiguration(
         // has to re-read configuration. The same SHA value is used for other per-AppHost persisted state.
         var appHostKey = configuration["AppHost:PathSha256"];
 
-        return new BrowserConfiguration(resolvedBrowser, resolvedProfile, resolvedUserDataMode, appHostKey, resolvedBrowserProcessLifetime);
+        return new BrowserConfiguration(resolvedBrowser, resolvedProfile, resolvedUserDataMode, appHostKey);
     }
 
     /// <summary>
@@ -141,29 +135,6 @@ internal readonly record struct BrowserConfiguration(
                 BrowserUserDataMode.Isolated));
     }
 
-    private static ConfigurationValue<BrowserProcessLifetime> ParseBrowserProcessLifetime(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return ConfigurationValue<BrowserProcessLifetime>.Missing;
-        }
-
-        if (Enum.TryParse<BrowserProcessLifetime>(value, ignoreCase: true, out var parsed) &&
-            Enum.IsDefined(parsed))
-        {
-            return ConfigurationValue<BrowserProcessLifetime>.Present(parsed);
-        }
-
-        throw new InvalidOperationException(
-            string.Format(
-                CultureInfo.CurrentCulture,
-                MessageStrings.BrowserLogsInvalidBrowserProcessLifetimeConfiguration,
-                value,
-                BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey,
-                BrowserProcessLifetime.Session,
-                BrowserProcessLifetime.Persistent));
-    }
-
     private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) =>
         GetDefaultBrowser(userDataMode, ChromiumBrowserResolver.TryResolveExecutable);
 
@@ -202,25 +173,6 @@ internal readonly record struct BrowserConfiguration(
             BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
             ParseUserDataMode,
             static () => DefaultUserDataMode);
-
-    private static BrowserProcessLifetime ResolveBrowserProcessLifetime(
-        BrowserConfigurationExplicitValues explicitValues,
-        BrowserConfiguration? resourceRuntimeConfiguration,
-        BrowserConfiguration? globalRuntimeConfiguration,
-        IConfigurationSection resourceSection,
-        IConfigurationSection browserLogsSection)
-        => ResolveValue(
-            explicitValues.BrowserProcessLifetime is { } explicitBrowserProcessLifetime
-                ? ConfigurationValue<BrowserProcessLifetime>.Present(explicitBrowserProcessLifetime)
-                : ConfigurationValue<BrowserProcessLifetime>.Missing,
-            resourceRuntimeConfiguration,
-            globalRuntimeConfiguration,
-            static configuration => configuration.BrowserProcessLifetime,
-            resourceSection,
-            browserLogsSection,
-            BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey,
-            ParseBrowserProcessLifetime,
-            static () => DefaultBrowserProcessLifetime);
 
     private static string ResolveBrowser(
         BrowserConfigurationExplicitValues explicitValues,
@@ -295,5 +247,4 @@ internal readonly record struct BrowserConfiguration(
 internal readonly record struct BrowserConfigurationExplicitValues(
     string? Browser = null,
     string? Profile = null,
-    BrowserUserDataMode? UserDataMode = null,
-    BrowserProcessLifetime? BrowserProcessLifetime = null);
+    BrowserUserDataMode? UserDataMode = null);
