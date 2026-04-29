@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Foundry;
 /// <summary>
 /// A Microsoft Foundry hosted agent resource.
 /// </summary>
-public class AzureHostedAgentResource : Resource, IComputeResource, IResourceWithEnvironment
+public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.

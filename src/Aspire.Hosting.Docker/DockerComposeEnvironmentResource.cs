@@ -70,6 +70,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 Name = $"prepare-deployment-targets-{Name}",
                 Description = $"Prepares Docker Compose deployment targets for {Name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
             steps.Add(prepareDeploymentTargetsStep);
@@ -118,7 +119,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 Name = $"prepare-{Name}",
                 Description = $"Prepares the Docker Compose environment {Name} for deployment.",
-                Action = ctx => PrepareAsync(ctx)
+                Action = ctx => PrepareAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments]
             };
             prepareStep.DependsOn(WellKnownPipelineSteps.Publish);
             prepareStep.DependsOn(WellKnownPipelineSteps.Build);

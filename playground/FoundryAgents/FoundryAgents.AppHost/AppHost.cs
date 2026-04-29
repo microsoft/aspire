@@ -8,6 +8,8 @@ using Azure.Provisioning.Expressions;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+var aca = builder.AddAzureContainerAppEnvironment("env");
+
 var foundry = builder.AddFoundry("aif-myfoundry");
 var project = foundry.AddProject("proj-myproject")
     // workaround for https://github.com/microsoft/aspire/issues/15971
@@ -71,6 +73,7 @@ var jokerAgent = project.AddPromptAgent(chat, "joker-agent",
 
 builder.AddProject<Projects.PromptAgentChat>("chat-app")
     .WithExternalHttpEndpoints()
+    .WithComputeEnvironment(aca)
     .WithReference(jokerAgent).WaitFor(jokerAgent)
     .WithReference(researchAgent).WaitFor(researchAgent);
 

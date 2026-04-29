@@ -59,7 +59,7 @@ public class AzureCognitiveServicesProjectResource :
                     return Task.CompletedTask;
                 },
                 Resource = this,
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
             steps.Add(removeDefaultContainerRegistryStep);

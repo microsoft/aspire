@@ -999,7 +999,7 @@ public static class ResourceExtensions
         if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
         {
             // If you have a ComputeEnvironmentAnnotation, it means the resource is bound to a specific compute environment.
-            // Skip the annotation if it doesn't match the specified computeEnvironmentResource.
+            // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
             if (targetComputeEnvironment is not null && targetComputeEnvironment != computeEnvironmentAnnotation.ComputeEnvironment)
             {
                 return null;
@@ -1024,7 +1024,16 @@ public static class ResourceExtensions
                 throw new InvalidOperationException($"Resource '{resource.Name}' has multiple compute environments - '{computeEnvironmentNames}'. Please specify a single compute environment using 'WithComputeEnvironment'.");
             }
 
-            return annotations[0];
+            var deploymentTargetAnnotation = annotations[0];
+
+            // If you have a DeploymentTargetAnnotation, it means the resource is bound to a specific compute environment.
+            // Skip the annotation if it doesn't match the specified targetComputeEnvironment.
+            if (targetComputeEnvironment is not null && targetComputeEnvironment != deploymentTargetAnnotation.ComputeEnvironment)
+            {
+                return null;
+            }
+
+            return deploymentTargetAnnotation;
         }
         return null;
     }
