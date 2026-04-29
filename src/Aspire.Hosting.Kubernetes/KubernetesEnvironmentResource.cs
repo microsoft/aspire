@@ -1342,16 +1342,32 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             using var doc = System.Text.Json.JsonDocument.Parse(string.Join("", stdout));
             var root = doc.RootElement;
 
-            // Build a minimal manifest: apiVersion, kind, metadata (name + namespace only), spec
+            // Build a minimal manifest: apiVersion, kind, metadata (name, namespace, annotations, labels), spec
+            var metadataNode = new System.Text.Json.Nodes.JsonObject
+            {
+                ["name"] = gatewayName,
+                ["namespace"] = @namespace
+            };
+
+            // Preserve annotations and labels from the current Gateway
+            if (root.TryGetProperty("metadata", out var metadata))
+            {
+                if (metadata.TryGetProperty("annotations", out var annotations))
+                {
+                    metadataNode["annotations"] = System.Text.Json.Nodes.JsonNode.Parse(annotations.GetRawText());
+                }
+
+                if (metadata.TryGetProperty("labels", out var labels))
+                {
+                    metadataNode["labels"] = System.Text.Json.Nodes.JsonNode.Parse(labels.GetRawText());
+                }
+            }
+
             var minimal = new System.Text.Json.Nodes.JsonObject
             {
                 ["apiVersion"] = root.GetProperty("apiVersion").GetString(),
                 ["kind"] = root.GetProperty("kind").GetString(),
-                ["metadata"] = new System.Text.Json.Nodes.JsonObject
-                {
-                    ["name"] = gatewayName,
-                    ["namespace"] = @namespace
-                }
+                ["metadata"] = metadataNode
             };
 
             // Copy the spec as-is (it already has the patched hostname from the previous step)
