@@ -267,6 +267,17 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
 
             var content = File.ReadAllText(appHostFilePath);
 
+            // The starter template doesn't assign webfrontend to a variable.
+            // Insert "var webfrontend = " before the AddProject("webfrontend") call.
+            content = content.Replace(
+                "builder.AddProject<Projects.",
+                "var __proj__ = builder.AddProject<Projects.");
+            // The apiService line already has "var apiService = " so it became
+            // "var apiService = var __proj__ = ..." — fix it back:
+            content = content.Replace("var apiService = var __proj__ = ", "var apiService = ");
+            // Rename the webfrontend capture to the actual name:
+            content = content.Replace("var __proj__ = ", "var webfrontend = ");
+
             var buildRunPattern = "builder.Build().Run();";
             var replacement = $$"""
 // Kubernetes environment with Gateway API + TLS (no hostname — FQDN auto-discovered)
