@@ -130,28 +130,23 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            // Create AKS with OIDC + workload identity (required for ALB controller)
-            output.WriteLine("Step 5: Creating AKS cluster (10-15 minutes)...");
+            // Create AKS with OIDC + workload identity + ALB controller in a single command
+            output.WriteLine("Step 5: Creating AKS cluster with ALB controller (10-15 minutes)...");
             await auto.TypeAsync(
                 $"az aks create " +
                 $"--resource-group {resourceGroupName} " +
                 $"--name {clusterName} " +
                 $"--node-count 1 " +
-                $"--node-vm-size Standard_D2s_v3 " +
+                $"--node-vm-size Standard_D2as_v5 " +
                 $"--generate-ssh-keys " +
                 $"--attach-acr {acrName} " +
                 $"--enable-managed-identity " +
                 $"--enable-oidc-issuer " +
                 $"--enable-workload-identity " +
+                $"--enable-alb " +
                 $"--output table");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
-
-            // Enable ALB controller addon
-            output.WriteLine("Step 6: Enabling ALB controller...");
-            await auto.TypeAsync($"az aks update --resource-group {resourceGroupName} --name {clusterName} --enable-alb");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
 
             // Get credentials
             await auto.TypeAsync($"az aks get-credentials --resource-group {resourceGroupName} --name {clusterName} --overwrite-existing");
@@ -159,7 +154,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
             // Create ALB subnet + ApplicationLoadBalancer CRD
-            output.WriteLine("Step 7: Creating ALB subnet and ApplicationLoadBalancer...");
+            output.WriteLine("Step 6: Creating ALB subnet and ApplicationLoadBalancer...");
             await auto.TypeAsync(
                 $"MC_RG=$(az aks show -g {resourceGroupName} -n {clusterName} --query nodeResourceGroup -o tsv) && " +
                 "VNET_NAME=$(az network vnet list -g $MC_RG --query '[0].name' -o tsv) && " +
@@ -193,7 +188,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
             // Install cert-manager with Gateway API support
-            output.WriteLine("Step 8: Installing cert-manager...");
+            output.WriteLine("Step 7: Installing cert-manager...");
             await auto.TypeAsync(
                 "helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager " +
                 "--namespace cert-manager --create-namespace " +
@@ -202,7 +197,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Create HTTP-01 ClusterIssuer
-            output.WriteLine("Step 9: Creating HTTP-01 ClusterIssuer...");
+            output.WriteLine("Step 8: Creating HTTP-01 ClusterIssuer...");
             await auto.TypeAsync(
                 "cat <<EOF | kubectl apply -f -\n" +
                 "apiVersion: cert-manager.io/v1\n" +
@@ -230,16 +225,16 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
 
             // ===== PHASE 2: Create Aspire Project with Gateway + TLS =====
 
-            await auto.InstallCurrentBuildAspireCliAsync(counter, output, "Step 10");
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output, "Step 9");
 
-            output.WriteLine("Step 11: Creating Aspire starter project...");
+            output.WriteLine("Step 9: Creating Aspire starter project...");
             await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
 
             await auto.TypeAsync($"cd {projectName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            output.WriteLine("Step 12: Adding Kubernetes hosting package...");
+            output.WriteLine("Step 9: Adding Kubernetes hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
             await auto.WaitForAspireAddCompletionAsync(counter);
@@ -249,7 +244,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
             var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
 
-            output.WriteLine($"Step 13: Modifying AppHost.cs at: {appHostFilePath}");
+            output.WriteLine($"Step 9: Modifying AppHost.cs at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
@@ -295,13 +290,13 @@ builder.Build().Run();
             // ===== PHASE 3: Deploy with aspire deploy =====
 
             // Refresh ACR login
-            output.WriteLine("Step 14: Refreshing ACR login...");
+            output.WriteLine("Step 9: Refreshing ACR login...");
             await auto.TypeAsync($"az acr login --name {acrName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Set parameters as environment variables so aspire deploy doesn't prompt
-            output.WriteLine("Step 15: Setting deployment parameters...");
+            output.WriteLine("Step 9: Setting deployment parameters...");
             await auto.TypeAsync(
                 $"export Parameters__registryendpoint={acrName}.azurecr.io && " +
                 $"export Parameters__namespace={k8sNamespace} && " +
@@ -310,7 +305,7 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Deploy using aspire deploy
-            output.WriteLine("Step 16: Running aspire deploy...");
+            output.WriteLine("Step 9: Running aspire deploy...");
             await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(15));
@@ -319,7 +314,7 @@ builder.Build().Run();
             // ===== PHASE 4: Verify Gateway TLS =====
 
             // Wait for pods
-            output.WriteLine("Step 17: Waiting for pods...");
+            output.WriteLine("Step 9: Waiting for pods...");
             await auto.TypeAsync($"kubectl wait --for=condition=Ready pod --all -n {k8sNamespace} --timeout=300s");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
@@ -329,7 +324,7 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Check Gateway has address
-            output.WriteLine("Step 18: Checking Gateway address...");
+            output.WriteLine("Step 9: Checking Gateway address...");
             await auto.TypeAsync(
                 $"for i in $(seq 1 30); do " +
                 $"FQDN=$(kubectl get gateway ingress -n {k8sNamespace} -o jsonpath='{{.status.addresses[0].value}}' 2>/dev/null); " +
@@ -338,7 +333,7 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
             // Check HTTPS listener has hostname (patched by FQDN discovery step)
-            output.WriteLine("Step 19: Checking HTTPS listener hostname...");
+            output.WriteLine("Step 9: Checking HTTPS listener hostname...");
             await auto.TypeAsync(
                 $"kubectl get gateway ingress -n {k8sNamespace} " +
                 "-o jsonpath='{range .spec.listeners[*]}{.name} {.protocol} {.hostname}{\"\\n\"}{end}'");
@@ -346,7 +341,7 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
             // Wait for certificate
-            output.WriteLine("Step 20: Waiting for TLS certificate (up to 10 minutes)...");
+            output.WriteLine("Step 9: Waiting for TLS certificate (up to 10 minutes)...");
             await auto.TypeAsync(
                 $"for i in $(seq 1 60); do " +
                 $"READY=$(kubectl get certificate -n {k8sNamespace} -o jsonpath='{{.items[0].status.conditions[?(@.type==\"Ready\")].status}}' 2>/dev/null); " +
@@ -357,7 +352,7 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(12));
 
             // Test HTTPS access
-            output.WriteLine("Step 21: Testing HTTPS access...");
+            output.WriteLine("Step 9: Testing HTTPS access...");
             await auto.TypeAsync(
                 $"FQDN=$(kubectl get gateway ingress -n {k8sNamespace} -o jsonpath='{{.status.addresses[0].value}}') && " +
                 "echo \"Testing: https://$FQDN\" && " +
@@ -370,7 +365,7 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Verify via port-forward (confirms app is running regardless of external TLS)
-            output.WriteLine("Step 22: Verifying app via port-forward...");
+            output.WriteLine("Step 9: Verifying app via port-forward...");
             await auto.TypeAsync($"kubectl port-forward svc/webfrontend-service 18081:8080 -n {k8sNamespace} &");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
@@ -393,7 +388,7 @@ builder.Build().Run();
 
             // ===== PHASE 5: Cleanup =====
 
-            output.WriteLine("Step 23: Destroying deployment...");
+            output.WriteLine("Step 9: Destroying deployment...");
             await auto.AspireDestroyAsync(counter);
 
             await auto.TypeAsync("exit");
