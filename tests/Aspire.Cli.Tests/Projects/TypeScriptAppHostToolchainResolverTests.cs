@@ -4,6 +4,8 @@
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Utils;
 using Aspire.TypeSystem;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -33,6 +35,23 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenPackageLockExists_ReturnsNpm()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"workspace\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"), string.Empty);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package-lock.json"), "{}");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(appHostDirectory);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Npm, resolution.Toolchain);
+        Assert.Equal($"package-lock.json found in {appHostDirectory.FullName}", resolution.Reason);
+    }
+
+    [Fact]
     public void Resolve_WhenYarnDirectoryExists_ReturnsYarn()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -56,12 +75,30 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
-    public void Resolve_WhenWorkspaceRootDefinesToolchain_ReturnsParentToolchain()
+    public void Resolve_WhenMarkerExists_LogsReason()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.12.1\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"), string.Empty);
+
+        var sink = new TestSink();
+        var logger = new TestLogger(nameof(TypeScriptAppHostToolchainResolverTests), sink, logLevel => logLevel == LogLevel.Debug);
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
+        var write = Assert.Single(sink.Writes);
+        Assert.Equal(LogLevel.Debug, write.LogLevel);
+        Assert.Equal($"Selected TypeScript AppHost package manager 'yarn' because yarn.lock found in {workspace.WorkspaceRoot.FullName}.", write.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenParentDirectoryDefinesToolchain_ReturnsParentToolchain()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.12.1\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
 
         var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory);
@@ -70,20 +107,38 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
-    public void Resolve_WhenToolchainConfigurationIsBeyondMaxDepth_ReturnsNpm()
+    public void Resolve_WhenGrandparentDirectoryDefinesToolchain_ReturnsNpm()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
-        var currentDirectory = workspace.WorkspaceRoot;
-        for (var i = 0; i < TypeScriptAppHostToolchainResolver.MaxParentSearchDepth + 1; i++)
-        {
-            currentDirectory = currentDirectory.CreateSubdirectory($"level{i}");
-        }
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(currentDirectory);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory);
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
+    }
+
+    [Fact]
+    public void ShouldSearchParentDirectory_WhenDirectoryIsRoot_ReturnsFalse()
+    {
+        var directory = new DirectoryInfo(Path.GetPathRoot(Path.GetTempPath())!);
+
+        var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(directory);
+
+        Assert.False(shouldSearch);
+    }
+
+    [Fact]
+    public void ShouldSearchParentDirectory_WhenDirectoryIsHome_ReturnsFalse()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(
+            workspace.WorkspaceRoot,
+            workspace.WorkspaceRoot.FullName);
+
+        Assert.False(shouldSearch);
     }
 
     [Fact]
