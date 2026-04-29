@@ -14,10 +14,45 @@ public class DotNetToolDetectionTests
     [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/aspire.cli.linux-x64/10.0.0/tools/net10.0/linux-x64/aspire")]
     [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/Aspire.Cli.linux-arm64/10.0.0/tools/any/linux-arm64/aspire")]
     [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/aspire.cli/10.0.0/tools/net10.0/any/aspire")]
+    [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/aspire.cli.linux-x64/10.0.0/tools/net10.0/linux-x64/future-layout-segment/aspire")]
     [InlineData(@"C:\Users\test\.dotnet\tools\.store\aspire.cli\10.0.0\aspire.cli.win-x64\10.0.0\tools\any\win-x64\aspire.exe")]
     public void IsRunningAsDotNetTool_ReturnsTrueForAspireCliNativeAotToolStorePath(string processPath)
     {
         Assert.True(DotNetToolDetection.IsRunningAsDotNetTool(processPath));
+    }
+
+    [Fact]
+    public void IsRunningAsDotNetTool_ReturnsTrueForCustomToolPathWithSiblingStore()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var processPath = Path.Combine(tempDirectory.Path, GetAspireExecutableName());
+        var storeExecutablePath = Path.Combine(
+            tempDirectory.Path,
+            ".store",
+            "aspire.cli",
+            "10.0.0",
+            "aspire.cli.linux-x64",
+            "10.0.0",
+            "tools",
+            "net10.0",
+            "linux-x64",
+            GetAspireExecutableName());
+
+        Directory.CreateDirectory(Path.GetDirectoryName(storeExecutablePath)!);
+        File.WriteAllText(processPath, string.Empty);
+        File.WriteAllText(storeExecutablePath, string.Empty);
+
+        Assert.True(DotNetToolDetection.IsRunningAsDotNetTool(processPath));
+    }
+
+    [Fact]
+    public void IsRunningAsDotNetTool_ReturnsFalseForCustomToolPathWithoutSiblingStore()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var processPath = Path.Combine(tempDirectory.Path, GetAspireExecutableName());
+        File.WriteAllText(processPath, string.Empty);
+
+        Assert.False(DotNetToolDetection.IsRunningAsDotNetTool(processPath));
     }
 
     [Theory]
@@ -35,5 +70,10 @@ public class DotNetToolDetectionTests
     public void IsRunningAsDotNetTool_ReturnsFalseForNonNativeAotToolStorePath(string? processPath)
     {
         Assert.False(DotNetToolDetection.IsRunningAsDotNetTool(processPath));
+    }
+
+    private static string GetAspireExecutableName()
+    {
+        return OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
     }
 }

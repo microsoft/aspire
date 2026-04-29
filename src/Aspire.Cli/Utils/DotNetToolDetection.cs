@@ -36,11 +36,18 @@ internal static class DotNetToolDetection
             .Replace('\\', '/')
             .Split('/', StringSplitOptions.RemoveEmptyEntries);
 
-        if (IsGlobalDotNetToolShimPath(parts))
+        if (IsGlobalDotNetToolShimPath(parts) ||
+            ContainsDotNetToolStorePackagePath(parts) ||
+            HasSiblingDotNetToolStore(processPath))
         {
             return true;
         }
 
+        return false;
+    }
+
+    private static bool ContainsDotNetToolStorePackagePath(string[] parts)
+    {
         for (var i = 0; i < parts.Length; i++)
         {
             if (!string.Equals(parts[i], ".store", StringComparison.OrdinalIgnoreCase))
@@ -75,9 +82,9 @@ internal static class DotNetToolDetection
 
     private static bool IsDotNetToolStorePackagePath(string[] parts, int storeIndex)
     {
-        const int storeLayoutPartCount = 9;
+        const int minimumStoreLayoutPartCount = 9;
 
-        if (parts.Length - storeIndex != storeLayoutPartCount)
+        if (parts.Length - storeIndex < minimumStoreLayoutPartCount)
         {
             return false;
         }
@@ -89,7 +96,7 @@ internal static class DotNetToolDetection
         var toolsSegment = parts[storeIndex + 5];
         var targetFramework = parts[storeIndex + 6];
         var toolRid = parts[storeIndex + 7];
-        var executable = parts[storeIndex + 8];
+        var executable = parts[^1];
 
         return string.Equals(toolPackageId, "aspire.cli", StringComparison.OrdinalIgnoreCase)
             && IsAspireCliPackageId(implementationPackageId, toolRid)
@@ -99,6 +106,51 @@ internal static class DotNetToolDetection
             && IsSupportedToolTargetFramework(targetFramework)
             && IsSupportedToolRuntimeIdentifier(toolRid)
             && IsAspireExecutable(executable);
+    }
+
+    private static bool HasSiblingDotNetToolStore(string processPath)
+    {
+        if (!IsAspireExecutable(Path.GetFileName(processPath)))
+        {
+            return false;
+        }
+
+        var processDirectory = Path.GetDirectoryName(processPath);
+        if (string.IsNullOrEmpty(processDirectory))
+        {
+            return false;
+        }
+
+        var storeDirectory = Path.Combine(processDirectory, ".store");
+        if (!Directory.Exists(storeDirectory))
+        {
+            return false;
+        }
+
+        var options = new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = true
+        };
+
+        foreach (var candidatePath in Directory.EnumerateFiles(storeDirectory, "*", options))
+        {
+            if (!IsAspireExecutable(Path.GetFileName(candidatePath)))
+            {
+                continue;
+            }
+
+            var candidateParts = candidatePath
+                .Replace('\\', '/')
+                .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            if (ContainsDotNetToolStorePackagePath(candidateParts))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsAspireCliPackageId(string packageId, string toolRid)
