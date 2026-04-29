@@ -143,6 +143,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
+        Assert.True(initCommand.Options.Single(o => o.Name == "--source").Hidden);
+        Assert.True(initCommand.Options.Single(o => o.Name == "--version").Hidden);
+        Assert.True(initCommand.Options.Single(o => o.Name == "--channel").Hidden);
+
         var parseResult = initCommand.Parse("init --source https://example.test/v3/index.json --version 13.0.0 --channel daily --suppress-agent-init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 

@@ -40,13 +40,15 @@ internal sealed class InitCommand : BaseCommand
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
         Description = "Deprecated. Accepted for compatibility but no longer affects `aspire init`; this option will be removed in a future version.",
-        Recursive = true
+        Recursive = true,
+        Hidden = true
     };
 
     private static readonly Option<string?> s_versionOption = new("--version")
     {
         Description = "Deprecated. Accepted for compatibility but no longer affects `aspire init`; this option will be removed in a future version.",
-        Recursive = true
+        Recursive = true,
+        Hidden = true
     };
 
     private readonly Option<string?> _channelOption;
@@ -79,7 +81,8 @@ internal sealed class InitCommand : BaseCommand
         _channelOption = new Option<string?>("--channel")
         {
             Description = "Deprecated. Accepted for compatibility but no longer affects `aspire init`; this option will be removed in a future version.",
-            Recursive = true
+            Recursive = true,
+            Hidden = true
         };
 
         _languageOption = new Option<string?>("--language")
