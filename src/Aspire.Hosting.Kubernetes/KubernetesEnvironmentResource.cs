@@ -971,43 +971,42 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             var gatewayName = gateway.Name.ToKubernetesResourceName();
             var secretName = await ResolveExpressionAsync(secretNameExpr, context.CancellationToken).ConfigureAwait(false);
 
-            // Poll for the Gateway's assigned address (load balancer controllers may take time to provision)
+            // Poll for the Gateway's assigned hostname address.
+            // We use -o json and parse the full status to select Hostname-type addresses,
+            // since some controllers return IP addresses which are not valid for TLS hostnames.
             context.Logger.LogInformation(
-                "Waiting for Gateway '{GatewayName}' to be assigned an address...", gatewayName);
+                "Waiting for Gateway '{GatewayName}' to be assigned a hostname address...", gatewayName);
 
             string? discoveredFqdn = null;
             var maxAttempts = 60; // 5 minutes with 5s intervals
             for (var attempt = 0; attempt < maxAttempts; attempt++)
             {
-                var jsonPathArgs = $"get gateway {gatewayName} --namespace {@namespace} -o jsonpath=\"{{.status.addresses[0].value}}\"";
+                var getArgs = $"get gateway {gatewayName} --namespace {@namespace} -o json";
                 if (environment.KubeConfigPath is not null)
                 {
-                    jsonPathArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                    getArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
                 }
 
                 var stdout = new List<string>();
                 var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
                 {
-                    Arguments = jsonPathArgs,
+                    Arguments = getArgs,
                     ThrowOnNonZeroReturnCode = false,
                     InheritEnv = true,
-                    OnOutputData = line =>
-                    {
-                        if (!string.IsNullOrWhiteSpace(line))
-                        {
-                            stdout.Add(line);
-                        }
-                    },
+                    OnOutputData = stdout.Add,
                     OnErrorData = _ => { }
                 });
 
                 await using (getDisposable.ConfigureAwait(false))
                 {
                     var result = await getResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (result.ExitCode == 0 && stdout.Count > 0 && !string.IsNullOrWhiteSpace(stdout[0]))
+                    if (result.ExitCode == 0 && stdout.Count > 0)
                     {
-                        discoveredFqdn = stdout[0].Trim();
-                        break;
+                        discoveredFqdn = ExtractHostnameFromGatewayJson(string.Join("", stdout));
+                        if (discoveredFqdn is not null)
+                        {
+                            break;
+                        }
                     }
                 }
 
@@ -1020,7 +1019,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             if (string.IsNullOrEmpty(discoveredFqdn))
             {
                 context.Logger.LogWarning(
-                    "Gateway '{GatewayName}' was not assigned an address after waiting. " +
+                    "Gateway '{GatewayName}' was not assigned a hostname address after waiting. " +
                     "TLS hostname discovery skipped. You may need to redeploy with an explicit hostname via WithHostname().",
                     gatewayName);
                 continue;
@@ -1030,63 +1029,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 "Gateway '{GatewayName}' assigned address: {Fqdn}. Patching HTTPS listener(s) and bootstrapping TLS.",
                 gatewayName, discoveredFqdn);
 
-            // Find HTTPS listeners without a hostname and patch them with the discovered FQDN.
-            // We query the Gateway spec to find the correct listener indices dynamically.
-            var listenerJsonArgs = $"get gateway {gatewayName} --namespace {@namespace} -o jsonpath=\"{{.spec.listeners}}\"";
-            if (environment.KubeConfigPath is not null)
-            {
-                listenerJsonArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
-            }
-
-            var listenerJson = new List<string>();
-            var (listenerResult, listenerDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
-            {
-                Arguments = listenerJsonArgs,
-                ThrowOnNonZeroReturnCode = false,
-                InheritEnv = true,
-                OnOutputData = line =>
-                {
-                    if (!string.IsNullOrWhiteSpace(line))
-                    {
-                        listenerJson.Add(line);
-                    }
-                },
-                OnErrorData = _ => { }
-            });
-
-            var httpsListenerIndices = new List<int>();
-            await using (listenerDisposable.ConfigureAwait(false))
-            {
-                var listenerExitResult = await listenerResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                if (listenerExitResult.ExitCode == 0 && listenerJson.Count > 0)
-                {
-                    try
-                    {
-                        using var doc = System.Text.Json.JsonDocument.Parse(string.Join("", listenerJson));
-                        var listeners = doc.RootElement;
-                        for (var i = 0; i < listeners.GetArrayLength(); i++)
-                        {
-                            var listener = listeners[i];
-                            if (listener.TryGetProperty("protocol", out var protocol) &&
-                                string.Equals(protocol.GetString(), "HTTPS", StringComparison.OrdinalIgnoreCase) &&
-                                !listener.TryGetProperty("hostname", out _))
-                            {
-                                httpsListenerIndices.Add(i);
-                            }
-                        }
-                    }
-                    catch (System.Text.Json.JsonException)
-                    {
-                        // Fall back to assuming index 1 (HTTP=0, HTTPS=1)
-                        httpsListenerIndices.Add(1);
-                    }
-                }
-                else
-                {
-                    // Fall back to assuming index 1
-                    httpsListenerIndices.Add(1);
-                }
-            }
+            // Find HTTPS listeners without a hostname by parsing the full Gateway JSON.
+            var httpsListenerIndices = await FindHostnamelessHttpsListeners(
+                gatewayName, @namespace, environment, context).ConfigureAwait(false);
 
             if (httpsListenerIndices.Count == 0)
             {
@@ -1096,102 +1041,61 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             else
             {
-                // Patch the HTTPS listeners with the discovered hostname using JSON patch,
-                // then transfer field ownership to Helm via server-side apply so that
-                // subsequent Helm deploys don't encounter SSA conflicts.
-                var patchOps = string.Join(",", httpsListenerIndices.Select(
-                    idx => $"{{\"op\":\"add\",\"path\":\"/spec/listeners/{idx}/hostname\",\"value\":\"{discoveredFqdn}\"}}"));
-                var patchJson = $"[{patchOps}]";
-
-                var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json -p=\"{patchJson.Replace("\"", "\\\"")}\"";
-                if (environment.KubeConfigPath is not null)
+                // Build the JSON patch using proper serialization to avoid injection issues.
+                var patchOperations = httpsListenerIndices.Select(idx => new
                 {
-                    patchArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
-                }
-
-                var (patchResult, patchDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
-                {
-                    Arguments = patchArgs,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true,
-                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
-                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                    op = "add",
+                    path = $"/spec/listeners/{idx}/hostname",
+                    value = discoveredFqdn
                 });
+                var patchJson = System.Text.Json.JsonSerializer.Serialize(patchOperations);
 
-                await using (patchDisposable.ConfigureAwait(false))
+                // Write patch to a temp file to avoid shell escaping issues with kubectl -p
+                var patchTempDir = Directory.CreateTempSubdirectory(".aspire-gateway-patch");
+                try
                 {
-                    var patchExitResult = await patchResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (patchExitResult.ExitCode != 0)
+                    var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
+                    await File.WriteAllTextAsync(patchFilePath, patchJson, context.CancellationToken).ConfigureAwait(false);
+
+                    var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --patch-file \"{patchFilePath}\"";
+                    if (environment.KubeConfigPath is not null)
                     {
-                        context.Logger.LogWarning(
-                            "Failed to patch Gateway '{GatewayName}' with hostname '{Hostname}' (exit code {ExitCode}). " +
-                            "You may need to redeploy with an explicit hostname via WithHostname().",
-                            gatewayName, discoveredFqdn, patchExitResult.ExitCode);
-                        continue;
+                        patchArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
                     }
-                }
 
-                // Transfer field ownership to Helm using server-side apply so subsequent
-                // Helm deploys don't encounter SSA conflicts on the patched hostname field.
-                var currentGatewayArgs = $"get gateway {gatewayName} --namespace {@namespace} -o yaml";
-                if (environment.KubeConfigPath is not null)
-                {
-                    currentGatewayArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
-                }
-
-                var gatewayYamlLines = new List<string>();
-                var (getGwResult, getGwDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
-                {
-                    Arguments = currentGatewayArgs,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true,
-                    OnOutputData = gatewayYamlLines.Add,
-                    OnErrorData = _ => { }
-                });
-
-                await using (getGwDisposable.ConfigureAwait(false))
-                {
-                    var getGwExitResult = await getGwResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (getGwExitResult.ExitCode == 0 && gatewayYamlLines.Count > 0)
+                    var (patchResult, patchDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
                     {
-                        var tempFile = Path.GetTempFileName();
-                        try
+                        Arguments = patchArgs,
+                        ThrowOnNonZeroReturnCode = false,
+                        InheritEnv = true,
+                        OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                        OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                    });
+
+                    await using (patchDisposable.ConfigureAwait(false))
+                    {
+                        var patchExitResult = await patchResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                        if (patchExitResult.ExitCode != 0)
                         {
-                            await File.WriteAllLinesAsync(tempFile, gatewayYamlLines, context.CancellationToken).ConfigureAwait(false);
-
-                            var applyArgs = $"apply --server-side --field-manager=helm --force-conflicts -f \"{tempFile}\"";
-                            if (environment.KubeConfigPath is not null)
-                            {
-                                applyArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
-                            }
-
-                            var (applyResult, applyDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
-                            {
-                                Arguments = applyArgs,
-                                ThrowOnNonZeroReturnCode = false,
-                                InheritEnv = true,
-                                OnOutputData = line => context.Logger.LogDebug("{Line}", line),
-                                OnErrorData = line => context.Logger.LogDebug("{Line}", line)
-                            });
-
-                            await using (applyDisposable.ConfigureAwait(false))
-                            {
-                                var applyExitResult = await applyResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                                if (applyExitResult.ExitCode != 0)
-                                {
-                                    context.Logger.LogDebug(
-                                        "Failed to transfer field ownership to Helm (exit code {ExitCode}). " +
-                                        "Subsequent deploys with an explicit hostname may require --force.",
-                                        applyExitResult.ExitCode);
-                                }
-                            }
-                        }
-                        finally
-                        {
-                            try { File.Delete(tempFile); } catch { }
+                            context.Logger.LogWarning(
+                                "Failed to patch Gateway '{GatewayName}' with hostname '{Hostname}' (exit code {ExitCode}). " +
+                                "You may need to redeploy with an explicit hostname via WithHostname().",
+                                gatewayName, discoveredFqdn, patchExitResult.ExitCode);
+                            continue;
                         }
                     }
                 }
+                finally
+                {
+                    try { patchTempDir.Delete(recursive: true); } catch { }
+                }
+
+                // Transfer field ownership to Helm using server-side apply with a minimal
+                // Gateway manifest so subsequent Helm deploys don't encounter SSA conflicts.
+                // We construct a minimal spec rather than re-applying kubectl get output,
+                // which would include server-populated fields (status, resourceVersion, etc.).
+                await TransferGatewayFieldOwnership(
+                    gatewayName, @namespace, environment, context).ConfigureAwait(false);
             }
 
             // Check if bootstrap TLS secret already exists
@@ -1225,6 +1129,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             var certRequest = new CertificateRequest($"CN={discoveredFqdn}", ecdsa, HashAlgorithmName.SHA256);
+            var sanBuilder = new SubjectAlternativeNameBuilder();
+            sanBuilder.AddDnsName(discoveredFqdn);
+            certRequest.CertificateExtensions.Add(sanBuilder.Build());
             using var cert = certRequest.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
 
             var certPem = cert.ExportCertificatePem();
@@ -1273,6 +1180,227 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 try { tempDir.Delete(recursive: true); } catch { }
             }
+        }
+    }
+
+    /// <summary>
+    /// Extracts the first Hostname-type address from Gateway JSON status.
+    /// Returns null if no hostname address is found (e.g., only IP addresses).
+    /// </summary>
+    private static string? ExtractHostnameFromGatewayJson(string gatewayJson)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(gatewayJson);
+            if (doc.RootElement.TryGetProperty("status", out var status) &&
+                status.TryGetProperty("addresses", out var addresses))
+            {
+                // Prefer Hostname-type addresses over IPAddress
+                foreach (var addr in addresses.EnumerateArray())
+                {
+                    if (addr.TryGetProperty("type", out var type) &&
+                        string.Equals(type.GetString(), "Hostname", StringComparison.OrdinalIgnoreCase) &&
+                        addr.TryGetProperty("value", out var value))
+                    {
+                        var hostname = value.GetString()?.Trim();
+                        if (!string.IsNullOrEmpty(hostname))
+                        {
+                            return hostname;
+                        }
+                    }
+                }
+
+                // Fall back to any address that looks like a DNS name (contains a dot, no colons)
+                foreach (var addr in addresses.EnumerateArray())
+                {
+                    if (addr.TryGetProperty("value", out var value))
+                    {
+                        var addrValue = value.GetString()?.Trim();
+                        if (!string.IsNullOrEmpty(addrValue) && addrValue.Contains('.') && !addrValue.Contains(':'))
+                        {
+                            return addrValue;
+                        }
+                    }
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Gateway JSON was malformed
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds HTTPS listener indices that don't have a hostname set, by parsing the
+    /// full Gateway JSON from kubectl.
+    /// </summary>
+    private static async Task<List<int>> FindHostnamelessHttpsListeners(
+        string gatewayName,
+        string @namespace,
+        KubernetesEnvironmentResource environment,
+        PipelineStepContext context)
+    {
+        var getArgs = $"get gateway {gatewayName} --namespace {@namespace} -o json";
+        if (environment.KubeConfigPath is not null)
+        {
+            getArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+        }
+
+        var stdout = new List<string>();
+        var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+        {
+            Arguments = getArgs,
+            ThrowOnNonZeroReturnCode = false,
+            InheritEnv = true,
+            OnOutputData = stdout.Add,
+            OnErrorData = _ => { }
+        });
+
+        var indices = new List<int>();
+        await using (getDisposable.ConfigureAwait(false))
+        {
+            var result = await getResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+            if (result.ExitCode == 0 && stdout.Count > 0)
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(string.Join("", stdout));
+                    if (doc.RootElement.TryGetProperty("spec", out var spec) &&
+                        spec.TryGetProperty("listeners", out var listeners))
+                    {
+                        for (var i = 0; i < listeners.GetArrayLength(); i++)
+                        {
+                            var listener = listeners[i];
+                            if (listener.TryGetProperty("protocol", out var protocol) &&
+                                string.Equals(protocol.GetString(), "HTTPS", StringComparison.OrdinalIgnoreCase) &&
+                                !listener.TryGetProperty("hostname", out _))
+                            {
+                                indices.Add(i);
+                            }
+                        }
+                    }
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    // Fall back to assuming index 1 (HTTP=0, HTTPS=1)
+                    indices.Add(1);
+                }
+            }
+            else
+            {
+                // Fall back to assuming index 1
+                indices.Add(1);
+            }
+        }
+
+        return indices;
+    }
+
+    /// <summary>
+    /// Transfers field ownership of the Gateway's patched hostname to Helm using server-side apply
+    /// with a minimal Gateway manifest, avoiding server-populated fields like status and resourceVersion.
+    /// </summary>
+    private static async Task TransferGatewayFieldOwnership(
+        string gatewayName,
+        string @namespace,
+        KubernetesEnvironmentResource environment,
+        PipelineStepContext context)
+    {
+        // Build a minimal Gateway JSON with only the fields needed for ownership transfer.
+        // We read the current Gateway, strip server-populated fields, update the hostname,
+        // and re-apply with Helm's field manager.
+        var getArgs = $"get gateway {gatewayName} --namespace {@namespace} -o json";
+        if (environment.KubeConfigPath is not null)
+        {
+            getArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+        }
+
+        var stdout = new List<string>();
+        var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+        {
+            Arguments = getArgs,
+            ThrowOnNonZeroReturnCode = false,
+            InheritEnv = true,
+            OnOutputData = stdout.Add,
+            OnErrorData = _ => { }
+        });
+
+        await using (getDisposable.ConfigureAwait(false))
+        {
+            var exitResult = await getResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+            if (exitResult.ExitCode != 0 || stdout.Count == 0)
+            {
+                context.Logger.LogDebug("Could not read Gateway for field ownership transfer.");
+                return;
+            }
+        }
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(string.Join("", stdout));
+            var root = doc.RootElement;
+
+            // Build a minimal manifest: apiVersion, kind, metadata (name + namespace only), spec
+            var minimal = new System.Text.Json.Nodes.JsonObject
+            {
+                ["apiVersion"] = root.GetProperty("apiVersion").GetString(),
+                ["kind"] = root.GetProperty("kind").GetString(),
+                ["metadata"] = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["name"] = gatewayName,
+                    ["namespace"] = @namespace
+                }
+            };
+
+            // Copy the spec as-is (it already has the patched hostname from the previous step)
+            if (root.TryGetProperty("spec", out var spec))
+            {
+                minimal["spec"] = System.Text.Json.Nodes.JsonNode.Parse(spec.GetRawText());
+            }
+
+            var tempDir = Directory.CreateTempSubdirectory(".aspire-gateway-ownership");
+            try
+            {
+                var manifestPath = Path.Combine(tempDir.FullName, "gateway.json");
+                await File.WriteAllTextAsync(manifestPath, minimal.ToJsonString(), context.CancellationToken).ConfigureAwait(false);
+
+                var applyArgs = $"apply --server-side --field-manager=helm --force-conflicts -f \"{manifestPath}\"";
+                if (environment.KubeConfigPath is not null)
+                {
+                    applyArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var (applyResult, applyDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = applyArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                });
+
+                await using (applyDisposable.ConfigureAwait(false))
+                {
+                    var applyExitResult = await applyResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (applyExitResult.ExitCode != 0)
+                    {
+                        context.Logger.LogDebug(
+                            "Failed to transfer field ownership to Helm (exit code {ExitCode}). " +
+                            "Subsequent deploys with an explicit hostname may require --force.",
+                            applyExitResult.ExitCode);
+                    }
+                }
+            }
+            finally
+            {
+                try { tempDir.Delete(recursive: true); } catch { }
+            }
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            context.Logger.LogDebug(ex, "Failed to parse Gateway JSON for field ownership transfer.");
         }
     }
 
@@ -1325,6 +1453,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             var request = new CertificateRequest($"CN={hostname}", ecdsa, HashAlgorithmName.SHA256);
+            var sanBuilder = new SubjectAlternativeNameBuilder();
+            sanBuilder.AddDnsName(hostname);
+            request.CertificateExtensions.Add(sanBuilder.Build());
             using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
 
             var certPem = cert.ExportCertificatePem();
