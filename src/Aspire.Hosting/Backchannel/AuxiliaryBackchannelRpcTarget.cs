@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -61,11 +62,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return new GetAppHostInfoResponse
         {
             Pid = legacyInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            AspireHostVersion = typeof(AuxiliaryBackchannelRpcTarget).Assembly.GetName().Version?.ToString() ?? "unknown",
+            AspireHostVersion = GetAspireHostVersion(),
             AppHostPath = legacyInfo.AppHostPath,
             CliProcessId = legacyInfo.CliProcessId,
             StartedAt = legacyInfo.StartedAt
         };
+    }
+
+    private static string GetAspireHostVersion()
+    {
+        return typeof(AuxiliaryBackchannelRpcTarget).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
     }
 
     /// <summary>

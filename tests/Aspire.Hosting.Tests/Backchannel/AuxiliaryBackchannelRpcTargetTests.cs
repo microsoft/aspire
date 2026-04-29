@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,6 +14,31 @@ namespace Aspire.Hosting.Backchannel;
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task GetAppHostInfoAsync_ReturnsAssemblyInformationalVersion()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Path"] = "/path/to/apphost.csproj"
+            })
+            .Build();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .BuildServiceProvider();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            services);
+
+        var result = await target.GetAppHostInfoAsync().DefaultTimeout();
+        var expectedVersion = typeof(AuxiliaryBackchannelRpcTarget).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+
+        Assert.Equal(expectedVersion, result.AspireHostVersion);
+    }
+
     [Fact]
     public async Task GetResourceSnapshotsAsync_EnumeratesResources()
     {
