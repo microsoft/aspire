@@ -142,6 +142,19 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void ShouldSearchParentDirectory_WhenDirectoryIsHomeWithDifferentCasingOnCaseInsensitiveOS_ReturnsFalse()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), "Case-insensitive path comparison only applies to Windows and macOS.");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var shouldSearch = TypeScriptAppHostToolchainResolver.ShouldSearchParentDirectory(
+            workspace.WorkspaceRoot,
+            InvertCasing(workspace.WorkspaceRoot.FullName));
+
+        Assert.False(shouldSearch);
+    }
+
+    [Fact]
     public void ApplyToRuntimeSpec_WhenBunSelected_UsesBunCommandsAndPreservesExtensionLaunch()
     {
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
@@ -198,5 +211,10 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             },
             ExtensionLaunchCapability = "node"
         };
+    }
+
+    private static string InvertCasing(string value)
+    {
+        return new string(value.Select(c => char.IsUpper(c) ? char.ToLowerInvariant(c) : char.ToUpperInvariant(c)).ToArray());
     }
 }
