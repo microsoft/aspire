@@ -353,6 +353,24 @@ internal sealed class ProjectLocator(
                     }
                 }
             }
+            else if (File.Exists(projectFile.FullName))
+            {
+                // A project file was directly specified.
+                //
+                // Resolve to the filesystem-canonical path so the path used for backchannel socket
+                // hash computation matches.
+                var resolvedProjectPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+
+                if (!string.Equals(resolvedProjectPath, projectFile.FullName, StringComparison.Ordinal))
+                {
+                    logger.LogDebug(
+                        "Canonicalized explicit AppHost path from '{OriginalPath}' to '{ResolvedPath}'.",
+                        projectFile.FullName,
+                        resolvedProjectPath);
+
+                    projectFile = new FileInfo(resolvedProjectPath);
+                }
+            }
 
             if (projectFile is not null)
             {

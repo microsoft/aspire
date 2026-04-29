@@ -113,9 +113,9 @@ internal static class BackchannelConstants
     /// Computes the hash portion of the socket name from an AppHost path.
     /// </summary>
     /// <remarks>
-    /// On case-insensitive file systems (Windows, macOS), the path is normalized to uppercase
-    /// before hashing so that "C:\App\MyApp.csproj" and "c:\app\myapp.csproj" produce the
-    /// same hash. Without this, the CLI and AppHost can derive different drive-letter casings
+    /// On Windows the drive letter is normalized to uppercase before hashing so that
+    /// "C:\App\MyApp.csproj" and "c:\App\MyApp.csproj" produce the same hash.
+    /// Without this, the CLI and AppHost can derive different drive-letter casings
     /// (e.g. <c>FileInfo.FullName</c> vs MSBuild metadata) and fail to match sockets.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
@@ -149,13 +149,16 @@ internal static class BackchannelConstants
     }
 
     /// <summary>
-    /// Normalizes the path for consistent hashing on case-insensitive file systems.
+    /// Normalizes the path for consistent hashing by uppercasing the Windows drive letter.
     /// </summary>
     private static string NormalizePath(string path)
     {
-        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        // On Windows, the drive letter casing can differ between callers
+        // (e.g. FileInfo.FullName produces "C:\..." while MSBuild metadata may produce "c:\...").
+        // Uppercase only the drive letter so both sides hash identically.
+        if (OperatingSystem.IsWindows() && path.Length >= 2 && path[1] == ':')
         {
-            return path.ToUpperInvariant();
+            return char.ToUpperInvariant(path[0]) + path[1..];
         }
 
         return path;

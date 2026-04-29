@@ -391,10 +391,10 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ComputeLegacyHash_ReturnsNullWhenPathUnchangedByNormalization()
     {
-        // On Linux, normalization is a no-op so the legacy hash is always null.
-        // On Windows/macOS, a path that is already fully uppercase won't change either.
-        var appHostPath = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? @"C:\PATH\TO\MYAPP.APPHOST.CSPROJ"
+        // Normalization only uppercases the Windows drive letter.
+        // A path whose drive letter is already uppercase (or any non-Windows path) is unchanged.
+        var appHostPath = OperatingSystem.IsWindows()
+            ? @"C:\Path\To\MyApp.AppHost.csproj"
             : "/path/to/MyApp.AppHost.csproj";
 
         var legacyHash = AppHostHelper.ComputeLegacyHash(appHostPath);
@@ -403,28 +403,24 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void FindMatchingSockets_FindsSocketsCreatedWithDifferentPathCasing()
+    public void FindMatchingSockets_FindsSocketsCreatedWithDifferentDriveLetterCasing()
     {
-        Assert.SkipWhen(!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS(),
-            "Path case normalization only applies on case-insensitive file systems (Windows/macOS).");
+        Assert.SkipWhen(!OperatingSystem.IsWindows(),
+            "Drive letter normalization only applies on Windows.");
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "backchannels");
         Directory.CreateDirectory(backchannelsDir);
 
-        // Simulate paths with different casing, as can happen when
-        // the CLI resolves via FileInfo.FullName (uppercase) and the AppHost resolves
-        // via MSBuild metadata (lowercase).
-        var upperCasePath = OperatingSystem.IsWindows()
-            ? @"C:\Development\MyApp\MyApp.AppHost.csproj"
-            : "/Users/Dev/MyApp/MyApp.AppHost.csproj";
-        var lowerCasePath = OperatingSystem.IsWindows()
-            ? @"c:\development\myapp\myapp.apphost.csproj"
-            : "/users/dev/myapp/myapp.apphost.csproj";
+        // Simulate the real-world mismatch: FileInfo.FullName yields an uppercase drive letter
+        // (e.g. "C:\...") while MSBuild metadata may yield a lowercase one (e.g. "c:\...").
+        // Only the drive letter casing differs; the rest of the path is identical.
+        var upperDrivePath = @"C:\Development\MyApp\MyApp.AppHost.csproj";
+        var lowerDrivePath = @"c:\Development\MyApp\MyApp.AppHost.csproj";
 
-        // Both casings should produce the same hash (current behavior after normalization)
-        var upperPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(upperCasePath, workspace.WorkspaceRoot.FullName);
-        var lowerPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(lowerCasePath, workspace.WorkspaceRoot.FullName);
+        // Both should produce the same hash after drive-letter normalization.
+        var upperPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(upperDrivePath, workspace.WorkspaceRoot.FullName);
+        var lowerPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(lowerDrivePath, workspace.WorkspaceRoot.FullName);
         Assert.Equal(upperPrefix, lowerPrefix);
 
         var hash = Path.GetFileName(upperPrefix)["auxi.sock.".Length..];
@@ -433,9 +429,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var socket = Path.Combine(backchannelsDir, $"auxi.sock.{hash}.a1b2c3d4e5f6.12345");
         File.WriteAllText(socket, "");
 
-        // Both path casings should find the socket
-        var fromUpper = AppHostHelper.FindMatchingSockets(upperCasePath, workspace.WorkspaceRoot.FullName);
-        var fromLower = AppHostHelper.FindMatchingSockets(lowerCasePath, workspace.WorkspaceRoot.FullName);
+        // Both path variants should find the socket
+        var fromUpper = AppHostHelper.FindMatchingSockets(upperDrivePath, workspace.WorkspaceRoot.FullName);
+        var fromLower = AppHostHelper.FindMatchingSockets(lowerDrivePath, workspace.WorkspaceRoot.FullName);
 
         Assert.Single(fromUpper);
         Assert.Single(fromLower);
@@ -446,17 +442,16 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindMatchingSockets_LegacyHashFindsSocketsFromOlderAppHost()
     {
-        Assert.SkipWhen(!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS(),
-            "Legacy hash divergence only occurs on case-insensitive file systems (Windows/macOS).");
+        Assert.SkipWhen(!OperatingSystem.IsWindows(),
+            "Legacy hash divergence only occurs on Windows where drive-letter casing is normalized.");
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "backchannels");
         Directory.CreateDirectory(backchannelsDir);
 
-        // A mixed-case path produces a legacy hash that differs from the normalized hash
-        var appHostPath = OperatingSystem.IsWindows()
-            ? @"c:\Development\MyApp\MyApp.AppHost.csproj"
-            : "/users/Dev/MyApp/MyApp.AppHost.csproj";
+        // A path with a lowercase drive letter produces a legacy hash that differs from the
+        // normalized hash (which has an uppercase drive letter).
+        var appHostPath = @"c:\Development\MyApp\MyApp.AppHost.csproj";
         var legacyHash = AppHostHelper.ComputeLegacyHash(appHostPath);
         Assert.NotNull(legacyHash);
 
