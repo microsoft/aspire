@@ -192,6 +192,7 @@ function getRunApiConfigFromOutput(runApiOutput: string): RunApiOutput {
 }
 
 function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
+    // Mark build errors whose output was already streamed to avoid replaying the transcript in AppHost startup handling.
     const error = new Error(message) as Error & { debugConsoleOutputAlreadyWritten?: boolean };
     error.debugConsoleOutputAlreadyWritten = true;
 
