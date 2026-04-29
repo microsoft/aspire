@@ -87,8 +87,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
         var resource = new AzureAppServiceEnvironmentResource(name, static infra =>
         {
-            var prefix = infra.AspireResource.Name;
             var resource = (AzureAppServiceEnvironmentResource)infra.AspireResource;
+            var prefix = Infrastructure.NormalizeBicepIdentifier(resource.Name);
 
             // This tells azd to avoid creating infrastructure
             var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
@@ -101,7 +101,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
             infra.Add(tags);
 
-            var identity = new UserAssignedIdentity(Infrastructure.NormalizeBicepIdentifier($"{prefix}-mi"))
+            var identity = new UserAssignedIdentity($"{prefix}_mi")
             {
                 Tags = tags
             };
@@ -133,7 +133,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
             pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, identity.Id, pullRa.RoleDefinitionId);
             infra.Add(pullRa);
 
-            var plan = new AppServicePlan(Infrastructure.NormalizeBicepIdentifier($"{prefix}-asplan"))
+            var plan = new AppServicePlan($"{prefix}_asplan")
             {
                 Sku = new AppServiceSkuDescription
                 {
@@ -191,7 +191,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
                 infra.Add(new ProvisioningOutput("AZURE_APP_SERVICE_DASHBOARD_URI", typeof(string))
                 {
-                    Value = BicepFunction.Interpolate($"https://{AzureAppServiceEnvironmentUtility.GetDashboardHostName(prefix)}.azurewebsites.net")
+                    Value = BicepFunction.Interpolate($"https://{AzureAppServiceEnvironmentUtility.GetDashboardHostName(resource.Name)}.azurewebsites.net")
                 });
             }
 
@@ -206,7 +206,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                 else
                 {
                     // Create Log Analytics workspace
-                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace(Infrastructure.NormalizeBicepIdentifier($"{prefix}_law"))
+                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace($"{prefix}_law")
                     {
                         Sku = new OperationalInsightsWorkspaceSku()
                         {
@@ -217,7 +217,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                     infra.Add(logAnalyticsWorkspace);
 
                     // Create Application Insights resource linked to the Log Analytics workspace
-                    applicationInsights = new ApplicationInsightsComponent(Infrastructure.NormalizeBicepIdentifier($"{prefix}_ai"))
+                    applicationInsights = new ApplicationInsightsComponent($"{prefix}_ai")
                     {
                         ApplicationType = ApplicationInsightsApplicationType.Web,
                         Kind = "web",
