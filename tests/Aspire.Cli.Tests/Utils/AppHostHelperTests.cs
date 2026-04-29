@@ -389,14 +389,33 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ComputeLegacyHash_ReturnsNullWhenPathUnchangedByNormalization()
+    public void ComputeLegacyHash_WhenUppercaseDrivePathOnWindows_ReturnsLowercaseDriveLegacyHash()
     {
-        // Normalization only uppercases the Windows drive letter.
-        // A path whose drive letter is already uppercase (or any non-Windows path) is unchanged.
-        var appHostPath = OperatingSystem.IsWindows()
-            ? @"C:\Path\To\MyApp.AppHost.csproj"
-            : "/path/to/MyApp.AppHost.csproj";
+        Assert.SkipWhen(!OperatingSystem.IsWindows(),
+            "Drive-letter legacy fallback behavior only applies on Windows.");
 
+        var upperDrivePath = @"C:\Path\To\MyApp.AppHost.csproj";
+        var lowerDrivePath = @"c:\Path\To\MyApp.AppHost.csproj";
+
+        var upperLegacyHash = AppHostHelper.ComputeLegacyHash(upperDrivePath);
+        var lowerLegacyHash = AppHostHelper.ComputeLegacyHash(lowerDrivePath);
+
+        Assert.NotNull(upperLegacyHash);
+        Assert.NotNull(lowerLegacyHash);
+        Assert.Equal(lowerLegacyHash, upperLegacyHash);
+
+        var currentPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(upperDrivePath, Path.GetTempPath());
+        var currentHash = Path.GetFileName(currentPrefix)["auxi.sock.".Length..];
+        Assert.NotEqual(currentHash, upperLegacyHash);
+    }
+
+    [Fact]
+    public void ComputeLegacyHash_ReturnsNullOnNonWindowsWhenPathUnchanged()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Non-Windows behavior is validated by this test.");
+
+        var appHostPath = "/path/to/MyApp.AppHost.csproj";
         var legacyHash = AppHostHelper.ComputeLegacyHash(appHostPath);
 
         Assert.Null(legacyHash);
