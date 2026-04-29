@@ -261,12 +261,12 @@ public class KubernetesGatewayTests
         // The HTTPS listener should NOT have a hostname field (since no WithHostname was called)
         // Verify it has the listener but the hostname line should not appear after HTTPS
         var lines = content.Split('\n').Select(l => l.Trim()).ToList();
-        var httpsIndex = lines.FindIndex(l => l.Contains("protocol: HTTPS"));
-        Assert.True(httpsIndex >= 0, "HTTPS listener not found");
+        var httpsIndex = lines.FindIndex(l => l.Contains("protocol:") && l.Contains("HTTPS"));
+        Assert.True(httpsIndex >= 0, "HTTPS listener not found in:\n" + content);
 
         // Find the next listener or end of listeners to check there's no hostname
         var nextListenerOrEnd = lines.FindIndex(httpsIndex + 1, l => l.StartsWith("- name:") || l == "");
         var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex);
-        Assert.DoesNotContain(httpsSection, l => l.StartsWith("hostname:"));
+        Assert.DoesNotContain(httpsSection, l => l.StartsWith("hostname:") || l.StartsWith("hostname "));
     }
 }
