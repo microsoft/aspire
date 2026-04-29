@@ -24,6 +24,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
+using Polly.Timeout;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -71,7 +72,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private readonly ExecutableCreator _executableCreator;
     private readonly ContainerCreator _containerCreator;
-    
+
     // We need to preserve the container creation context from the application startup phase 
     // so that container explicit start does not suffer from timing issues.
     private readonly TaskCompletionSource<ContainerCreationContext> _containerContextSource;
@@ -225,7 +226,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             await _executorEvents.PublishAsync(new OnEndpointsAllocatedContext(ct)).ConfigureAwait(false);
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             _shutdownCancellation.Cancel();
             _containerContextSource.TrySetException(ex);
@@ -386,36 +387,40 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             return pending;
         }
 
-        await pipeline.ExecuteAsync(async (attemptCancellationToken) =>
+        try
         {
-            // Note: a Kubernetes watch, when started, will return at least one event per existing object,
-            // so we won't miss any state already present at the time the watch starts.
-            var changeEnumerator = _kubernetesService.WatchAsync<TDcpResource>(cancellationToken: attemptCancellationToken);
-            await foreach (var (evt, observed) in changeEnumerator.ConfigureAwait(false))
+            await pipeline.ExecuteAsync(async (attemptCancellationToken) =>
             {
-                if (evt == WatchEventType.Bookmark)
+                // Note: a Kubernetes watch, when started, will return at least one event per existing object,
+                // so we won't miss any state already present at the time the watch starts.
+                var changeEnumerator = _kubernetesService.WatchAsync<TDcpResource>(cancellationToken: attemptCancellationToken);
+                await foreach (var (evt, observed) in changeEnumerator.ConfigureAwait(false))
                 {
-                    // Bookmarks do not contain any data.
-                    continue;
-                }
+                    if (evt == WatchEventType.Bookmark)
+                    {
+                        // Bookmarks do not contain any data.
+                        continue;
+                    }
 
-                if (!objectsByName.TryGetValue(observed.Metadata.Name, out var original))
-                {
-                    // Not one of the objects we are tracking.
-                    continue;
-                }
+                    if (!objectsByName.TryGetValue(observed.Metadata.Name, out var original))
+                    {
+                        // Not one of the objects we are tracking.
+                        continue;
+                    }
 
-                if (isInDesiredState(original, observed))
-                {
-                    pending.Remove(observed.Metadata.Name);
-                }
+                    if (pending.Contains(observed.Metadata.Name) && isInDesiredState(original, observed))
+                    {
+                        pending.Remove(observed.Metadata.Name);
+                    }
 
-                if (pending.Count == 0)
-                {
-                    return; // We are done.
+                    if (pending.Count == 0)
+                    {
+                        return; // We are done.
+                    }
                 }
-            }
-        }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutRejectedException) { }
 
         // Best-effort final direct query for any still-pending objects in case the watch missed updates.
         foreach (var name in pending.ToArray())
@@ -429,7 +434,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     pending.Remove(name);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogDebug(ex, "Failed to fetch latest state for {Kind} '{Name}' during DCP watch fallback.", original.Kind, name);
             }
@@ -450,7 +455,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         var createServicePipeline = DcpPipelineBuilder.BuildObjectWatchRetryPipeline(_options.Value, _logger, timeout);
         var initialServiceCount = needAddressAllocated.Length;
-        HashSet<string> stillPending = [];
+        HashSet<string> stillPending = [.. needAddressAllocated.Select(s => s.Metadata.Name)];
 
         try
         {
@@ -533,7 +538,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var pending = allItems.Where(o => !IsInFinalState(stateSelector(o), finalStates)).ToArray();
         if (pending.Length > 0)
         {
-            var pipeline = DcpPipelineBuilder.BuildObjectWatchRetryPipeline(_options.Value,_logger, timeout);
+            var pipeline = DcpPipelineBuilder.BuildObjectWatchRetryPipeline(_options.Value, _logger, timeout);
 
             await WatchUntilDesiredStateAsync(
                 pending,
@@ -932,8 +937,9 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                         cancellationToken, resourceType, modelResource,
                         r.DcpResource.Metadata.Name,
                         new ResourceStatus(KnownResourceStates.NotStarted, null, null),
-                        s => s with { 
-                            State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null) 
+                        s => s with
+                        {
+                            State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
                         })
                     ).ConfigureAwait(false);
                 }
@@ -983,7 +989,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
         finally
         {
-            foreach(var r in replicas)
+            foreach (var r in replicas)
             {
                 r.MarkInitialized();
             }
@@ -1150,7 +1156,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     await _executorEvents.PublishAsync(new OnConnectionStringAvailableContext(cancellationToken, resourceReference.ModelResource)).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
                     var startupCctx = await _containerContextSource.Task.ConfigureAwait(false);
-                    using (var cctx = startupCctx.ForAdditionalContainers(1)) {
+                    using (var cctx = startupCctx.ForAdditionalContainers(1))
+                    {
                         await _containerCreator.CreateObjectAsync(cr, cctx, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     }
                     break;

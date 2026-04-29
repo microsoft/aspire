@@ -15,7 +15,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly.Timeout;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -442,22 +441,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         // Wait for each tunnel proxy to reach a stable state (Running or Failed).
         // Container tunnel initialization can take a while if the container tunnel image needs to be built,
         // especially if the required image pull is slow, hence 10 minute timeout here.
-        IReadOnlyList<ContainerNetworkTunnelProxy> observedProxies;
-        try
-        {
-            observedProxies = await factory.WaitForStateAsync(
-                tunnelProxies,
-                p => p.Status?.State,
-                [ContainerNetworkTunnelProxyState.Running, ContainerNetworkTunnelProxyState.Failed],
-                TimeSpan.FromMinutes(10),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (TimeoutRejectedException ex)
-        {
-            var pendingNames = string.Join(", ", tunnelProxies.Select(p => $"'{p.Metadata.Name}'"));
-            _logger.LogError(ex, "Timed out waiting for container network tunnel proxies to reach a stable state: {ProxyNames}.", pendingNames);
-            throw new DistributedApplicationException($"Timed out waiting for container network tunnel proxies to reach a stable state: {pendingNames}.", ex);
-        }
+        var observedProxies = await factory.WaitForStateAsync(
+            tunnelProxies,
+            p => p.Status?.State,
+            [ContainerNetworkTunnelProxyState.Running, ContainerNetworkTunnelProxyState.Failed],
+            TimeSpan.FromMinutes(10),
+            cancellationToken).ConfigureAwait(false);
 
         var failedProxies = observedProxies
             .Where(p => string.Equals(p.Status?.State, ContainerNetworkTunnelProxyState.Failed, StringComparison.Ordinal))
