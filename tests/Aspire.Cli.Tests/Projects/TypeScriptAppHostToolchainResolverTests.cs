@@ -66,7 +66,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
-    public void Resolve_WhenYarnDirectoryExists_ReturnsYarn()
+    public void Resolve_WhenYarnDirectoryExists_ReturnsNpm()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
@@ -74,7 +74,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot);
 
-        Assert.Equal(TypeScriptAppHostToolchain.Yarn, toolchain);
+        Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
     }
 
     [Fact]

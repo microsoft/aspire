@@ -25,7 +25,6 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string BunBinaryLockFileName = "bun.lockb";
     private const string YarnLockFileName = "yarn.lock";
     private const string YarnConfigFileName = ".yarnrc.yml";
-    private const string YarnDirectoryName = ".yarn";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
 
@@ -79,11 +78,6 @@ internal static class TypeScriptAppHostToolchainResolver
             if (File.Exists(Path.Combine(candidateDirectory.FullName, YarnConfigFileName)))
             {
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnConfigFileName, candidateDirectory);
-            }
-
-            if (Directory.Exists(Path.Combine(candidateDirectory.FullName, YarnDirectoryName)))
-            {
-                return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnDirectoryName, candidateDirectory);
             }
 
             if (File.Exists(Path.Combine(candidateDirectory.FullName, PackageLockFileName)))
