@@ -321,7 +321,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 ValidateBuildOnlyContainerReferences(context.Model);
                 return Task.CompletedTask;
             },
-            RequiredBySteps = [WellKnownPipelineSteps.PublishPrereq, WellKnownPipelineSteps.DeployPrereq, ManifestPublishingExtensions.PublishManifestStepName],
+            RequiredBySteps = [WellKnownPipelineSteps.PublishPrereq, WellKnownPipelineSteps.DeployPrereq],
         });
 
         // Add diagnostic step for dependency graph analysis

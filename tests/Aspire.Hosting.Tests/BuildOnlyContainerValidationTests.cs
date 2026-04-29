@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.Pipelines;
-using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,21 +52,6 @@ public class BuildOnlyContainerValidationTests
 
         Assert.Contains("'orphan'", ex.Message);
         Assert.DoesNotContain("'frontend'", ex.Message);
-    }
-
-    [Fact]
-    public async Task PublishManifest_WithUnconsumedBuildOnlyContainer_Throws()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: ManifestPublishingExtensions.PublishManifestStepName);
-
-        AddBuildOnlyContainer(builder, "frontend");
-
-        using var app = builder.Build();
-
-        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
-            () => ExecutePipelineAsync(app)).DefaultTimeout();
-
-        Assert.Contains("'frontend'", ex.Message);
     }
 
     [Fact]
