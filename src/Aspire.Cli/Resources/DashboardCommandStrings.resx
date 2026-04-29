@@ -118,10 +118,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Manage the Aspire dashboard</value>
+    <value>Manage the Aspire dashboard (Preview)</value>
   </data>
   <data name="RunDescription" xml:space="preserve">
-    <value>Start the Aspire dashboard</value>
+    <value>Start the Aspire dashboard (Preview)</value>
   </data>
   <data name="BundleNotAvailable" xml:space="preserve">
     <value>The Aspire dashboard requires the CLI bundle. The bundle was not found.</value>
