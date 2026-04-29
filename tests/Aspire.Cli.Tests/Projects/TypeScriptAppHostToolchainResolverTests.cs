@@ -17,7 +17,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Bun, toolchain);
     }
@@ -29,7 +29,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "pnpm-lock.yaml"), "lockfileVersion: '9.0'");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Pnpm, toolchain);
     }
@@ -38,10 +38,10 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     public void Resolve_WhenPackageLockExists_ReturnsNpm()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"workspace\" }");
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "yarn.lock"), string.Empty);
-
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        var parentDirectory = appHostDirectory.Parent!;
+        File.WriteAllText(Path.Combine(parentDirectory.FullName, "package.json"), "{ \"name\": \"workspace\" }");
+        File.WriteAllText(Path.Combine(parentDirectory.FullName, "yarn.lock"), string.Empty);
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package-lock.json"), "{}");
 
@@ -72,7 +72,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".yarn"));
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
     }
@@ -83,7 +83,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
     }
@@ -115,7 +115,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         File.WriteAllText(Path.Combine(appHostDirectory.Parent!.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.12.1\" }");
         File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Pnpm, toolchain);
     }
@@ -128,7 +128,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger: null);
 
         Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
     }
