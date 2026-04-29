@@ -206,7 +206,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                 else
                 {
                     // Create Log Analytics workspace
-                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace(prefix + "_law")
+                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace(Infrastructure.NormalizeBicepIdentifier($"{prefix}-law"))
                     {
                         Sku = new OperationalInsightsWorkspaceSku()
                         {
@@ -217,7 +217,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                     infra.Add(logAnalyticsWorkspace);
 
                     // Create Application Insights resource linked to the Log Analytics workspace
-                    applicationInsights = new ApplicationInsightsComponent(prefix + "_ai")
+                    applicationInsights = new ApplicationInsightsComponent(Infrastructure.NormalizeBicepIdentifier($"{prefix}-ai"))
                     {
                         ApplicationType = ApplicationInsightsApplicationType.Web,
                         Kind = "web",
