@@ -130,20 +130,23 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            // Create AKS with OIDC + workload identity + ALB controller in a single command
-            output.WriteLine("Step 5: Creating AKS cluster with ALB controller (10-15 minutes)...");
+            // Create AKS with Azure CNI, OIDC, workload identity, Gateway API, and ALB controller
+            // Per https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-addon
+            output.WriteLine("Step 5: Creating AKS cluster with Gateway API + ALB (10-15 minutes)...");
             await auto.TypeAsync(
                 $"az aks create " +
                 $"--resource-group {resourceGroupName} " +
                 $"--name {clusterName} " +
+                $"--location westus3 " +
                 $"--node-count 1 " +
                 $"--node-vm-size Standard_D2as_v5 " +
+                $"--network-plugin azure " +
                 $"--generate-ssh-keys " +
                 $"--attach-acr {acrName} " +
-                $"--enable-managed-identity " +
                 $"--enable-oidc-issuer " +
                 $"--enable-workload-identity " +
-                $"--enable-alb " +
+                $"--enable-gateway-api " +
+                $"--enable-application-load-balancer " +
                 $"--output table");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(20));
@@ -153,17 +156,22 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Create ALB subnet + ApplicationLoadBalancer CRD
-            output.WriteLine("Step 6: Creating ALB subnet and ApplicationLoadBalancer...");
+            // Verify ALB controller is running and GatewayClass exists
+            output.WriteLine("Step 6: Verifying ALB controller and GatewayClass...");
+            await auto.TypeAsync("kubectl get pods -n kube-system | grep alb-controller && kubectl get gatewayclass azure-alb-external");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            // Create ApplicationLoadBalancer CRD using the add-on's auto-created subnet
+            output.WriteLine("Step 7: Creating ApplicationLoadBalancer...");
             await auto.TypeAsync(
                 $"MC_RG=$(az aks show -g {resourceGroupName} -n {clusterName} --query nodeResourceGroup -o tsv) && " +
-                "VNET_NAME=$(az network vnet list -g $MC_RG --query '[0].name' -o tsv) && " +
-                "az network vnet subnet create -g $MC_RG --vnet-name $VNET_NAME --name subnet-alb " +
-                "--address-prefix 10.237.0.0/24 --delegations Microsoft.ServiceNetworking/trafficControllers && " +
-                "SUBNET_ID=$(az network vnet subnet show -g $MC_RG --vnet-name $VNET_NAME --name subnet-alb --query id -o tsv) && " +
+                "SUBNET_ID=$(az network vnet subnet show -g $MC_RG " +
+                "--vnet-name $(az network vnet list -g $MC_RG --query '[0].name' -o tsv) " +
+                "--name aks-appgateway --query id -o tsv) && " +
                 "echo \"Subnet: $SUBNET_ID\"");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             await auto.TypeAsync(
                 "cat <<EOF | kubectl apply -f -\n" +
@@ -188,7 +196,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
             // Install cert-manager with Gateway API support
-            output.WriteLine("Step 7: Installing cert-manager...");
+            output.WriteLine("Step 8: Installing cert-manager...");
             await auto.TypeAsync(
                 "helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager " +
                 "--namespace cert-manager --create-namespace " +
@@ -197,7 +205,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Create HTTP-01 ClusterIssuer
-            output.WriteLine("Step 8: Creating HTTP-01 ClusterIssuer...");
+            output.WriteLine("Step 9: Creating HTTP-01 ClusterIssuer...");
             await auto.TypeAsync(
                 "cat <<EOF | kubectl apply -f -\n" +
                 "apiVersion: cert-manager.io/v1\n" +
@@ -225,7 +233,7 @@ public sealed class KubernetesGatewayTlsDeploymentTests(ITestOutputHelper output
 
             // ===== PHASE 2: Create Aspire Project with Gateway + TLS =====
 
-            await auto.InstallCurrentBuildAspireCliAsync(counter, output, "Step 9");
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output, "Step 10");
 
             output.WriteLine("Step 9: Creating Aspire starter project...");
             await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
