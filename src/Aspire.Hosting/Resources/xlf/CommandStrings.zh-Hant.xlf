@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserDescription">
-        <source>Choose the browser, profile, process lifetime, and scope used by tracked browser sessions.</source>
-        <target state="new">Choose the browser, profile, process lifetime, and scope used by tracked browser sessions.</target>
+        <source>Choose the browser, profile, user data mode, and scope used by tracked browser sessions.</source>
+        <target state="new">Choose the browser, profile, user data mode, and scope used by tracked browser sessions.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserEdgeOption">
@@ -75,31 +75,6 @@
       <trans-unit id="ConfigureTrackedBrowserName">
         <source>Configure tracked browser</source>
         <target state="new">Configure tracked browser</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ConfigureTrackedBrowserProcessLifetimeDescription">
-        <source>Choose whether pipe-created tracked browsers are session-scoped and closed with the AppHost or persistent and left running. Persistent browsers stop streaming logs when the AppHost exits and cannot be reattached.</source>
-        <target state="new">Choose whether pipe-created tracked browsers are session-scoped and closed with the AppHost or persistent and left running. Persistent browsers stop streaming logs when the AppHost exits and cannot be reattached.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ConfigureTrackedBrowserProcessLifetimeLabel">
-        <source>Browser process lifetime</source>
-        <target state="new">Browser process lifetime</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ConfigureTrackedBrowserProcessLifetimePersistentOption">
-        <source>Persistent</source>
-        <target state="new">Persistent</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ConfigureTrackedBrowserProcessLifetimeRequired">
-        <source>Browser process lifetime must be Session or Persistent.</source>
-        <target state="new">Browser process lifetime must be Session or Persistent.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ConfigureTrackedBrowserProcessLifetimeSessionOption">
-        <source>Session</source>
-        <target state="new">Session</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileDescription">

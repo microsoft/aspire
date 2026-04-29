@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -88,8 +89,6 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
             resourceState.LastError = null;
             resourceState.LastProfile = configuration.Profile;
-            resourceState.LastBrowserProcessLifetime = configuration.BrowserProcessLifetime.ToString();
-
             var resourceLogger = _resourceLoggerService.GetLogger(resourceName);
             resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, configuration.Browser);
 
@@ -495,10 +494,6 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
             : RemoveProperty(properties, BrowserLogsBuilderExtensions.ProfilePropertyName);
 
-        properties = resourceState.LastBrowserProcessLifetime is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName, resourceState.LastBrowserProcessLifetime)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName);
-
         return properties.SetResourcePropertyRange(propertyUpdates);
     }
 
@@ -595,7 +590,6 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
         public string? LastProfile { get; set; }
 
-        public string? LastBrowserProcessLifetime { get; set; }
     }
 
     private static string FormatProcessId(int? processId) =>

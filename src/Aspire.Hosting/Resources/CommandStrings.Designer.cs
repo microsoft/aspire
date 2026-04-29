@@ -124,7 +124,7 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Choose the browser, profile, process lifetime, and scope used by tracked browser sessions..
+        ///   Looks up a localized string similar to Choose the browser, profile, user data mode, and scope used by tracked browser sessions..
         /// </summary>
         internal static string ConfigureTrackedBrowserDescription {
             get {
@@ -250,42 +250,6 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Browser process lifetime.
-        /// </summary>
-        internal static string ConfigureTrackedBrowserProcessLifetimeLabel {
-            get {
-                return ResourceManager.GetString("ConfigureTrackedBrowserProcessLifetimeLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Choose whether pipe-created tracked browsers are session-scoped and closed with the AppHost or persistent and left running. Persistent browsers stop streaming logs when the AppHost exits and cannot be reattached..
-        /// </summary>
-        internal static string ConfigureTrackedBrowserProcessLifetimeDescription {
-            get {
-                return ResourceManager.GetString("ConfigureTrackedBrowserProcessLifetimeDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Session.
-        /// </summary>
-        internal static string ConfigureTrackedBrowserProcessLifetimeSessionOption {
-            get {
-                return ResourceManager.GetString("ConfigureTrackedBrowserProcessLifetimeSessionOption", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Persistent.
-        /// </summary>
-        internal static string ConfigureTrackedBrowserProcessLifetimePersistentOption {
-            get {
-                return ResourceManager.GetString("ConfigureTrackedBrowserProcessLifetimePersistentOption", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Profile.
         /// </summary>
         internal static string ConfigureTrackedBrowserProfileLabel {
@@ -345,15 +309,6 @@ namespace Aspire.Hosting.Resources {
         internal static string ConfigureTrackedBrowserProfileRequiresShared {
             get {
                 return ResourceManager.GetString("ConfigureTrackedBrowserProfileRequiresShared", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Browser process lifetime must be Session or Persistent..
-        /// </summary>
-        internal static string ConfigureTrackedBrowserProcessLifetimeRequired {
-            get {
-                return ResourceManager.GetString("ConfigureTrackedBrowserProcessLifetimeRequired", resourceCulture);
             }
         }
 

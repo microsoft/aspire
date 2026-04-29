@@ -39,15 +39,13 @@ public class BrowserHostTests
             var host = await OwnedBrowserHost.StartAsync(
                 identity,
                 browserDisplayName: "Test Browser",
-                BrowserProcessLifetime.Session,
                 BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, profileDirectoryName: "Profile 1"),
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
                 CancellationToken.None,
-                startPipeBrowserProcess: (executablePath, arguments, browserProcessLifetime) =>
+                startPipeBrowserProcess: (executablePath, arguments) =>
                 {
                     Assert.Equal(browserExecutable, executablePath);
-                    Assert.Equal(BrowserProcessLifetime.Session, browserProcessLifetime);
                     capturedArguments = [.. arguments];
                     fakeProcess = new FakePipeBrowserProcess();
                     return fakeProcess;
@@ -86,43 +84,6 @@ public class BrowserHostTests
             }
 
             Assert.True(fakeProcess?.Disposed is true);
-            Assert.True(fakeProcess?.TerminateProcess is true);
-        }
-        finally
-        {
-            userDataDirectory.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task OwnedBrowserHost_DisposeLeavesPersistentBrowserProcessRunning()
-    {
-        var userDataDirectory = Directory.CreateTempSubdirectory();
-        try
-        {
-            var browserExecutable = Path.Combine(userDataDirectory.FullName, "browser");
-            await File.WriteAllTextAsync(browserExecutable, string.Empty);
-
-            FakePipeBrowserProcess? fakeProcess = null;
-            var host = await OwnedBrowserHost.StartAsync(
-                new BrowserHostIdentity(browserExecutable, userDataDirectory.FullName),
-                browserDisplayName: "Test Browser",
-                BrowserProcessLifetime.Persistent,
-                BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, profileDirectoryName: null),
-                NullLogger<BrowserLogsSessionManager>.Instance,
-                TimeProvider.System,
-                CancellationToken.None,
-                startPipeBrowserProcess: (_, _, browserProcessLifetime) =>
-                {
-                    Assert.Equal(BrowserProcessLifetime.Persistent, browserProcessLifetime);
-                    fakeProcess = new FakePipeBrowserProcess();
-                    return fakeProcess;
-                });
-
-            await host.DisposeAsync();
-
-            Assert.True(fakeProcess?.Disposed is true);
-            Assert.False(fakeProcess?.TerminateProcess is true);
         }
         finally
         {
@@ -158,8 +119,6 @@ public class BrowserHostTests
 
         public bool Disposed { get; private set; }
 
-        public bool? TerminateProcess { get; private set; }
-
         public async Task<byte[]> ReadFrameAsync()
         {
             using var frame = new MemoryStream();
@@ -189,9 +148,7 @@ public class BrowserHostTests
             await _browserWrite.FlushAsync();
         }
 
-        public ValueTask DisposeAsync() => DisposeAsync(terminateProcess: true);
-
-        public async ValueTask DisposeAsync(bool terminateProcess)
+        public async ValueTask DisposeAsync()
         {
             if (Disposed)
             {
@@ -199,7 +156,6 @@ public class BrowserHostTests
             }
 
             Disposed = true;
-            TerminateProcess = terminateProcess;
             _processCompletion.TrySetResult(new ProcessResult(0));
 
             await _browserInput.DisposeAsync();

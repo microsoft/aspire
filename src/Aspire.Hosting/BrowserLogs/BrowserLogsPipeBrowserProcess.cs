@@ -14,8 +14,6 @@ internal interface IBrowserLogsPipeBrowserProcess : IAsyncDisposable
     Stream BrowserInput { get; }
 
     Task<ProcessResult> ProcessTask { get; }
-
-    ValueTask DisposeAsync(bool terminateProcess);
 }
 
 internal sealed class BrowserLogsPipeBrowserProcess(
@@ -38,9 +36,7 @@ internal sealed class BrowserLogsPipeBrowserProcess(
 
     public Task<ProcessResult> ProcessTask { get; } = processTask;
 
-    public ValueTask DisposeAsync() => DisposeAsync(terminateProcess: true);
-
-    public async ValueTask DisposeAsync(bool terminateProcess)
+    public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
         {
@@ -59,7 +55,7 @@ internal sealed class BrowserLogsPipeBrowserProcess(
             }
             finally
             {
-                await _processLifetime.DisposeAsync(terminateProcess).ConfigureAwait(false);
+                await _processLifetime.DisposeAsync().ConfigureAwait(false);
             }
         }
     }
@@ -67,5 +63,5 @@ internal sealed class BrowserLogsPipeBrowserProcess(
 
 internal interface IBrowserLogsPipeBrowserProcessLifetime
 {
-    ValueTask DisposeAsync(bool terminateProcess);
+    ValueTask DisposeAsync();
 }

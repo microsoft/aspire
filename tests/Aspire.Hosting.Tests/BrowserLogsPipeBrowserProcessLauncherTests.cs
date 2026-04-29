@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Text;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -71,44 +70,6 @@ public class BrowserLogsPipeBrowserProcessLauncherTests
 
         var result = await process.ProcessTask.DefaultTimeout();
         Assert.Equal(0, result.ExitCode);
-    }
-
-    [Fact]
-    public async Task DisposeWithPersistentLifetimeLeavesPosixProcessRunning()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        var process = BrowserLogsPipeBrowserProcessLauncher.Start(
-            "/bin/sh",
-            [
-                "-c",
-                "printf ready >&4; sleep 30",
-                "browserlogs-persistent-test"
-            ],
-            BrowserProcessLifetime.Persistent);
-
-        try
-        {
-            var response = await ReadExactlyAsync(process.BrowserOutput, byteCount: 5).DefaultTimeout();
-            Assert.Equal("ready", Encoding.UTF8.GetString(response));
-
-            await process.DisposeAsync(terminateProcess: false);
-
-            Assert.False(process.ProcessTask.IsCompleted);
-        }
-        finally
-        {
-            if (!process.ProcessTask.IsCompleted)
-            {
-                using var operatingSystemProcess = Process.GetProcessById(process.ProcessId);
-                operatingSystemProcess.Kill(entireProcessTree: true);
-            }
-
-            await process.ProcessTask.DefaultTimeout();
-        }
     }
 
     private static async Task<byte[]> ReadExactlyAsync(Stream stream, int byteCount)

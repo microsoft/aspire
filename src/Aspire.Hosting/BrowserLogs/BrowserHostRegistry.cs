@@ -308,7 +308,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
 
         _logger.LogInformation("Starting tracked browser host '{BrowserExecutable}' with a private CDP pipe.", identity.ExecutablePath);
-        return await OwnedBrowserHost.StartAsync(identity, configuration.Browser, configuration.BrowserProcessLifetime, userDataDirectory, _logger, _timeProvider, cancellationToken).ConfigureAwait(false);
+        return await OwnedBrowserHost.StartAsync(identity, configuration.Browser, userDataDirectory, _logger, _timeProvider, cancellationToken).ConfigureAwait(false);
     }
 
     private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserConfiguration configuration, string browserExecutable)

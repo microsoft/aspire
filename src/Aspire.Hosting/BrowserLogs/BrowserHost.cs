@@ -77,11 +77,10 @@ internal abstract class BrowserHost(
 }
 
 // Host implementation for browsers Aspire starts itself. Owned hosts are responsible for spawning Chromium with a
-// private browser-level CDP pipe and applying the configured process lifetime when the final lease is released.
+// private browser-level CDP pipe and cleaning it up when the final lease is released.
 internal sealed class OwnedBrowserHost : BrowserHost
 {
     private readonly BrowserLogsCdpConnectionMultiplexer _connectionMultiplexer;
-    private readonly BrowserProcessLifetime _browserProcessLifetime;
     private readonly IBrowserLogsPipeBrowserProcess _process;
     private readonly BrowserLogsUserDataDirectory _userDataDirectory;
     private readonly Task<ProcessResult> _processTask;
@@ -93,14 +92,12 @@ internal sealed class OwnedBrowserHost : BrowserHost
         string browserDisplayName,
         IBrowserLogsPipeBrowserProcess process,
         BrowserLogsCdpConnectionMultiplexer connectionMultiplexer,
-        BrowserProcessLifetime browserProcessLifetime,
         BrowserLogsUserDataDirectory userDataDirectory,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider)
         : base(identity, BrowserHostOwnership.Owned, debugEndpoint: null, browserDisplayName, logger, timeProvider, reuseInitialBlankTarget: true)
     {
         _connectionMultiplexer = connectionMultiplexer;
-        _browserProcessLifetime = browserProcessLifetime;
         _process = process;
         _processTask = process.ProcessTask;
         _termination = CompleteWhenProcessOrPipeEndsAsync(process.ProcessTask, connectionMultiplexer.Completion);
@@ -146,12 +143,11 @@ internal sealed class OwnedBrowserHost : BrowserHost
     public static async Task<OwnedBrowserHost> StartAsync(
         BrowserHostIdentity identity,
         string browserDisplayName,
-        BrowserProcessLifetime browserProcessLifetime,
         BrowserLogsUserDataDirectory userDataDirectory,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         CancellationToken cancellationToken,
-        Func<string, IReadOnlyList<string>, BrowserProcessLifetime, IBrowserLogsPipeBrowserProcess>? startPipeBrowserProcess = null)
+        Func<string, IReadOnlyList<string>, IBrowserLogsPipeBrowserProcess>? startPipeBrowserProcess = null)
     {
         var devToolsActivePortFilePath = Path.Combine(userDataDirectory.Path, "DevToolsActivePort");
         // Pipe-backed launches do not use DevToolsActivePort or the sidecar endpoint file. Clear stale WebSocket
@@ -166,7 +162,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            process = startPipeBrowserProcess(identity.ExecutablePath, BuildBrowserArguments(userDataDirectory), browserProcessLifetime);
+            process = startPipeBrowserProcess(identity.ExecutablePath, BuildBrowserArguments(userDataDirectory));
             connectionMultiplexer = new BrowserLogsCdpConnectionMultiplexer(
                 new BrowserLogsPipeCdpTransport(process.BrowserOutput, process.BrowserInput),
                 logger);
@@ -192,7 +188,6 @@ internal sealed class OwnedBrowserHost : BrowserHost
             browserDisplayName,
             process,
             connectionMultiplexer,
-            browserProcessLifetime,
             userDataDirectory,
             logger,
             timeProvider);
@@ -213,7 +208,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
         {
             try
             {
-                await _process.DisposeAsync(terminateProcess: _browserProcessLifetime == BrowserProcessLifetime.Session).ConfigureAwait(false);
+                await _process.DisposeAsync().ConfigureAwait(false);
             }
             finally
             {

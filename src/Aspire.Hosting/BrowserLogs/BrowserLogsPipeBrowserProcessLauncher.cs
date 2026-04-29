@@ -28,12 +28,11 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
 
     public static IBrowserLogsPipeBrowserProcess Start(
         string executablePath,
-        IReadOnlyList<string> browserArguments,
-        BrowserProcessLifetime browserProcessLifetime = BrowserProcessLifetime.Session)
+        IReadOnlyList<string> browserArguments)
     {
         return OperatingSystem.IsWindows()
-            ? StartWindows(executablePath, browserArguments, browserProcessLifetime)
-            : StartPosix(executablePath, browserArguments, browserProcessLifetime);
+            ? StartWindows(executablePath, browserArguments)
+            : StartPosix(executablePath, browserArguments);
     }
 
     internal static List<string> CreatePipeArguments(IReadOnlyList<string> browserArguments)
@@ -41,7 +40,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         return [.. browserArguments, RemoteDebuggingPipeArgument];
     }
 
-    private static BrowserLogsPipeBrowserProcess StartWindows(string executablePath, IReadOnlyList<string> browserArguments, BrowserProcessLifetime browserProcessLifetime)
+    private static BrowserLogsPipeBrowserProcess StartWindows(string executablePath, IReadOnlyList<string> browserArguments)
     {
         // Parent writes CDP commands to appToBrowser; the browser reads the client end. Parent reads responses/events
         // from browserToApp; the browser writes the client end. AnonymousPipeServerStream makes the client handles
@@ -68,14 +67,11 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             var processInfo = CreateWindowsProcess(executablePath, arguments, inheritedHandles);
             processHandle = new SafeWaitHandle(processInfo.ProcessHandle, ownsHandle: true);
             CloseWindowsHandle(processInfo.ThreadHandle);
-            if (browserProcessLifetime == BrowserProcessLifetime.Session)
-            {
-                // A Windows job with KILL_ON_JOB_CLOSE gives pipe-created browsers the same "owned by the AppHost"
-                // behavior even if the AppHost process exits before managed cleanup can run. Assigning can fail when a
-                // parent job forbids nested jobs, so this remains best-effort and normal DisposeAsync cleanup is still
-                // the primary path.
-                jobHandle = TryCreateKillOnCloseJob(processHandle);
-            }
+            // A Windows job with KILL_ON_JOB_CLOSE gives pipe-created browsers the same "owned by the AppHost"
+            // behavior even if the AppHost process exits before managed cleanup can run. Assigning can fail when a
+            // parent job forbids nested jobs, so this remains best-effort and normal DisposeAsync cleanup is still
+            // the primary path.
+            jobHandle = TryCreateKillOnCloseJob(processHandle);
 
             appToBrowser.DisposeLocalCopyOfClientHandle();
             browserToApp.DisposeLocalCopyOfClientHandle();
@@ -98,7 +94,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         }
     }
 
-    private static BrowserLogsPipeBrowserProcess StartPosix(string executablePath, IReadOnlyList<string> browserArguments, BrowserProcessLifetime browserProcessLifetime)
+    private static BrowserLogsPipeBrowserProcess StartPosix(string executablePath, IReadOnlyList<string> browserArguments)
     {
         var appToBrowser = PosixPipe.Invalid;
         var browserToApp = PosixPipe.Invalid;
@@ -120,7 +116,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             using var executablePathString = new NativeUtf8String(executablePath);
             using var argv = NativeStringArray.Create([executablePath, .. arguments]);
 
-            var setParentDeathSignal = browserProcessLifetime == BrowserProcessLifetime.Session && OperatingSystem.IsLinux();
+            var setParentDeathSignal = OperatingSystem.IsLinux();
             var processId = fork();
             if (processId == -1)
             {
@@ -544,9 +540,9 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
 
     private sealed class PosixProcessLifetime(int processId, Task<ProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
     {
-        public async ValueTask DisposeAsync(bool terminateProcess)
+        public async ValueTask DisposeAsync()
         {
-            if (!terminateProcess || processTask.IsCompleted)
+            if (processTask.IsCompleted)
             {
                 return;
             }
@@ -566,23 +562,10 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
 
     private sealed class WindowsProcessLifetime(int processId, SafeWaitHandle processHandle, SafeWaitHandle? jobHandle, Task<ProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
     {
-        public async ValueTask DisposeAsync(bool terminateProcess)
+        public async ValueTask DisposeAsync()
         {
-            var disposeHandle = true;
             try
             {
-                if (!terminateProcess)
-                {
-                    disposeHandle = false;
-                    _ = processTask.ContinueWith(
-                        static (task, state) => ((SafeWaitHandle)state!).Dispose(),
-                        processHandle,
-                        CancellationToken.None,
-                        TaskContinuationOptions.ExecuteSynchronously,
-                        TaskScheduler.Default);
-                    return;
-                }
-
                 if (!processTask.IsCompleted)
                 {
                     TryKillProcessTree(processId);
@@ -596,11 +579,8 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             }
             finally
             {
-                if (disposeHandle)
-                {
-                    jobHandle?.Dispose();
-                    processHandle.Dispose();
-                }
+                jobHandle?.Dispose();
+                processHandle.Dispose();
             }
         }
     }
