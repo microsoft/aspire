@@ -6,6 +6,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -148,6 +149,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                     AppHostFileName: "apphost.ts"));
                 return new TestLanguageService { DefaultProject = tsProject };
             };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
         });
 
         var serviceProvider = services.BuildServiceProvider();
@@ -193,6 +195,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
         });
 
         var serviceProvider = services.BuildServiceProvider();
@@ -203,7 +206,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Aspire AppHost created! To complete setup, run one of:");
-        Assert.Contains("  copilot -i \"run the aspireify skill\" --yolo", subtleMessages);
+        Assert.DoesNotContain(subtleMessages, m => m.Contains("copilot", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("  claude \"run the aspireify skill\"", subtleMessages);
         Assert.Contains("  opencode --prompt \"run the aspireify skill\"", subtleMessages);
     }
@@ -236,6 +239,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliHostEnvironmentFactory = _ => global::Aspire.Cli.Tests.TestHelpers.CreateInteractiveHostEnvironment();
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
         });
 
         var serviceProvider = services.BuildServiceProvider();
@@ -345,5 +349,26 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
+    }
+
+    private sealed class TestScaffoldingService : IScaffoldingService
+    {
+        public Task<bool> ScaffoldAsync(ScaffoldContext context, CancellationToken cancellationToken)
+        {
+            var appHostFileName = context.Language.AppHostFileName ?? "apphost";
+            File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, appHostFileName), string.Empty);
+
+            var config = new JsonObject
+            {
+                ["appHost"] = new JsonObject
+                {
+                    ["path"] = appHostFileName,
+                    ["language"] = context.Language.LanguageId.Value
+                }
+            };
+            File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, AspireConfigFile.FileName), config.ToJsonString());
+
+            return Task.FromResult(true);
+        }
     }
 }

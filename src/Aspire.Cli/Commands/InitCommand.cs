@@ -12,6 +12,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
@@ -33,6 +34,8 @@ internal sealed class InitCommand : BaseCommand
     private readonly AgentInitCommand _agentInitCommand;
     private readonly IDotNetCliRunner _runner;
     private readonly ICertificateService _certificateService;
+    private readonly IScaffoldingService _scaffoldingService;
+    private readonly ILanguageDiscovery _languageDiscovery;
 
     private readonly Option<string?> _languageOption;
 
@@ -46,7 +49,9 @@ internal sealed class InitCommand : BaseCommand
         IInteractionService interactionService,
         AgentInitCommand agentInitCommand,
         IDotNetCliRunner runner,
-        ICertificateService certificateService)
+        ICertificateService certificateService,
+        IScaffoldingService scaffoldingService,
+        ILanguageDiscovery languageDiscovery)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _executionContext = executionContext;
@@ -55,6 +60,8 @@ internal sealed class InitCommand : BaseCommand
         _agentInitCommand = agentInitCommand;
         _runner = runner;
         _certificateService = certificateService;
+        _scaffoldingService = scaffoldingService;
+        _languageDiscovery = languageDiscovery;
 
         _languageOption = new Option<string?>("--language")
         {
@@ -150,11 +157,6 @@ internal sealed class InitCommand : BaseCommand
     private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
     {
         var commands = new List<string>();
-
-        if (selectedLocations.Contains(SkillLocation.Standard) || selectedLocations.Contains(SkillLocation.GitHubSkills))
-        {
-            commands.Add("""copilot -i "run the aspireify skill" --yolo""");
-        }
 
         if (selectedLocations.Contains(SkillLocation.ClaudeCode))
         {
@@ -272,85 +274,30 @@ internal sealed class InitCommand : BaseCommand
         return ExitCodeConstants.Success;
     }
 
-    private Task<int> DropPolyglotSkeletonAsync(string languageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    private async Task<int> DropPolyglotSkeletonAsync(string languageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        _ = cancellationToken;
+        var language = _languageDiscovery.GetLanguageById(languageId)
+            ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {languageId}");
 
-        // Determine the apphost filename and skeleton content based on language
-        var (appHostFileName, languageConfigValue, appHostContent) = languageId switch
-        {
-            KnownLanguageId.TypeScript => ("apphost.ts", "typescript/nodejs", """
-                import { createBuilder } from './.modules/aspire.js';
-
-                const builder = await createBuilder();
-
-                // The aspireify skill will wire up your projects here.
-
-                await builder.build().run();
-                """),
-            KnownLanguageId.Python => ("apphost.py", "python", """
-                import aspire
-
-                builder = aspire.create_builder()
-
-                # The aspireify skill will wire up your projects here.
-
-                builder.build().run()
-                """),
-            KnownLanguageId.Go => ("apphost.go", "go", """
-                package main
-
-                import "aspire"
-
-                func main() {
-                	builder := aspire.CreateBuilder()
-
-                	// The aspireify skill will wire up your projects here.
-
-                	builder.Build().Run()
-                }
-                """),
-            KnownLanguageId.Java => ("AppHost.java", "java", """
-                import com.microsoft.aspire.*;
-
-                public class AppHost {
-                    public static void main(String[] args) {
-                        var builder = Aspire.createBuilder(args);
-
-                        // The aspireify skill will wire up your projects here.
-
-                        builder.build().run();
-                    }
-                }
-                """),
-            KnownLanguageId.Rust => ("apphost.rs", "rust", """
-                use aspire::*;
-
-                fn main() {
-                    let builder = create_builder();
-
-                    // The aspireify skill will wire up your projects here.
-
-                    builder.build().run();
-                }
-                """),
-            _ => throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {languageId}")
-        };
+        var appHostFileName = language.AppHostFileName
+            ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {language.LanguageId}");
 
         var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
         if (File.Exists(appHostPath))
         {
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
-            return Task.FromResult(ExitCodeConstants.Success);
+            return ExitCodeConstants.Success;
         }
 
-        File.WriteAllText(appHostPath, appHostContent);
+        var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name);
+        var scaffolded = await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
+        if (!scaffolded)
+        {
+            return ExitCodeConstants.FailedToCreateNewProject;
+        }
+
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
-
-        // Drop aspire.config.json
-        var configResult = DropAspireConfig(workingDirectory, appHostFileName, languageConfigValue);
-
-        return Task.FromResult(configResult);
+        return ExitCodeConstants.Success;
     }
 
     private int DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language)
