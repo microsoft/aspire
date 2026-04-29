@@ -310,15 +310,18 @@ internal static class TypeScriptAppHostToolchainResolver
 
     internal static bool ShouldSearchParentDirectory(DirectoryInfo parentDirectory, string? homeDirectory = null)
     {
-        var parentPath = Path.TrimEndingDirectorySeparator(parentDirectory.FullName);
-        if (string.Equals(parentPath, Path.TrimEndingDirectorySeparator(parentDirectory.Root.FullName), StringComparison.Ordinal))
+        var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var parentPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parentDirectory.FullName));
+        if (string.Equals(parentPath, Path.TrimEndingDirectorySeparator(Path.GetFullPath(parentDirectory.Root.FullName)), pathComparison))
         {
             return false;
         }
 
         homeDirectory ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         return string.IsNullOrWhiteSpace(homeDirectory) ||
-            !string.Equals(parentPath, Path.TrimEndingDirectorySeparator(Path.GetFullPath(homeDirectory)), StringComparison.Ordinal);
+            !string.Equals(parentPath, Path.TrimEndingDirectorySeparator(Path.GetFullPath(homeDirectory)), pathComparison);
     }
 
     private static TypeScriptAppHostToolchainResolution CreateLockFileResolution(TypeScriptAppHostToolchain toolchain, string markerName, DirectoryInfo directory)
