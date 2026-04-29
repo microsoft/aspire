@@ -863,8 +863,7 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         var (_, bicep) = await GetManifestWithBicep(environment);
 
-        Assert.Contains("resource env_1_law ", bicep);
-        Assert.Contains("resource env_1_ai ", bicep);
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
