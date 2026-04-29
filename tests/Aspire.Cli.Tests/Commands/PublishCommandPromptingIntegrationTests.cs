@@ -1213,6 +1213,165 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         Assert.Equal("MyApp", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
         Assert.Equal("interactive-region", promptBackchannel.CompletedPrompts[1].Answers[0].Value);
     }
+
+    [Fact]
+    public async Task PublishCommand_MultiInputPrompt_AllInputsFromOption_DoesNotDisplayHeader()
+    {
+        const string title = "Configuration Setup";
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        promptBackchannel.AddMultiInputPrompt("multi-prompt-1", title, "Please provide the following details:",
+            [
+                new("app-name", "Application Name", InputTypes.Text, true, null),
+                new("environment", "Environment", InputTypes.Choice, true,
+                [
+                    new("dev", "Development"),
+                    new("staging", "Staging"),
+                    new("prod", "Production")
+                ]),
+                new("enable-logging", "Enable Logging", InputTypes.Boolean, false, null)
+            ]);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.OutputTextWriter = outputWriter;
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input app-name=MyApp --input environment=prod --input enable-logging=false");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        // All inputs were provided via --input, so the header should not have been displayed
+        Assert.DoesNotContain(outputWriter.Logs, line => line.Contains(title));
+    }
+
+    [Fact]
+    public async Task PublishCommand_MultiInputPrompt_NonInteractive_DoesNotDisplayHeader()
+    {
+        const string title = "Configuration Setup";
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        promptBackchannel.AddMultiInputPrompt("multi-prompt-1", title, "Please provide the following details:",
+            [
+                new("app-name", "Application Name", InputTypes.Text, true, null),
+                new("region", "Region", InputTypes.Text, true, null)
+            ]);
+
+        // Provide inputs via --input since non-interactive mode won't have interactive prompts
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.OutputTextWriter = outputWriter;
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input app-name=MyApp --input region=us-east");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        // Non-interactive mode should not display the header
+        Assert.DoesNotContain(outputWriter.Logs, line => line.Contains(title));
+    }
+
+    [Fact]
+    public async Task PublishCommand_MultiInputPrompt_InteractiveWithoutAllInputs_DisplaysHeader()
+    {
+        const string title = "Configuration Setup";
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        promptBackchannel.AddMultiInputPrompt("multi-prompt-1", title, "Please provide the following details:",
+            [
+                new("app-name", "Application Name", InputTypes.Text, true, null),
+                new("region", "Region", InputTypes.Text, true, null)
+            ]);
+
+        consoleService.SetupSequentialResponses(
+            ("MyApp", ResponseType.String),
+            ("us-east", ResponseType.String)
+        );
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.OutputTextWriter = outputWriter;
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        // Interactive mode with no --input should display the header
+        Assert.Contains(outputWriter.Logs, line => line.Contains(title));
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_WithValidationErrors_ReturnsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        // Set up a prompt with validation errors simulating the server rejecting the --input value
+        promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true, defaultValue: "de", validationErrors: ["Environment name must be at least 3 characters long."]);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input text-prompt-1=de");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
+
+        // Should not have prompted interactively
+        Assert.Empty(consoleService.StringPromptCalls);
+
+        // Error should have been displayed with the validation message
+        var error = Assert.Single(consoleService.DisplayedErrors);
+        Assert.Equal(
+            string.Format(InteractionServiceStrings.NonInteractiveInvalidValue, "de", "'--input text-prompt-1'") + " Environment name must be at least 3 characters long.",
+            error);
+    }
 }
 
 // Test implementation of IAppHostCliBackchannel that simulates prompt interactions

@@ -917,11 +917,13 @@ internal abstract class PipelineCommandBase : BaseCommand
         var hasValidationErrors = inputs.Any(input => input.ValidationErrors is { Count: > 0 });
 
         // For multiple inputs, display the activity status text as a header.
-        // Don't display if there are validation errors. Validation errors means the header has already been displayed.
-        if (!hasValidationErrors && inputs.Count > 1)
+        // Don't display if there are validation errors (header was already shown on first prompt),
+        // if all inputs are resolved from --input options, or if running non-interactively.
+        var allInputsProvided = inputs.All(input => input.Name is not null && _providedInputs.ContainsKey(input.Name));
+        if (!hasValidationErrors && inputs.Count > 1 && _hostEnvironment.SupportsInteractiveInput && !allInputsProvided)
         {
             var headerText = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
-            AnsiConsole.MarkupLine($"[bold]{headerText}[/]");
+            _ansiConsole.MarkupLine($"[bold]{headerText}[/]");
         }
 
         // Handle multiple inputs
@@ -967,6 +969,16 @@ internal abstract class PipelineCommandBase : BaseCommand
         // Check if the input value was provided via --input option
         if (TryResolveProvidedInput(input, inputType, out var providedValue))
         {
+            // If the server returned validation errors for this input, fail since the
+            // value was provided non-interactively and can't be corrected.
+            if (input.ValidationErrors is { Count: > 0 } validationErrors)
+            {
+                var inputDisplayName = $"'--input {input.Name}'";
+                var validationMessage = string.Join("; ", validationErrors);
+                throw new PipelineInputValidationException(
+                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName) + " " + validationMessage);
+            }
+
             return providedValue;
         }
 
