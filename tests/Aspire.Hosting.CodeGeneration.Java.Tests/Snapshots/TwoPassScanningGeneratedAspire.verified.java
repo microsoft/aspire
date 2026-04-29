@@ -8363,6 +8363,14 @@ public class EndpointReference extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs);
     }
 
+    /** Gets the specified property expression of the endpoint */
+    public EndpointReferenceExpression property(EndpointProperty property) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("property", AspireClient.serializeValue(property));
+        return (EndpointReferenceExpression) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.property", reqArgs);
+    }
+
     /** Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise. */
     public ReferenceExpression getTlsValue(ReferenceExpression enabledValue, ReferenceExpression disabledValue) {
         Map<String, Object> reqArgs = new HashMap<>();

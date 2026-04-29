@@ -138,7 +138,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// </summary>
     /// <param name="property">The <see cref="EndpointProperty"/> enum value to use in the reference.</param>
     /// <returns>An <see cref="EndpointReferenceExpression"/> representing the specified <see cref="EndpointProperty"/>.</returns>
-    [AspireExportIgnore]
+    [AspireExport(Description = "Gets the specified property expression of the endpoint")]
     public EndpointReferenceExpression Property(EndpointProperty property)
     {
         return new(this, property);

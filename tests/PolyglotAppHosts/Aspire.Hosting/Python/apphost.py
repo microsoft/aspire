@@ -119,6 +119,9 @@ with create_builder() as builder:
     docker_container.with_http_endpoint_callback(update_existing_http_endpoint, name="http", create_if_not_exists=False)
     endpoint = docker_container.get_endpoint("http")
     expr = ReferenceExpression.format_string("Host=%s", endpoint)
+    endpoint_host = endpoint.property("Host")
+    endpoint_port = endpoint.property("Port")
+    endpoint_url = ReferenceExpression.format_string("http://%s:%s", endpoint_host, endpoint_port)
     built_connection_string = builder.add_connection_string("connection-string", env_var_name_or_expression=expr)
     env_connection_string = builder.add_connection_string("env-connection-string")
     expression_connection_string = builder.add_connection_string("expression-connection-string", env_var_name_or_expression=expr)
@@ -175,6 +178,8 @@ with create_builder() as builder:
     container.with_environment("MY_ENDPOINT", endpoint)
     # withEnvironment - ParameterResource
     container.with_environment("MY_PARAM", builder.add_parameter("param"))
+    # withEnvironment - endpoint property expression
+    container.with_environment("MY_ENDPOINT_URL", endpoint_url)
     # withEnvironment - connection string resource
     container.with_environment("MY_CONN", env_connection_string)
     container.with_environment("MY_EXPR_CONN", expression_connection_string)
