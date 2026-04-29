@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,14 +20,18 @@ public class BuildOnlyContainerValidationTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PublishPrereq);
 
-        AddBuildOnlyContainer(builder, "frontend");
+        var consumed = AddBuildOnlyContainer(builder, "frontend");
+        AddBuildOnlyContainer(builder, "orphan");
+        builder.AddResource(new TestContainerFilesDestinationResource("api"))
+            .PublishWithContainerFiles(consumed, "/app/wwwroot");
 
         using var app = builder.Build();
 
         var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => ExecutePipelineAsync(app)).DefaultTimeout();
 
-        Assert.Contains("'frontend'", ex.Message);
+        Assert.Contains("'orphan'", ex.Message);
+        Assert.DoesNotContain("'frontend'", ex.Message);
         Assert.Contains("PublishWithContainerFiles", ex.Message);
         Assert.Contains("builder.Pipeline.DisableBuildOnlyContainerValidation", ex.Message);
     }
@@ -35,6 +40,25 @@ public class BuildOnlyContainerValidationTests
     public async Task DeployPrereq_WithUnconsumedBuildOnlyContainer_Throws()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.DeployPrereq);
+
+        var consumed = AddBuildOnlyContainer(builder, "frontend");
+        AddBuildOnlyContainer(builder, "orphan");
+        builder.AddResource(new TestContainerFilesDestinationResource("api"))
+            .PublishWithContainerFiles(consumed, "/app/wwwroot");
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ExecutePipelineAsync(app)).DefaultTimeout();
+
+        Assert.Contains("'orphan'", ex.Message);
+        Assert.DoesNotContain("'frontend'", ex.Message);
+    }
+
+    [Fact]
+    public async Task PublishManifest_WithUnconsumedBuildOnlyContainer_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: ManifestPublishingExtensions.PublishManifestStepName);
 
         AddBuildOnlyContainer(builder, "frontend");
 
