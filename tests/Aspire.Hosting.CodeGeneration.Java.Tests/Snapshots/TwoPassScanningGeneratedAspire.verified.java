@@ -22438,6 +22438,9 @@ public final class WellKnownPipelineSteps {
     /** The prerequisite step that runs before any push operations. */
     public static final String PushPrereq = "push-prereq";
 
+    /** The step that validates compute resources are assigned to unambiguous compute environments. */
+    public static final String ValidateComputeEnvironments = "validate-compute-environments";
+
 }
 
 // ===== WellKnownPipelineTags.java =====

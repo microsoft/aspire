@@ -1864,6 +1864,8 @@ WellKnownPipelineSteps.PublishPrereq = "publish-prereq"
 WellKnownPipelineSteps.Push = "push"
 # The prerequisite step that runs before any push operations.
 WellKnownPipelineSteps.PushPrereq = "push-prereq"
+# The step that validates compute resources are assigned to unambiguous compute environments.
+WellKnownPipelineSteps.ValidateComputeEnvironments = "validate-compute-environments"
 
 WellKnownPipelineTags = types.SimpleNamespace()
 # Tag for steps that build compute resources.

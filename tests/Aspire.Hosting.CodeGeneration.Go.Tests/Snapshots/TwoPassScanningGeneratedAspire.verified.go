@@ -574,6 +574,7 @@ var WellKnownPipelineSteps = struct {
 	PublishPrereq string
 	Push string
 	PushPrereq string
+	ValidateComputeEnvironments string
 }{
 	Build: "build",
 	BuildPrereq: "build-prereq",
@@ -587,6 +588,7 @@ var WellKnownPipelineSteps = struct {
 	PublishPrereq: "publish-prereq",
 	Push: "push",
 	PushPrereq: "push-prereq",
+	ValidateComputeEnvironments: "validate-compute-environments",
 }
 
 var WellKnownPipelineTags = struct {
