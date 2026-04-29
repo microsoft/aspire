@@ -178,7 +178,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var startDebugSession = _startDebugSessionOption is not null && parseResult.GetValue(_startDebugSessionOption);
 
-        _providedInputs = ParseInputOptions(parseResult.GetValue(s_inputOption));
+        _providedInputs = [];
 
         Task<int>? pendingRun = null;
         PublishContext? publishContext = null;
@@ -188,6 +188,8 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         try
         {
+            _providedInputs = ParseInputOptions(parseResult.GetValue(s_inputOption));
+
             using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
             var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
@@ -395,15 +397,28 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             return pendingRun is { } && debugMode ? await pendingRun : ExitCodeConstants.FailedToBuildArtifacts;
         }
+        catch (PipelineInputValidationException ex)
+        {
+            // Send terminal progress bar stop sequence on exception
+            StopTerminalProgressBar();
+            Telemetry.RecordError("A pipeline input option value was invalid.", ex);
+            InteractionService.DisplayError(ex.Message);
+            if (ex.AvailableValues is not null)
+            {
+                InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, ex.AvailableValues));
+            }
+            if (publishContext?.OutputCollector is { } outputCollector)
+            {
+                InteractionService.DisplayLines(outputCollector.GetLines());
+            }
+            return ExitCodeConstants.MissingRequiredArgument;
+        }
         catch (NonInteractiveException ex)
         {
             // Send terminal progress bar stop sequence on exception
             StopTerminalProgressBar();
             Telemetry.RecordError("A required pipeline input was not provided in non-interactive mode.", ex);
-            var inputOptionDisplayName = s_inputOption.Name.StartsWith("--", StringComparison.Ordinal)
-                ? s_inputOption.Name
-                : $"--{s_inputOption.Name}";
-            var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, ex.SymbolDisplayName, inputOptionDisplayName);
+            var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, ex.SymbolDisplayName, s_inputOption.Name);
             InteractionService.DisplayError(errorMessage);
             if (publishContext?.OutputCollector is { } outputCollector)
             {
@@ -1059,12 +1074,16 @@ internal abstract class PipelineCommandBase : BaseCommand
         foreach (var input in inputs)
         {
             var separatorIndex = input.IndexOf('=');
-            if (separatorIndex > 0)
+            if (separatorIndex <= 0)
             {
-                var name = input[..separatorIndex];
-                var value = input[(separatorIndex + 1)..];
-                result[name] = value;
+                throw new PipelineInputValidationException(
+                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, input, $"'{s_inputOption.Name}'"),
+                    "name=value");
             }
+
+            var name = input[..separatorIndex];
+            var value = input[(separatorIndex + 1)..];
+            result[name] = value;
         }
 
         return result;
@@ -1101,9 +1120,9 @@ internal abstract class PipelineCommandBase : BaseCommand
 
                     var inputDisplayName = $"'--input {input.Name}'";
                     var availableValues = string.Join(", ", input.Options.Select(o => o.Key));
-                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
-                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableValues));
-                    throw new NonInteractiveException(inputDisplayName);
+                    throw new PipelineInputValidationException(
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName),
+                        availableValues);
                 }
 
                 value = providedValue;
@@ -1113,9 +1132,9 @@ internal abstract class PipelineCommandBase : BaseCommand
                 if (!bool.TryParse(providedValue, out var boolValue))
                 {
                     var inputDisplayName = $"'--input {input.Name}'";
-                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
-                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, "true, false"));
-                    throw new NonInteractiveException(inputDisplayName);
+                    throw new PipelineInputValidationException(
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName),
+                        "true, false");
                 }
 
                 value = boolValue.ToString().ToLowerInvariant();
@@ -1125,8 +1144,8 @@ internal abstract class PipelineCommandBase : BaseCommand
                 if (!double.TryParse(providedValue, out _))
                 {
                     var inputDisplayName = $"'--input {input.Name}'";
-                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
-                    throw new NonInteractiveException(inputDisplayName);
+                    throw new PipelineInputValidationException(
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
                 }
 
                 value = providedValue;
@@ -1149,6 +1168,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         "CRITICAL" => (LogLevel.Critical, "CRT"),
         null or _ => (LogLevel.Information, "INF")
     };
+
+    private sealed class PipelineInputValidationException(string message, string? availableValues = null) : Exception(message)
+    {
+        public string? AvailableValues { get; } = availableValues;
+    }
 
     private class StepInfo
     {

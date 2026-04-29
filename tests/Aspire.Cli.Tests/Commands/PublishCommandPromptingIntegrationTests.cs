@@ -6,6 +6,7 @@
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -1086,6 +1087,35 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     }
 
     [Fact]
+    public async Task PublishCommand_InputOption_MalformedInput_ReturnsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input invalid");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
+        Assert.Collection(
+            consoleService.DisplayedErrors,
+            error => Assert.Equal(
+                string.Format(InteractionServiceStrings.NonInteractiveInvalidValue, "invalid", "'--input'"),
+                error));
+    }
+
+    [Fact]
     public async Task PublishCommand_InputOption_ValueWithEqualsSign_ParsedCorrectly()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1113,6 +1143,36 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         Assert.Single(promptBackchannel.CompletedPrompts);
         Assert.Equal("Server=localhost;Database=MyApp", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_ValueWithSpacesAndSpecialCharacters_ParsedCorrectly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("script-arg", "Script Argument", InputTypes.Text, "Enter script argument:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        const string expectedValue = "hello world !@#$%^&*()[]{}:/?.,+-_=|~";
+        var result = command.Parse($"publish --input \"script-arg={expectedValue}\"");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal(expectedValue, promptBackchannel.CompletedPrompts[0].Answers[0].Value);
     }
 
     [Fact]
