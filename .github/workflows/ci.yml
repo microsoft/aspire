@@ -23,8 +23,6 @@ jobs:
     if: ${{ github.repository_owner == 'microsoft' }}
     outputs:
       skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
-      VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
-      EXTENSION_VERSION_OVERRIDE: ${{ steps.compute_version_suffix.outputs.EXTENSION_VERSION_OVERRIDE }}
 
     steps:
       - name: Checkout code
@@ -40,37 +38,11 @@ jobs:
         with:
           patterns_file: eng/testing/github-ci-trigger-patterns.txt
 
-      - id: compute_version_suffix
-        name: Compute version suffix for PRs
-        if: ${{ github.event_name == 'pull_request' }}
-        shell: pwsh
-        env:
-          # Use the pull request head SHA instead of GITHUB_SHA (which can be a merge commit)
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.number }}
-        run: |
-          Write-Host "Determining VERSION_SUFFIX_OVERRIDE (PR only step)..."
-          if ([string]::IsNullOrWhiteSpace($Env:PR_HEAD_SHA)) {
-            Write-Error "PR_HEAD_SHA not set; cannot compute version suffix."
-            exit 1
-          }
-          $SHORT_SHA = $Env:PR_HEAD_SHA.Substring(0,8)
-          $VERSION_SUFFIX = "/p:VersionSuffix=pr.$($Env:PR_NUMBER).g$SHORT_SHA"
-          Write-Host "Computed VERSION_SUFFIX_OVERRIDE=$VERSION_SUFFIX"
-          "VERSION_SUFFIX_OVERRIDE=$VERSION_SUFFIX" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append -Encoding utf8
-
-          $EXTENSION_VERSION = "99.0.$($Env:PR_NUMBER)"
-          Write-Host "Computed EXTENSION_VERSION_OVERRIDE=$EXTENSION_VERSION"
-          "EXTENSION_VERSION_OVERRIDE=$EXTENSION_VERSION" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append -Encoding utf8
-
   tests:
     uses: ./.github/workflows/tests.yml
     name: Tests
     needs: [prepare_for_ci]
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
-    with:
-      versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
-      extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
 
   # This job is used for branch protection. It fails if any of the dependent jobs failed
   results:
