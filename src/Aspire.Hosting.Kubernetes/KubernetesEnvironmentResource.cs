@@ -1093,7 +1093,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             else
             {
-                // Build a JSON patch that adds the hostname to all HTTPS listeners that don't have one
+                // Patch the HTTPS listeners with the discovered hostname using JSON patch,
+                // then transfer field ownership to Helm via server-side apply so that
+                // subsequent Helm deploys don't encounter SSA conflicts.
                 var patchOps = string.Join(",", httpsListenerIndices.Select(
                     idx => $"{{\"op\":\"add\",\"path\":\"/spec/listeners/{idx}/hostname\",\"value\":\"{discoveredFqdn}\"}}"));
                 var patchJson = $"[{patchOps}]";
@@ -1123,6 +1125,68 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                             "You may need to redeploy with an explicit hostname via WithHostname().",
                             gatewayName, discoveredFqdn, patchExitResult.ExitCode);
                         continue;
+                    }
+                }
+
+                // Transfer field ownership to Helm using server-side apply so subsequent
+                // Helm deploys don't encounter SSA conflicts on the patched hostname field.
+                var currentGatewayArgs = $"get gateway {gatewayName} --namespace {@namespace} -o yaml";
+                if (environment.KubeConfigPath is not null)
+                {
+                    currentGatewayArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var gatewayYamlLines = new List<string>();
+                var (getGwResult, getGwDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = currentGatewayArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = gatewayYamlLines.Add,
+                    OnErrorData = _ => { }
+                });
+
+                await using (getGwDisposable.ConfigureAwait(false))
+                {
+                    var getGwExitResult = await getGwResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (getGwExitResult.ExitCode == 0 && gatewayYamlLines.Count > 0)
+                    {
+                        var tempFile = Path.GetTempFileName();
+                        try
+                        {
+                            await File.WriteAllLinesAsync(tempFile, gatewayYamlLines, context.CancellationToken).ConfigureAwait(false);
+
+                            var applyArgs = $"apply --server-side --field-manager=helm --force-conflicts -f \"{tempFile}\"";
+                            if (environment.KubeConfigPath is not null)
+                            {
+                                applyArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                            }
+
+                            var (applyResult, applyDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                            {
+                                Arguments = applyArgs,
+                                ThrowOnNonZeroReturnCode = false,
+                                InheritEnv = true,
+                                OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                                OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                            });
+
+                            await using (applyDisposable.ConfigureAwait(false))
+                            {
+                                var applyExitResult = await applyResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                                if (applyExitResult.ExitCode != 0)
+                                {
+                                    context.Logger.LogDebug(
+                                        "Failed to transfer field ownership to Helm (exit code {ExitCode}). " +
+                                        "Subsequent deploys with an explicit hostname may require --force.",
+                                        applyExitResult.ExitCode);
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            try { File.Delete(tempFile); } catch { }
+                        }
                     }
                 }
             }
