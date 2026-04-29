@@ -238,6 +238,27 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 steps.Add(tlsBootstrapStep);
             }
 
+            // FQDN discovery step — for Gateway TLS configs with no hostnames, waits for the
+            // Gateway to be assigned an address, patches the listener hostname, and bootstraps TLS.
+            var gatewaysNeedingDiscovery = CollectGatewaysNeedingFqdnDiscovery(model, environment);
+            if (gatewaysNeedingDiscovery.Count > 0)
+            {
+                var fqdnDiscoveryStep = new PipelineStep
+                {
+                    Name = $"tls-fqdn-discovery-{environment.Name}",
+                    Description = "Discovers Gateway FQDN, patches listener hostname, and bootstraps TLS",
+                    Action = ctx => DiscoverFqdnAndBootstrapTlsAsync(ctx, environment, gatewaysNeedingDiscovery)
+                };
+                fqdnDiscoveryStep.DependsOn($"helm-deploy-{environment.Name}");
+                if (tlsSecrets.Count > 0)
+                {
+                    // Run after normal TLS bootstrap (which handles hostnames that are already known)
+                    fqdnDiscoveryStep.DependsOn($"tls-bootstrap-{environment.Name}");
+                }
+                fqdnDiscoveryStep.RequiredBy(WellKnownPipelineSteps.Deploy);
+                steps.Add(fqdnDiscoveryStep);
+            }
+
             // Expand deployment target steps for compute resources (including dashboard if enabled)
             var resources = environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard
                 ? [.. model.GetComputeResources(), dashboard]
@@ -718,20 +739,21 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         var tlsListenerIndex = 0;
         foreach (var tls in gatewayResource.TlsConfigs)
         {
-            foreach (var host in tls.Hosts)
+            var resolvedSecretName = await ResolveExpressionAsync(tls.SecretName, cancellationToken).ConfigureAwait(false);
+
+            if (tls.Hosts.Count == 0)
             {
+                // No hostnames specified — create an HTTPS listener without a hostname restriction.
+                // The hostname will be discovered from the Gateway's assigned address after deployment
+                // and patched onto the listener to enable cert-manager certificate issuance.
                 var listenerName = tlsListenerIndex == 0 ? "https" : $"https-{tlsListenerIndex}";
                 tlsListenerIndex++;
-
-                var resolvedHost = await ResolveExpressionAsync(host, cancellationToken).ConfigureAwait(false);
-                var resolvedSecretName = await ResolveExpressionAsync(tls.SecretName, cancellationToken).ConfigureAwait(false);
 
                 gateway.Spec.Listeners.Add(new GatewayListenerV1
                 {
                     Name = listenerName,
                     Protocol = "HTTPS",
                     Port = 443,
-                    Hostname = resolvedHost,
                     Tls = new GatewayTlsConfigV1
                     {
                         Mode = "Terminate",
@@ -742,6 +764,33 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                         Namespaces = new GatewayRouteNamespacesV1 { From = "Same" }
                     }
                 });
+            }
+            else
+            {
+                foreach (var host in tls.Hosts)
+                {
+                    var listenerName = tlsListenerIndex == 0 ? "https" : $"https-{tlsListenerIndex}";
+                    tlsListenerIndex++;
+
+                    var resolvedHost = await ResolveExpressionAsync(host, cancellationToken).ConfigureAwait(false);
+
+                    gateway.Spec.Listeners.Add(new GatewayListenerV1
+                    {
+                        Name = listenerName,
+                        Protocol = "HTTPS",
+                        Port = 443,
+                        Hostname = resolvedHost,
+                        Tls = new GatewayTlsConfigV1
+                        {
+                            Mode = "Terminate",
+                            CertificateRefs = { new GatewayCertificateRefV1 { Name = resolvedSecretName } }
+                        },
+                        AllowedRoutes = new GatewayAllowedRoutesV1
+                        {
+                            Namespaces = new GatewayRouteNamespacesV1 { From = "Same" }
+                        }
+                    });
+                }
             }
         }
 
@@ -868,6 +917,296 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
 
         return tlsSecrets;
+    }
+
+    /// <summary>
+    /// Collects gateway TLS configurations that have no hostnames specified and need
+    /// the assigned FQDN to be discovered from the Gateway's status after deployment.
+    /// </summary>
+    private static List<(KubernetesGatewayResource Gateway, ReferenceExpression SecretName)> CollectGatewaysNeedingFqdnDiscovery(
+        DistributedApplicationModel model,
+        KubernetesEnvironmentResource environment)
+    {
+        var results = new List<(KubernetesGatewayResource Gateway, ReferenceExpression SecretName)>();
+
+        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        {
+            foreach (var tls in gateway.TlsConfigs)
+            {
+                if (tls.Hosts.Count == 0)
+                {
+                    results.Add((gateway, tls.SecretName));
+                }
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Discovers the assigned FQDN from the Gateway's status, patches the HTTPS listener
+    /// to include the hostname, and creates a bootstrap TLS secret so cert-manager can
+    /// issue a real certificate.
+    /// </summary>
+    private static async Task DiscoverFqdnAndBootstrapTlsAsync(
+        PipelineStepContext context,
+        KubernetesEnvironmentResource environment,
+        List<(KubernetesGatewayResource Gateway, ReferenceExpression SecretName)> gatewaysNeedingDiscovery)
+    {
+        var @namespace = "default";
+        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
+        {
+            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(resolvedNs))
+            {
+                @namespace = resolvedNs;
+            }
+        }
+
+        foreach (var (gateway, secretNameExpr) in gatewaysNeedingDiscovery)
+        {
+            var gatewayName = gateway.Name.ToKubernetesResourceName();
+            var secretName = await ResolveExpressionAsync(secretNameExpr, context.CancellationToken).ConfigureAwait(false);
+
+            // Poll for the Gateway's assigned address (load balancer controllers may take time to provision)
+            context.Logger.LogInformation(
+                "Waiting for Gateway '{GatewayName}' to be assigned an address...", gatewayName);
+
+            string? discoveredFqdn = null;
+            var maxAttempts = 60; // 5 minutes with 5s intervals
+            for (var attempt = 0; attempt < maxAttempts; attempt++)
+            {
+                var jsonPathArgs = $"get gateway {gatewayName} --namespace {@namespace} -o jsonpath=\"{{.status.addresses[0].value}}\"";
+                if (environment.KubeConfigPath is not null)
+                {
+                    jsonPathArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var stdout = new List<string>();
+                var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = jsonPathArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = line =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                        {
+                            stdout.Add(line);
+                        }
+                    },
+                    OnErrorData = _ => { }
+                });
+
+                await using (getDisposable.ConfigureAwait(false))
+                {
+                    var result = await getResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (result.ExitCode == 0 && stdout.Count > 0 && !string.IsNullOrWhiteSpace(stdout[0]))
+                    {
+                        discoveredFqdn = stdout[0].Trim();
+                        break;
+                    }
+                }
+
+                if (attempt < maxAttempts - 1)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), context.CancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (string.IsNullOrEmpty(discoveredFqdn))
+            {
+                context.Logger.LogWarning(
+                    "Gateway '{GatewayName}' was not assigned an address after waiting. " +
+                    "TLS hostname discovery skipped. You may need to redeploy with an explicit hostname via WithHostname().",
+                    gatewayName);
+                continue;
+            }
+
+            context.Logger.LogInformation(
+                "Gateway '{GatewayName}' assigned address: {Fqdn}. Patching HTTPS listener(s) and bootstrapping TLS.",
+                gatewayName, discoveredFqdn);
+
+            // Find HTTPS listeners without a hostname and patch them with the discovered FQDN.
+            // We query the Gateway spec to find the correct listener indices dynamically.
+            var listenerJsonArgs = $"get gateway {gatewayName} --namespace {@namespace} -o jsonpath=\"{{.spec.listeners}}\"";
+            if (environment.KubeConfigPath is not null)
+            {
+                listenerJsonArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+            }
+
+            var listenerJson = new List<string>();
+            var (listenerResult, listenerDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            {
+                Arguments = listenerJsonArgs,
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true,
+                OnOutputData = line =>
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        listenerJson.Add(line);
+                    }
+                },
+                OnErrorData = _ => { }
+            });
+
+            var httpsListenerIndices = new List<int>();
+            await using (listenerDisposable.ConfigureAwait(false))
+            {
+                var listenerExitResult = await listenerResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                if (listenerExitResult.ExitCode == 0 && listenerJson.Count > 0)
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(string.Join("", listenerJson));
+                        var listeners = doc.RootElement;
+                        for (var i = 0; i < listeners.GetArrayLength(); i++)
+                        {
+                            var listener = listeners[i];
+                            if (listener.TryGetProperty("protocol", out var protocol) &&
+                                string.Equals(protocol.GetString(), "HTTPS", StringComparison.OrdinalIgnoreCase) &&
+                                !listener.TryGetProperty("hostname", out _))
+                            {
+                                httpsListenerIndices.Add(i);
+                            }
+                        }
+                    }
+                    catch (System.Text.Json.JsonException)
+                    {
+                        // Fall back to assuming index 1 (HTTP=0, HTTPS=1)
+                        httpsListenerIndices.Add(1);
+                    }
+                }
+                else
+                {
+                    // Fall back to assuming index 1
+                    httpsListenerIndices.Add(1);
+                }
+            }
+
+            if (httpsListenerIndices.Count == 0)
+            {
+                context.Logger.LogWarning(
+                    "No HTTPS listeners without hostname found on Gateway '{GatewayName}'. Skipping hostname patch.",
+                    gatewayName);
+            }
+            else
+            {
+                // Build a JSON patch that adds the hostname to all HTTPS listeners that don't have one
+                var patchOps = string.Join(",", httpsListenerIndices.Select(
+                    idx => $"{{\"op\":\"add\",\"path\":\"/spec/listeners/{idx}/hostname\",\"value\":\"{discoveredFqdn}\"}}"));
+                var patchJson = $"[{patchOps}]";
+
+                var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json -p=\"{patchJson.Replace("\"", "\\\"")}\"";
+                if (environment.KubeConfigPath is not null)
+                {
+                    patchArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var (patchResult, patchDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = patchArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                });
+
+                await using (patchDisposable.ConfigureAwait(false))
+                {
+                    var patchExitResult = await patchResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (patchExitResult.ExitCode != 0)
+                    {
+                        context.Logger.LogWarning(
+                            "Failed to patch Gateway '{GatewayName}' with hostname '{Hostname}' (exit code {ExitCode}). " +
+                            "You may need to redeploy with an explicit hostname via WithHostname().",
+                            gatewayName, discoveredFqdn, patchExitResult.ExitCode);
+                        continue;
+                    }
+                }
+            }
+
+            // Check if bootstrap TLS secret already exists
+            var checkArgs = $"get secret {secretName} --namespace {@namespace}";
+            if (environment.KubeConfigPath is not null)
+            {
+                checkArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+            }
+
+            var (checkResult, checkDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            {
+                Arguments = checkArgs,
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true,
+                OnOutputData = _ => { },
+                OnErrorData = _ => { }
+            });
+
+            await using (checkDisposable.ConfigureAwait(false))
+            {
+                var result = await checkResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                if (result.ExitCode == 0)
+                {
+                    context.Logger.LogInformation("TLS secret '{SecretName}' already exists, skipping bootstrap.", secretName);
+                    continue;
+                }
+            }
+
+            // Create a bootstrap self-signed cert with the discovered FQDN
+            context.Logger.LogInformation("Creating bootstrap TLS secret '{SecretName}' for '{Hostname}'.", secretName, discoveredFqdn);
+
+            using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var certRequest = new CertificateRequest($"CN={discoveredFqdn}", ecdsa, HashAlgorithmName.SHA256);
+            using var cert = certRequest.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
+
+            var certPem = cert.ExportCertificatePem();
+            var keyPem = ecdsa.ExportECPrivateKeyPem();
+
+            var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-discovery");
+            try
+            {
+                var certPath = Path.Combine(tempDir.FullName, "tls.crt");
+                var keyPath = Path.Combine(tempDir.FullName, "tls.key");
+                await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
+                await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
+
+                var createArgs = $"create secret tls {secretName} --cert=\"{certPath}\" --key=\"{keyPath}\" --namespace {@namespace}";
+                if (environment.KubeConfigPath is not null)
+                {
+                    createArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var (createResult, createDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = createArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                });
+
+                await using (createDisposable.ConfigureAwait(false))
+                {
+                    var createExitResult = await createResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (createExitResult.ExitCode != 0)
+                    {
+                        context.Logger.LogWarning("Failed to create bootstrap TLS secret '{SecretName}' (exit code {ExitCode}).", secretName, createExitResult.ExitCode);
+                    }
+                    else
+                    {
+                        context.Logger.LogInformation(
+                            "Bootstrap TLS secret '{SecretName}' created for '{Hostname}'. " +
+                            "cert-manager will replace this with a real certificate once the hostname is detected on the Gateway listener.",
+                            secretName, discoveredFqdn);
+                    }
+                }
+            }
+            finally
+            {
+                try { tempDir.Delete(recursive: true); } catch { }
+            }
+        }
     }
 
     private static async Task BootstrapTlsSecretsAsync(
