@@ -127,6 +127,11 @@
         <target state="new">Required input {0} was not provided in non-interactive mode. Specify the value with the {1} option.</target>
         <note>{0} is the input/argument display name. {1} is the option name like '--input'.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiredInputMissingWithOptions">
+        <source>Required input {0} was not provided in non-interactive mode. Specify the value with the {1} or {2} option.</source>
+        <target state="new">Required input {0} was not provided in non-interactive mode. Specify the value with the {1} or {2} option.</target>
+        <note>{0} is the input/argument display name. {1} and {2} are option names like '--input' and '--param'.</note>
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">İşlem iptal edildi.</target>

@@ -339,8 +339,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
     }
 
-    [Fact]
-    public async Task DeployCommandReturnsMissingRequiredArgumentWhenRequiredInputHasNoValue()
+    [Theory]
+    [InlineData("required-input")]
+    [InlineData("param-required-input")]
+    public async Task DeployCommandReturnsMissingRequiredArgumentWhenRequiredInputHasNoValue(string inputName)
     {
         using var tempRepo = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -363,7 +365,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                     {
                         var backchannel = new TestAppHostBackchannel
                         {
-                            GetPublishingActivitiesAsyncCallback = GetPromptActivities
+                            GetPublishingActivitiesAsyncCallback = (ct) => GetPromptActivities(inputName, ct)
                         };
 
                         backchannelCompletionSource?.SetResult(backchannel);
@@ -384,9 +386,9 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
         var error = Assert.Single(interactionService.Errors);
-        Assert.Equal(string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, "required-input", "--input"), error);
+        Assert.Equal(string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOptions, inputName, "--input", "--param"), error);
 
-        static async IAsyncEnumerable<PublishingActivity> GetPromptActivities([EnumeratorCancellation] CancellationToken cancellationToken)
+        static async IAsyncEnumerable<PublishingActivity> GetPromptActivities(string inputName, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.Yield();
 
@@ -403,7 +405,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                     [
                         new PublishingPromptInput
                         {
-                            Name = "required-input",
+                            Name = inputName,
                             Label = "Required Input",
                             InputType = "text",
                             Required = true,

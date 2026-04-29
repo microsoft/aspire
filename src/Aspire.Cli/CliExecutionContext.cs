@@ -56,6 +56,33 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
         return Environment.GetEnvironmentVariable(variable);
     }
 
+    /// <summary>
+    /// Gets all environment variables as key-value pairs. Uses the context's environment variables
+    /// if provided, otherwise reads from the process environment.
+    /// </summary>
+    public IEnumerable<KeyValuePair<string, string>> GetEnvironmentVariables()
+    {
+        if (EnvironmentVariables is not null)
+        {
+            foreach (var (key, val) in EnvironmentVariables)
+            {
+                if (val is not null)
+                {
+                    yield return new KeyValuePair<string, string>(key, val);
+                }
+            }
+            yield break;
+        }
+
+        foreach (var entry in Environment.GetEnvironmentVariables())
+        {
+            if (entry is System.Collections.DictionaryEntry { Key: string key, Value: string val })
+            {
+                yield return new KeyValuePair<string, string>(key, val);
+            }
+        }
+    }
+
     private Command? _command;
 
     /// <summary>

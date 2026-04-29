@@ -121,8 +121,10 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
-    [Fact]
-    public async Task PublishCommandReturnsMissingRequiredArgumentWhenRequiredInputHasNoValue()
+    [Theory]
+    [InlineData("required-input")]
+    [InlineData("param-required-input")]
+    public async Task PublishCommandReturnsMissingRequiredArgumentWhenRequiredInputHasNoValue(string inputName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -144,7 +146,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
                 {
                     var backchannel = new TestAppHostBackchannel
                     {
-                        GetPublishingActivitiesAsyncCallback = GetPromptActivities
+                        GetPublishingActivitiesAsyncCallback = (ct) => GetPromptActivities(inputName, ct)
                     };
 
                     backchannelCompletionSource?.SetResult(backchannel);
@@ -164,9 +166,9 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
         var error = Assert.Single(interactionService.Errors);
-        Assert.Equal(string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, "required-input", "--input"), error);
+        Assert.Equal(string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOptions, inputName, "--input", "--param"), error);
 
-        static async IAsyncEnumerable<PublishingActivity> GetPromptActivities([EnumeratorCancellation] CancellationToken cancellationToken)
+        static async IAsyncEnumerable<PublishingActivity> GetPromptActivities(string inputName, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await Task.Yield();
 
@@ -183,7 +185,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
                     [
                         new PublishingPromptInput
                         {
-                            Name = "required-input",
+                            Name = inputName,
                             Label = "Required Input",
                             InputType = "text",
                             Required = true,

@@ -25,8 +25,6 @@ namespace Aspire.Cli.Commands;
 
 internal abstract class PipelineCommandBase : BaseCommand
 {
-    private const string CustomChoiceValue = "__CUSTOM_CHOICE";
-
     protected readonly IDotNetCliRunner _runner;
     protected readonly IProjectLocator _projectLocator;
     protected readonly IAppHostProjectFactory _projectFactory;
@@ -36,8 +34,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ILogger _logger;
     private readonly IAnsiConsole _ansiConsole;
-
-    private Dictionary<string, string> _providedInputs = [];
+    private readonly PipelineCommandInputManager _inputManager;
 
     protected static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", PublishCommandStrings.ProjectArgumentDescription);
 
@@ -75,6 +72,12 @@ internal abstract class PipelineCommandBase : BaseCommand
         AllowMultipleArgumentsPerToken = false
     };
 
+    protected static readonly Option<string[]> s_paramOption = new("--param")
+    {
+        Description = SharedCommandStrings.PipelineParameterOptionDescription,
+        AllowMultipleArgumentsPerToken = false
+    };
+
     protected abstract string OperationCompletedPrefix { get; }
     protected abstract string OperationFailedPrefix { get; }
 
@@ -98,6 +101,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         _projectFactory = projectFactory;
         _logger = logger;
         _ansiConsole = ansiConsole;
+        _inputManager = new PipelineCommandInputManager(executionContext, interactionService, hostEnvironment, ansiConsole);
 
         _outputPathOption = new Option<string?>("--output-path", "-o")
         {
@@ -112,6 +116,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         Options.Add(s_noBuildOption);
         Options.Add(s_listStepsOption);
         Options.Add(s_inputOption);
+        Options.Add(s_paramOption);
 
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
@@ -178,8 +183,6 @@ internal abstract class PipelineCommandBase : BaseCommand
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var startDebugSession = _startDebugSessionOption is not null && parseResult.GetValue(_startDebugSessionOption);
 
-        _providedInputs = [];
-
         Task<int>? pendingRun = null;
         PublishContext? publishContext = null;
 
@@ -188,9 +191,9 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         try
         {
-            _providedInputs = ParseInputOptions(parseResult.GetValue(s_inputOption));
-
             using var activity = Telemetry.StartDiagnosticActivity(this.Name);
+
+            _inputManager.LoadProvidedValues(parseResult.GetValue(s_inputOption), parseResult.GetValue(s_paramOption));
 
             var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
             var effectiveAppHostFile = searchResult.SelectedProjectFile;
@@ -397,7 +400,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             return pendingRun is { } && debugMode ? await pendingRun : ExitCodeConstants.FailedToBuildArtifacts;
         }
-        catch (PipelineInputValidationException ex)
+        catch (PipelineCommandInputManager.InputValidationException ex)
         {
             // Send terminal progress bar stop sequence on exception
             StopTerminalProgressBar();
@@ -418,7 +421,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             // Send terminal progress bar stop sequence on exception
             StopTerminalProgressBar();
             Telemetry.RecordError("A required pipeline input was not provided in non-interactive mode.", ex);
-            var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOption, ex.SymbolDisplayName, s_inputOption.Name);
+            var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOptions, ex.SymbolDisplayName, s_inputOption.Name, s_paramOption.Name);
             InteractionService.DisplayError(errorMessage);
             if (publishContext?.OutputCollector is { } outputCollector)
             {
@@ -584,7 +587,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             else if (activity.Type == PublishingActivityTypes.Prompt)
             {
-                await HandlePromptActivityAsync(activity, backchannel, cancellationToken);
+                await _inputManager.HandlePromptActivityAsync(activity, backchannel, ConvertTextWithMarkdownFlag, cancellationToken);
             }
             else if (activity.Type == PublishingActivityTypes.Log)
             {
@@ -705,7 +708,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 else if (activity.Type == PublishingActivityTypes.Prompt)
                 {
                     await logger.StopSpinnerAsync();
-                    await HandlePromptActivityAsync(activity, backchannel, cancellationToken);
+                    await _inputManager.HandlePromptActivityAsync(activity, backchannel, ConvertTextWithMarkdownFlag, cancellationToken);
                     logger.StartSpinner();
                 }
                 else if (activity.Type == PublishingActivityTypes.Log)
@@ -874,302 +877,6 @@ internal abstract class PipelineCommandBase : BaseCommand
         }
     }
 
-    private static string BuildPromptText(PublishingPromptInput input, int inputCount, string statusText, PublishingActivityData activityData)
-    {
-        if (inputCount > 1)
-        {
-            // Multi-input: just show the label with markdown conversion
-            var labelText = ConvertTextWithMarkdownFlag($"{input.Label}: ", activityData);
-            return labelText;
-        }
-
-        // Single-input: show both StatusText and Label
-        var header = statusText ?? string.Empty;
-        var label = input.Label ?? string.Empty;
-
-        // If StatusText equals Label (case-insensitive), show only the label once
-        if (header.Equals(label, StringComparison.OrdinalIgnoreCase))
-        {
-            return $"[bold]{ConvertTextWithMarkdownFlag(label, activityData)}[/]";
-        }
-
-        // Show StatusText as header (converted from markdown), then Label on new line
-        var convertedHeader = ConvertTextWithMarkdownFlag(header, activityData);
-        var convertedLabel = ConvertTextWithMarkdownFlag(label, activityData);
-        return $"[bold]{convertedHeader}[/]\n{convertedLabel}: ";
-    }
-
-    private async Task HandlePromptActivityAsync(PublishingActivity activity, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
-    {
-        if (activity.Data.IsComplete)
-        {
-            // Prompt is already completed, nothing to do
-            return;
-        }
-
-        // Check if we have input information
-        if (activity.Data.Inputs is not { Count: > 0 } inputs)
-        {
-            throw new InvalidOperationException("Prompt provided without input data.");
-        }
-
-        // Check for validation errors. If there are errors then this isn't the first time the user has been prompted.
-        var hasValidationErrors = inputs.Any(input => input.ValidationErrors is { Count: > 0 });
-
-        // For multiple inputs, display the activity status text as a header.
-        // Don't display if there are validation errors (header was already shown on first prompt),
-        // if all inputs are resolved from --input options, or if running non-interactively.
-        var allInputsProvided = inputs.All(input => input.Name is not null && _providedInputs.ContainsKey(input.Name));
-        if (!hasValidationErrors && inputs.Count > 1 && _hostEnvironment.SupportsInteractiveInput && !allInputsProvided)
-        {
-            var headerText = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
-            _ansiConsole.MarkupLine($"[bold]{headerText}[/]");
-        }
-
-        // Handle multiple inputs
-        var answers = new PublishingPromptInputAnswer[inputs.Count];
-        for (var i = 0; i < inputs.Count; i++)
-        {
-            var input = inputs[i];
-
-            string? result;
-
-            // Get prompt for input if there are no validation errors (first time we've asked)
-            // or there are validation errors and this input has an error.
-            if (!hasValidationErrors || input.ValidationErrors is { Count: > 0 })
-            {
-                // Build the prompt text based on number of inputs
-                var promptText = BuildPromptText(input, inputs.Count, activity.Data.StatusText, activity.Data);
-
-                result = await HandleSingleInputAsync(input, promptText, cancellationToken);
-            }
-            else
-            {
-                result = input.Value;
-            }
-
-            answers[i] = new PublishingPromptInputAnswer
-            {
-                Value = result
-            };
-        }
-
-        // Send all results as an array
-        await backchannel.CompletePromptResponseAsync(activity.Data.Id, answers, cancellationToken);
-    }
-
-    private async Task<string?> HandleSingleInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
-    {
-        if (!Enum.TryParse<InputType>(input.InputType, ignoreCase: true, out var inputType))
-        {
-            // Fallback to text if unknown type
-            inputType = InputType.Text;
-        }
-
-        // Check if the input value was provided via --input option
-        if (TryResolveProvidedInput(input, inputType, out var providedValue))
-        {
-            // If the server returned validation errors for this input, fail since the
-            // value was provided non-interactively and can't be corrected.
-            if (input.ValidationErrors is { Count: > 0 } validationErrors)
-            {
-                var inputDisplayName = $"'--input {input.Name}'";
-                var validationMessage = string.Join("; ", validationErrors);
-                throw new PipelineInputValidationException(
-                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName) + " " + validationMessage);
-            }
-
-            return providedValue;
-        }
-
-        // Display any validation errors.
-        if (input.ValidationErrors is { Count: > 0 } errors)
-        {
-            foreach (var error in errors)
-            {
-                InteractionService.DisplayError(error);
-            }
-        }
-
-        return inputType switch
-        {
-            InputType.Text => await InteractionService.PromptForStringAsync(
-                promptText,
-                binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true),
-                required: input.Required,
-                cancellationToken: cancellationToken),
-
-            InputType.SecretText => await InteractionService.PromptForStringAsync(
-                promptText,
-                binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true),
-                isSecret: true,
-                required: input.Required,
-                cancellationToken: cancellationToken),
-
-            InputType.Choice => await HandleSelectInputAsync(input, promptText, cancellationToken),
-
-            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value), input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
-
-            InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
-
-            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true), required: input.Required, cancellationToken: cancellationToken)
-        };
-    }
-
-    private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
-    {
-        if (input.Options is null || input.Options.Count == 0)
-        {
-            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true), required: input.Required, cancellationToken: cancellationToken);
-        }
-
-        // If AllowCustomChoice is enabled then add an "Other" option to the list.
-        // CLI doesn't support custom values directly in selection prompts. Instead an "Other" option is added.
-        // If "Other" is selected then the user is prompted to enter a custom value as text.
-        var options = input.Options.ToList();
-        if (input.AllowCustomChoice)
-        {
-            options.Add(KeyValuePair.Create(CustomChoiceValue, InteractionServiceStrings.CustomChoiceLabel));
-        }
-
-        // For Choice inputs, we can't directly set a default in PromptForSelectionAsync,
-        // but we can reorder the options to put the default first or use a different approach
-        var (value, displayText) = await InteractionService.PromptForSelectionAsync(
-            promptText,
-            options,
-            choice => choice.Value.EscapeMarkup(),
-            cancellationToken: cancellationToken);
-
-        if (value == CustomChoiceValue)
-        {
-            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value, suppressNonInteractiveErrorDisplay: true), required: input.Required, cancellationToken: cancellationToken);
-        }
-
-        AnsiConsole.MarkupLine($"{promptText} {displayText.EscapeMarkup()}");
-
-        return value;
-    }
-
-    private async Task<string?> HandleNumberInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
-    {
-        static ValidationResult Validator(string value)
-        {
-            if (!string.IsNullOrWhiteSpace(value) && !double.TryParse(value, out _))
-            {
-                return ValidationResult.Error("Please enter a valid number.");
-            }
-
-            return ValidationResult.Success();
-        }
-
-        return await InteractionService.PromptForStringAsync(
-            promptText,
-            binding: PromptBinding.CreateDefault(input.Value, input.Name ?? string.Empty, suppressNonInteractiveErrorDisplay: true),
-            validator: Validator,
-            required: input.Required,
-            cancellationToken: cancellationToken);
-    }
-
-    private static bool ParseBooleanValue(string? value)
-    {
-        return bool.TryParse(value, out var result) && result;
-    }
-
-    private static Dictionary<string, string> ParseInputOptions(string[]? inputs)
-    {
-        if (inputs is null or { Length: 0 })
-        {
-            return [];
-        }
-
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var input in inputs)
-        {
-            var separatorIndex = input.IndexOf('=');
-            if (separatorIndex <= 0)
-            {
-                throw new PipelineInputValidationException(
-                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, input, $"'{s_inputOption.Name}'"),
-                    "name=value");
-            }
-
-            var name = input[..separatorIndex];
-            var value = input[(separatorIndex + 1)..];
-            result[name] = value;
-        }
-
-        return result;
-    }
-
-    private bool TryResolveProvidedInput(PublishingPromptInput input, InputType inputType, out string? value)
-    {
-        value = null;
-
-        // Can only match by name; old AppHosts without names fall through to interactive prompt
-        if (input.Name is null || !_providedInputs.TryGetValue(input.Name, out var providedValue))
-        {
-            return false;
-        }
-
-        switch (inputType)
-        {
-            case InputType.Choice:
-                // Validate the value matches one of the allowed options
-                if (input.Options is { Count: > 0 })
-                {
-                    var matchingOption = input.Options.FirstOrDefault(o => o.Key.Equals(providedValue, StringComparison.OrdinalIgnoreCase));
-                    if (matchingOption.Key is not null)
-                    {
-                        value = matchingOption.Key;
-                        return true;
-                    }
-
-                    if (input.AllowCustomChoice)
-                    {
-                        value = providedValue;
-                        return true;
-                    }
-
-                    var inputDisplayName = $"'--input {input.Name}'";
-                    var availableValues = string.Join(", ", input.Options.Select(o => o.Key));
-                    throw new PipelineInputValidationException(
-                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName),
-                        availableValues);
-                }
-
-                value = providedValue;
-                return true;
-
-            case InputType.Boolean:
-                if (!bool.TryParse(providedValue, out var boolValue))
-                {
-                    var inputDisplayName = $"'--input {input.Name}'";
-                    throw new PipelineInputValidationException(
-                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName),
-                        "true, false");
-                }
-
-                value = boolValue.ToString().ToLowerInvariant();
-                return true;
-
-            case InputType.Number:
-                if (!double.TryParse(providedValue, out _))
-                {
-                    var inputDisplayName = $"'--input {input.Name}'";
-                    throw new PipelineInputValidationException(
-                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
-                }
-
-                value = providedValue;
-                return true;
-
-            default:
-                // Text, SecretText, and unknown types: return as-is
-                value = providedValue;
-                return true;
-        }
-    }
-
     private static (LogLevel Level, string Prefix) ParseLogLevel(string? logLevel) => logLevel?.ToUpperInvariant() switch
     {
         "TRACE" => (LogLevel.Trace, "TRC"),
@@ -1180,11 +887,6 @@ internal abstract class PipelineCommandBase : BaseCommand
         "CRITICAL" => (LogLevel.Critical, "CRT"),
         null or _ => (LogLevel.Information, "INF")
     };
-
-    private sealed class PipelineInputValidationException(string message, string? availableValues = null) : Exception(message)
-    {
-        public string? AvailableValues { get; } = availableValues;
-    }
 
     private class StepInfo
     {

@@ -1372,6 +1372,331 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
             string.Format(InteractionServiceStrings.NonInteractiveInvalidValue, "de", "'--input text-prompt-1'") + " Environment name must be at least 3 characters long.",
             error);
     }
+
+    [Fact]
+    public async Task PublishCommand_ParamOption_ResolvesParamPrefixedInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        // Simulate a parameter input with the param- prefix (as ParameterResource.CreateInput() would produce)
+        // The parameter name is "apiKey", which becomes input name "param-apiKey"
+        promptBackchannel.AddPrompt("param-apiKey", "API Key", InputTypes.Text, "Enter API key:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // Use --param with the parameter name (without the param- prefix)
+        var result = command.Parse("publish --param apiKey=my-secret-key");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.StringPromptCalls);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal("my-secret-key", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_ParamOption_MultipleParams_AllResolved()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddMultiInputPrompt("multi-param-1", "Parameters", "Configure parameters:", [
+            new PromptInputData("param-apiKey", "API Key", InputTypes.Text, true),
+            new PromptInputData("param-dbPassword", "DB Password", InputTypes.SecretText, true),
+        ]);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --param apiKey=key123 --param dbPassword=pass456");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.StringPromptCalls);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        var answers = promptBackchannel.CompletedPrompts[0].Answers;
+        Assert.Equal("key123", answers[0].Value);
+        Assert.Equal("pass456", answers[1].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_ParamOption_DoesNotMatchNonParamInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        // A regular input (no param- prefix)
+        promptBackchannel.AddPrompt("environment", "Environment", InputTypes.Text, "Enter environment:", isRequired: true);
+
+        consoleService.SetupStringPromptResponse("staging");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // --param should NOT match a non-param-prefixed input
+        var result = command.Parse("publish --param environment=production");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        // Should have fallen through to interactive prompt
+        Assert.Single(consoleService.StringPromptCalls);
+        // The interactive response should be used
+        Assert.Equal("staging", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_DoesNotMatchParamPrefixedInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        // A parameter input (with param- prefix)
+        promptBackchannel.AddPrompt("param-apiKey", "API Key", InputTypes.Text, "Enter API key:", isRequired: true);
+
+        consoleService.SetupStringPromptResponse("interactive-key");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // --input should NOT match a param-prefixed input
+        var result = command.Parse("publish --input apiKey=cli-key");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        // Should have fallen through to interactive prompt
+        Assert.Single(consoleService.StringPromptCalls);
+        Assert.Equal("interactive-key", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_NonInteractive_MissingInput_ErrorMentionsBothOptions()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
+
+        // Don't queue any responses — when prompt is hit, NonInteractiveException will be thrown
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
+        var error = Assert.Single(consoleService.DisplayedErrors);
+        Assert.Equal(
+            string.Format(InteractionServiceStrings.NonInteractiveRequiredInputMissingWithOptions, "text-prompt-1", "--input", "--param"),
+            error);
+    }
+
+    [Fact]
+    public async Task PublishCommand_AspireParametersEnvVar_ResolvesParamPrefixedInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        // A parameter input (with param- prefix as ParameterResource.CreateInput() would produce)
+        promptBackchannel.AddPrompt("param-apiKey", "API Key", InputTypes.Text, "Enter API key:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        Environment.SetEnvironmentVariable("ASPIRE_PARAMETERS__apiKey", "env-param-value");
+        try
+        {
+            var result = command.Parse("publish");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(0, exitCode);
+            Assert.Empty(consoleService.StringPromptCalls);
+
+            Assert.Single(promptBackchannel.CompletedPrompts);
+            Assert.Equal("env-param-value", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPIRE_PARAMETERS__apiKey", null);
+        }
+    }
+
+    [Fact]
+    public async Task PublishCommand_AspireInputsEnvVar_ResolvesInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // Set the environment variable
+        Environment.SetEnvironmentVariable("ASPIRE_INPUTS__text-prompt-1", "env-production");
+        try
+        {
+            var result = command.Parse("publish");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(0, exitCode);
+            Assert.Empty(consoleService.StringPromptCalls);
+
+            Assert.Single(promptBackchannel.CompletedPrompts);
+            Assert.Equal("env-production", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPIRE_INPUTS__text-prompt-1", null);
+        }
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOptionTakesPrecedenceOverEnvVar()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // Set both env var and CLI option - CLI should win
+        Environment.SetEnvironmentVariable("ASPIRE_INPUTS__text-prompt-1", "env-value");
+        try
+        {
+            var result = command.Parse("publish --input text-prompt-1=cli-value");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(0, exitCode);
+            Assert.Empty(consoleService.StringPromptCalls);
+
+            Assert.Single(promptBackchannel.CompletedPrompts);
+            Assert.Equal("cli-value", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPIRE_INPUTS__text-prompt-1", null);
+        }
+    }
+
+    [Fact]
+    public async Task PublishCommand_AspireInputsEnvVar_DoesNotMatchParamPrefixedInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        // A parameter input (with param- prefix)
+        promptBackchannel.AddPrompt("param-apiKey", "API Key", InputTypes.Text, "Enter API key:", isRequired: true);
+
+        consoleService.SetupStringPromptResponse("interactive-key");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // ASPIRE_INPUTS__ env var should NOT match param-prefixed inputs
+        Environment.SetEnvironmentVariable("ASPIRE_INPUTS__apiKey", "env-key");
+        try
+        {
+            var result = command.Parse("publish");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(0, exitCode);
+            // Should have fallen through to interactive prompt
+            Assert.Single(consoleService.StringPromptCalls);
+            Assert.Equal("interactive-key", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ASPIRE_INPUTS__apiKey", null);
+        }
+    }
 }
 
 // Test implementation of IAppHostCliBackchannel that simulates prompt interactions

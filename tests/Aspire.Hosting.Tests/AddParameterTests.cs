@@ -414,6 +414,7 @@ public class AddParameterTests
         var input = parameter.Resource.CreateInput();
 
         // Assert
+        Assert.Equal("param-test", input.Name);
         Assert.Equal(InputType.Text, input.InputType);
         Assert.Equal("test", input.Label);
         Assert.Equal("Test description", input.Description);
@@ -433,6 +434,7 @@ public class AddParameterTests
         var input = parameter.Resource.CreateInput();
 
         // Assert
+        Assert.Equal("param-secret", input.Name);
         Assert.Equal(InputType.SecretText, input.InputType);
         Assert.Equal("secret", input.Label);
         Assert.Equal("Secret description", input.Description);

@@ -277,6 +277,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Required input {0} was not provided in non-interactive mode. Specify the value with the {1} or {2} option..
+        /// </summary>
+        public static string NonInteractiveRequiredInputMissingWithOptions {
+            get {
+                return ResourceManager.GetString("NonInteractiveRequiredInputMissingWithOptions", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to [yellow]A new version of Aspire is available: {0}[/].
         /// </summary>
         public static string NewCliVersionAvailable {

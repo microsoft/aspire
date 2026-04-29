@@ -57,6 +57,11 @@
         <target state="new">Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is 'information'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PipelineParameterOptionDescription">
+        <source>Provide a value for a pipeline parameter in name=value format. Can be specified multiple times, for example: --param environment=staging --param region=westus. The name must match the parameter name defined by the AppHost.</source>
+        <target state="new">Provide a value for a pipeline parameter in name=value format. Can be specified multiple times, for example: --param environment=staging --param region=westus. The name must match the parameter name defined by the AppHost.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PipelineStepTimelineLabel">
         <source>Step timeline:</source>
         <target state="new">Step timeline:</target>
