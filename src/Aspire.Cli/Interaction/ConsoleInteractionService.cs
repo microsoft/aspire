@@ -161,10 +161,10 @@ internal class ConsoleInteractionService : IInteractionService
         {
             if (binding != null)
             {
-                if (binding.DefaultValue != null)
+                if (binding.NonInteractiveDefaultValue != null)
                 {
-                    ValidateResolvedStringValue(binding.DefaultValue, required, validator, binding.SymbolDisplayName);
-                    return binding.DefaultValue;
+                    ValidateResolvedStringValue(binding.NonInteractiveDefaultValue, required, validator, binding.SymbolDisplayName);
+                    return binding.NonInteractiveDefaultValue;
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -229,9 +229,9 @@ internal class ConsoleInteractionService : IInteractionService
         {
             if (binding != null)
             {
-                if (defaultValue != null)
+                if (binding.NonInteractiveDefaultValue != null)
                 {
-                    return MatchChoiceOrThrow(defaultValue, binding, choicesList, choiceFormatter);
+                    return MatchChoiceOrThrow(binding.NonInteractiveDefaultValue, binding, choicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -281,9 +281,9 @@ internal class ConsoleInteractionService : IInteractionService
         {
             if (binding != null)
             {
-                if (defaultValue != null)
+                if (binding.NonInteractiveDefaultValue != null)
                 {
-                    return MatchChoicesOrThrow(defaultValue, binding, choicesList, choiceFormatter);
+                    return MatchChoicesOrThrow(binding.NonInteractiveDefaultValue, binding, choicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -499,7 +499,7 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (binding.HasExplicitDefault)
                 {
-                    return binding.DefaultValue;
+                    return binding.NonInteractiveDefaultValue;
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);

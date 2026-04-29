@@ -1009,6 +1009,41 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task ConfirmAsync_NonInteractive_WithSeparateNonInteractiveDefault_ReturnsNonInteractiveDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var option = new System.CommandLine.Option<bool?>("--confirm");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, option, interactiveDefault: true, nonInteractiveDefault: false);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_Interactive_WithSeparateNonInteractiveDefault_UsesInteractiveDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var interactionService = CreateInteractionService(console);
+
+        var option = new System.CommandLine.Option<bool?>("--confirm");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, option, interactiveDefault: true, nonInteractiveDefault: false);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Contains("[Y/n]", output.ToString());
+    }
+
+    [Fact]
     public void MatchChoices_WithDuplicateValues_ReturnsDeduplicated()
     {
         var choices = new[] { "alpha", "beta", "gamma" };
@@ -1242,13 +1277,13 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public void PromptBinding_BoolAsSelection_SymbolDisplayName_IsCorrect()
+    public void PromptBinding_BoolConfirm_SymbolDisplayName_IsCorrect()
     {
         var option = new System.CommandLine.Option<bool?>("--include");
         var command = new System.CommandLine.RootCommand { option };
         var parseResult = command.Parse("--include");
 
-        var binding = PromptBinding.CreateBoolAsSelection(parseResult, option, "Yes", "No");
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, option, defaultValue: false);
 
         Assert.Equal("'--include'", binding.SymbolDisplayName);
     }
@@ -1260,6 +1295,7 @@ public class ConsoleInteractionServiceTests
         var updated = binding.WithDefault("new-value");
 
         Assert.Equal("new-value", updated.DefaultValue);
+        Assert.Equal("new-value", updated.NonInteractiveDefaultValue);
         Assert.True(updated.HasExplicitDefault);
     }
 
