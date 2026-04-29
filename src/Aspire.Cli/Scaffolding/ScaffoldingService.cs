@@ -181,7 +181,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(language.LanguageId.Value, cancellationToken);
         if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
-            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
@@ -280,14 +280,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
             language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string GetPackageManagerCommand(DirectoryInfo directory, LanguageInfo language)
+    private string GetPackageManagerCommand(DirectoryInfo directory, LanguageInfo language)
     {
         if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
             return "npm";
         }
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
         return TypeScriptAppHostToolchainResolver.GetCommandName(toolchain);
     }
 }

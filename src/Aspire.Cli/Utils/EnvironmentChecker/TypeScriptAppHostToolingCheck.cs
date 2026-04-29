@@ -48,7 +48,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
             return [];
         }
 
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory);
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _logger);
         var missingResults = new List<EnvironmentCheckResult>();
 
         foreach (var command in TypeScriptAppHostToolchainResolver.GetRequiredCommands(toolchain))
