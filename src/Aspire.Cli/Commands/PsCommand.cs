@@ -235,6 +235,17 @@ internal sealed class PsCommand : BaseCommand
             return null;
         }
 
+        var plusIndex = sdkVersion.IndexOf('+');
+        if (plusIndex > 0)
+        {
+            sdkVersion = sdkVersion[..plusIndex];
+        }
+
+        if (Version.TryParse(sdkVersion, out var version) && version.Revision == 0)
+        {
+            return FormattableString.Invariant($"{version.Major}.{version.Minor}.{version.Build}");
+        }
+
         return sdkVersion;
     }
 

@@ -169,13 +169,17 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             });
     }
 
-    [Fact]
-    public async Task PsCommand_JsonFormat_IncludesSdkVersionFromV2AppHostInfo()
+    [Theory]
+    [InlineData("9.9.9", "9.9.9")]
+    [InlineData("13.2.4.0", "13.2.4")]
+    [InlineData("13.2.4.0+e7762a46d31842884a0bc72c92e07ba700c99bf5", "13.2.4")]
+    [InlineData("13.3.0-pr.16502.g809f606f+e7762a46d31842884a0bc72c92e07ba700c99bf5", "13.3.0-pr.16502.g809f606f")]
+    public async Task PsCommand_JsonFormat_NormalizesSdkVersionFromV2AppHostInfo(string sdkVersion, string expectedSdkVersion)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
-        using var server = TestAppHostBackchannelServer.Start(appHostPath, processId: 1234, sdkVersion: "9.9.9");
+        using var server = TestAppHostBackchannelServer.Start(appHostPath, processId: 1234, sdkVersion: sdkVersion);
         using var connection = await server.ConnectAsync().DefaultTimeout();
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -198,7 +202,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         var jsonOutput = string.Join(string.Empty, textWriter.Logs);
         using var document = JsonDocument.Parse(jsonOutput);
         Assert.Equal(1, document.RootElement.GetArrayLength());
-        Assert.Equal("9.9.9", document.RootElement[0].GetProperty("sdkVersion").GetString());
+        Assert.Equal(expectedSdkVersion, document.RootElement[0].GetProperty("sdkVersion").GetString());
     }
 
     [Fact]
@@ -379,7 +383,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
-        using var server = TestAppHostBackchannelServer.Start(appHostPath, processId: 1234, sdkVersion: "9.9.9");
+        using var server = TestAppHostBackchannelServer.Start(appHostPath, processId: 1234, sdkVersion: "13.2.4.0");
         using var connection = await server.ConnectAsync().DefaultTimeout();
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -403,7 +407,8 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         var output = string.Join(Environment.NewLine, textWriter.Logs);
         var normalizedOutput = output.Replace(Environment.NewLine, string.Empty, StringComparison.Ordinal);
         Assert.Contains("SDK", normalizedOutput, StringComparison.Ordinal);
-        Assert.Contains("9.9.9", normalizedOutput, StringComparison.Ordinal);
+        Assert.Contains("13.2.4", normalizedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("13.2.4.0", normalizedOutput, StringComparison.Ordinal);
     }
 
     [Fact]
