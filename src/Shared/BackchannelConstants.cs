@@ -138,6 +138,11 @@ internal static class BackchannelConstants
     // TODO: Remove legacy hash support once all supported AppHost versions use normalized hashing.
     public static string? ComputeLegacyHash(string appHostPath)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
         var currentHash = ComputeHash(appHostPath);
         var legacyHash = ComputeStableIdentifier(appHostPath, HashLength);
 
@@ -149,7 +154,7 @@ internal static class BackchannelConstants
         // If the input path was already normalized (for example, an uppercase drive letter on Windows),
         // also try the opposite drive-letter casing to preserve compatibility with older AppHosts that
         // may have hashed the same path with a lowercase drive letter from MSBuild metadata.
-        if (OperatingSystem.IsWindows() && appHostPath.Length >= 2 && appHostPath[1] == ':' && char.IsLetter(appHostPath[0]))
+        if (appHostPath.Length >= 2 && appHostPath[1] == ':' && char.IsLetter(appHostPath[0]))
         {
             var alternateDriveLetter = char.IsUpper(appHostPath[0])
                 ? char.ToLowerInvariant(appHostPath[0])
