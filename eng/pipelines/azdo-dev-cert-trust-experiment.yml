@@ -1,0 +1,94 @@
+# Manual trigger pipeline for the Windows dev-certificate trust experiment.
+
+trigger: none
+pr: none
+
+variables:
+  - template: /eng/common/templates/variables/pool-providers.yml
+
+stages:
+- stage: dev_cert_trust_experiment
+  displayName: Dev certificate trust experiment
+  jobs:
+  - job: WindowsDevCertTrust
+    displayName: Windows dev-cert trust
+    timeoutInMinutes: 30
+    pool:
+      name: $(DncEngPublicBuildPool)
+      demands: ImageOverride -equals windows.vs2026preview.scout.amd64.open
+    strategy:
+      matrix:
+        CurrentUserRoot:
+          StoreLocation: CurrentUser
+        LocalMachineRoot:
+          StoreLocation: LocalMachine
+    steps:
+    - checkout: self
+      fetchDepth: 1
+
+    - pwsh: |
+        $ErrorActionPreference = 'Stop'
+        & "$(Build.SourcesDirectory)\dotnet.cmd" --info
+      displayName: Show .NET info
+
+    - pwsh: |
+        $ErrorActionPreference = 'Continue'
+        $PSNativeCommandUseErrorActionPreference = $false
+
+        $outputDirectory = "$(Build.SourcesDirectory)\artifacts\dev-cert-trust-experiment\$(StoreLocation)"
+        New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
+        $baselinePath = Join-Path $outputDirectory "dotnet-trust-baseline.json"
+        $dotnetPath = "$(Build.SourcesDirectory)\dotnet.cmd"
+
+        $cleanOutput = & $dotnetPath dev-certs https --clean 2>&1 | ForEach-Object { $_.ToString() }
+        $cleanExitCode = $LASTEXITCODE
+        $trustOutput = & $dotnetPath dev-certs https --trust 2>&1 | ForEach-Object { $_.ToString() }
+        $trustExitCode = $LASTEXITCODE
+        $checkOutput = & $dotnetPath dev-certs https --check --trust 2>&1 | ForEach-Object { $_.ToString() }
+        $checkExitCode = $LASTEXITCODE
+
+        [ordered]@{
+          StoreLocation = "$(StoreLocation)"
+          CleanExitCode = $cleanExitCode
+          CleanOutput = @($cleanOutput)
+          TrustExitCode = $trustExitCode
+          TrustOutput = @($trustOutput)
+          CheckTrustExitCode = $checkExitCode
+          CheckTrustOutput = @($checkOutput)
+        } | ConvertTo-Json -Depth 6 | Set-Content -Path $baselinePath -Encoding UTF8
+
+        Write-Host "Baseline result written to $baselinePath"
+        if ($trustExitCode -ne 0) {
+          Write-Warning "dotnet dev-certs https --trust failed with exit code $trustExitCode"
+        }
+      displayName: Compare dotnet dev-certs trust baseline
+      timeoutInMinutes: 5
+      continueOnError: true
+
+    - pwsh: |
+        & "$(Build.SourcesDirectory)\dotnet.cmd" dev-certs https --clean
+      displayName: Reset dev certs before Import-Certificate probe
+      condition: always()
+      continueOnError: true
+
+    - pwsh: |
+        $ErrorActionPreference = 'Stop'
+        & "$(Build.SourcesDirectory)\eng\scripts\trust-dev-cert-windows.ps1" `
+          -StoreLocation "$(StoreLocation)" `
+          -DotNetPath "$(Build.SourcesDirectory)\dotnet.cmd" `
+          -OutputDirectory "$(Build.SourcesDirectory)\artifacts\dev-cert-trust-experiment\$(StoreLocation)" `
+          -Clean
+      displayName: Run Import-Certificate probe
+
+    - pwsh: |
+        & "$(Build.SourcesDirectory)\dotnet.cmd" dev-certs https --clean
+      displayName: Final dev cert cleanup
+      condition: always()
+      continueOnError: true
+
+    - task: PublishPipelineArtifact@1
+      displayName: Publish experiment logs
+      condition: always()
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)\artifacts\dev-cert-trust-experiment\$(StoreLocation)'
+        artifact: 'dev-cert-trust-$(StoreLocation)'

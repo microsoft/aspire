@@ -1,0 +1,124 @@
+name: Dev Certificate Trust Experiment
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dev-cert-trust-experiment.yml'
+      - 'eng/pipelines/azdo-dev-cert-trust-experiment.yml'
+      - 'eng/scripts/trust-dev-cert-windows.ps1'
+  workflow_dispatch:
+    inputs:
+      runBaseline:
+        description: 'Run dotnet dev-certs https --trust first for comparison'
+        required: false
+        type: boolean
+        default: true
+      keepCertificate:
+        description: 'Leave the imported root certificate in the store after the probe'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  windows-dev-cert-trust:
+    name: Windows ${{ matrix.storeLocation }} Root
+    runs-on: windows-latest
+    timeout-minutes: 30
+    continue-on-error: ${{ matrix.allowFailure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - storeLocation: CurrentUser
+            allowFailure: false
+          - storeLocation: LocalMachine
+            allowFailure: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Show .NET info
+        shell: pwsh
+        run: dotnet --info
+
+      - name: Compare dotnet dev-certs trust baseline
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.runBaseline }}
+        shell: pwsh
+        timeout-minutes: 5
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+
+          $outputDirectory = "${{ github.workspace }}\artifacts\dev-cert-trust-experiment\${{ matrix.storeLocation }}"
+          New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
+          $baselinePath = Join-Path $outputDirectory "dotnet-trust-baseline.json"
+
+          $cleanOutput = dotnet dev-certs https --clean 2>&1 | ForEach-Object { $_.ToString() }
+          $cleanExitCode = $LASTEXITCODE
+          $trustOutput = dotnet dev-certs https --trust 2>&1 | ForEach-Object { $_.ToString() }
+          $trustExitCode = $LASTEXITCODE
+          $checkOutput = dotnet dev-certs https --check --trust 2>&1 | ForEach-Object { $_.ToString() }
+          $checkExitCode = $LASTEXITCODE
+
+          [ordered]@{
+            StoreLocation = "${{ matrix.storeLocation }}"
+            CleanExitCode = $cleanExitCode
+            CleanOutput = @($cleanOutput)
+            TrustExitCode = $trustExitCode
+            TrustOutput = @($trustOutput)
+            CheckTrustExitCode = $checkExitCode
+            CheckTrustOutput = @($checkOutput)
+          } | ConvertTo-Json -Depth 6 | Set-Content -Path $baselinePath -Encoding UTF8
+
+          Write-Host "Baseline result written to $baselinePath"
+          if ($trustExitCode -ne 0) {
+            Write-Warning "dotnet dev-certs https --trust failed with exit code $trustExitCode"
+          }
+
+      - name: Reset dev certs before Import-Certificate probe
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        run: dotnet dev-certs https --clean
+
+      - name: Run Import-Certificate probe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $scriptArgs = @(
+            '-StoreLocation', '${{ matrix.storeLocation }}',
+            '-DotNetPath', 'dotnet',
+            '-OutputDirectory', '${{ github.workspace }}\artifacts\dev-cert-trust-experiment\${{ matrix.storeLocation }}',
+            '-Clean'
+          )
+
+          if ('${{ inputs.keepCertificate }}' -eq 'true') {
+            $scriptArgs += '-KeepCertificate'
+          }
+
+          & "${{ github.workspace }}\eng\scripts\trust-dev-cert-windows.ps1" @scriptArgs
+
+      - name: Final dev cert cleanup
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        run: dotnet dev-certs https --clean
+
+      - name: Upload experiment logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: dev-cert-trust-${{ matrix.storeLocation }}
+          path: artifacts/dev-cert-trust-experiment/${{ matrix.storeLocation }}
+          if-no-files-found: warn
+          retention-days: 7
