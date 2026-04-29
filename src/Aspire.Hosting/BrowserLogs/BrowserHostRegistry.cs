@@ -19,6 +19,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     private readonly Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory> _createUserDataDirectory;
     private readonly Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
     private readonly Dictionary<BrowserHostIdentity, BrowserHostEntry> _hosts = new();
+    private readonly bool _enableEndpointMetadataAdoption;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly object _lockLifetimeGate = new();
     private readonly ILogger<BrowserLogsSessionManager> _logger;
@@ -37,11 +38,13 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory>? createUserDataDirectory,
-        Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>>? createHostAsync)
+        Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>>? createHostAsync,
+        bool enableEndpointMetadataAdoption = false)
     {
         _endpointDiscovery = new BrowserEndpointDiscovery(logger);
         _createUserDataDirectory = createUserDataDirectory ?? CreateUserDataDirectory;
         _createHostAsync = createHostAsync ?? CreateHostCoreAsync;
+        _enableEndpointMetadataAdoption = enableEndpointMetadataAdoption;
         _logger = logger;
         _timeProvider = timeProvider;
     }
@@ -61,10 +64,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         //    count.
         // 2. Otherwise, create a host exactly once and publish it into the registry with the first lease.
         //
-        // Keep the lock held across CreateHostCoreAsync. That method may adopt an existing debug-enabled browser or
-        // start a new process, both of which depend on filesystem endpoint metadata for the same user data root. If two
-        // callers ran that decision concurrently they could both miss the dictionary entry and race to adopt/start a
-        // browser for the same profile.
+        // Keep the lock held across CreateHostCoreAsync. That method starts a new process by default, and can adopt a
+        // WebSocket endpoint when an explicit attach mode enables endpoint metadata. If two callers ran that decision
+        // concurrently they could both miss the dictionary entry and race to adopt/start a browser for the same profile.
         var lockAcquired = false;
         var hostPublished = false;
         try
@@ -82,16 +84,16 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
                 // as more resources start browser-log sessions, rather than one browser process per session.
                 ValidateProfileCompatibility(identity, entry.ProfileDirectoryName, userDataDirectory.ProfileDirectoryName);
                 entry.ReferenceCount++;
-                _logger.LogInformation("Reusing tracked browser host '{BrowserExecutable}' at '{Endpoint}'. Active leases: {ReferenceCount}.", identity.ExecutablePath, entry.Host.DebugEndpoint, entry.ReferenceCount);
+                _logger.LogInformation("Reusing tracked browser host '{BrowserExecutable}' at '{Endpoint}'. Active leases: {ReferenceCount}.", identity.ExecutablePath, FormatDebugEndpoint(entry.Host.DebugEndpoint), entry.ReferenceCount);
                 userDataDirectory.Dispose();
                 return new BrowserHostLease(entry.Host, releaseAsync: token => ReleaseAsync(identity, token));
             }
 
-            // No host exists for this identity yet. CreateHostCoreAsync owns the second-stage decision:
-            // adopt a validated shared browser if one is already running, reject an incompatible locked profile, or
-            // start a new owned browser. The returned host is inserted before returning the first lease so future
-            // callers can reuse it. This keeps the visible behavior stable when several resources request browser logs
-            // together: the first request may open/adopt the browser, and the rest should attach to that result.
+            // No host exists for this identity yet. CreateHostCoreAsync owns the second-stage decision: start a new
+            // pipe-owned browser by default, or adopt a validated WebSocket endpoint if an explicit attach mode enabled
+            // that path. The returned host is inserted before returning the first lease so future callers can reuse it.
+            // This keeps the visible behavior stable when several resources request browser logs together: the first
+            // request opens/adopts the browser, and the rest attach to that result.
             var host = await _createHostAsync(configuration, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
             _hosts[identity] = new BrowserHostEntry(host, userDataDirectory.ProfileDirectoryName, ReferenceCount: 1);
             hostPublished = true;
@@ -293,17 +295,11 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         BrowserLogsUserDataDirectory userDataDirectory,
         CancellationToken cancellationToken)
     {
-        // Both Shared and Isolated point at an Aspire-managed persistent user data directory, so the same
-        // adoption-or-launch decision applies to both:
-        //
-        // 1. If a previous AppHost run for this identity wrote an adoption sidecar and the recorded process is
-        //    still alive with a live /json/version endpoint, connect to that browser via CDP.
-        // 2. Otherwise, launch a new debug-enabled browser against the same user data directory and write the
-        //    sidecar so the next AppHost run can connect.
-        //
-        // Aspire never points at the user's real browser profile, so a "non-debuggable browser is using this
-        // user data dir" failure mode no longer applies.
-        if (await _endpointDiscovery.TryReadAndValidateAsync(identity, userDataDirectory.ProfileDirectoryName, cancellationToken).ConfigureAwait(false) is { } metadata)
+        // Default owned launches use a process-private CDP pipe. WebSocket remains the attach/adoption transport for
+        // explicit connect-to-existing-browser modes, but the normal path must not adopt stale endpoint metadata from
+        // earlier WebSocket experiments because pipe-backed browsers cannot be reattached across AppHost processes.
+        if (_enableEndpointMetadataAdoption &&
+            await _endpointDiscovery.TryReadAndValidateAsync(identity, userDataDirectory.ProfileDirectoryName, cancellationToken).ConfigureAwait(false) is { } metadata)
         {
             var endpoint = new Uri(metadata.Endpoint, UriKind.Absolute);
             _logger.LogInformation("Adopting tracked browser host '{BrowserExecutable}' at '{Endpoint}'.", identity.ExecutablePath, endpoint);
@@ -311,8 +307,8 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             return new AdoptedBrowserHost(identity, endpoint, configuration.Browser, _logger, _timeProvider);
         }
 
-        _logger.LogInformation("Starting tracked browser host '{BrowserExecutable}'.", identity.ExecutablePath);
-        return await OwnedBrowserHost.StartAsync(identity, configuration.Browser, userDataDirectory, _logger, _timeProvider, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Starting tracked browser host '{BrowserExecutable}' with a private CDP pipe.", identity.ExecutablePath);
+        return await OwnedBrowserHost.StartAsync(identity, configuration.Browser, configuration.BrowserProcessLifetime, userDataDirectory, _logger, _timeProvider, cancellationToken).ConfigureAwait(false);
     }
 
     private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserConfiguration configuration, string browserExecutable)
@@ -321,8 +317,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         //   Shared   -> machine-wide, shared across every Aspire AppHost
         //   Isolated -> per-AppHost (keyed on AppHost:PathSha256)
         //
-        // The directory is created on demand and never deleted by AppHost shutdown. The browser process is left
-        // running across AppHost runs and adopted via the endpoint sidecar.
+        // The directory is created on demand and not deleted by AppHost shutdown. The browser process itself is
+        // pipe-backed and defaults to Session lifetime, so each new AppHost run starts its own debuggable browser
+        // process unless an advanced lifetime option intentionally leaves the old browser running.
         var path = BrowserUserDataPathResolver.Resolve(configuration);
 
         // Profile resolution requires Local State to exist (Chromium writes it on first launch). Skip resolution
@@ -373,6 +370,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
                 existingProfileDirectoryName ?? MessageStrings.BrowserLogsDefaultProfileName,
                 requestedProfileDirectoryName));
     }
+
+    private static string FormatDebugEndpoint(Uri? debugEndpoint) =>
+        debugEndpoint?.ToString() ?? "private CDP pipe";
 
     private sealed class BrowserHostEntry(IBrowserHost host, string? profileDirectoryName, int ReferenceCount)
     {

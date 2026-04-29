@@ -173,6 +173,10 @@
     <value>Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</value>
     <comment>{0} is the configured value, {1} is the user data mode configuration key, {2} and {3} are valid enum values.</comment>
   </data>
+  <data name="BrowserLogsInvalidBrowserProcessLifetimeConfiguration" xml:space="preserve">
+    <value>Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</value>
+    <comment>{0} is the configured value, {1} is the browser process lifetime configuration key, {2} and {3} are valid enum values.</comment>
+  </data>
   <data name="BrowserLogsUnableToLocateBrowser" xml:space="preserve">
     <value>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</value>
     <comment>{0} is the requested browser name or path.</comment>

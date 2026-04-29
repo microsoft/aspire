@@ -274,6 +274,25 @@ public class BrowserLogsCdpConnectionTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => failingConnection.CreateTargetAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task MultiplexerRejectsNewLeasesAfterInnerConnectionCompletes()
+    {
+        FakeSharedCdpConnection? innerConnection = null;
+        await using var multiplexer = new BrowserLogsCdpConnectionMultiplexer(
+            eventHandler =>
+            {
+                innerConnection = new FakeSharedCdpConnection(eventHandler);
+                return innerConnection;
+            },
+            NullLogger<BrowserLogsSessionManager>.Instance);
+
+        innerConnection!.Complete();
+        await multiplexer.Completion.DefaultTimeout();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => multiplexer.CreateConnection(static _ => ValueTask.CompletedTask));
+        Assert.Equal("Tracked browser CDP pipe is no longer active.", exception.Message);
+    }
+
     private static async Task<ReceivedCommand> ReceiveCommandAsync(WebSocket socket)
     {
         using var document = await ReceiveJsonDocumentAsync(socket).DefaultTimeout();
@@ -397,6 +416,11 @@ public class BrowserLogsCdpConnectionTests
         public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
         {
             return eventHandler(protocolEvent);
+        }
+
+        public void Complete()
+        {
+            _completionSource.TrySetResult();
         }
 
         public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)

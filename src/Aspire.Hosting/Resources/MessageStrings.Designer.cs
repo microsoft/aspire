@@ -223,6 +223,15 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Tracked browser configuration value &apos;{0}&apos; is not a valid &apos;{1}&apos;. Expected &apos;{2}&apos; or &apos;{3}&apos;..
+        /// </summary>
+        internal static string BrowserLogsInvalidBrowserProcessLifetimeConfiguration {
+            get {
+                return ResourceManager.GetString("BrowserLogsInvalidBrowserProcessLifetimeConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Unable to locate browser &apos;{0}&apos;. Specify an installed Chromium-based browser or an explicit executable path..
         /// </summary>
         internal static string BrowserLogsUnableToLocateBrowser {

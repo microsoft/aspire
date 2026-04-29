@@ -24,6 +24,7 @@ internal sealed class BrowserLogsConfigurationManager(
     private const string ScopeInputName = "scope";
     private const string BrowserInputName = "browser";
     private const string UserDataModeInputName = "userDataMode";
+    private const string BrowserProcessLifetimeInputName = "browserProcessLifetime";
     private const string ProfileInputName = "profile";
     private const string SaveToUserSecretsInputName = "saveToUserSecrets";
     private const string ResourceScopeValue = "resource";
@@ -127,6 +128,21 @@ internal sealed class BrowserLogsConfigurationManager(
             ]
         };
 
+        var browserProcessLifetimeInput = new InteractionInput
+        {
+            Name = BrowserProcessLifetimeInputName,
+            Label = CommandStrings.ConfigureTrackedBrowserProcessLifetimeLabel,
+            Description = CommandStrings.ConfigureTrackedBrowserProcessLifetimeDescription,
+            InputType = InputType.Choice,
+            Required = true,
+            Value = currentConfiguration.BrowserProcessLifetime.ToString(),
+            Options =
+            [
+                new(nameof(BrowserProcessLifetime.Session), CommandStrings.ConfigureTrackedBrowserProcessLifetimeSessionOption),
+                new(nameof(BrowserProcessLifetime.Persistent), CommandStrings.ConfigureTrackedBrowserProcessLifetimePersistentOption)
+            ]
+        };
+
         var profileInput = new InteractionInput
         {
             Name = ProfileInputName,
@@ -150,7 +166,7 @@ internal sealed class BrowserLogsConfigurationManager(
 
         var saveInput = CreateSaveToUserSecretsInput();
 
-        return [scopeInput, browserInput, userDataModeInput, profileInput, saveInput];
+        return [scopeInput, browserInput, userDataModeInput, browserProcessLifetimeInput, profileInput, saveInput];
     }
 
     private InteractionInput CreateSaveToUserSecretsInput()
@@ -287,6 +303,14 @@ internal sealed class BrowserLogsConfigurationManager(
             hasValidationErrors = true;
         }
 
+        var browserProcessLifetime = inputs[BrowserProcessLifetimeInputName];
+        if (!Enum.TryParse<BrowserProcessLifetime>(browserProcessLifetime.Value, ignoreCase: true, out var parsedBrowserProcessLifetime) ||
+            !Enum.IsDefined(parsedBrowserProcessLifetime))
+        {
+            context.AddValidationError(browserProcessLifetime, CommandStrings.ConfigureTrackedBrowserProcessLifetimeRequired);
+            hasValidationErrors = true;
+        }
+
         var saveToUserSecrets = inputs[SaveToUserSecretsInputName];
         if (IsSaveToUserSecretsRequested(inputs) && !userSecretsManager.IsAvailable)
         {
@@ -354,7 +378,8 @@ internal sealed class BrowserLogsConfigurationManager(
             selected.Browser,
             selected.Profile,
             selected.UserDataMode,
-            configuration["AppHost:PathSha256"]);
+            configuration["AppHost:PathSha256"],
+            selected.BrowserProcessLifetime);
     }
 
     private void Apply(BrowserLogsResource resource, BrowserLogsConfigurationSelection selected)
@@ -370,6 +395,7 @@ internal sealed class BrowserLogsConfigurationManager(
             // never observes a partial save.
             SaveValue($"{configurationPrefix}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}", selected.Browser);
             SaveValue($"{configurationPrefix}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}", selected.UserDataMode.ToString());
+            SaveValue($"{configurationPrefix}:{BrowserLogsBuilderExtensions.BrowserProcessLifetimeConfigurationKey}", selected.BrowserProcessLifetime.ToString());
 
             var profileKey = $"{configurationPrefix}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}";
             if (selected.Profile is { } profile)
@@ -423,7 +449,8 @@ internal sealed class BrowserLogsConfigurationManager(
     {
         properties = properties
             .SetResourceProperty(BrowserLogsBuilderExtensions.BrowserPropertyName, browserConfiguration.Browser)
-            .SetResourceProperty(BrowserLogsBuilderExtensions.UserDataModePropertyName, browserConfiguration.UserDataMode.ToString());
+            .SetResourceProperty(BrowserLogsBuilderExtensions.UserDataModePropertyName, browserConfiguration.UserDataMode.ToString())
+            .SetResourceProperty(BrowserLogsBuilderExtensions.BrowserProcessLifetimePropertyName, browserConfiguration.BrowserProcessLifetime.ToString());
 
         return browserConfiguration.Profile is { } profile
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, profile)
@@ -449,6 +476,7 @@ internal sealed class BrowserLogsConfigurationManager(
         BrowserLogsConfigurationScope Scope,
         string Browser,
         BrowserUserDataMode UserDataMode,
+        BrowserProcessLifetime BrowserProcessLifetime,
         string? Profile,
         bool SaveToUserSecrets)
     {
@@ -459,6 +487,7 @@ internal sealed class BrowserLogsConfigurationManager(
                 : BrowserLogsConfigurationScope.Resource;
             var browser = inputs[BrowserInputName].Value ?? string.Empty;
             var userDataMode = Enum.Parse<BrowserUserDataMode>(inputs[UserDataModeInputName].Value!, ignoreCase: true);
+            var browserProcessLifetime = Enum.Parse<BrowserProcessLifetime>(inputs[BrowserProcessLifetimeInputName].Value!, ignoreCase: true);
             var profileValue = inputs[ProfileInputName].Value;
             var profile = string.IsNullOrWhiteSpace(profileValue) ||
                 string.Equals(profileValue, BrowserDefaultProfileValue, StringComparison.Ordinal)
@@ -466,7 +495,7 @@ internal sealed class BrowserLogsConfigurationManager(
                     : profileValue;
             var saveToUserSecrets = IsSaveToUserSecretsRequested(inputs);
 
-            return new BrowserLogsConfigurationSelection(scope, browser, userDataMode, profile, saveToUserSecrets);
+            return new BrowserLogsConfigurationSelection(scope, browser, userDataMode, browserProcessLifetime, profile, saveToUserSecrets);
         }
     }
 
