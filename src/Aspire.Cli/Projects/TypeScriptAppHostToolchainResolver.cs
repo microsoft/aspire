@@ -35,7 +35,7 @@ internal static class TypeScriptAppHostToolchainResolver
              language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static TypeScriptAppHostToolchain Resolve(DirectoryInfo appHostDirectory, ILogger? logger = null)
+    public static TypeScriptAppHostToolchain Resolve(DirectoryInfo appHostDirectory, ILogger? logger)
     {
         var resolution = ResolveWithReason(appHostDirectory);
         logger?.LogDebug(
@@ -243,10 +243,13 @@ internal static class TypeScriptAppHostToolchainResolver
 
     private static bool TryGetToolchainFromPackageJson(DirectoryInfo appHostDirectory, out TypeScriptAppHostToolchain toolchain, out string reason)
     {
+        toolchain = default;
+        reason = string.Empty;
+
         var packageJsonPath = Path.Combine(appHostDirectory.FullName, PackageJsonFileName);
         if (!File.Exists(packageJsonPath))
         {
-            return SetUnknownToolchain(out toolchain, out reason);
+            return false;
         }
 
         try
@@ -256,7 +259,7 @@ internal static class TypeScriptAppHostToolchainResolver
                 !packageManagerValue.TryGetValue<string>(out var packageManager) ||
                 string.IsNullOrWhiteSpace(packageManager))
             {
-                return SetUnknownToolchain(out toolchain, out reason);
+                return false;
             }
 
             var packageManagerName = packageManager.Split('@', 2)[0];
@@ -266,13 +269,13 @@ internal static class TypeScriptAppHostToolchainResolver
                 return true;
             }
 
-            return SetUnknownToolchain(out toolchain, out reason);
+            return false;
         }
         catch (Exception ex) when (ex is JsonException or IOException
             or UnauthorizedAccessException or SecurityException
             or NotSupportedException)
         {
-            return SetUnknownToolchain(out toolchain, out reason);
+            return false;
         }
     }
 
@@ -295,6 +298,8 @@ internal static class TypeScriptAppHostToolchainResolver
     {
         yield return appHostDirectory;
 
+        // Only use the immediate parent as a fallback so a project folder can provide
+        // workspace-level hints without inheriting unrelated markers from higher directories.
         var parentDirectory = appHostDirectory.Parent;
         if (parentDirectory is not null && ShouldSearchParentDirectory(parentDirectory))
         {
@@ -307,8 +312,11 @@ internal static class TypeScriptAppHostToolchainResolver
         var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        var parentPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parentDirectory.FullName));
-        if (string.Equals(parentPath, Path.TrimEndingDirectorySeparator(Path.GetFullPath(parentDirectory.Root.FullName)), pathComparison))
+
+        // Root and home directories are not project folders. They can contain unrelated user-level
+        // files, so package manager markers there should not influence TypeScript AppHost projects.
+        var parentPath = Path.TrimEndingDirectorySeparator(parentDirectory.FullName);
+        if (string.Equals(parentPath, Path.TrimEndingDirectorySeparator(parentDirectory.Root.FullName), pathComparison))
         {
             return false;
         }
@@ -321,13 +329,6 @@ internal static class TypeScriptAppHostToolchainResolver
     private static TypeScriptAppHostToolchainResolution CreateLockFileResolution(TypeScriptAppHostToolchain toolchain, string markerName, DirectoryInfo directory)
     {
         return new(toolchain, $"{markerName} found in {directory.FullName}");
-    }
-
-    private static bool SetUnknownToolchain(out TypeScriptAppHostToolchain toolchain, out string reason)
-    {
-        toolchain = default;
-        reason = string.Empty;
-        return false;
     }
 }
 
