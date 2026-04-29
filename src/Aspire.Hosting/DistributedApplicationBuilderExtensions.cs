@@ -1,11 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 
 namespace Aspire.Hosting;
 
@@ -111,30 +108,5 @@ public static class DistributedApplicationBuilderExtensions
         return true;
     }
 
-    /// <summary>
-    /// Disables the publish and deploy validation that requires build-only containers to be consumed by another resource.
-    /// </summary>
-    /// <param name="builder">The distributed application builder.</param>
-    /// <returns>The distributed application builder for chaining.</returns>
-    /// <remarks>
-    /// This is an application-wide escape hatch for scenarios where the build-only container validation is too restrictive
-    /// for a particular app. Prefer wiring build-only containers through <c>PublishWithContainerFiles</c> or
-    /// <c>PublishWithStaticFiles</c> when possible.
-    /// </remarks>
-    [AspireExport(Description = "Disables publish and deploy validation for unconsumed build-only containers.")]
-    [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IDistributedApplicationBuilder DisableBuildOnlyContainerValidation(this IDistributedApplicationBuilder builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.Pipeline.AddPipelineConfiguration(static context =>
-        {
-            var validationStep = context.Steps.Single(step => step.Name == DistributedApplicationPipeline.ValidateBuildOnlyContainerReferencesStepName);
-            validationStep.RequiredBySteps.Clear();
-            return Task.CompletedTask;
-        });
-
-        return builder;
-    }
 }
 

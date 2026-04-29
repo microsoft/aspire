@@ -158,7 +158,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             };
         });
         ConfigureTestServices(builder, armClientProvider: armClientProvider, activityReporter: mockActivityReporter);
-        builder.DisableBuildOnlyContainerValidation();
+        builder.Pipeline.DisableBuildOnlyContainerValidation();
 
         var containerAppEnv = builder.AddAzureContainerAppEnvironment("env");
 

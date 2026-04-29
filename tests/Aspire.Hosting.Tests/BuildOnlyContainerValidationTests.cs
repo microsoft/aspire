@@ -28,7 +28,7 @@ public class BuildOnlyContainerValidationTests
 
         Assert.Contains("'frontend'", ex.Message);
         Assert.Contains("PublishWithContainerFiles", ex.Message);
-        Assert.Contains("DisableBuildOnlyContainerValidation", ex.Message);
+        Assert.Contains("builder.Pipeline.DisableBuildOnlyContainerValidation", ex.Message);
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class BuildOnlyContainerValidationTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.PublishPrereq);
 
         PipelineStep? validationStep = null;
-        builder.DisableBuildOnlyContainerValidation();
+        builder.Pipeline.DisableBuildOnlyContainerValidation();
         builder.Pipeline.AddPipelineConfiguration(context =>
         {
             validationStep = context.Steps.Single(step => step.Name == DistributedApplicationPipeline.ValidateBuildOnlyContainerReferencesStepName);
