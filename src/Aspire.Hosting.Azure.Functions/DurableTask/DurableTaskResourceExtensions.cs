@@ -2,8 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.DurableTask;
+using Azure.Provisioning;
+using Azure.Provisioning.Expressions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Aspire.Hosting;
 
@@ -28,11 +33,67 @@ public static class DurableTaskResourceExtensions
     [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
-        var scheduler = new DurableTaskSchedulerResource(name);
+        builder.AddAzureProvisioning();
 
-        scheduler.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
+        var configureInfrastructure = static (AzureResourceInfrastructure infrastructure) =>
+        {
+            var aspireResource = (DurableTaskSchedulerResource)infrastructure.AspireResource;
 
-        return builder.AddResource(scheduler);
+            // Create the Durable Task Scheduler resource using the custom provisioning resource
+            var scheduler = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
+                infrastructure,
+                (identifier, name) =>
+                {
+                    var resource = DurableTaskSchedulerProvisioningResource.FromExisting(identifier);
+                    resource.Name = name;
+                    return resource;
+                },
+                (infra) =>
+                {
+                    var skuParameter = new ProvisioningParameter("sku", typeof(string))
+                    {
+                        Value = "Consumption"
+                    };
+                    infra.Add(skuParameter);
+
+                    var resource = new DurableTaskSchedulerProvisioningResource(infra.AspireResource.GetBicepIdentifier())
+                    {
+                        Name = infra.AspireResource.Name,
+                        Location = new ProvisioningParameter(AzureBicepResource.KnownParameters.Location, typeof(string)),
+                        SkuName = skuParameter,
+                        IpAllowlist = ["0.0.0.0/0"]
+                    };
+                    return resource;
+                });
+
+            // Output the scheduler endpoint for connection string construction
+            infrastructure.Add(new ProvisioningOutput("schedulerEndpoint", typeof(string))
+            {
+                Value = scheduler.Endpoint
+            });
+
+            // Output the name for role assignments
+            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = scheduler.Name });
+
+            // Output subscription and tenant IDs for dashboard URL construction
+            infrastructure.Add(new ProvisioningOutput("subscriptionId", typeof(string)) { Value = BicepFunction.GetSubscription().SubscriptionId });
+            infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string)) { Value = BicepFunction.GetSubscription().TenantId });
+
+            // Create TaskHub sub-resources
+            foreach (var hub in aspireResource.Hubs)
+            {
+                var taskHub = hub.ToProvisioningEntity();
+                taskHub.Parent = scheduler;
+                infrastructure.Add(taskHub);
+            }
+        };
+
+        var scheduler = new DurableTaskSchedulerResource(name, configureInfrastructure);
+
+        return builder.AddResource(scheduler)
+            .WithDefaultRoleAssignments(
+                DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName,
+                DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor);
     }
 
     /// <summary>
@@ -133,6 +194,16 @@ public static class DurableTaskResourceExtensions
         // Mark this resource as an emulator for consistent resource identification and tooling support
         builder.WithAnnotation(new EmulatorResourceAnnotation());
 
+        // Propagate emulator annotation to any hubs already registered with this scheduler,
+        // so the Azure provisioner skips them.
+        foreach (var hub in builder.Resource.Hubs)
+        {
+            if (!hub.IsEmulator())
+            {
+                hub.Annotations.Add(new EmulatorResourceAnnotation());
+            }
+        }
+
         builder.WithHttpEndpoint(name: "grpc", targetPort: 8080)
                .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
@@ -204,29 +275,26 @@ public static class DurableTaskResourceExtensions
     {
         var hub = new DurableTaskHubResource(name, builder.Resource);
 
-        hub.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
+        // If the scheduler is already in emulator mode, propagate the annotation so the
+        // Azure provisioner skips this hub resource.
+        if (builder.Resource.IsEmulator())
+        {
+            hub.Annotations.Add(new EmulatorResourceAnnotation());
+        }
+
+        builder.Resource.Hubs.Add(hub);
 
         var hubBuilder = builder.ApplicationBuilder.AddResource(hub);
 
-        hubBuilder.OnResourceReady(
-            async (r, e, ct) =>
-            {
-                var notifications = e.Services.GetRequiredService<ResourceNotificationService>();
+        // Register the background service that watches resource state updates and adds
+        // dashboard URL annotations to hub resources when provisioning data becomes available.
+        // TryAddEnumerable ensures it is only registered once even if AddTaskHub is called multiple times.
+        builder.ApplicationBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DurableTaskDashboardUrlService>());
 
-                var url = builder.Resource.IsEmulator
-                    ? await ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/default/schedulers/default/taskhubs/{r.TaskHubName}").GetValueAsync(ct).ConfigureAwait(false)
-                    : null;
-
-                await notifications.PublishUpdateAsync(r, snapshot => snapshot with
-                {
-                    State = KnownResourceStates.Running,
-                    Urls = url is not null
-                        ? [new("dashboard", url, false) { DisplayProperties = new() { DisplayName = "Task Hub Dashboard" } }]
-                        : []
-                }).ConfigureAwait(false);
-            });
-
-        return hubBuilder;
+        return hubBuilder
+            .WithDefaultRoleAssignments(
+                DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName,
+                DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor);
     }
 
     /// <summary>
@@ -281,4 +349,129 @@ public static class DurableTaskResourceExtensions
             IResourceBuilder<ParameterResource> parameter => builder.WithTaskHubName(parameter),
             _ => throw new ArgumentException($"Unexpected task hub name type: {taskHubName.GetType().Name}", nameof(taskHubName))
         };
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Durable Task Scheduler resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <typeparam name="T">The type of the resource to assign the roles to.</typeparam>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Durable Task Scheduler resource.</param>
+    /// <param name="roles">The built-in Durable Task Scheduler roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{DurableTaskSchedulerResource}, DurableTaskSchedulerRole[])"/>
+    /// instead.
+    /// <example>
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler");
+    ///
+    /// var worker = builder.AddProject&lt;Projects.Worker&gt;("worker")
+    ///   .WithRoleAssignments(scheduler, DurableTaskSchedulerBuiltInRole.DurableTaskWorker)
+    ///   .WithReference(scheduler);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "DurableTaskSchedulerBuiltInRole is a custom type not compatible with ATS. Use the DurableTaskSchedulerRole-based overload instead.")]
+    public static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskSchedulerResource> target,
+        params DurableTaskSchedulerBuiltInRole[] roles)
+        where T : IResource
+    {
+        return builder.WithRoleAssignments(target, DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    [AspireExport("withDurableTaskSchedulerRoleAssignments", Description = "Assigns Durable Task Scheduler roles to a resource")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskSchedulerResource> target,
+        params DurableTaskSchedulerRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<DurableTaskSchedulerBuiltInRole>());
+        }
+
+        var builtInRoles = new DurableTaskSchedulerBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                DurableTaskSchedulerRole.DurableTaskDataContributor => DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor,
+                DurableTaskSchedulerRole.DurableTaskDataReader => DurableTaskSchedulerBuiltInRole.DurableTaskDataReader,
+                DurableTaskSchedulerRole.DurableTaskWorker => DurableTaskSchedulerBuiltInRole.DurableTaskWorker,
+                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(DurableTaskSchedulerRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Durable Task Hub resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <typeparam name="T">The type of the resource to assign the roles to.</typeparam>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Durable Task Hub resource.</param>
+    /// <param name="roles">The built-in Durable Task Scheduler roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{DurableTaskHubResource}, DurableTaskSchedulerRole[])"/>
+    /// instead.
+    /// <example>
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler");
+    /// var hub = scheduler.AddTaskHub("hub");
+    ///
+    /// var worker = builder.AddProject&lt;Projects.Worker&gt;("worker")
+    ///   .WithRoleAssignments(hub, DurableTaskSchedulerBuiltInRole.DurableTaskWorker)
+    ///   .WithReference(hub);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "DurableTaskSchedulerBuiltInRole is a custom type not compatible with ATS. Use the DurableTaskSchedulerRole-based overload instead.")]
+    public static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskHubResource> target,
+        params DurableTaskSchedulerBuiltInRole[] roles)
+        where T : IResource
+    {
+        return builder.WithRoleAssignments(target, DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    [AspireExport("withDurableTaskHubRoleAssignments", Description = "Assigns Durable Task Scheduler roles to a resource scoped to a task hub")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskHubResource> target,
+        params DurableTaskSchedulerRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<DurableTaskSchedulerBuiltInRole>());
+        }
+
+        var builtInRoles = new DurableTaskSchedulerBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                DurableTaskSchedulerRole.DurableTaskDataContributor => DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor,
+                DurableTaskSchedulerRole.DurableTaskDataReader => DurableTaskSchedulerBuiltInRole.DurableTaskDataReader,
+                DurableTaskSchedulerRole.DurableTaskWorker => DurableTaskSchedulerBuiltInRole.DurableTaskWorker,
+                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(DurableTaskSchedulerRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
+    }
 }

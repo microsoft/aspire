@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Azure.Provisioning.Primitives;
 
 namespace Aspire.Hosting.Azure.DurableTask;
 
@@ -10,8 +11,32 @@ namespace Aspire.Hosting.Azure.DurableTask;
 /// and a connection string for Durable Task orchestration scheduling.
 /// </summary>
 /// <param name="name">The unique resource name.</param>
-public sealed class DurableTaskSchedulerResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithConnectionString
+/// <param name="configureInfrastructure">Callback to configure the Azure infrastructure for this resource.</param>
+public sealed class DurableTaskSchedulerResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
+    internal List<DurableTaskHubResource> Hubs { get; } = [];
+
+    /// <summary>
+    /// Gets the "schedulerEndpoint" output reference from the bicep template for the Durable Task scheduler resource.
+    /// </summary>
+    public BicepOutputReference SchedulerEndpoint => new("schedulerEndpoint", this);
+
+    /// <summary>
+    /// Gets the "name" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference NameOutputReference => new("name", this);
+
+    /// <summary>
+    /// Gets the "subscriptionId" output reference for the resource.
+    /// </summary>
+    internal BicepOutputReference SubscriptionId => new("subscriptionId", this);
+
+    /// <summary>
+    /// Gets the "tenantId" output reference for the resource.
+    /// </summary>
+    internal BicepOutputReference TenantId => new("tenantId", this);
+
     /// <summary>
     /// Gets the expression that resolves to the connection string for the Durable Task scheduler.
     /// </summary>
@@ -24,6 +49,33 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
     /// emulator (container) instead of a cloud-hosted service.
     /// </summary>
     public bool IsEmulator => this.IsContainer();
+
+    /// <inheritdoc/>
+    public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
+    {
+        var bicepIdentifier = this.GetBicepIdentifier();
+        var resources = infra.GetProvisionableResources();
+
+        // Check if a scheduler with the same identifier already exists
+        var existingScheduler = resources.OfType<DurableTaskSchedulerProvisioningResource>()
+            .SingleOrDefault(s => s.BicepIdentifier == bicepIdentifier);
+
+        if (existingScheduler is not null)
+        {
+            return existingScheduler;
+        }
+
+        // Create and add new resource if it doesn't exist
+        var scheduler = DurableTaskSchedulerProvisioningResource.FromExisting(bicepIdentifier);
+
+        if (!TryApplyExistingResourceAnnotation(this, infra, scheduler))
+        {
+            scheduler.Name = NameOutputReference.AsProvisioningParameter(infra);
+        }
+
+        infra.Add(scheduler);
+        return scheduler;
+    }
 
     private ReferenceExpression CreateConnectionString()
     {
@@ -44,7 +96,8 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
             };
         }
 
-        throw new InvalidOperationException($"Unable to resolve the Durable Task Scheduler connection string. Configure the scheduler using {nameof(DurableTaskResourceExtensions.RunAsEmulator)}() or {nameof(DurableTaskResourceExtensions.RunAsExisting)}(connectionString) before accessing {nameof(ConnectionStringExpression)}.");
+        // For Azure deployment, use the scheduler endpoint from Bicep output
+        return ReferenceExpression.Create($"Endpoint={SchedulerEndpoint};Authentication=DefaultAzure");
     }
 
     private ReferenceExpression CreateDashboardEndpoint()
@@ -57,5 +110,19 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
         }
 
         throw new InvalidOperationException("Dashboard endpoint is only available when running as an emulator.");
+    }
+
+    void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
+    {
+        if (IsEmulator)
+        {
+            // For emulator, use the full connection string
+            target[connectionName] = ConnectionStringExpression;
+        }
+        else
+        {
+            // For Azure deployment, use the scheduler endpoint
+            target[$"{connectionName}__endpoint"] = SchedulerEndpoint;
+        }
     }
 }
