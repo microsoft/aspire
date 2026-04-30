@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Shared;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
@@ -187,6 +188,40 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal(existingTsConfig, File.ReadAllText(existingTsConfigPath));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(16626)]
+    [InlineData(55571)]
+    public void Scaffold_GeneratesProfilePortsOutsideWindowsEphemeralRange(int portSeed)
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "PortsApp",
+            PortSeed = portSeed
+        });
+
+        var appHostRunJson = ParseJson(files["apphost.run.json"]);
+        var httpsProfile = appHostRunJson["profiles"]!["https"]!.AsObject();
+        var applicationUrls = httpsProfile["applicationUrl"]!.GetValue<string>().Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var environmentVariables = httpsProfile["environmentVariables"]!.AsObject();
+
+        Assert.Equal(2, applicationUrls.Length);
+
+        var httpsPort = GetPort(applicationUrls.Single(url => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)));
+        var httpPort = GetPort(applicationUrls.Single(url => url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
+        var otlpHttpsPort = GetPort(environmentVariables["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        var resourceServiceHttpsPort = GetPort(environmentVariables["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+
+        AssertPortInRange(httpPort, AppHostProfilePortGenerator.DashboardHttpPortMin, AppHostProfilePortGenerator.DashboardHttpPortMaxExclusive);
+        AssertPortInRange(httpsPort, AppHostProfilePortGenerator.DashboardHttpsPortMin, AppHostProfilePortGenerator.DashboardHttpsPortMaxExclusive);
+        AssertPortInRange(otlpHttpsPort, AppHostProfilePortGenerator.OtlpHttpsPortMin, AppHostProfilePortGenerator.OtlpHttpsPortMaxExclusive);
+        AssertPortInRange(resourceServiceHttpsPort, AppHostProfilePortGenerator.ResourceServiceHttpsPortMin, AppHostProfilePortGenerator.ResourceServiceHttpsPortMaxExclusive);
+    }
+
     [Fact]
     public void GetRuntimeSpec_UsesAppHostSpecificTsConfig()
     {
@@ -198,4 +233,12 @@ public sealed class TypeScriptLanguageSupportTests
     }
 
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
+
+    private static int GetPort(string url) => new Uri(url).Port;
+
+    private static void AssertPortInRange(int port, int minInclusive, int maxExclusive)
+    {
+        Assert.InRange(port, minInclusive, maxExclusive - 1);
+        Assert.True(port < AppHostProfilePortGenerator.WindowsEphemeralPortMin, $"Expected port {port} to be below the Windows ephemeral range.");
+    }
 }
