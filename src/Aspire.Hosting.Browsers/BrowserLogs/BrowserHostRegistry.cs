@@ -4,8 +4,8 @@
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
 using System.Diagnostics;
+using Aspire.Hosting.Browsers.Resources;
 using System.Globalization;
-using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -54,7 +54,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         var browserExecutable = ChromiumBrowserResolver.TryResolveExecutable(configuration.Browser)
-            ?? throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToLocateBrowser, configuration.Browser));
+            ?? throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUnableToLocateBrowser, configuration.Browser));
         var userDataDirectory = _createUserDataDirectory(configuration, browserExecutable);
         var identity = new BrowserHostIdentity(browserExecutable, userDataDirectory.Path);
 
@@ -365,9 +365,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         throw new InvalidOperationException(
             string.Format(
                 CultureInfo.CurrentCulture,
-                MessageStrings.BrowserLogsTrackedBrowserProfileConflict,
+                BrowserMessageStrings.BrowserLogsTrackedBrowserProfileConflict,
                 identity.UserDataRootPath,
-                existingProfileDirectoryName ?? MessageStrings.BrowserLogsDefaultProfileName,
+                existingProfileDirectoryName ?? BrowserMessageStrings.BrowserLogsDefaultProfileName,
                 requestedProfileDirectoryName));
     }
 

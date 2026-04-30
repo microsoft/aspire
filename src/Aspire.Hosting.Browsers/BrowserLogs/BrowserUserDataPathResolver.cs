@@ -4,7 +4,7 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Globalization;
-using Aspire.Hosting.Resources;
+using Aspire.Hosting.Browsers.Resources;
 
 namespace Aspire.Hosting;
 
@@ -105,7 +105,7 @@ internal static class BrowserUserDataPathResolver
             throw new InvalidOperationException(
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    MessageStrings.BrowserLogsAppHostPathShaNotAvailable,
+                    BrowserMessageStrings.BrowserLogsAppHostPathShaNotAvailable,
                     BrowserUserDataMode.Isolated));
         }
 

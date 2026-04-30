@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
-using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -83,7 +82,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
     private readonly BrowserLogsCdpConnectionMultiplexer _connectionMultiplexer;
     private readonly IBrowserLogsPipeBrowserProcess _process;
     private readonly BrowserLogsUserDataDirectory _userDataDirectory;
-    private readonly Task<ProcessResult> _processTask;
+    private readonly Task<BrowserLogsProcessResult> _processTask;
     private readonly Task _termination;
     private int _disposed;
 

@@ -4,7 +4,7 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Globalization;
-using Aspire.Hosting.Resources;
+using Aspire.Hosting.Browsers.Resources;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
@@ -54,12 +54,12 @@ internal readonly record struct BrowserConfiguration(
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
         {
-            throw new InvalidOperationException(MessageStrings.BrowserLogsEmptyBrowserConfiguration);
+            throw new InvalidOperationException(BrowserMessageStrings.BrowserLogsEmptyBrowserConfiguration);
         }
 
         if (resolvedProfile is not null && string.IsNullOrWhiteSpace(resolvedProfile))
         {
-            throw new InvalidOperationException(MessageStrings.BrowserLogsEmptyProfileConfiguration);
+            throw new InvalidOperationException(BrowserMessageStrings.BrowserLogsEmptyProfileConfiguration);
         }
 
         if (resolvedUserDataMode == BrowserUserDataMode.Isolated && resolvedProfile is not null)
@@ -67,7 +67,7 @@ internal readonly record struct BrowserConfiguration(
             throw new InvalidOperationException(
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    MessageStrings.BrowserLogsProfileRequiresSharedUserDataMode,
+                    BrowserMessageStrings.BrowserLogsProfileRequiresSharedUserDataMode,
                     BrowserLogsBuilderExtensions.ProfileConfigurationKey,
                     resolvedProfile,
                     BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
@@ -128,7 +128,7 @@ internal readonly record struct BrowserConfiguration(
         throw new InvalidOperationException(
             string.Format(
                 CultureInfo.CurrentCulture,
-                MessageStrings.BrowserLogsInvalidUserDataModeConfiguration,
+                BrowserMessageStrings.BrowserLogsInvalidUserDataModeConfiguration,
                 value,
                 BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
                 BrowserUserDataMode.Shared,

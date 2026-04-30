@@ -6,7 +6,6 @@
 using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json;
-using Aspire.Hosting.Dcp.Process;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -99,7 +98,7 @@ public class BrowserHostTests
         private readonly Stream _browserRead;
         private readonly Stream _browserWrite;
         private readonly Pipe _browserToApp = new();
-        private readonly TaskCompletionSource<ProcessResult> _processCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<BrowserLogsProcessResult> _processCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public FakePipeBrowserProcess()
         {
@@ -115,7 +114,7 @@ public class BrowserHostTests
 
         public Stream BrowserInput => _browserInput;
 
-        public Task<ProcessResult> ProcessTask => _processCompletion.Task;
+        public Task<BrowserLogsProcessResult> ProcessTask => _processCompletion.Task;
 
         public bool Disposed { get; private set; }
 
@@ -156,7 +155,7 @@ public class BrowserHostTests
             }
 
             Disposed = true;
-            _processCompletion.TrySetResult(new ProcessResult(0));
+            _processCompletion.TrySetResult(new BrowserLogsProcessResult(0));
 
             await _browserInput.DisposeAsync();
             await _browserOutput.DisposeAsync();

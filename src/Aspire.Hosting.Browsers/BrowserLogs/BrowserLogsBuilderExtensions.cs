@@ -5,11 +5,11 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Collections.Immutable;
+using Aspire.Hosting.Browsers.Resources;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -150,7 +150,7 @@ public static class BrowserLogsBuilderExtensions
             })
             .WithCommand(
                 OpenTrackedBrowserCommandName,
-                CommandStrings.OpenTrackedBrowserName,
+                BrowserCommandStrings.OpenTrackedBrowserName,
                 async context =>
                 {
                     try
@@ -170,7 +170,7 @@ public static class BrowserLogsBuilderExtensions
                 },
                 new CommandOptions
                 {
-                    Description = CommandStrings.OpenTrackedBrowserDescription,
+                    Description = BrowserCommandStrings.OpenTrackedBrowserDescription,
                     IconName = "Open",
                     IconVariant = IconVariant.Regular,
                     IsHighlighted = true,
@@ -200,7 +200,7 @@ public static class BrowserLogsBuilderExtensions
                 })
             .WithCommand(
                 ConfigureTrackedBrowserCommandName,
-                CommandStrings.ConfigureTrackedBrowserName,
+                BrowserCommandStrings.ConfigureTrackedBrowserName,
                 async context =>
                 {
                     try
@@ -215,7 +215,7 @@ public static class BrowserLogsBuilderExtensions
                 },
                 new CommandOptions
                 {
-                    Description = CommandStrings.ConfigureTrackedBrowserDescription,
+                    Description = BrowserCommandStrings.ConfigureTrackedBrowserDescription,
                     IconName = "Settings",
                     IconVariant = IconVariant.Regular,
                     UpdateState = context =>
@@ -228,7 +228,7 @@ public static class BrowserLogsBuilderExtensions
                 })
             .WithCommand(
                 CaptureScreenshotCommandName,
-                CommandStrings.CaptureScreenshotName,
+                BrowserCommandStrings.CaptureScreenshotName,
                 async context =>
                 {
                     try
@@ -267,7 +267,7 @@ public static class BrowserLogsBuilderExtensions
                 },
                 new CommandOptions
                 {
-                    Description = CommandStrings.CaptureScreenshotDescription,
+                    Description = BrowserCommandStrings.CaptureScreenshotDescription,
                     IconName = "Camera",
                     IconVariant = IconVariant.Regular,
                     UpdateState = context =>
@@ -324,13 +324,13 @@ public static class BrowserLogsBuilderExtensions
 
             if (endpointAnnotation is null)
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsResourceMissingHttpEndpoint, resource.Name));
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsResourceMissingHttpEndpoint, resource.Name));
             }
 
             var endpointReference = resource.GetEndpoint(endpointAnnotation.Name);
             if (!endpointReference.IsAllocated)
             {
-                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsEndpointNotAllocated, endpointAnnotation.Name, resource.Name));
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsEndpointNotAllocated, endpointAnnotation.Name, resource.Name));
             }
 
             return new Uri(endpointReference.Url, UriKind.Absolute);
