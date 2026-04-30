@@ -665,6 +665,28 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardResourceIsAbsent()
+    {
+        // When the dashboard is disabled, there is no dashboard resource in the app model.
+        // The method must return promptly rather than waiting forever for a resource event
+        // that will never arrive.
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var result = await target.GetDashboardUrlsAsync().DefaultTimeout();
+
+        Assert.False(result.DashboardHealthy);
+        Assert.Null(result.BaseUrlWithLoginToken);
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_ReturnsNotFound_WhenResourceDoesNotExist()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
