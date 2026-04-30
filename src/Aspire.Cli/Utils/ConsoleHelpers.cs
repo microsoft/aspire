@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Aspire.Cli.Interaction;
 using Spectre.Console;
 
@@ -36,5 +37,60 @@ internal static class ConsoleHelpers
         }
 
         return spectreEmojiText + new string(' ', padding);
+    }
+
+    /// <summary>
+    /// Escapes a message as Spectre markup while hyperlinking each occurrence of the specified file path.
+    /// </summary>
+    public static string EscapeMarkupWithFileLink(string message, string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(filePath);
+
+        if (filePath.Length == 0)
+        {
+            return message.EscapeMarkup();
+        }
+
+        var index = message.IndexOf(filePath, StringComparison.Ordinal);
+        if (index < 0)
+        {
+            return message.EscapeMarkup();
+        }
+
+        var linkedPath = FormatPathAsFileLink(filePath);
+        var builder = new StringBuilder(message.Length + linkedPath.Length);
+        var nextIndex = 0;
+
+        while (index >= 0)
+        {
+            builder.Append(message[nextIndex..index].EscapeMarkup());
+            builder.Append(linkedPath);
+            nextIndex = index + filePath.Length;
+            index = message.IndexOf(filePath, nextIndex, StringComparison.Ordinal);
+        }
+
+        builder.Append(message[nextIndex..].EscapeMarkup());
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Formats a file path as Spectre link markup using a file URI target.
+    /// </summary>
+    public static string FormatPathAsFileLink(string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(filePath);
+
+        if (filePath.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var fileUri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri
+            .Replace("[", "%5B", StringComparison.Ordinal)
+            .Replace("]", "%5D", StringComparison.Ordinal);
+
+        return $"[link={fileUri.EscapeMarkup()}]{filePath.EscapeMarkup()}[/]";
     }
 }
