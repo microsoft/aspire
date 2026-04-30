@@ -290,16 +290,14 @@ internal class DotNetTemplateFactory(
 
     private async Task PromptForDevLocalhostTldOptionAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var binding = PromptBinding.CreateBoolAsSelection(result, _localhostTldOption);
+        var binding = PromptBinding.CreateBoolConfirm(result, _localhostTldOption, defaultValue: false);
 
-        var selected = await interactionService.PromptForSelectionAsync(
+        var useLocalhostTld = await interactionService.PromptConfirmAsync(
             TemplatingStrings.UseLocalhostTld_Prompt,
-            [TemplatingStrings.No, TemplatingStrings.Yes],
-            choice => choice,
             binding: binding,
             cancellationToken: cancellationToken);
 
-        if (string.Equals(selected, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
+        if (useLocalhostTld)
         {
             interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
             extraArgs.Add("--localhost-tld");
@@ -308,16 +306,14 @@ internal class DotNetTemplateFactory(
 
     private async Task PromptForRedisCacheOptionAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var binding = PromptBinding.CreateBoolAsSelection(result, _useRedisCacheOption);
+        var binding = PromptBinding.CreateBoolConfirm(result, _useRedisCacheOption, interactiveDefault: true, nonInteractiveDefault: false);
 
-        var selected = await interactionService.PromptForSelectionAsync(
+        var useRedisCache = await interactionService.PromptConfirmAsync(
             TemplatingStrings.UseRedisCache_Prompt,
-            [TemplatingStrings.Yes, TemplatingStrings.No],
-            choice => choice,
             binding: binding,
             cancellationToken: cancellationToken);
 
-        if (string.Equals(selected, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
+        if (useRedisCache)
         {
             interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseRedisCache_UsingRedisCache);
             extraArgs.Add("--use-redis-cache");
@@ -336,13 +332,12 @@ internal class DotNetTemplateFactory(
                 return;
             }
 
-            var createTestProject = await interactionService.PromptForSelectionAsync(
+            var createTestProject = await interactionService.PromptConfirmAsync(
                 TemplatingStrings.PromptForTFMOptions_Prompt,
-                [TemplatingStrings.No, TemplatingStrings.Yes],
-                choice => choice,
+                binding: PromptBinding.CreateDefault(false),
                 cancellationToken: cancellationToken);
 
-            if (string.Equals(createTestProject, TemplatingStrings.No, StringComparisons.CliInputOrOutput))
+            if (!createTestProject)
             {
                 return;
             }

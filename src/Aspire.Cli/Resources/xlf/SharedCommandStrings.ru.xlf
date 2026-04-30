@@ -12,6 +12,11 @@
         <target state="new">No running AppHost found. Use 'aspire run' to start one first.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotRunningAtPath">
+        <source>No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</source>
+        <target state="new">No AppHost is currently running for '{0}'. Use 'aspire run' to start it first.</target>
+        <note>{0} is the AppHost project path.</note>
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="new">Output format for detached AppHost results</target>
@@ -33,8 +38,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AppHostOptionDescription">
-        <source>The path to the Aspire AppHost project file</source>
-        <target state="new">The path to the Aspire AppHost project file</target>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
+        <target state="new">The path to the Aspire AppHost project file or a directory to search</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">

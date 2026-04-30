@@ -6,7 +6,7 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
+using Azure.AI.Projects.Agents;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Foundry;
 /// <summary>
 /// A Microsoft Foundry hosted agent resource.
 /// </summary>
-public class AzureHostedAgentResource : Resource, IComputeResource, IResourceWithEnvironment
+public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.
@@ -128,7 +128,7 @@ public class AzureHostedAgentResource : Resource, IComputeResource, IResourceWit
     /// <summary>
     /// Deploys the specified agent to the given Microsoft Foundry project.
     /// </summary>
-    public async Task<AgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
+    public async Task<ProjectsAgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -139,10 +139,10 @@ public class AzureHostedAgentResource : Resource, IComputeResource, IResourceWit
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
-        var result = await projectClient.Agents.CreateAgentVersionAsync(
+        var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
-            def.ToAgentVersionCreationOptions(),
-            context.CancellationToken
+            def.ToProjectsAgentVersionCreationOptions(),
+            cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
         return result.Value;
     }

@@ -22,9 +22,9 @@
 #
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
-# Daily burndown report for the Aspire 13.2 milestone. Tracks progress
+# Daily burndown report for the Aspire 13.3 milestone. Tracks progress
 # on issues closed, new bugs found, notable changes merged into the
-# release/13.2 branch, pending PR reviews, and discussions. Generates
+# release/13.3 branch, pending PR reviews, and discussions. Generates
 # a 7-day burndown chart using cached daily snapshots.
 #
 # Secrets used:
@@ -50,7 +50,7 @@
 #   - ghcr.io/github/github-mcp-server:v1.0.0
 #   - node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
 
-name: "13.2 Release Burndown Report"
+name: "13.3 Release Burndown Report"
 "on":
   schedule:
   - cron: "13 8 * * *"
@@ -68,7 +68,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}"
 
-run-name: "13.2 Release Burndown Report"
+run-name: "13.3 Release Burndown Report"
 
 jobs:
   activation:
@@ -100,7 +100,7 @@ jobs:
           GH_AW_INFO_VERSION: "1.0.21"
           GH_AW_INFO_AGENT_VERSION: "1.0.21"
           GH_AW_INFO_CLI_VERSION: "v0.69.0"
-          GH_AW_INFO_WORKFLOW_NAME: "13.2 Release Burndown Report"
+          GH_AW_INFO_WORKFLOW_NAME: "13.3 Release Burndown Report"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -419,14 +419,14 @@ jobs:
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
           cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_deefd5e90ca1753a_EOF'
-          {"create_issue":{"close_older_issues":true,"labels":["report","burndown"],"max":1,"title_prefix":"[13.2-burndown] "},"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"report_incomplete":{}}
+          {"create_issue":{"close_older_issues":true,"labels":["report","burndown"],"max":1,"title_prefix":"[13.3-burndown] "},"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"report_incomplete":{}}
           GH_AW_SAFE_OUTPUTS_CONFIG_deefd5e90ca1753a_EOF
       - name: Write Safe Outputs Tools
         env:
           GH_AW_TOOLS_META_JSON: |
             {
               "description_suffixes": {
-                "create_issue": " CONSTRAINTS: Maximum 1 issue(s) can be created. Title will be prefixed with \"[13.2-burndown] \". Labels [\"report\" \"burndown\"] will be automatically added."
+                "create_issue": " CONSTRAINTS: Maximum 1 issue(s) can be created. Title will be prefixed with \"[13.3-burndown] \". Labels [\"report\" \"burndown\"] will be automatically added."
               },
               "repo_params": {},
               "dynamic_tools": []
@@ -918,7 +918,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "13.2 Release Burndown Report"
+          GH_AW_WORKFLOW_NAME: "13.3 Release Burndown Report"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_REPORT_AS_ISSUE: "true"
@@ -934,7 +934,7 @@ jobs:
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "13.2 Release Burndown Report"
+          GH_AW_WORKFLOW_NAME: "13.3 Release Burndown Report"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
           GH_AW_DETECTION_REASON: ${{ needs.detection.outputs.detection_reason }}
@@ -951,7 +951,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_MISSING_TOOL_CREATE_ISSUE: "true"
-          GH_AW_WORKFLOW_NAME: "13.2 Release Burndown Report"
+          GH_AW_WORKFLOW_NAME: "13.3 Release Burndown Report"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -965,7 +965,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_REPORT_INCOMPLETE_CREATE_ISSUE: "true"
-          GH_AW_WORKFLOW_NAME: "13.2 Release Burndown Report"
+          GH_AW_WORKFLOW_NAME: "13.3 Release Burndown Report"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -979,7 +979,7 @@ jobs:
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "13.2 Release Burndown Report"
+          GH_AW_WORKFLOW_NAME: "13.3 Release Burndown Report"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_WORKFLOW_ID: "daily-repo-status"
@@ -1089,8 +1089,8 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
-          WORKFLOW_NAME: "13.2 Release Burndown Report"
-          WORKFLOW_DESCRIPTION: "Daily burndown report for the Aspire 13.2 milestone. Tracks progress\non issues closed, new bugs found, notable changes merged into the\nrelease/13.2 branch, pending PR reviews, and discussions. Generates\na 7-day burndown chart using cached daily snapshots."
+          WORKFLOW_NAME: "13.3 Release Burndown Report"
+          WORKFLOW_DESCRIPTION: "Daily burndown report for the Aspire 13.3 milestone. Tracks progress\non issues closed, new bugs found, notable changes merged into the\nrelease/13.3 branch, pending PR reviews, and discussions. Generates\na 7-day burndown chart using cached daily snapshots."
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |
@@ -1183,7 +1183,7 @@ jobs:
       GH_AW_ENGINE_ID: "copilot"
       GH_AW_ENGINE_MODEL: ${{ needs.agent.outputs.model }}
       GH_AW_WORKFLOW_ID: "daily-repo-status"
-      GH_AW_WORKFLOW_NAME: "13.2 Release Burndown Report"
+      GH_AW_WORKFLOW_NAME: "13.3 Release Burndown Report"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}
@@ -1232,7 +1232,7 @@ jobs:
           GH_AW_ALLOWED_DOMAINS: "api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,github.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
-          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_issue\":{\"close_older_issues\":true,\"labels\":[\"report\",\"burndown\"],\"max\":1,\"title_prefix\":\"[13.2-burndown] \"},\"create_report_incomplete_issue\":{},\"missing_data\":{},\"missing_tool\":{},\"noop\":{\"max\":1,\"report-as-issue\":\"true\"},\"report_incomplete\":{}}"
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_issue\":{\"close_older_issues\":true,\"labels\":[\"report\",\"burndown\"],\"max\":1,\"title_prefix\":\"[13.3-burndown] \"},\"create_report_incomplete_issue\":{},\"missing_data\":{},\"missing_tool\":{},\"noop\":{\"max\":1,\"report-as-issue\":\"true\"},\"report_incomplete\":{}}"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |

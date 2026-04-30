@@ -1189,6 +1189,283 @@ public class DocsIndexServiceTests
         }
     }
 
+    [Fact]
+    public void NormalizeContent_WithEmptyString_ReturnsEmpty()
+    {
+        var result = DocsIndexService.NormalizeContent("");
+        Assert.Equal("", result);
+    }
+
+    [Fact]
+    public void NormalizeContent_WithWhitespaceOnly_ReturnsWhitespace()
+    {
+        var result = DocsIndexService.NormalizeContent("   ");
+        Assert.Equal("   ", result);
+    }
+
+    [Fact]
+    public void NormalizeContent_NormalizesLineEndings()
+    {
+        var result = DocsIndexService.NormalizeContent("line1\r\nline2\rline3\nline4");
+        Assert.Equal("""
+            line1
+            line2
+            line3
+            line4
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineHeadings()
+    {
+        var result = DocsIndexService.NormalizeContent("Some text ## Heading\nMore text");
+        Assert.Equal("""
+            Some text
+
+            ## Heading
+
+            More text
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_RemovesSectionTitledBookmarks()
+    {
+        var result = DocsIndexService.NormalizeContent("Before [Section titled Overview](#overview) After");
+        Assert.Equal("""
+            Before
+
+            After
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineOrderedLists()
+    {
+        var result = DocsIndexService.NormalizeContent("Some text 1. First item");
+        Assert.Equal("""
+            Some text
+            1. First item
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineUnorderedLists()
+    {
+        var result = DocsIndexService.NormalizeContent("Some text * List item");
+        Assert.Equal("""
+            Some text
+            * List item
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_CollapsesExcessBlankLines()
+    {
+        var result = DocsIndexService.NormalizeContent("""
+            Paragraph 1
+
+
+
+
+            Paragraph 2
+            """);
+        Assert.Equal("""
+            Paragraph 1
+
+            Paragraph 2
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_StripsTrailingWhitespaceBeforeNewlines()
+    {
+        var result = DocsIndexService.NormalizeContent("line1   \nline2\t\nline3");
+        Assert.Equal("""
+            line1
+            line2
+            line3
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_StripsLeadingWhitespace()
+    {
+        var result = DocsIndexService.NormalizeContent("""
+              indented line
+                more indented
+            """);
+        Assert.Equal("""
+            indented line
+            more indented
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_PreservesCodeBlockContent()
+    {
+        var input = """
+            Before
+            ```csharp
+              var x = 1;
+              var y = 2;
+            ```
+            After
+            """;
+        var result = DocsIndexService.NormalizeContent(input);
+        Assert.Equal("""
+            Before
+
+            ```csharp
+              var x = 1;
+              var y = 2;
+            ```
+
+            After
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_ExpandsInlineCodeBlocks()
+    {
+        var result = DocsIndexService.NormalizeContent("""Text ```csharp Console.WriteLine("hello");``` more""");
+        Assert.Equal("""
+            Text
+            ```csharp
+            Console.WriteLine("hello");
+            ```
+            more
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineTables()
+    {
+        var result = DocsIndexService.NormalizeContent("Text |Col1|Col2|Col3| |---|---|---| |A|B|C|");
+        Assert.Equal("""
+            Text
+            |Col1|Col2|Col3|
+            |---|---|---|
+            |A|B|C|
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_TrimsResult()
+    {
+        var result = DocsIndexService.NormalizeContent("\n\n  Hello world  \n\n");
+        Assert.Equal("Hello world", result);
+    }
+
+    [Fact]
+    public void NormalizeContent_HandlesComplexDocument()
+    {
+        var input = """
+            # Title
+            Some intro text ## Configuration
+            Use `aspire run`. 1. Step one 2. Step two
+
+
+
+            ```bash
+            aspire run
+            ```
+            Done.
+            """;
+        var result = DocsIndexService.NormalizeContent(input);
+
+        Assert.Equal("""
+            # Title
+
+            Some intro text
+
+            ## Configuration
+
+            Use `aspire run`.
+            1. Step one
+            2. Step two
+
+            ```bash
+            aspire run
+            ```
+
+            Done.
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterTable()
+    {
+        var result = DocsIndexService.NormalizeContent("Header text |Col1|Col2| |---|---| |A|B| Footer text");
+        Assert.Equal("""
+            Header text
+            |Col1|Col2|
+            |---|---|
+            |A|B|
+
+            Footer text
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro text 1. First 2. Second\nFollowing paragraph");
+        Assert.Equal("""
+            Intro text
+            1. First
+            2. Second
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterUnorderedList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro text * Item one * Item two\nFollowing paragraph");
+        Assert.Equal("""
+            Intro text
+            * Item one
+            * Item two
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineOnlyAfterRootList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro 1. First * Sub A * Sub B 2. Second\nFollowing paragraph");
+        Assert.Equal("""
+            Intro
+            1. First
+            * Sub A
+            * Sub B
+            2. Second
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_NoBlankLineAfterListBeforeCodeBlock()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro * Bash ```bash echo hello``` * PowerShell ```powershell Write-Host hello``` Done.");
+        Assert.Equal("""
+            Intro
+            * Bash
+            ```bash
+            echo hello
+            ```
+            * PowerShell
+            ```powershell
+            Write-Host hello
+            ```
+            Done.
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
     private sealed class DelayingDocsFetcher(string? content, TimeSpan delay) : IDocsFetcher
     {
         public async Task<string?> FetchDocsAsync(CancellationToken cancellationToken = default)

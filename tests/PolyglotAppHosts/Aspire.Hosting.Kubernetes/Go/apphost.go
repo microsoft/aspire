@@ -54,6 +54,14 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
+	gateway := kubernetes.AddGateway("public-gateway")
+	gateway.WithHostname("gateway.example.com")
+	gateway.WithTls("gateway-tls")
+
+	ingress := kubernetes.AddIngress("public-ingress")
+	ingress.WithHostname("ingress.example.com")
+	ingress.WithTls("ingress-tls")
+
 	serviceContainer := builder.AddContainer("kube-service", "redis:alpine")
 	_ = serviceContainer.PublishAsKubernetesService(func(service aspire.KubernetesResource) {
 		_, _ = service.Name()

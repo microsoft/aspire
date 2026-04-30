@@ -1,4 +1,4 @@
-#   -------------------------------------------------------------
+﻿#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1864,6 +1864,8 @@ WellKnownPipelineSteps.PublishPrereq = "publish-prereq"
 WellKnownPipelineSteps.Push = "push"
 # The prerequisite step that runs before any push operations.
 WellKnownPipelineSteps.PushPrereq = "push-prereq"
+# The step that validates compute resources are assigned to unambiguous compute environments.
+WellKnownPipelineSteps.ValidateComputeEnvironments = "validate-compute-environments"
 
 WellKnownPipelineTags = types.SimpleNamespace()
 # Tag for steps that build compute resources.
@@ -2367,6 +2369,15 @@ class AbstractDistributedApplicationPipeline:
     def handle(self) -> Handle:
         """The underlying object reference handle."""
         return self._handle
+
+    def disable_build_only_container_validation(self) -> AbstractDistributedApplicationPipeline:
+        """Disables publish and deploy validation for unconsumed build-only containers."""
+        rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/disableBuildOnlyContainerValidation',
+            rpc_args,
+        )
+        return typing.cast(AbstractDistributedApplicationPipeline, result)
 
     def add_step(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None) -> None:
         """Adds a pipeline step to the application"""
@@ -2920,6 +2931,16 @@ class AbstractUserSecretsManager:
         rpc_args['value'] = value
         result = self._client.invoke_capability(
             'Aspire.Hosting/IUserSecretsManager.trySetSecret',
+            rpc_args,
+        )
+        return result
+
+    def try_delete_secret(self, name: str) -> bool:
+        """Attempts to delete a user secret value"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['name'] = name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/IUserSecretsManager.tryDeleteSecret',
             rpc_args,
         )
         return result
@@ -3854,6 +3875,16 @@ class EndpointReference:
             rpc_args,
         )
         return result
+
+    def property(self, property: EndpointProperty) -> EndpointReferenceExpression:
+        """Gets the specified property expression of the endpoint"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['property'] = property
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.property',
+            rpc_args,
+        )
+        return typing.cast(EndpointReferenceExpression, result)
 
     def get_tls_value(self, enabled_value: ReferenceExpression, disabled_value: ReferenceExpression) -> ReferenceExpression:
         """Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise."""

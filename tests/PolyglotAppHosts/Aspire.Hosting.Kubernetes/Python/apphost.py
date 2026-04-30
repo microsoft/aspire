@@ -23,6 +23,12 @@ with create_builder() as builder:
     _resolved_helm_chart_name = kubernetes.helm_chart_name
     _resolved_default_storage_class_name = kubernetes.default_storage_class_name
     _resolved_default_service_type = kubernetes.default_service_type
+    gateway = kubernetes.add_gateway("public-gateway")
+    gateway.with_hostname("gateway.example.com")
+    gateway.with_tls("gateway-tls")
+    ingress = kubernetes.add_ingress("public-ingress")
+    ingress.with_hostname("ingress.example.com")
+    ingress.with_tls("ingress-tls")
     service_container = builder.add_container("resource", "image")
     service_container.publish_as_kubernetes_service()
     builder.run()

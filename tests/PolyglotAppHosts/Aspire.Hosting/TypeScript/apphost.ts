@@ -5,6 +5,7 @@ import {
     WellKnownPipelineTags,
     createBuilder,
     CertificateTrustScope,
+    EndpointProperty,
     IconVariant,
     ProbeType,
     refExpr,
@@ -126,6 +127,9 @@ await dockerContainer.withHttpEndpointCallback(async (updateContext) => {
 }, { name: "http", createIfNotExists: false });
 const endpoint = await dockerContainer.getEndpoint("http");
 const expr = refExpr`Host=${endpoint}`;
+const endpointHost = await endpoint.property(EndpointProperty.Host);
+const endpointPort = await endpoint.property(EndpointProperty.Port);
+const endpointUrl = refExpr`http://${endpointHost}:${endpointPort}`;
 
 const builtConnectionString = await builder.addConnectionString("customcs", { environmentVariableNameOrExpression: expr });
 
@@ -178,6 +182,7 @@ await container.withEnvironment("MY_ENDPOINT", endpoint);
 
 // withEnvironment — with ReferenceExpression
 await container.withEnvironment("MY_EXPR", expr);
+await container.withEnvironment("MY_ENDPOINT_URL", endpointUrl);
 
 // withEnvironment — with ParameterResource
 await container.withEnvironment("MY_PARAM", configParam);

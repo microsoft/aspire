@@ -482,7 +482,6 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        await auto.EnterAsync();
 
         await auto.WaitUntilAsync(s =>
         {
@@ -620,10 +619,12 @@ internal static class Hex1bAutomatorTestHelpers
 
             if (!useRedisCache)
             {
-                await auto.DownAsync(); // Default is "Yes", navigate to "No"
+                await auto.TypeAsync("n");
             }
-
-            await auto.EnterAsync();
+            else
+            {
+                await auto.EnterAsync();
+            }
         }
 
         // Step 7: Test project prompt (only Starter)
@@ -656,32 +657,65 @@ internal static class Hex1bAutomatorTestHelpers
         var waitingForInitComplete = new CellPatternSearcher()
             .Find("Aspire initialization complete");
 
+        var waitingForAgentInitPrompt = new CellPatternSearcher()
+            .Find("configure AI agent environments");
+
         await auto.TypeAsync("aspire init --language csharp");
         await auto.EnterAsync();
 
-        // NuGet.config prompt may or may not appear depending on environment.
-        // Wait for either the NuGet.config prompt or the URLs prompt.
-        await auto.WaitUntilAsync(
-            s => waitingForNuGetConfigPrompt.Search(s).Count > 0
-                || waitingForUrlsPrompt.Search(s).Count > 0,
-            timeout: TimeSpan.FromMinutes(2),
-            description: "NuGet.config prompt or URLs prompt");
-        await auto.EnterAsync(); // Dismiss NuGet.config prompt if present
+        var handledNuGetConfigPrompt = false;
+        var handledUrlsPrompt = false;
 
-        // Wait for the URLs prompt (if NuGet.config appeared first) or init completion.
-        await auto.WaitUntilAsync(
-            s => waitingForUrlsPrompt.Search(s).Count > 0
-                || waitingForInitComplete.Search(s).Count > 0,
-            timeout: TimeSpan.FromMinutes(2),
-            description: "URLs prompt or init completion");
-        await auto.EnterAsync(); // Dismiss URLs prompt (accept default "No")
+        while (true)
+        {
+            var initState = "unknown";
+            await auto.WaitUntilAsync(s =>
+            {
+                if (!handledNuGetConfigPrompt && waitingForNuGetConfigPrompt.Search(s).Count > 0)
+                {
+                    initState = "nuget-config";
+                    return true;
+                }
 
-        await auto.WaitUntilAsync(
-            s => waitingForInitComplete.Search(s).Count > 0,
-            timeout: TimeSpan.FromMinutes(2),
-            description: "aspire initialization complete");
+                if (!handledUrlsPrompt && waitingForUrlsPrompt.Search(s).Count > 0)
+                {
+                    initState = "urls";
+                    return true;
+                }
 
-        await auto.DeclineAgentInitPromptAsync(counter);
+                if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                {
+                    initState = "agent-init";
+                    return true;
+                }
+
+                if (waitingForInitComplete.Search(s).Count > 0)
+                {
+                    initState = "init-complete";
+                    return true;
+                }
+
+                return false;
+            }, timeout: TimeSpan.FromMinutes(2), description: "NuGet.config prompt, URLs prompt, agent init prompt, or init completion");
+
+            if (initState is "nuget-config" or "urls")
+            {
+                if (initState == "nuget-config")
+                {
+                    handledNuGetConfigPrompt = true;
+                }
+                else
+                {
+                    handledUrlsPrompt = true;
+                }
+
+                await auto.EnterAsync();
+                continue;
+            }
+
+            await auto.DeclineAgentInitPromptAsync(counter);
+            return;
+        }
     }
 
     /// <summary>

@@ -133,6 +133,9 @@ func main() {
 		log.Fatalf(aspire.FormatError(endpoint.Err()))
 	}
 	expr := aspire.RefExpr("Host=%v", endpoint)
+	endpointHost := endpoint.Property(aspire.EndpointPropertyHost)
+	endpointPort := endpoint.Property(aspire.EndpointPropertyPort)
+	endpointURL := aspire.RefExpr("http://%v:%v", endpointHost, endpointPort)
 
 	_ = builder.AddConnectionString("customcs",
 		&aspire.AddConnectionStringOptions{EnvironmentVariableNameOrExpression: expr})
@@ -145,6 +148,7 @@ func main() {
 
 	// WithEnvironment - EndpointReference
 	container.WithEnvironmentEndpoint("MY_ENDPOINT", endpoint)
+	container.WithEnvironment("MY_ENDPOINT_URL", endpointURL)
 
 	// WithEnvironment — with ReferenceExpression (via WithEnvironment any overload)
 	container.WithEnvironment("MY_EXPR", expr)

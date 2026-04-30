@@ -6,6 +6,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -52,6 +53,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
         ICliHostEnvironment hostEnvironment,
         IHttpClientFactory httpClientFactory,
@@ -66,7 +68,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -108,7 +110,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             return dashboardApi.ExitCode;
         }
 
-        return await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, cancellationToken);
+        return await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, cancellationToken);
     }
 
     private async Task<int> FetchLogsAsync(
@@ -121,6 +123,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         bool follow,
         OutputFormat format,
         bool dashboardOnly,
+        string dashboardUrl,
         CancellationToken cancellationToken)
     {
         try
@@ -148,11 +151,11 @@ internal sealed class TelemetryLogsCommand : BaseCommand
 
             if (follow)
             {
-                return await StreamLogsAsync(client, url, format, allOtlpResources, cancellationToken);
+                return await StreamLogsAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
             else
             {
-                return await GetLogsSnapshotAsync(client, url, format, allOtlpResources, cancellationToken);
+                return await GetLogsSnapshotAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
         }
         catch (HttpRequestException ex)
@@ -164,7 +167,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         }
     }
 
-    private async Task<int> GetLogsSnapshotAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
+    private async Task<int> GetLogsSnapshotAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
     {
         var response = await client.GetAsync(url, cancellationToken);
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -173,8 +176,10 @@ internal sealed class TelemetryLogsCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            var resourceLogs = apiResponse?.Data?.ResourceLogs;
+            Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
+            _interactionService.DisplayRawText(SharedAIHelpers.SerializeLogsToJson(resourceLogs, getResourceName, dashboardUrl), ConsoleOutput.Standard);
         }
         else
         {
@@ -184,7 +189,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         return ExitCodeConstants.Success;
     }
 
-    private async Task<int> StreamLogsAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
+    private async Task<int> StreamLogsAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -196,8 +201,10 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         {
             if (format == OutputFormat.Json)
             {
-                // Structured output always goes to stdout.
-                _interactionService.DisplayRawText(line, ConsoleOutput.Standard);
+                var request = JsonSerializer.Deserialize(line, OtlpJsonSerializerContext.Default.OtlpExportLogsServiceRequestJson);
+                var resourceLogs = request?.ResourceLogs;
+                Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
+                _interactionService.DisplayRawText(SharedAIHelpers.SerializeLogsToJson(resourceLogs, getResourceName, dashboardUrl), ConsoleOutput.Standard);
             }
             else
             {

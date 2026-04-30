@@ -1,4 +1,4 @@
-//! aspire.rs - Capability-based Aspire SDK
+﻿//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -1018,6 +1018,11 @@ pub mod well_known_pipeline_steps {
     /// The prerequisite step that runs before any push operations.
     pub fn push_prereq() -> String {
         serde_json::from_value::<String>(serde_json::json!("push-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The step that validates compute resources are assigned to unambiguous compute environments.
+    pub fn validate_compute_environments() -> String {
+        serde_json::from_value::<String>(serde_json::json!("validate-compute-environments"))
             .expect("generated exported value should deserialize")
     }
 }
@@ -6382,6 +6387,16 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Gets the specified property expression of the endpoint
+    pub fn property(&self, property: EndpointProperty) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("property".to_string(), serde_json::to_value(&property).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.property", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
+    }
+
     /// Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.
     pub fn get_tls_value(&self, enabled_value: ReferenceExpression, disabled_value: ReferenceExpression) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9208,6 +9223,15 @@ impl IDistributedApplicationPipeline {
         &self.client
     }
 
+    /// Disables publish and deploy validation for unconsumed build-only containers.
+    pub fn disable_build_only_container_validation(&self) -> Result<IDistributedApplicationPipeline, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("pipeline".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/disableBuildOnlyContainerValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IDistributedApplicationPipeline::new(handle, self.client.clone()))
+    }
+
     /// Adds a pipeline step to the application
     pub fn add_step(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -10162,6 +10186,15 @@ impl IUserSecretsManager {
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/IUserSecretsManager.trySetSecret", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Attempts to delete a user secret value
+    pub fn try_delete_secret(&self, name: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/IUserSecretsManager.tryDeleteSecret", args)?;
         Ok(serde_json::from_value(result)?)
     }
 

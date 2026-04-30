@@ -2,16 +2,22 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES003
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesInfrastructureTests
+public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 {
     [Fact]
     public async Task NoUserPool_CreatesDefaultWorkloadPool()
@@ -96,13 +102,11 @@ public class AzureKubernetesInfrastructureTests
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        // DeploymentTargetAnnotation comes from KubernetesInfrastructure (via the inner
-        // KubernetesEnvironmentResource), not from AzureKubernetesInfrastructure.
         Assert.True(container.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target));
         Assert.NotNull(target.DeploymentTarget);
 
-        // The compute environment should be the inner K8s environment
-        Assert.Same(aks.Resource.KubernetesEnvironment, target.ComputeEnvironment);
+        // The compute environment should be the Azure K8s environment
+        Assert.Same(aks.Resource, target.ComputeEnvironment);
 
         // CRITICAL: ContainerRegistry must be set on the DeploymentTargetAnnotation
         // so that push steps can resolve the registry endpoint
@@ -135,6 +139,8 @@ public class AzureKubernetesInfrastructureTests
         // OwningComputeEnvironment should be set
         Assert.Same(enva.Resource, enva.Resource.KubernetesEnvironment.OwningComputeEnvironment);
         Assert.Same(envb.Resource, envb.Resource.KubernetesEnvironment.OwningComputeEnvironment);
+        Assert.True(enva.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var _));
+        Assert.True(envb.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var _));
 
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
@@ -152,5 +158,37 @@ public class AzureKubernetesInfrastructureTests
         Assert.True(other.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var otherTarget),
             "other should have DeploymentTargetAnnotation");
         Assert.Same(envb.Resource, otherTarget.ComputeEnvironment);
+    }
+
+    [Fact]
+    public async Task KubernetesPipelineStepsFlowThroughAksEnvironment()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+
+        var reporter = new TestPipelineActivityReporter(output);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        builder.AddAzureKubernetesEnvironment("aks");
+        builder.AddContainer("api", "myimage")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        await using var app = builder.Build();
+        await app.RunAsync();
+
+        var logs = reporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .ToList();
+
+        Assert.Contains(logs, msg => msg.Contains("publish-aks"));
+        Assert.Contains(logs, msg => msg.Contains("prepare-aks"));
+        Assert.Contains(logs, msg => msg.Contains("helm-deploy-aks"));
+        Assert.Contains(logs, msg => msg.Contains("aks-get-credentials-aks"));
+        Assert.DoesNotContain(logs, msg => msg.Contains("aks-k8s"));
     }
 }

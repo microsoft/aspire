@@ -164,7 +164,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Adds a hostname to a Kubernetes Gateway")]
+    [AspireExport("withGatewayHostname", MethodName = "withHostname", Description = "Adds a hostname to a Kubernetes Gateway")]
     public static IResourceBuilder<KubernetesGatewayResource> WithHostname(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string hostname)
@@ -203,7 +203,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Configures TLS on a Kubernetes Gateway listener")]
+    [AspireExport("withGatewayTls", MethodName = "withTls", Description = "Configures TLS on a Kubernetes Gateway listener")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string secretName)
@@ -312,4 +312,3 @@ public static class KubernetesGatewayExtensions
         return builder;
     }
 }
-

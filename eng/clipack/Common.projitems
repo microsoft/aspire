@@ -18,8 +18,9 @@
     <!-- Read the PE Machine field from the binary and compare against PEExpectedMachine (hex) — Windows only -->
     <_CheckPEMachine Condition="'$(PublishNativeAot)' == 'true' and $([System.OperatingSystem]::IsWindows())">true</_CheckPEMachine>
 
-    <_NativeBinaryPath>$([MSBuild]::NormalizePath($(OutputPath), 'aspire'))</_NativeBinaryPath>
-    <_NativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_NativeBinaryPath).exe</_NativeBinaryPath>
+    <!-- Microsoft.DotNet.Build.Tasks.Archives stages PublishToDisk output under $(IntermediateOutputPath)/output for the current TFM. -->
+    <_ArchiveStagedNativeBinaryPath>$([MSBuild]::NormalizePath($(IntermediateOutputPath), '$(TargetFramework)', 'output', 'aspire'))</_ArchiveStagedNativeBinaryPath>
+    <_ArchiveStagedNativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_ArchiveStagedNativeBinaryPath).exe</_ArchiveStagedNativeBinaryPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,9 +28,9 @@
   </ItemGroup>
 
   <Target Name="PublishToDisk"
-          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;PrepareOutputPathForPublishToDisk" />
+          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_PrepareOutputPathForPublishToDisk" />
 
-  <Target Name="PrepareOutputPathForPublishToDisk">
+  <Target Name="_PrepareOutputPathForPublishToDisk">
     <!-- TODO: avoid generating the file instead of manually deleting it here -->
     <Delete Files="$(OutputPath)\aspire.xml" Condition="Exists('$(OutputPath)\aspire.xml')" />
 
@@ -41,6 +42,9 @@
   </Target>
 
   <Target Name="_PublishProject">
+
+    <Error Condition="'$(CliRuntime)' == ''" Text="CliRuntime must be set before packing the CLI tool." />
+
     <!--
       Bundle payload flow:
         1. Bundle.proj runs CreateLayout which produces a tar.gz archive (managed runtime, DCP, etc.)
@@ -94,13 +98,13 @@
         Properties="@(AdditionalProperties)"
         RemoveProperties="OutputPath;TargetFramework" />
 
-    <Error Condition="!Exists('$(_NativeBinaryPath)')" Text="Could not find expected `aspire` binary at $(_NativeBinaryPath)" />
+    <Error Condition="!Exists('$(_ArchiveStagedNativeBinaryPath)')" Text="Could not find expected `aspire` binary at $(_ArchiveStagedNativeBinaryPath)" />
   </Target>
 
   <Target Name="_ValidateNativeBinaryFileSignatureOnUnix" Condition="'$(_CheckFileSignature)' == 'true'">
     <Error Condition="$(FileSignatureRegex) == ''" Text="Property %24(FileSignatureRegex) is unset." />
 
-    <Exec Command="file -b $(_NativeBinaryPath)" ConsoleToMSBuild="true">
+    <Exec Command="file -b $(_ArchiveStagedNativeBinaryPath)" ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="_FileCommandOutput" />
     </Exec>
 
@@ -119,13 +123,115 @@
   <Target Name="_ValidateNativeBinaryPEMachineOnWindows" Condition="'$(_CheckPEMachine)' == 'true'">
     <Error Condition="'$(PEExpectedMachine)' == ''" Text="Property %24(PEExpectedMachine) is unset for $(CliRuntime)." />
 
-    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_NativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); [Console]::Write(([BitConverter]::ToUInt16($b,$p+4)).ToString('X4'))&quot;"
+    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_ArchiveStagedNativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); [Console]::Write(([BitConverter]::ToUInt16($b,$p+4)).ToString('X4'))&quot;"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="_PEMachineHex" />
     </Exec>
 
     <Error Condition="'$(_PEMachineHex)' != '$(PEExpectedMachine)'"
            Text="PE Machine type mismatch for $(CliRuntime). Expected: $(PEExpectedMachine), Got: $(_PEMachineHex)" />
+  </Target>
+
+  <!--
+    Tool packing targets.
+
+    These targets pack Aspire.Cli.Tool packages from the CLI native archives produced by
+    this RID-specific clipack project. They are invoked after native archive signing by
+    eng/AfterSigning.targets so the tool packages contain the final signed/native payload.
+  -->
+
+  <Target Name="PackDotnetTool"
+          DependsOnTargets="_InitializeDotnetToolPackProperties;_ExtractNativeBinaryFromArchive;_PackRidSpecificDotnetTool;_PackPointerDotnetTool" />
+
+  <Target Name="_InitializeDotnetToolPackProperties">
+    <Error Condition="'$(CliRuntime)' == ''"
+           Text="CliRuntime must be set before packing the CLI tool." />
+
+    <PropertyGroup>
+      <!-- The native archive is the canonical payload. On signed platforms, MicroBuild signs nested files
+           and writes the signed streams back into this archive without updating Arcade's staging directory.
+           Linux archives are not signed here, but extracting still keeps the tool package aligned with the published archive. -->
+      <_CliArchiveFileName>$(ArchiveName)-$(Version)</_CliArchiveFileName>
+      <_CliArchivePath>$([MSBuild]::NormalizePath($(PackageOutputPath), '$(_CliArchiveFileName).$(ArchiveFormat)'))</_CliArchivePath>
+      <_NativeBinaryArchiveExtractionDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'extracted-tool-binary'))</_NativeBinaryArchiveExtractionDir>
+      <_ExtractedNativeBinaryPath>$([MSBuild]::NormalizePath($(_NativeBinaryArchiveExtractionDir), 'aspire'))</_ExtractedNativeBinaryPath>
+      <_ExtractedNativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_ExtractedNativeBinaryPath).exe</_ExtractedNativeBinaryPath>
+      <_CliToolPublishBaseDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish'))</_CliToolPublishBaseDir>
+      <_CliToolPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), '$(CliRuntime)'))</_CliToolPublishDir>
+      <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), 'pointer'))</_CliToolPointerPublishDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_SharedPackToolProperties Include="CreateRidSpecificToolPackages=true" />
+      <_SharedPackToolProperties Include="PreBuiltCliBinaryPath=$(_ExtractedNativeBinaryPath)" />
+      <_SharedPackToolProperties Include="PublishAot=true" />
+      <_SharedPackToolProperties Include="BundlePayloadPath=" />
+      <_SharedPackToolProperties Include="Configuration=$(Configuration)" />
+      <_SharedPackToolProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
+      <_SharedPackToolProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_SharedPackToolProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_ExtractNativeBinaryFromArchive"
+          DependsOnTargets="_InitializeDotnetToolPackProperties">
+    <Error Condition="'$(_CliArchivePath)' == '' or !Exists('$(_CliArchivePath)')"
+           Text="CLI archive path does not exist: '$(_CliArchivePath)'. Run the native archive build for $(CliRuntime) before PackDotnetTool." />
+
+    <RemoveDir Directories="$(_NativeBinaryArchiveExtractionDir)" />
+    <MakeDir Directories="$(_NativeBinaryArchiveExtractionDir)" />
+
+    <!-- ArchiveFormat is derived from CliRuntime above: Windows RIDs are zip archives,
+         and all supported Linux/macOS RIDs are tar.gz archives. -->
+    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;Expand-Archive -LiteralPath '$(_CliArchivePath)' -DestinationPath '$(_NativeBinaryArchiveExtractionDir)' -Force&quot;"
+          Condition="'$(ArchiveFormat)' == 'zip'" />
+    <Exec Command="tar -xzf '$(_CliArchivePath)' -C '$(_NativeBinaryArchiveExtractionDir)'"
+          Condition="'$(ArchiveFormat)' == 'tar.gz'" />
+
+    <Error Condition="!Exists('$(_ExtractedNativeBinaryPath)')"
+           Text="Could not find expected `aspire` binary at '$(_ExtractedNativeBinaryPath)' after extracting '$(_CliArchivePath)'." />
+  </Target>
+
+  <Target Name="_PackRidSpecificDotnetTool">
+    <ItemGroup>
+      <_PackToolProperties Include="@(_SharedPackToolProperties)" />
+      <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_PackToolProperties Include="PublishDir=$(_CliToolPublishDir)" />
+    </ItemGroup>
+
+    <Message Importance="High"
+             Text="Packing RID-specific CLI tool for $(CliRuntime) from '$(_ExtractedNativeBinaryPath)' extracted from '$(_CliArchivePath)'." />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+  </Target>
+
+  <Target Name="_PackPointerDotnetTool">
+    <ItemGroup>
+      <_PackPointerProperties Include="@(_SharedPackToolProperties)" />
+      <_PackPointerProperties Include="PublishDir=$(_CliToolPointerPublishDir)" />
+      <_PackPointerProperties Include="NoBuild=true" />
+    </ItemGroup>
+
+    <Message Importance="High"
+             Text="Packing CLI tool pointer package from '$(_ExtractedNativeBinaryPath)' extracted from '$(_CliArchivePath)'." />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
   </Target>
 
 </Project>

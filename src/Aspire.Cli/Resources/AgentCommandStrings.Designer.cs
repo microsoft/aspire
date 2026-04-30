@@ -259,6 +259,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to One-time setup: wire up AppHost with discovered projects.
+        /// </summary>
+        internal static string SkillDescription_Aspireify {
+            get {
+                return ResourceManager.GetString("SkillDescription_Aspireify", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Standard (.agents/skills/).
         /// </summary>
         internal static string SkillLocation_StandardName {

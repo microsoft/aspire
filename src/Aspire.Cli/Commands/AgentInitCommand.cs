@@ -100,7 +100,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
     /// </summary>
-    internal async Task<int> PromptAndChainAsync(
+    internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
         int previousResultExitCode,
         DirectoryInfo workspaceRoot,
@@ -109,7 +109,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     {
         if (previousResultExitCode != ExitCodeConstants.Success)
         {
-            return previousResultExitCode;
+            return new(previousResultExitCode, [], []);
         }
 
         var runAgentInit = await interactionService.PromptConfirmAsync(
@@ -122,13 +122,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, cancellationToken);
         }
 
-        return ExitCodeConstants.Success;
+        return new(ExitCodeConstants.Success, [], []);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
-        return await ExecuteAgentInitAsync(workspaceRoot, parseResult, cancellationToken);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, cancellationToken);
+        return result.ExitCode;
     }
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -161,7 +162,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return new DirectoryInfo(workspaceRootPath);
     }
 
-    private async Task<int> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, CancellationToken cancellationToken)
+    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
         {
@@ -375,7 +376,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             _interactionService.DisplaySuccess(McpCommandStrings.InitCommand_ConfigurationComplete);
         }
 
-        return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
+        return new(
+            hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success,
+            selectedLocations,
+            selectedSkills);
     }
 
     /// <summary>
@@ -455,3 +459,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
     }
 }
+
+internal readonly record struct AgentInitExecutionResult(
+    int ExitCode,
+    IReadOnlyList<SkillLocation> SelectedLocations,
+    IReadOnlyList<SkillDefinition> SelectedSkills);

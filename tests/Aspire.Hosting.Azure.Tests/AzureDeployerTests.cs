@@ -158,6 +158,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             };
         });
         ConfigureTestServices(builder, armClientProvider: armClientProvider, activityReporter: mockActivityReporter);
+        builder.Pipeline.DisableBuildOnlyContainerValidation();
 
         var containerAppEnv = builder.AddAzureContainerAppEnvironment("env");
 
@@ -1268,6 +1269,36 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         // Use Verify to snapshot the diagnostic output showing the dependency graph
         // The key assertion is that provision-api-website depends on provision-cache
         // because the Redis resource writes the secret that the API consumes
+        await Verify(logs);
+    }
+
+    [Fact]
+    public async Task DeployAsync_WithFoundryAndAzureContainerApps_CreatesCorrectDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "diagnostics");
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        ConfigureTestServices(builder, activityReporter: mockActivityReporter);
+
+        var foundryProject = builder.AddFoundry("foundry")
+            .AddProject("foundry-project");
+        var acaEnv = builder.AddAzureContainerAppEnvironment("aca-env");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .PublishAsHostedAgent(foundryProject);
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(acaEnv);
+
+        using var app = builder.Build();
+        await app.StartAsync();
+        await app.WaitForShutdownAsync();
+
+        var logs = mockActivityReporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .ToList();
+
         await Verify(logs);
     }
 

@@ -45,6 +45,9 @@ void main() throws Exception {
         dockerContainer.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8080.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("http").createIfNotExists(false));
         var endpoint = dockerContainer.getEndpoint("http");
         var expr = ReferenceExpression.refExpr("Host=%s", endpoint);
+        var endpointHost = endpoint.property(EndpointProperty.HOST);
+        var endpointPort = endpoint.property(EndpointProperty.PORT);
+        var endpointUrl = ReferenceExpression.refExpr("http://%s:%s", endpointHost, endpointPort);
         var builtConnectionString = builder.addConnectionString("customcs", expr);
         var envConnectionString = builder.addConnectionString("envcs");
         var expressionConnectionString = builder.addConnectionString("exprcs", expr);
@@ -62,6 +65,7 @@ void main() throws Exception {
         pipeline.addStep("custom-builder-step", (stepContext) -> { var builderSummary = stepContext.summary(); builderSummary.add("BuilderPipelineStep", "Validated"); }, new AddStepOptions().dependsOn(new String[] { WellKnownPipelineSteps.Build }).requiredBy(new String[] { WellKnownPipelineSteps.Publish }));
         pipeline.configure((configContext) -> { var builderPipeline = configContext.pipeline(); var _allSteps = builderPipeline.steps(); var _builderTaggedSteps = configContext.getSteps("custom-build"); });
         container.withEnvironment("MY_ENDPOINT", endpoint);
+        container.withEnvironment("MY_ENDPOINT_URL", endpointUrl);
         container.withEnvironment("MY_PARAM", configParam);
         container.withEnvironment("MY_BUILT_CONN", builtConnectionString);
         container.withEnvironment("MY_CONN", envConnectionString);

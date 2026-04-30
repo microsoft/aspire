@@ -75,7 +75,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // Create a working directory for this app host session
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appDirectoryPath));
         var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-        _workingDirectory = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "bundle-hosts", pathDir);
+        var workspaceAspireDirectory = ConfigurationHelper.GetWorkspaceAspireDirectory(new DirectoryInfo(_appDirectoryPath));
+        _workingDirectory = Path.Combine(workspaceAspireDirectory.FullName, "bundle-hosts", pathDir);
         Directory.CreateDirectory(_workingDirectory);
     }
 
@@ -170,14 +171,16 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
 
         var packages = packageRefs.Select(r => (r.Name, r.Version!)).ToList();
+        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(channelName, cancellationToken);
         var sources = await GetNuGetSourcesAsync(channelName, cancellationToken);
 
         return await _nugetService.RestorePackagesAsync(
             packages,
-            DotNetBasedAppHostServerProject.TargetFramework,
+            workingDirectory: _appDirectoryPath,
+            targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
-            workingDirectory: _appDirectoryPath,
+            nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
             ct: cancellationToken);
     }
 
@@ -398,6 +401,31 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         }
 
         return sources.Count > 0 ? sources : null;
+    }
+
+    private async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? channelName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(channelName))
+        {
+            return null;
+        }
+
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
+        var channel = channels.FirstOrDefault(c =>
+            c.Type == PackageChannelType.Explicit &&
+            c.Mappings is { Length: > 0 } &&
+            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        if (channel?.Mappings is null)
+        {
+            return null;
+        }
+
+        // Materializing the temp config is required for explicit channels so that
+        // restore honors the channel's package source mappings. Let IO/XML failures
+        // surface instead of silently falling back to the caller's unmapped sources,
+        // which could otherwise restore from an unintended feed.
+        return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
     }
 
     /// <inheritdoc />

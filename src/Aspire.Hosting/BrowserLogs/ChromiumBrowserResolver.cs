@@ -64,8 +64,9 @@ internal static class ChromiumBrowserResolver
             return directMatch;
         }
 
-        // Chromium stores display names in the user-data-root "Local State" file under profile.info_cache. Directory
-        // names like "Default" or "Profile 1" are stable command-line values, while display names are user-facing.
+        // Chromium stores profile metadata in the user-data-root "Local State" file under profile.info_cache. Directory
+        // names like "Default" or "Profile 1" are stable command-line values, while "name" and "shortcut_name" are
+        // user-facing labels that can be renamed in the browser UI.
         //
         // Relevant Local State shape:
         // {
@@ -152,6 +153,58 @@ internal static class ChromiumBrowserResolver
         return match;
     }
 
+    internal static IReadOnlyList<ChromiumBrowserProfile> GetAvailableProfiles(string userDataDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userDataDirectory);
+
+        if (!Directory.Exists(userDataDirectory))
+        {
+            return [];
+        }
+
+        var profiles = new Dictionary<string, ChromiumBrowserProfile>(StringComparer.OrdinalIgnoreCase);
+        var localStatePath = Path.Combine(userDataDirectory, "Local State");
+        if (File.Exists(localStatePath))
+        {
+            // Prefer Local State because it is the only place we can get the profile display names shown in the
+            // configure dialog. The profile.info_cache object is keyed by profile directory name:
+            //
+            // <user-data-dir>\
+            //   Local State
+            //   Default\       <-- key "Default"; often displayed as "Profile 1" or a user-chosen name
+            //   Profile 1\     <-- key "Profile 1"; display name might be "Work"
+            //
+            // The directory key is what Chromium accepts in --profile-directory. The display name is friendlier but
+            // not unique, so the picker shows both when they differ and we persist the stable directory name.
+            try
+            {
+                using var localStateStream = File.OpenRead(localStatePath);
+                using var localStateDocument = JsonDocument.Parse(localStateStream);
+                AddProfilesFromLocalState(localStateDocument.RootElement, userDataDirectory, profiles);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                // Fall back to profile directory names below. This can happen while Chromium is writing Local State.
+            }
+        }
+
+        // Local State can be missing (new/empty user data directory), stale, or temporarily unreadable while Chromium
+        // is writing it. Fall back to the profile directory names Chromium conventionally creates so the picker still
+        // offers useful values when metadata is incomplete.
+        foreach (var directoryPath in Directory.EnumerateDirectories(userDataDirectory))
+        {
+            var directoryName = Path.GetFileName(directoryPath);
+            if (IsLikelyProfileDirectory(directoryName) && !profiles.ContainsKey(directoryName))
+            {
+                profiles[directoryName] = new ChromiumBrowserProfile(directoryName, DisplayName: null, ShortcutName: null);
+            }
+        }
+
+        return [.. profiles.Values
+            .OrderBy(static profile => string.Equals(profile.DirectoryName, "Default", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(static profile => profile.DirectoryName, StringComparer.OrdinalIgnoreCase)];
+    }
+
     /// <summary>
     /// Gets platform-specific candidate executables for logical browser names.
     /// </summary>
@@ -223,6 +276,40 @@ internal static class ChromiumBrowserResolver
         return null;
     }
 
+    private static void AddProfilesFromLocalState(JsonElement localStateRoot, string userDataDirectory, Dictionary<string, ChromiumBrowserProfile> profiles)
+    {
+        if (!localStateRoot.TryGetProperty("profile", out var profileElement) ||
+            !profileElement.TryGetProperty("info_cache", out var infoCacheElement) ||
+            infoCacheElement.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var profileEntry in infoCacheElement.EnumerateObject())
+        {
+            // Chromium can leave profile.info_cache entries behind after a profile is deleted. Ignore entries whose
+            // directories are missing so the dashboard doesn't offer stale profile choices.
+            if (!Directory.Exists(Path.Combine(userDataDirectory, profileEntry.Name)))
+            {
+                continue;
+            }
+
+            profiles[profileEntry.Name] = new ChromiumBrowserProfile(
+                profileEntry.Name,
+                TryGetProfileProperty(profileEntry.Value, "name"),
+                TryGetProfileProperty(profileEntry.Value, "shortcut_name"));
+        }
+    }
+
+    private static bool IsLikelyProfileDirectory(string directoryName)
+    {
+        // Chromium's profile folders are convention-based. "Default" is the first profile, then additional profiles
+        // are usually "Profile 1", "Profile 2", etc. Other folders in the user data directory (ShaderCache, Crashpad,
+        // BrowserMetrics, component data, ...) are not launchable profiles and should not be shown as choices.
+        return string.Equals(directoryName, "Default", StringComparison.OrdinalIgnoreCase) ||
+            directoryName.StartsWith("Profile ", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool MatchesBrowserProfile(JsonProperty profileEntry, string profile)
     {
         return string.Equals(profileEntry.Name, profile, StringComparison.OrdinalIgnoreCase) ||
@@ -236,4 +323,14 @@ internal static class ChromiumBrowserResolver
             propertyElement.ValueKind == JsonValueKind.String &&
             string.Equals(propertyElement.GetString(), profile, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string? TryGetProfileProperty(JsonElement profileElement, string propertyName)
+    {
+        return profileElement.TryGetProperty(propertyName, out var propertyElement) &&
+            propertyElement.ValueKind == JsonValueKind.String
+                ? propertyElement.GetString()
+                : null;
+    }
 }
+
+internal sealed record ChromiumBrowserProfile(string DirectoryName, string? DisplayName, string? ShortcutName);

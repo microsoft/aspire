@@ -1,8 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <ToolPackageRuntimeIdentifiers>$(RuntimeIdentifiers)</ToolPackageRuntimeIdentifiers>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -32,14 +33,31 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>aspire</ToolCommandName>
     <PackageId>Aspire.Cli</PackageId>
-    <RollForward>Major</RollForward>
     <PackageTags>aspire cli</PackageTags>
     <Description>Command line tool for Aspire developers.</Description>
-    <!-- For 9.5 we want to keep the tool platform-independent, framework-dependent.
-         To do this we make sure it doesn't PublishAOT, and ensure that it doesn't publish for any RIDs at all. -->
-    <PublishAot>false</PublishAot>
+    <!-- Tool packages are packed from prebuilt NativeAOT binaries. Clear the default
+         RuntimeIdentifiers list so clipack can pack one RID-specific tool package at a time
+         using RuntimeIdentifier and PreBuiltCliBinaryPath. -->
     <RuntimeIdentifiers></RuntimeIdentifiers>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PreBuiltCliBinaryPath)' != '' and '$(IsCliToolProject)' == 'true'">
+    <IsPublishable>false</IsPublishable>
+    <PublishDepsFilePath></PublishDepsFilePath>
+    <PublishRuntimeConfigFilePath></PublishRuntimeConfigFilePath>
+  </PropertyGroup>
+
+  <Target Name="_PreparePreBuiltCliBinaryForPackTool"
+          BeforeTargets="PackTool"
+          Condition="'$(IsCliToolProject)' == 'true'">
+
+    <Error Condition="'$(PreBuiltCliBinaryPath)' == '' or !Exists('$(PreBuiltCliBinaryPath)')"
+           Text="Could not find %24(PreBuiltCliBinaryPath) = '$(PreBuiltCliBinaryPath)'. Aspire.Cli.Tool.csproj requires PreBuiltCliBinaryPath to pack NativeAOT tool packages. Use eng/clipack to build tool packages." />
+
+    <RemoveDir Directories="$(PublishDir)" />
+    <MakeDir Directories="$(PublishDir)" />
+    <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+  </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
     <LinkerArg Condition="'$(RuntimeIdentifier)' == 'linux-musl-x64'" Include="--target=x86_64-alpine-linux-musl" />
@@ -228,6 +246,9 @@
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\.agents\skills\aspireify\**\*" LogicalName="skills.aspireify/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
   </ItemGroup>

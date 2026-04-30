@@ -25,7 +25,7 @@ internal static class SharedAIHelpers
     public const int MaximumListTokenLength = 8192;
     public const int MaximumStringLength = 2048;
 
-    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new JsonSerializerOptions
+    internal static readonly JsonSerializerOptions s_jsonSerializerOptions = new JsonSerializerOptions
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
@@ -147,6 +147,175 @@ internal static class SharedAIHelpers
     }
 
     /// <summary>
+    /// Serializes OTLP resource spans to a JSON string of individual spans for CLI output.
+    /// Unlike <see cref="GetTracesJson"/>, which groups spans by trace ID, this returns a flat list.
+    /// </summary>
+    public static string SerializeSpansToJson(
+        IList<OtlpResourceSpansJson>? resourceSpans,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var spans = GetSpanDtosFromOtlpData(resourceSpans);
+        var context = new PromptContext(processValues: false);
+        var jsonArray = new JsonArray(spans.Select(s => GetSpanDto(s, context, getResourceName, dashboardBaseUrl)).ToArray<JsonNode>());
+        return jsonArray.ToJsonString(s_jsonSerializerOptions);
+    }
+
+    /// <summary>
+    /// Serializes OTLP resource logs to a JSON string of log entries for CLI output.
+    /// </summary>
+    public static string SerializeLogsToJson(
+        IList<OtlpResourceLogsJson>? resourceLogs,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var logRecords = GetLogRecordsFromOtlpData(resourceLogs);
+        var context = new PromptContext(processValues: false);
+        var jsonArray = new JsonArray(logRecords.Select(l => GetLogEntryDto(l, context, getResourceName, dashboardBaseUrl)).ToArray<JsonNode>());
+        return jsonArray.ToJsonString(s_jsonSerializerOptions);
+    }
+
+    /// <summary>
+    /// Serializes OTLP resource spans to a JSON string of traces for CLI output.
+    /// </summary>
+    public static string SerializeTracesToJson(
+        IList<OtlpResourceSpansJson>? resourceSpans,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var traces = GetTracesFromOtlpData(resourceSpans);
+        var context = new PromptContext(processValues: false);
+        var jsonArray = new JsonArray(traces.Select(t => GetTraceDto(t, context, getResourceName, dashboardBaseUrl)).ToArray<JsonNode>());
+        return jsonArray.ToJsonString(s_jsonSerializerOptions);
+    }
+
+    /// <summary>
+    /// Serializes a single trace DTO to JSON for CLI output.
+    /// </summary>
+    public static string SerializeTraceToJson(
+        OtlpTraceDto traceDto,
+        Func<IOtlpResource, string>? getResourceName = null,
+        string? dashboardBaseUrl = null)
+    {
+        var context = new PromptContext(processValues: false);
+        return GetTraceDto(traceDto, context, getResourceName ?? (s => s.ResourceName), dashboardBaseUrl)
+            .ToJsonString(s_jsonSerializerOptions);
+    }
+
+    /// <summary>
+    /// Creates a JsonObject representing a single span for AI processing.
+    /// </summary>
+    public static JsonObject GetSpanDto(
+        OtlpSpanDto spanDto,
+        PromptContext context,
+        Func<IOtlpResource, string> getResourceName,
+        string? dashboardBaseUrl = null)
+    {
+        var span = spanDto.Span;
+        var spanId = span.SpanId ?? string.Empty;
+        var traceId = span.TraceId ?? string.Empty;
+
+        var attributesObj = new JsonObject();
+        if (span.Attributes is not null)
+        {
+            foreach (var attr in span.Attributes.Where(a => a.Key != OtlpHelpers.AspireDestinationNameAttribute))
+            {
+                var attrValue = MapOtelAttributeValue(attr);
+                attributesObj[attr.Key!] = context.AddValue(attrValue, id => $@"Duplicate of attribute ""{id.Key}"" for span {OtlpHelpers.ToShortenedId(id.SpanId)}", (SpanId: spanId, attr.Key));
+            }
+        }
+
+        JsonArray? linksArray = null;
+        if (span.Links is { Length: > 0 })
+        {
+            var linkObjects = span.Links.Select(link => (JsonNode)new JsonObject
+            {
+                ["traceId"] = link.TraceId ?? string.Empty,
+                ["spanId"] = link.SpanId ?? string.Empty
+            }).ToArray();
+            linksArray = new JsonArray(linkObjects);
+        }
+
+        var resourceName = getResourceName?.Invoke(spanDto.Resource) ?? spanDto.Resource.ResourceName;
+        var destination = GetAttributeStringValue(span.Attributes, OtlpHelpers.AspireDestinationNameAttribute);
+        var statusCode = span.Status?.Code;
+        var statusText = statusCode switch
+        {
+            1 => "Ok",
+            2 => "Error",
+            _ => null
+        };
+
+        var timestamp = span.StartTimeUnixNano is { } startNano
+            ? OtlpHelpers.UnixNanoSecondsToDateTime(startNano)
+            : (DateTime?)null;
+
+        var spanObj = new JsonObject
+        {
+            ["traceId"] = traceId,
+            ["spanId"] = spanId,
+            ["parentSpanId"] = span.ParentSpanId,
+            ["kind"] = GetSpanKindName(span.Kind),
+            ["name"] = context.AddValue(span.Name, sId => $@"Duplicate of ""name"" for span {OtlpHelpers.ToShortenedId(sId)}", spanId),
+            ["status"] = statusText,
+            ["statusMessage"] = context.AddValue(span.Status?.Message, sId => $@"Duplicate of ""statusMessage"" for span {OtlpHelpers.ToShortenedId(sId)}", spanId),
+            ["source"] = resourceName,
+            ["destination"] = destination,
+            ["durationMs"] = CalculateDurationMs(span.StartTimeUnixNano, span.EndTimeUnixNano),
+            ["timestamp"] = timestamp,
+            ["attributes"] = attributesObj,
+            ["links"] = linksArray
+        };
+
+        if (dashboardBaseUrl is not null)
+        {
+            spanObj["dashboardUrl"] = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.TraceDetailUrl(traceId, spanId: spanId));
+        }
+
+        return StripNullProperties(spanObj);
+    }
+
+    /// <summary>
+    /// Extracts individual spans from OTLP resource spans as a flat list.
+    /// </summary>
+    public static List<OtlpSpanDto> GetSpanDtosFromOtlpData(IList<OtlpResourceSpansJson>? resourceSpans)
+    {
+        var spans = new List<OtlpSpanDto>();
+
+        if (resourceSpans is null)
+        {
+            return spans;
+        }
+
+        foreach (var resourceSpan in resourceSpans)
+        {
+            var resource = CreateResourceFromOtlpJson(resourceSpan.Resource);
+
+            if (resourceSpan.ScopeSpans is null)
+            {
+                continue;
+            }
+
+            foreach (var scopeSpan in resourceSpan.ScopeSpans)
+            {
+                var scopeName = scopeSpan.Scope?.Name;
+
+                if (scopeSpan.Spans is null)
+                {
+                    continue;
+                }
+
+                foreach (var span in scopeSpan.Spans)
+                {
+                    spans.Add(new OtlpSpanDto(span, resource, scopeName));
+                }
+            }
+        }
+
+        return spans;
+    }
+
+    /// <summary>
     /// Extracts traces from OTLP resource spans, grouping spans by trace ID.
     /// </summary>
     public static List<OtlpTraceDto> GetTracesFromOtlpData(IList<OtlpResourceSpansJson>? resourceSpans)
@@ -212,59 +381,12 @@ internal static class SharedAIHelpers
         var spanObjects = new List<JsonNode>();
         foreach (var s in trace.Spans)
         {
-            var span = s.Span;
-            var spanId = span.SpanId ?? string.Empty;
-
-            var attributesObj = new JsonObject();
-            if (span.Attributes is not null)
-            {
-                foreach (var attr in span.Attributes.Where(a => a.Key != OtlpHelpers.AspireDestinationNameAttribute))
-                {
-                    var attrValue = MapOtelAttributeValue(attr);
-                    attributesObj[attr.Key!] = context.AddValue(attrValue, id => $@"Duplicate of attribute ""{id.Key}"" for span {OtlpHelpers.ToShortenedId(id.SpanId)}", (SpanId: spanId, attr.Key));
-                }
-            }
-
-            JsonArray? linksArray = null;
-            if (span.Links is { Length: > 0 })
-            {
-                var linkObjects = span.Links.Select(link => (JsonNode)new JsonObject
-                {
-                    ["trace_id"] = OtlpHelpers.ToShortenedId(link.TraceId ?? string.Empty),
-                    ["span_id"] = OtlpHelpers.ToShortenedId(link.SpanId ?? string.Empty)
-                }).ToArray();
-                linksArray = new JsonArray(linkObjects);
-            }
-
-            var resourceName = getResourceName?.Invoke(s.Resource) ?? s.Resource.ResourceName;
-            var destination = GetAttributeStringValue(span.Attributes, OtlpHelpers.AspireDestinationNameAttribute);
-            var statusCode = span.Status?.Code;
-            var statusText = statusCode switch
-            {
-                1 => "Ok",
-                2 => "Error",
-                _ => null
-            };
-
-            var spanObj = new JsonObject
-            {
-                ["span_id"] = OtlpHelpers.ToShortenedId(spanId),
-                ["parent_span_id"] = span.ParentSpanId is { } id ? OtlpHelpers.ToShortenedId(id) : null,
-                ["kind"] = GetSpanKindName(span.Kind),
-                ["name"] = context.AddValue(span.Name, sId => $@"Duplicate of ""name"" for span {OtlpHelpers.ToShortenedId(sId)}", spanId),
-                ["status"] = statusText,
-                ["status_message"] = context.AddValue(span.Status?.Message, sId => $@"Duplicate of ""status_message"" for span {OtlpHelpers.ToShortenedId(sId)}", spanId),
-                ["source"] = resourceName,
-                ["destination"] = destination,
-                ["duration_ms"] = CalculateDurationMs(span.StartTimeUnixNano, span.EndTimeUnixNano),
-                ["attributes"] = attributesObj,
-                ["links"] = linksArray
-            };
+            var spanObj = GetSpanDto(s, context, getResourceName, dashboardBaseUrl: null);
             spanObjects.Add(spanObj);
         }
 
         var spanArray = new JsonArray(spanObjects.ToArray());
-        var traceId = OtlpHelpers.ToShortenedId(trace.TraceId);
+        var traceId = trace.TraceId;
         var rootSpan = trace.Spans.FirstOrDefault(s => string.IsNullOrEmpty(s.Span.ParentSpanId)) ?? trace.Spans.FirstOrDefault();
         var hasError = trace.Spans.Any(s => s.Span.Status?.Code == 2);
         var timestamp = rootSpan?.Span.StartTimeUnixNano is { } startNano
@@ -273,20 +395,20 @@ internal static class SharedAIHelpers
 
         var traceData = new JsonObject
         {
-            ["trace_id"] = traceId,
-            ["duration_ms"] = CalculateTraceDurationMs(trace.Spans),
+            ["traceId"] = traceId,
+            ["durationMs"] = CalculateTraceDurationMs(trace.Spans),
             ["title"] = rootSpan?.Span.Name,
             ["spans"] = spanArray,
-            ["has_error"] = hasError,
+            ["hasError"] = hasError,
             ["timestamp"] = timestamp
         };
 
         if (dashboardBaseUrl is not null)
         {
-            traceData["dashboard_link"] = GetDashboardLinkObject(dashboardBaseUrl, DashboardUrls.TraceDetailUrl(traceId), traceId);
+            traceData["dashboardUrl"] = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.TraceDetailUrl(traceId));
         }
 
-        return traceData;
+        return StripNullProperties(traceData);
     }
 
     private static string MapOtelAttributeValue(OtlpKeyValueJson attribute)
@@ -381,6 +503,16 @@ internal static class SharedAIHelpers
             5 => "Consumer",
             _ => null
         };
+    }
+
+    private static JsonObject StripNullProperties(JsonObject obj)
+    {
+        foreach (var key in obj.Where(kvp => kvp.Value is null).Select(kvp => kvp.Key).ToList())
+        {
+            obj.Remove(key);
+        }
+
+        return obj;
     }
 
     private static int? CalculateDurationMs(ulong? startTimeUnixNano, ulong? endTimeUnixNano)
@@ -591,12 +723,12 @@ internal static class SharedAIHelpers
         var message = GetLogMessage(logEntry.LogRecord) ?? string.Empty;
         var log = new JsonObject
         {
-            ["log_id"] = logId,
-            ["span_id"] = OtlpHelpers.ToShortenedId(logEntry.LogRecord.SpanId ?? string.Empty),
-            ["trace_id"] = OtlpHelpers.ToShortenedId(logEntry.LogRecord.TraceId ?? string.Empty),
+            ["logId"] = logId,
+            ["spanId"] = logEntry.LogRecord.SpanId,
+            ["traceId"] = logEntry.LogRecord.TraceId,
             ["message"] = context.AddValue(message, id => $@"Duplicate of ""message"" for log entry {id}", logId),
             ["severity"] = logEntry.LogRecord.SeverityText ?? "Unknown",
-            ["resource_name"] = resourceName,
+            ["resourceName"] = resourceName,
             ["attributes"] = attributesObject,
             ["exception"] = context.AddValue(exceptionText, id => $@"Duplicate of ""exception"" for log entry {id}", logId),
             ["source"] = logEntry.ScopeName
@@ -604,19 +736,10 @@ internal static class SharedAIHelpers
 
         if (dashboardBaseUrl is not null && logId is not null)
         {
-            log["dashboard_link"] = GetDashboardLinkObject(dashboardBaseUrl, DashboardUrls.StructuredLogsUrl(logEntryId: logId), $"log_id: {logId}");
+            log["dashboardUrl"] = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.StructuredLogsUrl(logEntryId: logId));
         }
 
-        return log;
-    }
-
-    public static JsonObject? GetDashboardLinkObject(string dashboardBaseUrl, string path, string text)
-    {
-        return new JsonObject
-        {
-            ["url"] = DashboardUrls.CombineUrl(dashboardBaseUrl, path),
-            ["text"] = text
-        };
+        return StripNullProperties(log);
     }
 
     /// <summary>

@@ -29,7 +29,9 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
     internal static BrowserConfiguration Resolve(
         IConfiguration configuration,
         string resourceName,
-        BrowserConfigurationOverrides overrides)
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration = null,
+        BrowserConfiguration? globalRuntimeConfiguration = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
@@ -40,17 +42,9 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
         // Resolution order is explicit argument -> resource-specific config -> global browser-log config -> default.
         // Resolve user-data mode before browser so the browser default can prefer Edge for shared state and Chrome for
         // disposable isolated state.
-        var resolvedProfile = overrides.Profile
-            ?? resourceSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey]
-            ?? browserLogsSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey];
-        var resolvedUserDataMode = overrides.UserDataMode
-            ?? ParseUserDataMode(resourceSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey])
-            ?? ParseUserDataMode(browserLogsSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey])
-            ?? DefaultUserDataMode;
-        var resolvedBrowser = overrides.Browser
-            ?? resourceSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey]
-            ?? browserLogsSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey]
-            ?? GetDefaultBrowser(resolvedUserDataMode);
+        var resolvedProfile = ResolveProfile(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
+        var resolvedUserDataMode = ResolveUserDataMode(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
+        var resolvedBrowser = ResolveBrowser(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection, resolvedUserDataMode);
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
         {
@@ -77,8 +71,7 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
 
         // Stable per-AppHost key sourced from DistributedApplicationBuilder. Only Isolated mode actually needs it
         // (its user-data path includes the AppHost segment), but it is always captured here so the registry never
-        // has to re-read configuration. Same SHA value is used by FileDeploymentStateManager for analogous
-        // per-AppHost persistent state.
+        // has to re-read configuration. The same SHA value is used for other per-AppHost persisted state.
         var appHostKey = configuration["AppHost:PathSha256"];
 
         return new BrowserConfiguration(resolvedBrowser, resolvedProfile, resolvedUserDataMode, appHostKey);
@@ -114,16 +107,16 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
         return "chrome";
     }
 
-    private static BrowserUserDataMode? ParseUserDataMode(string? value)
+    private static ConfigurationValue<BrowserUserDataMode> ParseUserDataMode(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return null;
+            return ConfigurationValue<BrowserUserDataMode>.Missing;
         }
 
         if (Enum.TryParse<BrowserUserDataMode>(value, ignoreCase: true, out var parsed))
         {
-            return parsed;
+            return ConfigurationValue<BrowserUserDataMode>.Present(parsed);
         }
 
         throw new InvalidOperationException(
@@ -138,9 +131,111 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
 
     private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) =>
         GetDefaultBrowser(userDataMode, ChromiumBrowserResolver.TryResolveExecutable);
+
+    private static string? ResolveProfile(
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration,
+        BrowserConfiguration? globalRuntimeConfiguration,
+        IConfigurationSection resourceSection,
+        IConfigurationSection browserLogsSection)
+        => ResolveValue(
+            FromOptionalString(explicitValues.Profile),
+            resourceRuntimeConfiguration,
+            globalRuntimeConfiguration,
+            static configuration => configuration.Profile,
+            resourceSection,
+            browserLogsSection,
+            BrowserLogsBuilderExtensions.ProfileConfigurationKey,
+            FromOptionalString,
+            static () => null);
+
+    private static BrowserUserDataMode ResolveUserDataMode(
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration,
+        BrowserConfiguration? globalRuntimeConfiguration,
+        IConfigurationSection resourceSection,
+        IConfigurationSection browserLogsSection)
+        => ResolveValue(
+            explicitValues.UserDataMode is { } explicitUserDataMode
+                ? ConfigurationValue<BrowserUserDataMode>.Present(explicitUserDataMode)
+                : ConfigurationValue<BrowserUserDataMode>.Missing,
+            resourceRuntimeConfiguration,
+            globalRuntimeConfiguration,
+            static configuration => configuration.UserDataMode,
+            resourceSection,
+            browserLogsSection,
+            BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+            ParseUserDataMode,
+            static () => DefaultUserDataMode);
+
+    private static string ResolveBrowser(
+        BrowserConfigurationExplicitValues explicitValues,
+        BrowserConfiguration? resourceRuntimeConfiguration,
+        BrowserConfiguration? globalRuntimeConfiguration,
+        IConfigurationSection resourceSection,
+        IConfigurationSection browserLogsSection,
+        BrowserUserDataMode resolvedUserDataMode)
+        => ResolveValue<string?>(
+            FromOptionalString(explicitValues.Browser),
+            resourceRuntimeConfiguration,
+            globalRuntimeConfiguration,
+            static configuration => configuration.Browser,
+            resourceSection,
+            browserLogsSection,
+            BrowserLogsBuilderExtensions.BrowserConfigurationKey,
+            FromOptionalString,
+            () => GetDefaultBrowser(resolvedUserDataMode))!;
+
+    private static T ResolveValue<T>(
+        ConfigurationValue<T> explicitValue,
+        BrowserConfiguration? resourceRuntimeConfiguration,
+        BrowserConfiguration? globalRuntimeConfiguration,
+        Func<BrowserConfiguration, T> getRuntimeValue,
+        IConfigurationSection resourceSection,
+        IConfigurationSection browserLogsSection,
+        string configurationKey,
+        Func<string?, ConfigurationValue<T>> parseConfigurationValue,
+        Func<T> getDefault)
+    {
+        if (explicitValue.HasValue)
+        {
+            return explicitValue.Value;
+        }
+
+        if (resourceRuntimeConfiguration is { } resourceRuntime)
+        {
+            return getRuntimeValue(resourceRuntime);
+        }
+
+        var resourceConfiguration = parseConfigurationValue(resourceSection[configurationKey]);
+        if (resourceConfiguration.HasValue)
+        {
+            return resourceConfiguration.Value;
+        }
+
+        if (globalRuntimeConfiguration is { } globalRuntime)
+        {
+            return getRuntimeValue(globalRuntime);
+        }
+
+        var globalConfiguration = parseConfigurationValue(browserLogsSection[configurationKey]);
+        return globalConfiguration.HasValue
+            ? globalConfiguration.Value
+            : getDefault();
+    }
+
+    private static ConfigurationValue<string?> FromOptionalString(string? value) =>
+        value is null ? ConfigurationValue<string?>.Missing : ConfigurationValue<string?>.Present(value);
+
+    private readonly record struct ConfigurationValue<T>(bool HasValue, T Value)
+    {
+        public static ConfigurationValue<T> Missing => new(false, default!);
+
+        public static ConfigurationValue<T> Present(T value) => new(true, value);
+    }
 }
 
 /// <summary>
-/// Explicit browser configuration values supplied by the resource builder.
+/// Browser configuration values explicitly supplied by the resource builder.
 /// </summary>
-internal readonly record struct BrowserConfigurationOverrides(string? Browser, string? Profile, BrowserUserDataMode? UserDataMode);
+internal readonly record struct BrowserConfigurationExplicitValues(string? Browser, string? Profile, BrowserUserDataMode? UserDataMode);

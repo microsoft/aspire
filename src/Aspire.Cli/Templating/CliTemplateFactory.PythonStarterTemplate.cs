@@ -121,16 +121,12 @@ internal sealed partial class CliTemplateFactory
 
     private async Task<bool> ResolveUseRedisCacheAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var binding = PromptBinding.CreateBoolAsSelection(parseResult, _useRedisCacheOption);
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, _useRedisCacheOption, interactiveDefault: true, nonInteractiveDefault: false);
 
-        var selected = await _interactionService.PromptForSelectionAsync(
+        var useRedisCache = await _interactionService.PromptConfirmAsync(
             TemplatingStrings.UseRedisCache_Prompt,
-            [TemplatingStrings.Yes, TemplatingStrings.No],
-            choice => choice,
             binding: binding,
             cancellationToken: cancellationToken);
-
-        var useRedisCache = string.Equals(selected, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput);
 
         if (useRedisCache)
         {

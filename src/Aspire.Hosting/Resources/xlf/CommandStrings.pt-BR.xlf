@@ -12,6 +12,151 @@
         <target state="new">Capture screenshot</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserApplied">
+        <source>Applied tracked browser settings for {0}.</source>
+        <target state="new">Applied tracked browser settings for {0}.</target>
+        <note>{0} is the selected configuration scope.</note>
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserBrowserDescription">
+        <source>Choose an installed Chromium-based browser or enter an executable path.</source>
+        <target state="new">Choose an installed Chromium-based browser or enter an executable path.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserBrowserLabel">
+        <source>Browser</source>
+        <target state="new">Browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserBrowserRequired">
+        <source>Browser is required.</source>
+        <target state="new">Browser is required.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserChromeOption">
+        <source>Google Chrome (chrome)</source>
+        <target state="new">Google Chrome (chrome)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserChromiumOption">
+        <source>Chromium (chromium)</source>
+        <target state="new">Chromium (chromium)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserDefaultProfileOption">
+        <source>Browser default profile</source>
+        <target state="new">Browser default profile</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserDescription">
+        <source>Choose the browser, profile, and scope used by tracked browser sessions.</source>
+        <target state="new">Choose the browser, profile, and scope used by tracked browser sessions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserEdgeOption">
+        <source>Microsoft Edge (msedge)</source>
+        <target state="new">Microsoft Edge (msedge)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserGlobalScopeOption">
+        <source>All BrowserLogs resources</source>
+        <target state="new">All BrowserLogs resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserGlobalScopeResult">
+        <source>all BrowserLogs resources</source>
+        <target state="new">all BrowserLogs resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserInteractionUnavailable">
+        <source>Tracked browser settings cannot be configured because dashboard interactions are not available.</source>
+        <target state="new">Tracked browser settings cannot be configured because dashboard interactions are not available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserName">
+        <source>Configure tracked browser</source>
+        <target state="new">Configure tracked browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserProfileDescription">
+        <source>Choose a Chromium profile from the Aspire-managed browser hive, or enter a profile directory/name.</source>
+        <target state="new">Choose a Chromium profile from the Aspire-managed browser hive, or enter a profile directory/name.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserProfileLabel">
+        <source>Profile</source>
+        <target state="new">Profile</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserProfileOptionWithDisplayName">
+        <source>{0} ({1})</source>
+        <target state="new">{0} ({1})</target>
+        <note>{0} is the Chromium profile directory name, {1} is the profile display name.</note>
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserProfileRequiresShared">
+        <source>Profiles can only be selected when user data mode is Shared.</source>
+        <target state="new">Profiles can only be selected when user data mode is Shared.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserPromptMessage">
+        <source>Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</source>
+        <target state="new">Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserResourceScopeOption">
+        <source>This resource only ({0})</source>
+        <target state="new">This resource only ({0})</target>
+        <note>{0} is the parent resource name.</note>
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserSaveButton">
+        <source>Apply</source>
+        <target state="new">Apply</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserSaveFailed">
+        <source>Tracked browser settings could not be saved to user secrets for key '{0}'.</source>
+        <target state="new">Tracked browser settings could not be saved to user secrets for key '{0}'.</target>
+        <note>{0} is the user secrets key.</note>
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured">
+        <source>Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them.</source>
+        <target state="new">Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured">
+        <source>User secrets are not configured for this AppHost, so settings can only apply to this running AppHost.</source>
+        <target state="new">User secrets are not configured for this AppHost, so settings can only apply to this running AppHost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsLabel">
+        <source>Save to AppHost user secrets</source>
+        <target state="new">Save to AppHost user secrets</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserSaved">
+        <source>Saved tracked browser settings for {0}.</source>
+        <target state="new">Saved tracked browser settings for {0}.</target>
+        <note>{0} is the selected configuration scope.</note>
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserScopeLabel">
+        <source>Scope</source>
+        <target state="new">Scope</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserUserDataModeLabel">
+        <source>User data mode</source>
+        <target state="new">User data mode</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserUserDataModeRequired">
+        <source>User data mode must be Shared or Isolated.</source>
+        <target state="new">User data mode must be Shared or Isolated.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureTrackedBrowserUserSecretsUnavailable">
+        <source>Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</source>
+        <target state="new">Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeleteParameterDescription">
         <source>Delete parameter value</source>
         <target state="translated">Excluir valor do parâmetro</target>

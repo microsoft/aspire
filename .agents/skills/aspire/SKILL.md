@@ -12,7 +12,7 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 ## Use this skill for
 
 - Starting, restarting, and stopping AppHosts with `aspire start` and `aspire stop`
-- Initializing Aspire in an existing app with `aspire init`
+- Initializing Aspire in an existing app with `aspire init` (drops skeleton files; use the `aspireify` skill to complete wiring)
 - Inspecting resources, logs, traces, and docs
 - Adding integrations with `aspire add`
 - Recovering missing TypeScript AppHost support files with `aspire restore`

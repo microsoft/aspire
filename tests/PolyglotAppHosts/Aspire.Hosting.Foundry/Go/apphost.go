@@ -58,6 +58,31 @@ func main() {
 	project.AddConnection(storage)
 	project.AddConnection(registry)
 	project.AddConnection(keyVault)
+	project.AddSearchConnection(search)
+
+	_ = project.AddCodeInterpreterTool("code-interpreter")
+	_ = project.AddFileSearchTool("file-search", []string{"vs_placeholder"})
+	_ = project.AddWebSearchTool("web-search")
+	_ = project.AddImageGenerationTool("image-gen")
+	_ = project.AddComputerUseTool("computer-use")
+
+	aiSearchTool := project.AddAISearchTool("ai-search-tool")
+	aiSearchTool.WithReference(search)
+
+	bingConn := project.AddBingGroundingConnection("bing-conn", "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing")
+	bingTool := project.AddBingGroundingTool("bing-tool")
+	bingTool.WithReference(bingConn)
+	bingTool2 := project.AddBingGroundingTool("bing-tool-2")
+	bingTool2.WithReference("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing")
+	bingParam := builder.AddParameter("bing-resource-id")
+	bingTool3 := project.AddBingGroundingTool("bing-tool-3")
+	bingTool3.WithReference(bingParam)
+
+	_ = project.AddSharePointTool("sharepoint-tool", []string{"https://contoso.sharepoint.com", "MySite"})
+	_ = project.AddFabricTool("fabric-tool", []string{"workspace-id"})
+	_ = project.AddAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q")
+	_ = project.AddFunctionTool("func-tool", "myFunc", "{}")
+	_ = project.AddPromptAgent(chat, "prompt-agent")
 
 	builderProjectFoundry := builder.AddFoundry("builder-project-foundry")
 	builderProject := builderProjectFoundry.AddProject("builder-project")

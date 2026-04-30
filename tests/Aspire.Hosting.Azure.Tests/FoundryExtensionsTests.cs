@@ -174,7 +174,7 @@ public class FoundryExtensionsTests
         var manifest = await AzureManifestUtils.GetManifestWithBicep(model, foundry.Resource);
 
         var roles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "foundry-roles");
-        var rolesManifest = await AzureManifestUtils.GetManifestWithBicep(model, roles);
+        var rolesManifest = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
 
         Assert.Contains("name: 'foundry-caphost'", manifest.BicepText);
 
