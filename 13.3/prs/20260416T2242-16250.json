@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Internal build infrastructure fix",
+  "mergedAt": "2026-04-16T22:42:37Z",
+  "number": 16250,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Use libicu-dev in Ubuntu Dockerfiles"
+}

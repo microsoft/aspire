@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "A `check-container-runtime` pipeline step now runs at the start of `aspire deploy` to detect whether Docker or Podman is available. In interactive mode it prompts the user to start the runtime; in non-interactive mode it fails fast with a clear error, preventing misleading Azure credential errors caused by cancelled sibling steps.",
+  "docsRequired": false,
+  "emoji": "🐋",
+  "firstMergedAt": "2026-04-18T05:56:15Z",
+  "lastMergedAt": "2026-04-18T05:56:15Z",
+  "name": "Container runtime health check before deploy",
+  "prs": [
+    16196
+  ]
+}

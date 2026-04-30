@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test/E2E helper refactoring",
+  "mergedAt": "2026-04-18T04:06:04Z",
+  "number": 16131,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Unify non-Azure CLI E2E helpers and stabilize localhive"
+}

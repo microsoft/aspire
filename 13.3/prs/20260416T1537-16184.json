@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Adds repo-local container workflow for PR testing",
+  "mergedAt": "2026-04-16T15:37:13Z",
+  "number": 16184,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "included",
+  "title": "Improve PR testing container workflow"
+}

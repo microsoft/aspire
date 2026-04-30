@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only changes",
+  "mergedAt": "2026-04-17T13:37:05Z",
+  "number": 16261,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Dispose ServiceProvider in CLI tests"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Routine Homebrew/CI fix",
+  "mergedAt": "2026-04-17T02:45:24Z",
+  "number": 16242,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Fix Homebrew cask audit livecheck failure"
+}

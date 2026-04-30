@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard UX improvement: disable browser autocomplete",
+  "mergedAt": "2026-04-18T07:32:23Z",
+  "number": 16297,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "included",
+  "title": "Disable browser autocomplete on dashboard search and input fields"
+}

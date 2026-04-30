@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "A repo-local containerized PR testing workflow (`eng/scripts/aspire-pr-container/`) is now available for consistent CLI validation on macOS, Linux, WSL, and Windows PowerShell hosts, with optional asciinema recording and a Docker-managed volume for CLI installs.",
+  "docsRequired": false,
+  "emoji": "🐳",
+  "firstMergedAt": "2026-04-16T15:37:13Z",
+  "lastMergedAt": "2026-04-16T15:37:13Z",
+  "name": "Repo-local container workflow for PR testing",
+  "prs": [
+    16184
+  ]
+}

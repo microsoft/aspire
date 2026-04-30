@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Internal developer tooling config migration",
+  "mergedAt": "2026-04-19T23:50:21Z",
+  "number": 16311,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Migrate MCP config from .vscode/mcp.json to .mcp.json"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New Aspire.Hosting.Azure.Kubernetes package for AKS support",
+  "mergedAt": "2026-04-17T09:33:50Z",
+  "number": 16088,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "included",
+  "title": "Add Azure Kubernetes Service (AKS) hosting support"
+}

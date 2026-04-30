@@ -1,0 +1,9 @@
+{
+  "author": "GeertvanHorrik",
+  "comment": "Documentation-only typo fix",
+  "mergedAt": "2026-04-17T18:22:00Z",
+  "number": 16237,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Fix typo in README for Azure Key Vault setup"
+}

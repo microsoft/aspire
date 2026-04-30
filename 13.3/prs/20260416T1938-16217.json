@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine dependency version bump",
+  "mergedAt": "2026-04-16T19:38:03Z",
+  "number": 16217,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Update dependencies from latest .NET Servicing"
+}

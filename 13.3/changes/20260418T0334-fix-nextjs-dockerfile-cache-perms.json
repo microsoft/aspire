@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a permissions error in generated Next.js standalone Dockerfiles where the `node` user could not write to the `.next` cache directory at runtime. Generated images now correctly set `node:node` ownership on the `.next` folder before switching to the non-root user.",
+  "docsRequired": false,
+  "emoji": "🔑",
+  "firstMergedAt": "2026-04-18T03:34:02Z",
+  "lastMergedAt": "2026-04-18T03:34:02Z",
+  "name": "Fix Next.js standalone Dockerfile cache permissions",
+  "prs": [
+    16290
+  ]
+}

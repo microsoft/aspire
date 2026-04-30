@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire ps` now disambiguates AppHost paths when multiple projects share the same filename by showing the minimum number of parent directory segments needed to make each entry unique (e.g., `~\\folder1\\Project.csproj`).",
+  "docsRequired": false,
+  "emoji": "📂",
+  "firstMergedAt": "2026-04-16T23:58:45Z",
+  "lastMergedAt": "2026-04-16T23:58:45Z",
+  "name": "Disambiguate duplicate AppHost paths in aspire ps",
+  "prs": [
+    16199
+  ]
+}

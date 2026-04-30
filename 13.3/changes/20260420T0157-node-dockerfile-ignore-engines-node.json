@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": true,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`package.json` `engines.node` is no longer used to select the Node.js base image version in generated Dockerfiles because it is compatibility metadata rather than a deployment pin. Authoritative toolchain files (`.nvmrc`, `.node-version`, `.tool-versions`) are still used; when none is present, the default version is Node 22.",
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-04-20T01:57:22Z",
+  "lastMergedAt": "2026-04-20T01:57:22Z",
+  "name": "Stop using package.json engines.node for Dockerfile Node image selection",
+  "prs": [
+    16295
+  ]
+}

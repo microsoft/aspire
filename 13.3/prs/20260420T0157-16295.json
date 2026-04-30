@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Breaking change: package.json engines.node no longer used for Dockerfile Node image selection",
+  "mergedAt": "2026-04-20T01:57:22Z",
+  "number": 16295,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "included",
+  "title": "Ignore package.json engines.node when generating Dockerfiles"
+}

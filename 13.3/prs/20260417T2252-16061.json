@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Test infrastructure fix only",
+  "mergedAt": "2026-04-17T22:52:53Z",
+  "number": 16061,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "excluded",
+  "title": "Fix cryptic curl error in CLI E2E AspireStartAsync when dashboard URL is empty"
+}

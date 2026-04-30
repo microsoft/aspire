@@ -1,0 +1,9 @@
+{
+  "author": "tommasodotNET",
+  "comment": "Bug fix for Foundry Hosted Agent HTTP endpoint handling",
+  "mergedAt": "2026-04-16T20:25:49Z",
+  "number": 16130,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "included",
+  "title": "Fixes Foundry Hosted Agents HTTP endpoints"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Bug fix for ANSI escape leaks in non-interactive output",
+  "mergedAt": "2026-04-17T00:32:37Z",
+  "number": 16225,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "included",
+  "title": "Fix ANSI leaks in plain logs and telemetry output"
+}

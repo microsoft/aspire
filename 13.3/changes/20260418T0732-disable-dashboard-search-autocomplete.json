@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Browser autocomplete is now disabled on Dashboard search fields and interaction input dialogs to prevent the browser from offering irrelevant suggestions that interfere with navigation and filtering.",
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-04-18T07:32:23Z",
+  "lastMergedAt": "2026-04-18T07:32:23Z",
+  "name": "Disable browser autocomplete on Dashboard search and inputs",
+  "prs": [
+    16297
+  ]
+}

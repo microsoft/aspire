@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed HTTP endpoint handling for Foundry Hosted Agents: `PublishAsHostedAgent` now correctly overwrites existing HTTP/HTTPS endpoints instead of creating duplicate ones, and accepts custom target ports for running multiple hosted agents locally.",
+  "docsRequired": false,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-04-16T20:25:49Z",
+  "lastMergedAt": "2026-04-16T20:25:49Z",
+  "name": "Fix Foundry Hosted Agent HTTP endpoint configuration",
+  "prs": [
+    16130
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed raw ANSI escape sequences leaking into `aspire logs` and `aspire otel logs` output in non-interactive and automation scenarios. The `--non-interactive` flag now forces plain console rendering and strips embedded control sequences from human-readable output.",
+  "docsRequired": false,
+  "emoji": "🔤",
+  "firstMergedAt": "2026-04-17T00:32:37Z",
+  "lastMergedAt": "2026-04-17T00:32:37Z",
+  "name": "Fix ANSI escape leaks in plain logs output",
+  "prs": [
+    16225
+  ]
+}

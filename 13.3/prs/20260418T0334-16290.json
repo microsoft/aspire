@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix for Next.js Dockerfile permissions",
+  "mergedAt": "2026-04-18T03:34:02Z",
+  "number": 16290,
+  "runDate": "2026-04-30T14:35:11Z",
+  "status": "included",
+  "title": "Fix Next.js standalone Dockerfile cache permissions"
+}
