@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "CLI bug fix: aspire start --format json restart output now stays valid JSON",
+  "mergedAt": "2026-04-16T03:47:33Z",
+  "number": 16228,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Fix aspire start --format json restart output"
+}

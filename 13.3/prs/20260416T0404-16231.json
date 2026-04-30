@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Engineering bug fix: installer SHA-256 mismatch on Windows caused by MicroBuild tar.gz repacking",
+  "mergedAt": "2026-04-16T04:04:42Z",
+  "number": 16231,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Fix installer SHA-256 mismatch caused by MicroBuild repacking tar.gz on Windows"
+}

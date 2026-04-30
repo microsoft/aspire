@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Replaced four individual boolean inputs in the test pipeline with a single generic `properties` dictionary, reducing the boilerplate needed to add new per-project test flags from ~7 files to just 3 targeted changes.",
+  "docsRequired": false,
+  "emoji": "⚙️",
+  "firstMergedAt": "2026-04-15T21:21:12Z",
+  "lastMergedAt": "2026-04-15T21:21:12Z",
+  "name": "Simplified test pipeline flag plumbing",
+  "prs": [
+    16056
+  ]
+}

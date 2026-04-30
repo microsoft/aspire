@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "New feature: private endpoint support for Azure Container Registry",
+  "mergedAt": "2026-04-15T20:24:40Z",
+  "number": 16132,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Support private endpoints for Azure Container Registry"
+}

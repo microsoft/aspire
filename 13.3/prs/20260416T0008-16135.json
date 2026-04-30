@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Engineering fix: CodeQL pipeline now builds all code without publishing",
+  "mergedAt": "2026-04-16T00:08:59Z",
+  "number": 16135,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Fix CodeQL pipeline to build all code without publishing"
+}

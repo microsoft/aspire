@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Added comprehensive automated test coverage for the Bash and PowerShell CLI acquisition scripts, covering install, update, version selection, and error scenarios across platforms.",
+  "docsRequired": false,
+  "emoji": "🧪",
+  "firstMergedAt": "2026-04-15T19:13:06Z",
+  "lastMergedAt": "2026-04-15T19:13:06Z",
+  "name": "Comprehensive test coverage for CLI acquisition scripts",
+  "prs": [
+    15995
+  ]
+}

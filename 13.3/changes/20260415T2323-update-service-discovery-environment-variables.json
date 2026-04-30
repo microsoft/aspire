@@ -1,0 +1,16 @@
+{
+  "area": "Service Discovery",
+  "areaEmoji": "🔍",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Service discovery now correctly handles mismatches between HTTP/HTTPS endpoint names and schemes, and allows non-HTTP endpoints to be referenced using DNS-style service discovery notation.",
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-04-15T23:23:44Z",
+  "lastMergedAt": "2026-04-15T23:23:44Z",
+  "name": "Improved service discovery endpoint name and scheme resolution",
+  "prs": [
+    16210
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed `aspire start --format json` so that stdout remains a valid single JSON document when an existing AppHost instance is restarted, rather than emitting mixed or invalid JSON output.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-16T03:47:33Z",
+  "lastMergedAt": "2026-04-16T03:47:33Z",
+  "name": "Fix `aspire start --format json` restart output",
+  "prs": [
+    16228
+  ]
+}

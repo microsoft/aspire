@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Examples-only: fix missing awaits in TypeScript AppHost examples",
+  "mergedAt": "2026-04-15T20:29:25Z",
+  "number": 16179,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "excluded",
+  "title": "Fix missing awaits in TypeScript AppHost examples"
+}

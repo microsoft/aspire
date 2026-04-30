@@ -1,0 +1,9 @@
+{
+  "author": "divyeshio",
+  "comment": "Adds dashboard URL token to aspire ps output",
+  "mergedAt": "2026-04-15T15:29:33Z",
+  "number": 16165,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Add token for Dashboard url when running aspire ps"
+}

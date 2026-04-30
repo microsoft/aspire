@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Service discovery improvement: handles http/https endpoint name and scheme mismatches",
+  "mergedAt": "2026-04-15T23:23:44Z",
+  "number": 16210,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Update service discovery environment variables"
+}

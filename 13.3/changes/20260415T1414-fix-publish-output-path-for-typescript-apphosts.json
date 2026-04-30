@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where `aspire publish` for TypeScript AppHosts would write output to the bundle-host helper directory instead of the actual workspace directory.",
+  "docsRequired": false,
+  "emoji": "📁",
+  "firstMergedAt": "2026-04-15T14:14:29Z",
+  "lastMergedAt": "2026-04-15T14:14:29Z",
+  "name": "Fix publish output path for TypeScript AppHosts",
+  "prs": [
+    16157
+  ]
+}

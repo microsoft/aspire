@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Notable engineering improvement: generic properties bag simplifies test pipeline flag plumbing",
+  "mergedAt": "2026-04-15T21:21:12Z",
+  "number": 16056,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Simplify test pipeline flag plumbing with a generic properties bag"
+}

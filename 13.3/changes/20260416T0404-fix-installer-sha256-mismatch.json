@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a SHA-256 mismatch in the installer caused by MicroBuild repacking tar.gz archives on Windows, which was causing installer verification failures.",
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-04-16T04:04:42Z",
+  "lastMergedAt": "2026-04-16T04:04:42Z",
+  "name": "Fix installer SHA-256 mismatch on Windows",
+  "prs": [
+    16231
+  ]
+}

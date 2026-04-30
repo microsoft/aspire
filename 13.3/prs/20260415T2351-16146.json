@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: hide hidden resources by default, add --include-hidden option",
+  "mergedAt": "2026-04-15T23:51:57Z",
+  "number": 16146,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "CLI: Hide hidden resources by default in describe/logs/export, add --include-hidden option"
+}

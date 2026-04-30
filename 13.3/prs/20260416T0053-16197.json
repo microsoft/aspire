@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test infrastructure improvement only: WaitForPipelineSuccessAsync helper in E2E tests",
+  "mergedAt": "2026-04-16T00:53:05Z",
+  "number": 16197,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "excluded",
+  "title": "Add WaitForPipelineSuccessAsync helper to fail fast on pipeline failure"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Test-only: regression coverage for TS SDK refresh after aspire add",
+  "mergedAt": "2026-04-15T20:24:03Z",
+  "number": 16158,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "excluded",
+  "title": "Add regression coverage for TS SDK refresh after aspire add"
+}

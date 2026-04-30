@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix for flaky SdkDumpCi test timeout",
+  "mergedAt": "2026-04-15T10:07:54Z",
+  "number": 16186,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "excluded",
+  "title": "Fix flaky SdkDumpCi test timeout"
+}

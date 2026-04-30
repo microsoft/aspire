@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Cleaner resource command error messages using display name instead of DCP resource ID",
+  "mergedAt": "2026-04-15T11:46:44Z",
+  "number": 16148,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Use display name without DCP suffix in resource command error messages"
+}

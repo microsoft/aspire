@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the CodeQL security analysis pipeline to build all code without publishing, ensuring full code coverage in security scans.",
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-04-16T00:08:59Z",
+  "lastMergedAt": "2026-04-16T00:08:59Z",
+  "name": "Fix CodeQL pipeline to analyze all code",
+  "prs": [
+    16135
+  ]
+}

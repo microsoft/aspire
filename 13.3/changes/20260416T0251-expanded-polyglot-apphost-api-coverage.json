@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript, Python, and Java polyglot AppHosts now expose the full set of Aspire.Hosting extension methods previously only available in C#, including execution-configuration, Aspire store, and eventing-subscriber workflows.",
+  "docsRequired": false,
+  "emoji": "🌍",
+  "firstMergedAt": "2026-04-16T02:51:13Z",
+  "lastMergedAt": "2026-04-16T02:51:13Z",
+  "name": "Full Aspire.Hosting API parity for polyglot AppHosts",
+  "prs": [
+    16227
+  ]
+}

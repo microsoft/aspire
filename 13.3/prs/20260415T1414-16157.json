@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fixes publish output path bug for TypeScript AppHosts",
+  "mergedAt": "2026-04-15T14:14:29Z",
+  "number": 16157,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Fix default publish output path for TypeScript AppHosts"
+}

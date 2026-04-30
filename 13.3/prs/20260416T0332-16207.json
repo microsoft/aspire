@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix for flaky OtlpGrpcServiceTests file-changed test",
+  "mergedAt": "2026-04-16T03:32:42Z",
+  "number": 16207,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "excluded",
+  "title": "Fix flaky OtlpGrpcServiceTests file-changed test"
+}

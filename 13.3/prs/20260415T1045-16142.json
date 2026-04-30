@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Adds Azure Portal links for resource group and individual resources in deployment summaries",
+  "mergedAt": "2026-04-15T10:45:10Z",
+  "number": 16142,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "included",
+  "title": "Add Azure portal links to deploy summaries"
+}

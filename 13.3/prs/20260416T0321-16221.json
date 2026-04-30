@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Test-only: improves CreateStartAndStopAspireProject test",
+  "mergedAt": "2026-04-16T03:21:45Z",
+  "number": 16221,
+  "runDate": "2026-04-30T14:13:07Z",
+  "status": "excluded",
+  "title": "Improve CreateStartAndStopAspireProject test"
+}

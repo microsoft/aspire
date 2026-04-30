@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource command error messages now show the display name (e.g., `cache`) instead of the internal DCP resource ID (e.g., `cache-abcdwxyz`) for single-instance resources, making error output easier to read.",
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-04-15T11:46:44Z",
+  "lastMergedAt": "2026-04-15T11:46:44Z",
+  "name": "Cleaner resource command error messages",
+  "prs": [
+    16148
+  ]
+}
