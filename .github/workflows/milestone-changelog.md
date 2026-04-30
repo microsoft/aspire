@@ -335,8 +335,8 @@ unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry conta
 
 For each remaining (non-bot) PR, use the `pull_request_read` tool to fetch its
 full body/description and changed file paths. Collect: number, title, author,
-body/description, labels, the list of changed files, and the total number of
-changed lines (additions + deletions).
+`author_association`, body/description, labels, the list of changed files, and the
+total number of changed lines (additions + deletions).
 
 ### 3a. Read the PR diff when needed
 
@@ -433,17 +433,23 @@ Then determine whether either of these optional flags applies:
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
 | **Docs required** | 📝 | Change needs documentation on aspire.dev (new feature, changed behavior, new config options) |
+| **Community contribution** | 👥 | PR author's `author_association` (from `pull_request_read`) is not `MEMBER` or `OWNER` — i.e., the author is an external community contributor |
 
-A change can have zero, one, or both flags. When present, show each flag on its own
+A change can have zero or more flags. When present, show each flag on its own
 indented line below the Changes line:
 
 ```
   Changes: [#1234](https://github.com/microsoft/aspire/pull/1234)  
   ⚠️ **Breaking change**  
-  📝 **Documentation required**
+  📝 **Documentation required**  
+  👥 **Community contribution** by @username
 ```
 
-Omit flag lines entirely when neither flag applies.
+For the community contribution flag, include the author's GitHub username after
+the label (e.g., `👥 **Community contribution** by @username`). This gives
+visibility and recognition to external contributors.
+
+Omit flag lines entirely when a flag does not apply.
 
 ### 5c. Write name and description
 
@@ -590,7 +596,8 @@ Use this exact format:
 - **🐛 Fix crash on init**  
   Resolved a crash when running aspire init in an empty directory  
   Changes: [#1239](https://github.com/microsoft/aspire/pull/1239)  
-  ⚠️ **Breaking change**
+  ⚠️ **Breaking change**  
+  👥 **Community contribution** by @contributor
 
 ## 📊 Dashboard
 
