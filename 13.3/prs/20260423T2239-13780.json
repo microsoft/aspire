@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "New AppHost feature: Azure startup steps as ordered pipeline steps",
+  "mergedAt": "2026-04-23T22:39:29Z",
+  "number": 13780,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Add support for BeforeStart Pipeline steps"
+}

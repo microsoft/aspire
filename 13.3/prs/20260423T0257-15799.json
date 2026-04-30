@@ -1,0 +1,9 @@
+{
+  "author": "yreynhout",
+  "comment": "Extends aspire update to handle F# and VB project files",
+  "mergedAt": "2026-04-23T02:57:00Z",
+  "number": 15799,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Support upgrading F# and VB projects"
+}

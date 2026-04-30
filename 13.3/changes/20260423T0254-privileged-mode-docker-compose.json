@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Docker Compose service definitions can now be configured with the `privileged` flag via `PublishAsDockerComposeService`, enabling containers to run with extended Linux capabilities and device access during publishing.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-23T02:54:47Z",
+  "lastMergedAt": "2026-04-23T02:54:47Z",
+  "name": "Privileged mode support for Docker Compose publishing",
+  "prs": [
+    16075
+  ]
+}

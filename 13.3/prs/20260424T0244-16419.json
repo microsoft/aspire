@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Routine OpenTelemetry dependency version bumps",
+  "mergedAt": "2026-04-24T02:44:33Z",
+  "number": 16419,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "excluded",
+  "title": "Update dependencies."
+}

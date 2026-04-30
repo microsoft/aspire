@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "PR comments for CLI E2E test recordings now include pass/fail status indicators parsed from TRX result files, with failed tests highlighted in a dedicated section above the recordings table for easier triage.",
+  "docsRequired": false,
+  "emoji": "✅",
+  "firstMergedAt": "2026-04-23T19:42:16Z",
+  "lastMergedAt": "2026-04-23T19:42:16Z",
+  "name": "CLI E2E test recordings show pass/fail status in PR comments",
+  "prs": [
+    16247
+  ]
+}

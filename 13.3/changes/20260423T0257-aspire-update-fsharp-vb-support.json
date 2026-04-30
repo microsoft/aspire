@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The `aspire update` command now handles F# (`.fsproj`) and Visual Basic (`.vbproj`) AppHost project files in addition to C# projects, fixing a gap that prevented non-C# projects from being upgraded.",
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-04-23T02:57:00Z",
+  "lastMergedAt": "2026-04-23T02:57:00Z",
+  "name": "`aspire update` supports F# and Visual Basic projects",
+  "prs": [
+    15799
+  ]
+}

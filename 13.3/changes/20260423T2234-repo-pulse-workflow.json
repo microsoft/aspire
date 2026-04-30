@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added a daily agentic workflow that maintains a pinned issue with a rolling 3-day view of repository activity, including notable changes, recently merged/opened PRs, filed issues, and PRs awaiting review.",
+  "docsRequired": false,
+  "emoji": "📊",
+  "firstMergedAt": "2026-04-23T22:34:10Z",
+  "lastMergedAt": "2026-04-23T22:34:10Z",
+  "name": "Repo Pulse daily activity workflow",
+  "prs": [
+    16405
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When `--version` is supplied to `aspire add`, the CLI now skips the version selection prompt if the specified version is found in any available channel, instead of always prompting when the version is not the latest.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-23T20:18:25Z",
+  "lastMergedAt": "2026-04-23T20:18:25Z",
+  "name": "`aspire add --version` no longer prompts when version is found",
+  "prs": [
+    15527
+  ]
+}

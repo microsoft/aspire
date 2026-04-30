@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Significant test platform upgrade enabling MTP native runner mode",
+  "mergedAt": "2026-04-23T19:08:56Z",
+  "number": 16253,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Update Microsoft.Testing.Platform from 1.8.4 to 2.2.1"
+}

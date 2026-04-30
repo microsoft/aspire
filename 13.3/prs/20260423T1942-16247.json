@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Engineering improvement: CLI E2E recordings show pass/fail from TRX files",
+  "mergedAt": "2026-04-23T19:42:16Z",
+  "number": 16247,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Show test pass/fail status in CLI E2E recording PR comments"
+}

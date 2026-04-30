@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`IResourceCollection` now exposes a `TryGetByName` method with an O(1) dictionary-backed implementation in `ResourceCollection`, replacing verbose O(n) linear searches throughout the codebase and enforcing unique resource name validation.",
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-04-23T10:26:12Z",
+  "lastMergedAt": "2026-04-23T10:26:12Z",
+  "name": "Efficient resource lookup via IResourceCollection.TryGetByName",
+  "prs": [
+    16389
+  ]
+}

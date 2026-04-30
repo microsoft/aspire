@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Adds O(1) TryGetByName method to IResourceCollection",
+  "mergedAt": "2026-04-23T10:26:12Z",
+  "number": 16389,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Add TryGetByName to IResourceCollection"
+}

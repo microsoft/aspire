@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire docs` command now uses Markdig for richer, more accurate markdown rendering in interactive terminals, with improved support for nested lists, links, tables, and bare URL deduplication. Non-interactive streams receive readable plain-text output.",
+  "docsRequired": false,
+  "emoji": "📖",
+  "firstMergedAt": "2026-04-24T04:58:10Z",
+  "lastMergedAt": "2026-04-24T04:58:10Z",
+  "name": "Improved markdown rendering for `aspire docs`",
+  "prs": [
+    16342
+  ]
+}

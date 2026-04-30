@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Routine link maintenance, no user-facing feature change",
+  "mergedAt": "2026-04-23T21:38:19Z",
+  "number": 16176,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "excluded",
+  "title": "Remove 'dotnet' prefix from aka.ms/aspire shortlinks"
+}

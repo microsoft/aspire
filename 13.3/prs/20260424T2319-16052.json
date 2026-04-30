@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Test-only change",
+  "mergedAt": "2026-04-24T23:19:40Z",
+  "number": 16052,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "excluded",
+  "title": "Disable deterministically failing tests #14993 and #15831"
+}

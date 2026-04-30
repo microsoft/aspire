@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Azure hosting infrastructure now exposes its startup logic as named pipeline steps, allowing developers to declare ordering dependencies between BeforeStart operations and ensure correct sequencing during app startup (e.g., running custom role assignment setup before Azure resource provisioning).",
+  "docsRequired": true,
+  "emoji": "🔀",
+  "firstMergedAt": "2026-04-23T22:39:29Z",
+  "lastMergedAt": "2026-04-23T22:39:29Z",
+  "name": "BeforeStart pipeline steps for ordered Azure startup",
+  "prs": [
+    13780
+  ]
+}

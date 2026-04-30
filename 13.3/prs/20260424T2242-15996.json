@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Dashboard improvement: state column shows interactive popover with links",
+  "mergedAt": "2026-04-24T22:42:47Z",
+  "number": 15996,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Dashboard: Add InfoPopover for state column with clickable links"
+}

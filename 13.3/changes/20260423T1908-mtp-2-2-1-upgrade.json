@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Upgraded Microsoft.Testing.Platform from 1.8.4 to 2.2.1, enabling native runner mode and adding `--hangdump-type none` for faster CI hang detection. Consolidates MTP diagnostic flags into a single `MtpBaseArgs` property in `eng/Testing.props`.",
+  "docsRequired": false,
+  "emoji": "⬆️",
+  "firstMergedAt": "2026-04-23T19:08:56Z",
+  "lastMergedAt": "2026-04-23T19:08:56Z",
+  "name": "Microsoft.Testing.Platform updated to 2.2.1",
+  "prs": [
+    16253
+  ]
+}

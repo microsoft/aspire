@@ -1,0 +1,9 @@
+{
+  "author": "Muckenbatscher",
+  "comment": "Bug fix for aspire add --version always prompting unnecessarily",
+  "mergedAt": "2026-04-23T20:18:25Z",
+  "number": 15527,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "don't prompt for version when `--version` was supplied"
+}

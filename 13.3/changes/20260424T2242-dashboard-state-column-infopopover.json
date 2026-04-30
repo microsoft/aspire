@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The state column in the resources table now shows an interactive popover on click instead of a plain tooltip, enabling rich content including clickable links in state messages.",
+  "docsRequired": false,
+  "emoji": "💬",
+  "firstMergedAt": "2026-04-24T22:42:47Z",
+  "lastMergedAt": "2026-04-24T22:42:47Z",
+  "name": "Resources state column shows interactive info popover",
+  "prs": [
+    15996
+  ]
+}

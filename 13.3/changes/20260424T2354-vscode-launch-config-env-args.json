@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire VS Code extension's debug launch configuration now formally supports `env` (environment variables) and `args` (additional CLI arguments) properties, which are passed to the Aspire CLI when launching an AppHost.",
+  "docsRequired": false,
+  "emoji": "🛠️",
+  "firstMergedAt": "2026-04-24T23:54:35Z",
+  "lastMergedAt": "2026-04-24T23:54:35Z",
+  "name": "VS Code launch config supports `env` and `args` for AppHost",
+  "prs": [
+    16449
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added a new GitHub Actions agentic workflow that automatically generates and maintains a changelog wiki page for each milestone, processing merged PRs incrementally in batches and supporting editorial feedback via a companion issue.",
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-04-23T13:38:35Z",
+  "lastMergedAt": "2026-04-23T13:38:35Z",
+  "name": "Automated milestone changelog agentic workflow",
+  "prs": [
+    16371
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension improvement: env and args support in launch config",
+  "mergedAt": "2026-04-24T23:54:35Z",
+  "number": 16449,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Add env support to Aspire debug launch configuration"
+}

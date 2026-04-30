@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "CLI improvement: richer markdown rendering for aspire docs command",
+  "mergedAt": "2026-04-24T04:58:10Z",
+  "number": 16342,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Use Markdig for Aspire CLI docs rendering"
+}

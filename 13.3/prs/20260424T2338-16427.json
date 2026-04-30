@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Test-only change",
+  "mergedAt": "2026-04-24T23:38:09Z",
+  "number": 16427,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "excluded",
+  "title": "Fix InitCommand_WithSingleFileAppHost test failing on Windows CI"
+}

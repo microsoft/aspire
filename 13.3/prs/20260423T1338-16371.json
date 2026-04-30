@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New Engineering workflow for automated milestone changelog",
+  "mergedAt": "2026-04-23T13:38:35Z",
+  "number": 16371,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Add agentic workflow for milestone changelog generation"
+}

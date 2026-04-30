@@ -1,0 +1,9 @@
+{
+  "author": "holystix04",
+  "comment": "New privileged mode support for Docker Compose publishing",
+  "mergedAt": "2026-04-23T02:54:47Z",
+  "number": 16075,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "included",
+  "title": "Add 'privileged' flag for docker-compose publishing"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Routine dependency version bump",
+  "mergedAt": "2026-04-24T00:18:01Z",
+  "number": 16395,
+  "runDate": "2026-04-30T15:33:02Z",
+  "status": "excluded",
+  "title": "Update Hex1b packages to 0.133.0"
+}

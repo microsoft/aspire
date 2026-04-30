@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Parameters page now lets users set unresolved values by clicking the 'Value not set' link, and resources can be filtered to show only their parameters via the Actions menu. Parameter nodes in the graph view no longer display erroneous 'No endpoints' text.",
+  "docsRequired": false,
+  "emoji": "🎛️",
+  "firstMergedAt": "2026-04-24T03:08:41Z",
+  "lastMergedAt": "2026-04-24T03:08:41Z",
+  "name": "Dashboard Parameters page improvements",
+  "prs": [
+    16117
+  ]
+}
