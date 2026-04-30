@@ -574,62 +574,6 @@
     ]
   },
   {
-    CapabilityId: Aspire.Hosting/withEnvironmentConnectionString,
-    MethodName: withEnvironmentConnectionString,
-    TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
-      IsInterface: true
-    },
-    ExpandedTargetTypes: [
-      {
-        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
-        IsInterface: false
-      }
-    ]
-  },
-  {
-    CapabilityId: Aspire.Hosting/withEnvironmentEndpoint,
-    MethodName: withEnvironmentEndpoint,
-    TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
-      IsInterface: true
-    },
-    ExpandedTargetTypes: [
-      {
-        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
-        IsInterface: false
-      }
-    ]
-  },
-  {
-    CapabilityId: Aspire.Hosting/withEnvironmentExpression,
-    MethodName: withEnvironmentExpression,
-    TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
-      IsInterface: true
-    },
-    ExpandedTargetTypes: [
-      {
-        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
-        IsInterface: false
-      }
-    ]
-  },
-  {
-    CapabilityId: Aspire.Hosting/withEnvironmentParameter,
-    MethodName: withEnvironmentParameter,
-    TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment,
-      IsInterface: true
-    },
-    ExpandedTargetTypes: [
-      {
-        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
-        IsInterface: false
-      }
-    ]
-  },
-  {
     CapabilityId: Aspire.Hosting/withExplicitStart,
     MethodName: withExplicitStart,
     TargetType: {
