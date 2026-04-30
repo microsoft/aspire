@@ -171,6 +171,32 @@ steps:
       DATA_DIR="/tmp/gh-aw/pr-data"
       mkdir -p "$DATA_DIR"
 
+      # 0. Clone repo-memory branch to read previously processed PRs.
+      #    The gh-aw framework clones repo-memory AFTER user steps run,
+      #    so we need our own early clone to compute the correct batch.
+      MEMORY_BRANCH="memory/milestone-changelog"
+      MEMORY_TMP=$(mktemp -d)
+      PROCESSED_NUMBERS="[]"
+      if git clone --depth 1 --branch "$MEMORY_BRANCH" \
+           "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
+           "$MEMORY_TMP/repo-memory" 2>/dev/null; then
+        PRS_DIR="$MEMORY_TMP/repo-memory/${MILESTONE}/prs"
+        if [ -d "$PRS_DIR" ]; then
+          PROCESSED_NUMBERS=$(ls "$PRS_DIR"/*.json 2>/dev/null \
+            | xargs -I{} basename {} .json \
+            | jq -R 'tonumber' | jq -s '.' || echo "[]")
+        fi
+
+        # Also grab the feedback issue number while we have the clone
+        FEEDBACK_MEM_FILE="$MEMORY_TMP/repo-memory/${MILESTONE}/feedback-issue.txt"
+        if [ -f "$FEEDBACK_MEM_FILE" ]; then
+          FEEDBACK_FROM_MEMORY=$(tr -d '[:space:]' < "$FEEDBACK_MEM_FILE")
+        fi
+      else
+        echo "No repo-memory branch found (first run)"
+      fi
+      rm -rf "$MEMORY_TMP"
+
       # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
       gh pr list --repo "$REPO" --state merged --limit 5000 \
         --search "milestone:$MILESTONE" \
@@ -182,14 +208,6 @@ steps:
       echo "Total merged PRs in milestone: $TOTAL"
 
       # 2. Determine the batch of unprocessed PRs
-      # List PR numbers that already have a per-PR summary file in repo-memory
-      PRS_DIR="/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs"
-      PROCESSED_NUMBERS="[]"
-      if [ -d "$PRS_DIR" ]; then
-        PROCESSED_NUMBERS=$(ls "$PRS_DIR"/*.json 2>/dev/null \
-          | xargs -I{} basename {} .json \
-          | jq -R 'tonumber' | jq -s '.' || echo "[]")
-      fi
 
       # Filter all-milestone-prs to only unprocessed, take oldest BATCH_SIZE
       jq --argjson processed "$PROCESSED_NUMBERS" \
@@ -205,10 +223,8 @@ steps:
 
       # 3. Find the feedback issue number (check repo-memory first, fallback to search)
       FEEDBACK_TITLE="[${MILESTONE}] Changelog feedback"
-      FEEDBACK_FILE="$PRS_DIR/../feedback-issue.txt"
-      FEEDBACK_NUM=""
-      if [ -f "$FEEDBACK_FILE" ]; then
-        FEEDBACK_NUM=$(tr -d '[:space:]' < "$FEEDBACK_FILE")
+      FEEDBACK_NUM="${FEEDBACK_FROM_MEMORY:-}"
+      if [ -n "$FEEDBACK_NUM" ]; then
         echo "Feedback issue from repo-memory: #$FEEDBACK_NUM"
       fi
 
@@ -684,15 +700,15 @@ Verify that all files were written before proceeding to 8b.
 
 ```json
 {
-  "number": 1240,
   "author": "username",
-  "runAt": "2026-04-27T03:49:58Z",
-  "title": "Original PR title from GitHub API",
-  "status": "included",
   "changes": [
     "Added new aspire destroy command for tearing down deployments",
     "Updated CLI help text and argument parsing"
-  ]
+  ],
+  "number": 1240,
+  "runAt": "2026-04-27T03:49:58Z",
+  "status": "included",
+  "title": "Original PR title from GitHub API"
 }
 ```
 
