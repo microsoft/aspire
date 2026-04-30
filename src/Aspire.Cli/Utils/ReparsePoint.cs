@@ -281,7 +281,8 @@ internal static partial class ReparsePoint
         {
             // Force Windows to evaluate the link immediately. Directory.Exists can
             // report true for a symlink whose evaluation class is disabled.
-            _ = Directory.GetFileSystemEntries(path);
+            using var enumerator = Directory.EnumerateFileSystemEntries(path).GetEnumerator();
+            _ = enumerator.MoveNext();
             return true;
         }
         catch
