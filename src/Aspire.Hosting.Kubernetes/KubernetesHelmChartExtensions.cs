@@ -169,7 +169,7 @@ public static class KubernetesHelmChartExtensions
             chart.Name, chartRef, chartVersion, @namespace);
 
         var arguments = new StringBuilder();
-        arguments.Append(CultureInfo.InvariantCulture, $"upgrade --install {releaseName} {chartRef}");
+        arguments.Append(CultureInfo.InvariantCulture, $"upgrade --install {releaseName} \"{chartRef}\"");
         arguments.Append(CultureInfo.InvariantCulture, $" --namespace {@namespace}");
         arguments.Append(" --create-namespace");
         arguments.Append(" --wait");
@@ -186,7 +186,7 @@ public static class KubernetesHelmChartExtensions
 
         foreach (var (key, value) in chart.Values)
         {
-            arguments.Append(CultureInfo.InvariantCulture, $" --set {key}={value}");
+            arguments.Append(CultureInfo.InvariantCulture, $" --set \"{key}={value}\"");
         }
 
         var stderrBuilder = new StringBuilder();
