@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The `aspire update --self` command no longer shows the staging channel option when the staging feature flag is not enabled. Previously, selecting staging in this state would fail with an error.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-02-25T18:39:43Z",
+  "lastMergedAt": "2026-02-25T18:39:43Z",
+  "name": "Fix `aspire update --self` showing unavailable staging channel",
+  "prs": [
+    14675
+  ]
+}

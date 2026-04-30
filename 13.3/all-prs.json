@@ -3087,144 +3087,144 @@
     "status": "unprocessed"
   },
   {
-    "comment": null,
+    "comment": "Test-only: fix NotSupportedException in AsyncTestHelpers",
     "mergedAt": "2026-02-26T16:25:20Z",
     "number": 14716,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Maintenance: backmerge release/13.2 into main",
     "mergedAt": "2026-02-26T05:21:56Z",
     "number": 14719,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Engineering CI: move run-test-repeatedly scripts",
     "mergedAt": "2026-02-26T01:34:43Z",
     "number": 14704,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test fix: fix flaky test (thread-unsafe collections)",
     "mergedAt": "2026-02-26T01:27:54Z",
     "number": 14708,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Engineering tooling: upgrade gh-aw",
     "mergedAt": "2026-02-25T19:06:15Z",
     "number": 14685,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Engineering tooling: add fix-flaky-test skill and CI workflow",
     "mergedAt": "2026-02-25T18:44:54Z",
     "number": 14586,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "CLI: fix aspire update --self showing unavailable staging channel",
     "mergedAt": "2026-02-25T18:39:43Z",
     "number": 14675,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Extensions: fix VS Code debug session errors and auto-restart",
     "mergedAt": "2026-02-25T18:34:24Z",
     "number": 14548,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Maintenance: manual merge of release branch into main",
     "mergedAt": "2026-02-25T03:46:52Z",
     "number": 14657,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "AppHost: container tunnel enabled by default",
     "mergedAt": "2026-02-25T01:16:59Z",
     "number": 14557,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Engineering tooling: review feedback on dashboard skill",
     "mergedAt": "2026-02-24T08:27:24Z",
     "number": 14642,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Engineering tooling: add dashboard testing skill",
     "mergedAt": "2026-02-24T07:13:21Z",
     "number": 14611,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Bot PR (dotnet-maestro): dependency update from dcp",
     "mergedAt": "2026-02-24T01:50:28Z",
     "number": 14633,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Engineering tooling: update dependency-update skill",
     "mergedAt": "2026-02-24T00:36:59Z",
     "number": 14614,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only: add ACA Managed Redis E2E test",
     "mergedAt": "2026-02-23T17:52:01Z",
     "number": 14584,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Internal dependency cleanup: remove vendored OTel SqlClient code",
     "mergedAt": "2026-02-23T17:38:25Z",
     "number": 14621,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Bot PR (dotnet-maestro): dependency update",
     "mergedAt": "2026-02-23T05:52:37Z",
     "number": 14616,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only: centralize E2E test code",
     "mergedAt": "2026-02-23T03:54:36Z",
     "number": 14369,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Community bug fix in shared CircularBuffer utility",
     "mergedAt": "2026-02-22T23:42:41Z",
     "number": 14609,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Bot PR (github-actions): automated backmerge",
     "mergedAt": "2026-02-21T20:52:00Z",
     "number": 14604,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:01:39Z",
+    "status": "excluded"
   },
   {
     "comment": "Routine CI maintenance - fix Copilot not working in forks",

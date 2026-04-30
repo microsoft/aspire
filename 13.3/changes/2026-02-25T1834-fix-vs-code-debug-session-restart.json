@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an unexpected JSON-RPC connection error shown when stopping the Aspire debug session in VS Code. The debug session now also automatically restarts when the AppHost is restarted externally (not user-initiated).",
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-02-25T18:34:24Z",
+  "lastMergedAt": "2026-02-25T18:34:24Z",
+  "name": "Fix VS Code debug session error and auto-restart on AppHost restart",
+  "prs": [
+    14548
+  ]
+}

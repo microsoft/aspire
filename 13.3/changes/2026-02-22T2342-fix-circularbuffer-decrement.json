@@ -1,0 +1,18 @@
+{
+  "area": "Other",
+  "areaEmoji": "📦",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@mitchcapper"
+  ],
+  "description": "Fixed a logic error in the shared CircularBuffer.Decrement method where an incorrect branch would produce wrong results if reached in future refactoring.",
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-02-22T23:42:41Z",
+  "lastMergedAt": "2026-02-22T23:42:41Z",
+  "name": "Fix logic error in CircularBuffer.Decrement",
+  "prs": [
+    14609
+  ]
+}
