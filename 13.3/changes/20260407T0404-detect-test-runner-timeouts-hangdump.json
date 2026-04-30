@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CI workflows now fail correctly when a test runner times out instead of silently passing with zero test results. Hangdump files are generated on timeout and detected by the Final Results job to signal failures.",
+  "docsRequired": false,
+  "emoji": "⏰",
+  "firstMergedAt": "2026-04-07T04:04:36Z",
+  "lastMergedAt": "2026-04-07T04:04:36Z",
+  "name": "Detect test runner timeouts in CI via hangdump files",
+  "prs": [
+    15917
+  ]
+}

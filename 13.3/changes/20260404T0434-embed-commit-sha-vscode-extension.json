@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension now embeds the git commit SHA as a `.version` file in the VSIX bundle, making it easy to identify exactly which commit a published extension was built from.",
+  "docsRequired": false,
+  "emoji": "🔖",
+  "firstMergedAt": "2026-04-04T04:34:42Z",
+  "lastMergedAt": "2026-04-04T04:34:42Z",
+  "name": "Embed commit SHA in VS Code extension bundle",
+  "prs": [
+    15762
+  ]
+}

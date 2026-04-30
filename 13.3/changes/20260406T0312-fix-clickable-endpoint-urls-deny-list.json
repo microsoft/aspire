@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed endpoint URLs with custom schemes (e.g., `vscode://`) being non-clickable in the VS Code extension tree view. The extension now uses a deny-list approach matching the dashboard, allowing any URL scheme not explicitly blocked.",
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-04-06T03:12:43Z",
+  "lastMergedAt": "2026-04-06T03:12:43Z",
+  "name": "Fix clickable endpoint URLs using deny list in VS Code extension",
+  "prs": [
+    15894
+  ]
+}

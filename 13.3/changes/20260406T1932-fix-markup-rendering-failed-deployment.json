@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an issue where Spectre markup tags (e.g., `[bold]`) appeared as literal text in deployment failure messages instead of being rendered. Azure deployment error output now displays correctly formatted text.",
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-04-06T19:32:24Z",
+  "lastMergedAt": "2026-04-06T19:32:24Z",
+  "name": "Fix markup rendering in failed deployment output",
+  "prs": [
+    15757
+  ]
+}

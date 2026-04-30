@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Fixed intermittent Windows CI runner crashes caused by resource exhaustion from concurrent test parallelization, VBCSCompiler, and heartbeat monitoring on 2-core runners. Test parallelization is now disabled on Windows and the heartbeat interval increased.",
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-04-07T00:39:36Z",
+  "lastMergedAt": "2026-04-07T00:39:36Z",
+  "name": "Fix Windows CI runner crashes due to resource exhaustion",
+  "prs": [
+    15834
+  ]
+}

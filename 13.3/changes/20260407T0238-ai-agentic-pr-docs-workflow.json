@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Replaced the broken `pr-docs-hook.yml` workflow with a new AI-powered agentic workflow that analyzes merged PRs for documentation needs and creates draft PRs on `microsoft/aspire.dev` with actual documentation changes. Uses GitHub App authentication instead of an expiring PAT.",
+  "docsRequired": false,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-04-07T02:38:39Z",
+  "lastMergedAt": "2026-04-07T02:38:39Z",
+  "name": "AI agentic workflow for PR documentation review",
+  "prs": [
+    15916
+  ]
+}
