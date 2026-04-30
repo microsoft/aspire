@@ -51,7 +51,7 @@ internal sealed class DeployCommand : PipelineCommandBase
         }
 
         // Add --log-level and --envionment flags if specified
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
 
         if (!string.IsNullOrEmpty(logLevel))
         {

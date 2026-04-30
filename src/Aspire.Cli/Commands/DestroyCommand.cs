@@ -50,7 +50,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
             baseArgs.AddRange(["--yes", "true"]);
         }
 
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);
