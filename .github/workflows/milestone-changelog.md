@@ -228,12 +228,17 @@ steps:
 
         PRS_DIR="$MEMORY_DIR/prs"
         # Since tracker files only exist for processed PRs, extract all numbers.
-        if [ -d "$PRS_DIR" ] && compgen -G "$PRS_DIR/*.json" > /dev/null 2>&1; then
-          PRS_LISTING=$(jq -s '[.[] | .number]' \
-            "$PRS_DIR/"*.json 2>/dev/null || true)
-          if echo "$PRS_LISTING" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        # Filenames follow the pattern TIMESTAMP-NUMBER.json, so we parse the
+        # PR number from the filename instead of reading every JSON file (which
+        # can fail when the glob expands to hundreds of arguments).
+        if [ -d "$PRS_DIR" ]; then
+          PRS_LISTING=$(ls "$PRS_DIR" 2>/dev/null \
+            | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
+            | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
+          if echo "$PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
             PROCESSED_NUMBERS="$PRS_LISTING"
           fi
+          echo "Extracted $(echo "$PROCESSED_NUMBERS" | jq length) processed PR numbers from filenames"
         fi
 
         # Also grab the feedback issue number from memory
