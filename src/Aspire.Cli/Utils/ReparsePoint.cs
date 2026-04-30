@@ -15,9 +15,9 @@ namespace Aspire.Cli.Utils;
 /// Windows strategy: prefer a symbolic link (<see cref="Directory.CreateSymbolicLink"/>)
 /// — available to users with Developer Mode or admin — and fall back to a directory
 /// junction (created via <c>DeviceIoControl</c> + <c>FSCTL_SET_REPARSE_POINT</c>)
-/// when symlink creation is denied. Junctions need no elevation, work for local
-/// directory targets, and are transparent to <see cref="Directory.Exists(string)"/>
-/// and file enumeration.
+/// when symlink creation is denied or the created symlink cannot be evaluated.
+/// Junctions need no elevation, work for local directory targets, and are
+/// transparent to <see cref="Directory.Exists(string)"/> and file enumeration.
 ///
 /// Unix strategy: symbolic link via <see cref="Directory.CreateSymbolicLink"/>.
 /// </remarks>
@@ -29,13 +29,13 @@ internal static partial class ReparsePoint
     /// </summary>
     /// <remarks>
     /// The target must be a local directory path. On Windows, if symbolic-link
-    /// creation is denied (for example, the user does not have Developer Mode
-    /// enabled and is not running as admin), this method falls back to creating
-    /// a directory junction. The public behavior is otherwise identical: the
-    /// resulting path resolves to <paramref name="target"/> for I/O purposes.
+    /// creation is denied or the created symbolic link cannot be evaluated, this
+    /// method falls back to creating a directory junction. The public behavior is
+    /// otherwise identical: the resulting path resolves to <paramref name="target"/>
+    /// for I/O purposes.
     /// </remarks>
     /// <param name="linkPath">The path to create the reparse point at.</param>
-    /// <param name="target">Absolute path to the target directory.</param>
+    /// <param name="target">Path to the target directory. Relative paths are resolved against the link's parent directory.</param>
     public static void CreateOrReplace(string linkPath, string target)
     {
         if (string.IsNullOrEmpty(linkPath))
@@ -48,7 +48,7 @@ internal static partial class ReparsePoint
             throw new ArgumentException("Target path is required.", nameof(target));
         }
 
-        var absoluteTarget = Path.GetFullPath(target);
+        var absoluteTarget = ResolveTargetPath(linkPath, target);
 
         // Create the new reparse point under a temporary name adjacent to the
         // final link, then atomically rename over the existing link. This avoids
@@ -115,6 +115,15 @@ internal static partial class ReparsePoint
     {
         try
         {
+            var attributes = File.GetAttributes(path);
+            return (attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        try
+        {
             var info = new FileInfo(path);
             if (info.Exists)
             {
@@ -142,14 +151,20 @@ internal static partial class ReparsePoint
     {
         try
         {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReparsePoint) != FileAttributes.ReparsePoint)
+            {
+                return null;
+            }
+
             var dirInfo = new DirectoryInfo(path);
-            if (dirInfo.Exists && (dirInfo.Attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
+            if (!string.IsNullOrEmpty(dirInfo.LinkTarget))
             {
                 return dirInfo.LinkTarget;
             }
 
             var fileInfo = new FileInfo(path);
-            if (fileInfo.Exists && (fileInfo.Attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
+            if (!string.IsNullOrEmpty(fileInfo.LinkTarget))
             {
                 return fileInfo.LinkTarget;
             }
@@ -168,6 +183,38 @@ internal static partial class ReparsePoint
     /// </summary>
     public static void RemoveIfExists(string path)
     {
+        try
+        {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
+            {
+                if ((attributes & FileAttributes.Directory) == FileAttributes.Directory)
+                {
+                    Directory.Delete(path);
+                }
+                else
+                {
+                    File.Delete(path);
+                }
+
+                return;
+            }
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return;
+        }
+        catch (FileNotFoundException)
+        {
+            return;
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
         try
         {
             var dirInfo = new DirectoryInfo(path);
@@ -207,18 +254,40 @@ internal static partial class ReparsePoint
             return;
         }
 
-        // Windows: try symbolic link first; fall back to a junction if creation is denied.
+        // Windows: try symbolic link first; fall back to a junction if creation is denied
+        // or if Windows policy allows creation but prevents following this link type.
         try
         {
             Directory.CreateSymbolicLink(linkPath, target);
-            return;
+            if (CanFollowDirectoryReparsePoint(linkPath))
+            {
+                return;
+            }
+
+            RemoveIfExists(linkPath);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
+            RemoveIfExists(linkPath);
             // Fall through to junction creation below.
         }
 
         CreateWindowsJunction(linkPath, target);
+    }
+
+    internal static bool CanFollowDirectoryReparsePoint(string path)
+    {
+        try
+        {
+            // Force Windows to evaluate the link immediately. Directory.Exists can
+            // report true for a symlink whose evaluation class is disabled.
+            _ = Directory.GetFileSystemEntries(path);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string GetTempLinkPath(string linkPath)
@@ -229,6 +298,31 @@ internal static partial class ReparsePoint
         var name = Path.GetFileName(linkPath);
         var suffix = Guid.NewGuid().ToString("N")[..8];
         return Path.Combine(parent, $"{name}.new.{suffix}");
+    }
+
+    internal static string ResolveTargetPath(string linkPath, string target)
+    {
+        var normalizedTarget = NormalizeWindowsTargetPath(target);
+        if (Path.IsPathFullyQualified(normalizedTarget))
+        {
+            return Path.GetFullPath(normalizedTarget);
+        }
+
+        var linkParent = Path.GetDirectoryName(Path.GetFullPath(linkPath)) ?? ".";
+        return Path.GetFullPath(Path.Combine(linkParent, normalizedTarget));
+    }
+
+    private static string NormalizeWindowsTargetPath(string target)
+    {
+        const string ntLocalPathPrefix = @"\??\";
+        if (OperatingSystem.IsWindows() &&
+            target.StartsWith(ntLocalPathPrefix, StringComparison.Ordinal) &&
+            target.Length > ntLocalPathPrefix.Length)
+        {
+            return target[ntLocalPathPrefix.Length..];
+        }
+
+        return target;
     }
 
     // ═══════════════════════════════════════════════════════════════════════

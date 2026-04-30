@@ -128,6 +128,47 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
         ReparsePoint.RemoveIfExists(Path.Combine(workspace.WorkspaceRoot.FullName, "missing"));
     }
 
+    [Fact]
+    public void ResolveTargetPath_ResolvesRelativeTargetAgainstLinkDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var link = Path.Combine(root, "bundle");
+        var target = Path.Combine(root, "versions", "v1");
+
+        var resolvedTarget = ReparsePoint.ResolveTargetPath(link, Path.Combine("versions", "v1"));
+
+        Assert.Equal(Path.GetFullPath(target), resolvedTarget);
+    }
+
+    [Fact]
+    public void CanFollowDirectoryReparsePoint_ReturnsFalseWhenSymlinkTargetCannotBeOpened()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var link = Path.Combine(root, "bundle");
+        try
+        {
+            Directory.CreateSymbolicLink(link, Path.Combine("versions", "missing"));
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip("Symlink creation is not available (Developer Mode not enabled or not running as admin).");
+            return;
+        }
+
+        try
+        {
+            Assert.False(ReparsePoint.CanFollowDirectoryReparsePoint(link));
+        }
+        finally
+        {
+            ReparsePoint.RemoveIfExists(link);
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Windows-specific: explicitly exercise the junction code path.
     //
@@ -338,14 +379,20 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
-        // Probe: can we create symlinks on this machine? If not, skip —
-        // we cannot assert a symlink was created.
+        // Probe: can we create and evaluate symlinks on this machine? If not, skip —
+        // CreateOrReplace should fall back to a junction and this test cannot assert
+        // that a symlink was created.
         var probe = Path.Combine(root, "symlink-probe");
         var probeTarget = Path.Combine(root, "probe-target");
         Directory.CreateDirectory(probeTarget);
         try
         {
             Directory.CreateSymbolicLink(probe, probeTarget);
+            if (!ReparsePoint.CanFollowDirectoryReparsePoint(probe))
+            {
+                Assert.Skip("Symlink evaluation is not available on this machine.");
+                return;
+            }
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
