@@ -1,16 +1,1 @@
-{
-  "area": "Dashboard",
-  "areaEmoji": "📊",
-  "breaking": true,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "The MCP (Model Context Protocol) server, authentication, and related UI have been removed from the Aspire Dashboard. The dashboard-hosted MCP endpoint is replaced by the CLI MCP server. The `ASPIRE_DASHBOARD_MCP_ENDPOINT_URL` environment variable and related configuration are no longer supported.",
-  "docsRequired": true,
-  "emoji": "🧹",
-  "firstMergedAt": "2026-03-26T01:49:06Z",
-  "lastMergedAt": "2026-03-26T01:49:06Z",
-  "name": "MCP server removed from Aspire Dashboard",
-  "prs": [
-    15528
-  ]
-}
+{"area":"Dashboard","areaEmoji":"📊","breaking":true,"changeType":"Improvements","communityContributors":[],"description":"The MCP (Model Context Protocol) server, authentication, and related UI have been removed from the Aspire Dashboard. The dashboard-hosted MCP endpoint is replaced by the CLI MCP server. The `ASPIRE_DASHBOARD_MCP_ENDPOINT_URL` environment variable and related configuration are no longer supported.","docsRequired":true,"emoji":"🧹","firstMergedAt":"2026-03-26T01:49:06Z","lastMergedAt":"2026-03-26T01:49:06Z","name":"MCP server removed from Aspire Dashboard","prs":[15528]}

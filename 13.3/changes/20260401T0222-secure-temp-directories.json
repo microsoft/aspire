@@ -1,16 +1,1 @@
-{
-  "area": "Engineering",
-  "areaEmoji": "🔧",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "Temporary directory creation in the CLI and test infrastructure has been updated to use Directory.CreateTempSubdirectory() instead of combining Path.GetTempPath() with Path.GetRandomFileName(). This ensures temp directories are created with tighter default permissions.",
-  "docsRequired": false,
-  "emoji": "🛡️",
-  "firstMergedAt": "2026-04-01T02:22:23Z",
-  "lastMergedAt": "2026-04-01T02:22:23Z",
-  "name": "Use secure temp directories in CLI and test infrastructure",
-  "prs": [
-    15733
-  ]
-}
+{"area":"Engineering","areaEmoji":"🔧","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"Temporary directory creation in the CLI and test infrastructure has been updated to use Directory.CreateTempSubdirectory() instead of combining Path.GetTempPath() with Path.GetRandomFileName(). This ensures temp directories are created with tighter default permissions.","docsRequired":false,"emoji":"🛡️","firstMergedAt":"2026-04-01T02:22:23Z","lastMergedAt":"2026-04-01T02:22:23Z","name":"Use secure temp directories in CLI and test infrastructure","prs":[15733]}

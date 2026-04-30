@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": true,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed incorrect property types on the Docker Swarm `UpdateConfig` class that caused invalid Docker Compose YAML to be generated. `Parallelism` is now typed as `int?` (was `string?`) and `FailOnError` has been renamed to `FailureAction` typed as `string?` to correctly represent the `failure_action` field.",
-  "docsRequired": false,
-  "emoji": "🐛",
-  "firstMergedAt": "2026-03-25T03:50:19Z",
-  "lastMergedAt": "2026-03-25T03:50:19Z",
-  "name": "Fix Docker Swarm UpdateConfig property types",
-  "prs": [
-    15566
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":true,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed incorrect property types on the Docker Swarm `UpdateConfig` class that caused invalid Docker Compose YAML to be generated. `Parallelism` is now typed as `int?` (was `string?`) and `FailOnError` has been renamed to `FailureAction` typed as `string?` to correctly represent the `failure_action` field.","docsRequired":false,"emoji":"🐛","firstMergedAt":"2026-03-25T03:50:19Z","lastMergedAt":"2026-03-25T03:50:19Z","name":"Fix Docker Swarm UpdateConfig property types","prs":[15566]}

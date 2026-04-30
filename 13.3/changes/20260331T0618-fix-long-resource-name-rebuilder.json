@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed a crash where resources with names close to the 64-character limit would fail to start because the internal ProjectRebuilderResource appended '-rebuilder' to the parent name, exceeding the limit. Internal rebuilder resources now skip name validation since they are never deployed.",
-  "docsRequired": false,
-  "emoji": "🐛",
-  "firstMergedAt": "2026-03-31T06:18:19Z",
-  "lastMergedAt": "2026-03-31T06:18:19Z",
-  "name": "Fix crash when resource name is near the 64-character limit",
-  "prs": [
-    15724
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed a crash where resources with names close to the 64-character limit would fail to start because the internal ProjectRebuilderResource appended '-rebuilder' to the parent name, exceeding the limit. Internal rebuilder resources now skip name validation since they are never deployed.","docsRequired":false,"emoji":"🐛","firstMergedAt":"2026-03-31T06:18:19Z","lastMergedAt":"2026-03-31T06:18:19Z","name":"Fix crash when resource name is near the 64-character limit","prs":[15724]}

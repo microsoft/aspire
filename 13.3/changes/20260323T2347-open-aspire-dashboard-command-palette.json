@@ -1,16 +1,1 @@
-{
-  "area": "Extensions",
-  "areaEmoji": "🧩",
-  "breaking": false,
-  "changeType": "New features",
-  "communityContributors": [],
-  "description": "The 'Open Aspire Dashboard' command is now accessible from the VS Code Command Palette when an Aspire app host is running. When multiple app hosts are running, a quick pick selector lets you choose which dashboard to open.",
-  "docsRequired": false,
-  "emoji": "🖥️",
-  "firstMergedAt": "2026-03-23T23:47:58Z",
-  "lastMergedAt": "2026-03-23T23:47:58Z",
-  "name": "Open Aspire Dashboard from VS Code Command Palette",
-  "prs": [
-    15499
-  ]
-}
+{"area":"Extensions","areaEmoji":"🧩","breaking":false,"changeType":"New features","communityContributors":[],"description":"The 'Open Aspire Dashboard' command is now accessible from the VS Code Command Palette when an Aspire app host is running. When multiple app hosts are running, a quick pick selector lets you choose which dashboard to open.","docsRequired":false,"emoji":"🖥️","firstMergedAt":"2026-03-23T23:47:58Z","lastMergedAt":"2026-03-23T23:47:58Z","name":"Open Aspire Dashboard from VS Code Command Palette","prs":[15499]}

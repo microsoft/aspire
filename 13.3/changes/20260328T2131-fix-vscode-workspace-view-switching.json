@@ -1,16 +1,1 @@
-{
-  "area": "Extensions",
-  "areaEmoji": "🧩",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed the Running AppHosts view mode toggle in the VS Code extension so that the extension can correctly switch between workspace and global modes. The bug was caused by incorrect when-clause comparisons for the aspire.viewMode context key.",
-  "docsRequired": false,
-  "emoji": "🔄",
-  "firstMergedAt": "2026-03-28T21:31:42Z",
-  "lastMergedAt": "2026-03-28T21:31:42Z",
-  "name": "Fix VS Code workspace/global mode toggle in Running AppHosts view",
-  "prs": [
-    15682
-  ]
-}
+{"area":"Extensions","areaEmoji":"🧩","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed the Running AppHosts view mode toggle in the VS Code extension so that the extension can correctly switch between workspace and global modes. The bug was caused by incorrect when-clause comparisons for the aspire.viewMode context key.","docsRequired":false,"emoji":"🔄","firstMergedAt":"2026-03-28T21:31:42Z","lastMergedAt":"2026-03-28T21:31:42Z","name":"Fix VS Code workspace/global mode toggle in Running AppHosts view","prs":[15682]}

@@ -1,18 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "New features",
-  "communityContributors": [
-    "@afscrome"
-  ],
-  "description": "Added extension methods on IDistributedApplicationBuilder for subscribing to application-level events such as BeforeStartEvent, AfterResourcesCreatedEvent, and more, making it easier to hook into app host lifecycle events without manually resolving the eventing service.",
-  "docsRequired": true,
-  "emoji": "📣",
-  "firstMergedAt": "2026-03-28T15:17:50Z",
-  "lastMergedAt": "2026-03-28T15:17:50Z",
-  "name": "Extension methods for subscribing to app host lifecycle events",
-  "prs": [
-    14119
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"New features","communityContributors":["@afscrome"],"description":"Added extension methods on IDistributedApplicationBuilder for subscribing to application-level events such as BeforeStartEvent, AfterResourcesCreatedEvent, and more, making it easier to hook into app host lifecycle events without manually resolving the eventing service.","docsRequired":true,"emoji":"📣","firstMergedAt":"2026-03-28T15:17:50Z","lastMergedAt":"2026-03-28T15:17:50Z","name":"Extension methods for subscribing to app host lifecycle events","prs":[14119]}

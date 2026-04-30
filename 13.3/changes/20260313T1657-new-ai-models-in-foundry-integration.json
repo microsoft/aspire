@@ -1,16 +1,1 @@
-{
-  "area": "Integrations",
-  "areaEmoji": "🔌",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "Added GPT-5.4, GPT-5.4-Pro, and Qwen3 VL models (2B, 4B, 8B) to the `Aspire.Hosting.Foundry` model catalog. Also corrected the code generation tool to use the `Aspire.Hosting.Foundry` namespace instead of `Aspire.Hosting.Azure`.",
-  "docsRequired": false,
-  "emoji": "🤖",
-  "firstMergedAt": "2026-03-13T16:57:24Z",
-  "lastMergedAt": "2026-03-13T16:57:24Z",
-  "name": "New AI models added to Foundry integration",
-  "prs": [
-    15210
-  ]
-}
+{"area":"Integrations","areaEmoji":"🔌","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"Added GPT-5.4, GPT-5.4-Pro, and Qwen3 VL models (2B, 4B, 8B) to the `Aspire.Hosting.Foundry` model catalog. Also corrected the code generation tool to use the `Aspire.Hosting.Foundry` namespace instead of `Aspire.Hosting.Azure`.","docsRequired":false,"emoji":"🤖","firstMergedAt":"2026-03-13T16:57:24Z","lastMergedAt":"2026-03-13T16:57:24Z","name":"New AI models added to Foundry integration","prs":[15210]}

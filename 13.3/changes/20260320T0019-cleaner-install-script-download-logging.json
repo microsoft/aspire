@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "The Aspire CLI install scripts (Bash and PowerShell) now emit compact download messages such as `Downloading aspire-cli-win-x64.zip from 'rc/daily'` instead of logging the full download URL. This applies to both CLI archive and VS Code extension downloads.",
-  "docsRequired": false,
-  "emoji": "📋",
-  "firstMergedAt": "2026-03-20T00:19:43Z",
-  "lastMergedAt": "2026-03-20T00:19:43Z",
-  "name": "Cleaner install script download logging",
-  "prs": [
-    15405
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"The Aspire CLI install scripts (Bash and PowerShell) now emit compact download messages such as `Downloading aspire-cli-win-x64.zip from 'rc/daily'` instead of logging the full download URL. This applies to both CLI archive and VS Code extension downloads.","docsRequired":false,"emoji":"📋","firstMergedAt":"2026-03-20T00:19:43Z","lastMergedAt":"2026-03-20T00:19:43Z","name":"Cleaner install script download logging","prs":[15405]}

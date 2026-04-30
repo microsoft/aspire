@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed a regression in TypeScript AppHost code generation where reusable helper packages with independently restored SDKs from separate `.modules` trees could not type-check correctly across packages. Generated public interfaces now use structural typing without the `I` prefix to ensure compatibility.",
-  "docsRequired": false,
-  "emoji": "🐛",
-  "firstMergedAt": "2026-04-01T17:41:48Z",
-  "lastMergedAt": "2026-04-01T17:41:48Z",
-  "name": "Fix TypeScript codegen typing for reusable packages",
-  "prs": [
-    15631
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed a regression in TypeScript AppHost code generation where reusable helper packages with independently restored SDKs from separate `.modules` trees could not type-check correctly across packages. Generated public interfaces now use structural typing without the `I` prefix to ensure compatibility.","docsRequired":false,"emoji":"🐛","firstMergedAt":"2026-04-01T17:41:48Z","lastMergedAt":"2026-04-01T17:41:48Z","name":"Fix TypeScript codegen typing for reusable packages","prs":[15631]}

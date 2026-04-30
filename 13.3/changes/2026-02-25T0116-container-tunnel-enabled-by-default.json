@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "Aspire now enables the container tunnel feature by default, allowing containers to communicate with host resources uniformly across Docker Desktop, Podman, and other container runtimes. Previously this required Docker Desktop's host bridging functionality.",
-  "docsRequired": true,
-  "emoji": "🌐",
-  "firstMergedAt": "2026-02-25T01:16:59Z",
-  "lastMergedAt": "2026-02-25T01:16:59Z",
-  "name": "Container tunnel enabled by default",
-  "prs": [
-    14557
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"Aspire now enables the container tunnel feature by default, allowing containers to communicate with host resources uniformly across Docker Desktop, Podman, and other container runtimes. Previously this required Docker Desktop's host bridging functionality.","docsRequired":true,"emoji":"🌐","firstMergedAt":"2026-02-25T01:16:59Z","lastMergedAt":"2026-02-25T01:16:59Z","name":"Container tunnel enabled by default","prs":[14557]}

@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed Azure deployment output links that were wrapping across terminal lines and becoming non-clickable. The fix uses the correct MarkdownStrings formatting so long URLs render as proper clickable hyperlinks in the terminal.",
-  "docsRequired": false,
-  "emoji": "🔗",
-  "firstMergedAt": "2026-03-25T05:11:14Z",
-  "lastMergedAt": "2026-03-25T05:11:14Z",
-  "name": "Fix Azure deployment output links not clickable in terminal",
-  "prs": [
-    15542
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed Azure deployment output links that were wrapping across terminal lines and becoming non-clickable. The fix uses the correct MarkdownStrings formatting so long URLs render as proper clickable hyperlinks in the terminal.","docsRequired":false,"emoji":"🔗","firstMergedAt":"2026-03-25T05:11:14Z","lastMergedAt":"2026-03-25T05:11:14Z","name":"Fix Azure deployment output links not clickable in terminal","prs":[15542]}

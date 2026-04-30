@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed a bug where the AppHost incorrectly defaulted to `~/.nuget/packages` as the NuGet restore folder instead of using NuGet's standard package path resolution logic. The restore code now correctly follows NuGet client conventions.",
-  "docsRequired": false,
-  "emoji": "🐛",
-  "firstMergedAt": "2026-04-01T15:52:02Z",
-  "lastMergedAt": "2026-04-01T15:52:02Z",
-  "name": "Fix NuGet packages restore folder defaulting",
-  "prs": [
-    15416
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed a bug where the AppHost incorrectly defaulted to `~/.nuget/packages` as the NuGet restore folder instead of using NuGet's standard package path resolution logic. The restore code now correctly follows NuGet client conventions.","docsRequired":false,"emoji":"🐛","firstMergedAt":"2026-04-01T15:52:02Z","lastMergedAt":"2026-04-01T15:52:02Z","name":"Fix NuGet packages restore folder defaulting","prs":[15416]}

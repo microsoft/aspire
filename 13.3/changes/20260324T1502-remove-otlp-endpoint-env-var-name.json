@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": true,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "The `OtlpConfigurationExtensions.OtlpEndpointEnvironmentVariableName` property has been removed. Use `KnownOtelConfigNames.ExporterOtlpEndpoint` directly as a replacement.",
-  "docsRequired": false,
-  "emoji": "🧹",
-  "firstMergedAt": "2026-03-24T15:02:30Z",
-  "lastMergedAt": "2026-03-24T15:02:30Z",
-  "name": "Remove OtlpEndpointEnvironmentVariableName property",
-  "prs": [
-    15390
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":true,"changeType":"Improvements","communityContributors":[],"description":"The `OtlpConfigurationExtensions.OtlpEndpointEnvironmentVariableName` property has been removed. Use `KnownOtelConfigNames.ExporterOtlpEndpoint` directly as a replacement.","docsRequired":false,"emoji":"🧹","firstMergedAt":"2026-03-24T15:02:30Z","lastMergedAt":"2026-03-24T15:02:30Z","name":"Remove OtlpEndpointEnvironmentVariableName property","prs":[15390]}

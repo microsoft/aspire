@@ -1,18 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [
-    "@tranhoangtu-it"
-  ],
-  "description": "ExecuteCommandContext now exposes a Logger property that gives resource command handlers direct access to the resource's log stream, eliminating the need to manually resolve a logger from the service provider.",
-  "docsRequired": false,
-  "emoji": "📋",
-  "firstMergedAt": "2026-03-31T01:35:49Z",
-  "lastMergedAt": "2026-03-31T01:35:49Z",
-  "name": "Logger property added to ExecuteCommandContext",
-  "prs": [
-    15678
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Improvements","communityContributors":["@tranhoangtu-it"],"description":"ExecuteCommandContext now exposes a Logger property that gives resource command handlers direct access to the resource's log stream, eliminating the need to manually resolve a logger from the service provider.","docsRequired":false,"emoji":"📋","firstMergedAt":"2026-03-31T01:35:49Z","lastMergedAt":"2026-03-31T01:35:49Z","name":"Logger property added to ExecuteCommandContext","prs":[15678]}

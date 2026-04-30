@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "TypeScript AppHost YARP configuration now uses a single unified `addRoute()` / `addCatchAllRoute()` surface that accepts clusters, endpoints, service-discovery resources, and external services. This simplifies YARP route configuration compared to the previous set of separate `withConfiguration` overloads.",
-  "docsRequired": false,
-  "emoji": "🔀",
-  "firstMergedAt": "2026-04-02T16:57:48Z",
-  "lastMergedAt": "2026-04-02T16:57:48Z",
-  "name": "Unified YARP TypeScript route helpers",
-  "prs": [
-    15729
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"TypeScript AppHost YARP configuration now uses a single unified `addRoute()` / `addCatchAllRoute()` surface that accepts clusters, endpoints, service-discovery resources, and external services. This simplifies YARP route configuration compared to the previous set of separate `withConfiguration` overloads.","docsRequired":false,"emoji":"🔀","firstMergedAt":"2026-04-02T16:57:48Z","lastMergedAt":"2026-04-02T16:57:48Z","name":"Unified YARP TypeScript route helpers","prs":[15729]}

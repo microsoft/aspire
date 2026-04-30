@@ -1,16 +1,1 @@
-{
-  "area": "Integrations",
-  "areaEmoji": "🔌",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "Updated `Azure.Provisioning.AppContainers` to the latest version, enabling support for the `Kind` property now available in the stable API. Data protection configuration continues to use a preview API version to ensure all properties remain available.",
-  "docsRequired": false,
-  "emoji": "☁️",
-  "firstMergedAt": "2026-03-25T15:15:51Z",
-  "lastMergedAt": "2026-03-25T15:15:51Z",
-  "name": "Update Azure Container Apps provisioning to latest library version",
-  "prs": [
-    15450
-  ]
-}
+{"area":"Integrations","areaEmoji":"🔌","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"Updated `Azure.Provisioning.AppContainers` to the latest version, enabling support for the `Kind` property now available in the stable API. Data protection configuration continues to use a preview API version to ensure all properties remain available.","docsRequired":false,"emoji":"☁️","firstMergedAt":"2026-03-25T15:15:51Z","lastMergedAt":"2026-03-25T15:15:51Z","name":"Update Azure Container Apps provisioning to latest library version","prs":[15450]}

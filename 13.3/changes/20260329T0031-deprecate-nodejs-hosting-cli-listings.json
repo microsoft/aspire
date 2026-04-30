@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "Aspire.Hosting.NodeJs is now hidden from aspire add integration listings since it has been superseded by Aspire.Hosting.JavaScript. This prevents developers from accidentally adding the deprecated package.",
-  "docsRequired": false,
-  "emoji": "🚫",
-  "firstMergedAt": "2026-03-29T00:31:36Z",
-  "lastMergedAt": "2026-03-29T00:31:36Z",
-  "name": "Aspire.Hosting.NodeJs hidden from CLI integration listings",
-  "prs": [
-    15677
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"Aspire.Hosting.NodeJs is now hidden from aspire add integration listings since it has been superseded by Aspire.Hosting.JavaScript. This prevents developers from accidentally adding the deprecated package.","docsRequired":false,"emoji":"🚫","firstMergedAt":"2026-03-29T00:31:36Z","lastMergedAt":"2026-03-29T00:31:36Z","name":"Aspire.Hosting.NodeJs hidden from CLI integration listings","prs":[15677]}

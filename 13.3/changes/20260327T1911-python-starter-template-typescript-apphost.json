@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": true,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "The `aspire-py-starter` template has been migrated from `dotnet new` to the Aspire CLI template factory with a TypeScript AppHost, removing the .NET SDK requirement for the AppHost project. Use `aspire new aspire-py-starter` instead of `dotnet new aspire-py-starter`. Supports optional Redis integration via `--use-redis-cache`.",
-  "docsRequired": true,
-  "emoji": "🐍",
-  "firstMergedAt": "2026-03-27T19:11:02Z",
-  "lastMergedAt": "2026-03-27T19:11:02Z",
-  "name": "Python starter template migrated to CLI template factory",
-  "prs": [
-    15574
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":true,"changeType":"Improvements","communityContributors":[],"description":"The `aspire-py-starter` template has been migrated from `dotnet new` to the Aspire CLI template factory with a TypeScript AppHost, removing the .NET SDK requirement for the AppHost project. Use `aspire new aspire-py-starter` instead of `dotnet new aspire-py-starter`. Supports optional Redis integration via `--use-redis-cache`.","docsRequired":true,"emoji":"🐍","firstMergedAt":"2026-03-27T19:11:02Z","lastMergedAt":"2026-03-27T19:11:02Z","name":"Python starter template migrated to CLI template factory","prs":[15574]}

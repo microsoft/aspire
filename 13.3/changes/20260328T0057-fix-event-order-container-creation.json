@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed issues introduced by the container tunnel feature where environment and invocation argument callbacks were invoked in the wrong order, invoked multiple times, or caused other resources to fail if they threw an exception during startup.",
-  "docsRequired": false,
-  "emoji": "🐛",
-  "firstMergedAt": "2026-03-28T00:57:18Z",
-  "lastMergedAt": "2026-03-28T00:57:18Z",
-  "name": "Fix event order and callback execution during resource startup",
-  "prs": [
-    15503
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed issues introduced by the container tunnel feature where environment and invocation argument callbacks were invoked in the wrong order, invoked multiple times, or caused other resources to fail if they threw an exception during startup.","docsRequired":false,"emoji":"🐛","firstMergedAt":"2026-03-28T00:57:18Z","lastMergedAt":"2026-03-28T00:57:18Z","name":"Fix event order and callback execution during resource startup","prs":[15503]}

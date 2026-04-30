@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed `DotnetToolResource` validation so that resources sharing the same tool name but with different validation callbacks now execute the correct callback. Migrated `DotnetToolResource` to use `RequiredCommandValidator` for consistent dotnet tool version checks.",
-  "docsRequired": false,
-  "emoji": "🔧",
-  "firstMergedAt": "2026-03-27T05:20:08Z",
-  "lastMergedAt": "2026-03-27T05:20:08Z",
-  "name": "Fix DotnetToolResource validation callback selection",
-  "prs": [
-    15267
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed `DotnetToolResource` validation so that resources sharing the same tool name but with different validation callbacks now execute the correct callback. Migrated `DotnetToolResource` to use `RequiredCommandValidator` for consistent dotnet tool version checks.","docsRequired":false,"emoji":"🔧","firstMergedAt":"2026-03-27T05:20:08Z","lastMergedAt":"2026-03-27T05:20:08Z","name":"Fix DotnetToolResource validation callback selection","prs":[15267]}

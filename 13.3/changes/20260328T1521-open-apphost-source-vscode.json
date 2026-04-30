@@ -1,16 +1,1 @@
-{
-  "area": "Extensions",
-  "areaEmoji": "🧩",
-  "breaking": false,
-  "changeType": "New features",
-  "communityContributors": [],
-  "description": "Added an 'Open AppHost source' action to the VS Code extension's Running AppHosts view, allowing developers to quickly navigate to the AppHost.cs or Program.cs source file for a running app host.",
-  "docsRequired": false,
-  "emoji": "📂",
-  "firstMergedAt": "2026-03-28T15:21:48Z",
-  "lastMergedAt": "2026-03-28T15:21:48Z",
-  "name": "Open AppHost source file from VS Code Running AppHosts view",
-  "prs": [
-    15668
-  ]
-}
+{"area":"Extensions","areaEmoji":"🧩","breaking":false,"changeType":"New features","communityContributors":[],"description":"Added an 'Open AppHost source' action to the VS Code extension's Running AppHosts view, allowing developers to quickly navigate to the AppHost.cs or Program.cs source file for a running app host.","docsRequired":false,"emoji":"📂","firstMergedAt":"2026-03-28T15:21:48Z","lastMergedAt":"2026-03-28T15:21:48Z","name":"Open AppHost source file from VS Code Running AppHosts view","prs":[15668]}

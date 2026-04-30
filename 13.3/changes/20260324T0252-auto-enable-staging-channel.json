@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "When `channel: \"staging\"` is configured in `aspire.config.json`, the staging channel is now automatically enabled without also needing to set `features.stagingChannelEnabled: true`. The feature flag still works as an independent toggle.",
-  "docsRequired": false,
-  "emoji": "🔄",
-  "firstMergedAt": "2026-03-24T02:52:59Z",
-  "lastMergedAt": "2026-03-24T02:52:59Z",
-  "name": "Auto-enable staging channel when channel is configured as staging",
-  "prs": [
-    15422
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"When `channel: \"staging\"` is configured in `aspire.config.json`, the staging channel is now automatically enabled without also needing to set `features.stagingChannelEnabled: true`. The feature flag still works as an independent toggle.","docsRequired":false,"emoji":"🔄","firstMergedAt":"2026-03-24T02:52:59Z","lastMergedAt":"2026-03-24T02:52:59Z","name":"Auto-enable staging channel when channel is configured as staging","prs":[15422]}

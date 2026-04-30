@@ -1,16 +1,1 @@
-{
-  "area": "Extensions",
-  "areaEmoji": "🧩",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "The Aspire VS Code extension activity bar icon has been updated with a solid outer border, making it look more cohesive alongside other VS Code sidebar icons.",
-  "docsRequired": false,
-  "emoji": "🎨",
-  "firstMergedAt": "2026-03-26T20:54:46Z",
-  "lastMergedAt": "2026-03-26T20:54:46Z",
-  "name": "Updated VS Code activity bar icon",
-  "prs": [
-    15451
-  ]
-}
+{"area":"Extensions","areaEmoji":"🧩","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"The Aspire VS Code extension activity bar icon has been updated with a solid outer border, making it look more cohesive alongside other VS Code sidebar icons.","docsRequired":false,"emoji":"🎨","firstMergedAt":"2026-03-26T20:54:46Z","lastMergedAt":"2026-03-26T20:54:46Z","name":"Updated VS Code activity bar icon","prs":[15451]}

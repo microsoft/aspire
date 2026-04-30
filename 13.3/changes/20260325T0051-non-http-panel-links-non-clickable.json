@@ -1,16 +1,1 @@
-{
-  "area": "Extensions",
-  "areaEmoji": "🧩",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "Non-HTTP endpoint links in the Aspire panel in VS Code are now displayed as non-clickable text instead of hyperlinks. Previously, non-HTTP links (such as TCP endpoints) appeared as clickable links but could not be opened in a browser.",
-  "docsRequired": false,
-  "emoji": "🔗",
-  "firstMergedAt": "2026-03-25T00:51:16Z",
-  "lastMergedAt": "2026-03-25T00:51:16Z",
-  "name": "Non-HTTP endpoint links shown as non-clickable in VS Code panel",
-  "prs": [
-    15514
-  ]
-}
+{"area":"Extensions","areaEmoji":"🧩","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"Non-HTTP endpoint links in the Aspire panel in VS Code are now displayed as non-clickable text instead of hyperlinks. Previously, non-HTTP links (such as TCP endpoints) appeared as clickable links but could not be opened in a browser.","docsRequired":false,"emoji":"🔗","firstMergedAt":"2026-03-25T00:51:16Z","lastMergedAt":"2026-03-25T00:51:16Z","name":"Non-HTTP endpoint links shown as non-clickable in VS Code panel","prs":[15514]}

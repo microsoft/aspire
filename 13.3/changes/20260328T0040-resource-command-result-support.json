@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "New features",
-  "communityContributors": [],
-  "description": "Resource commands can now return structured output (text or JSON) back to the caller. Results flow through the entire pipeline — model, gRPC, backchannel, Dashboard UI, CLI, and MCP tools — enabling commands like token generation to pipe their output directly to other tools.",
-  "docsRequired": true,
-  "emoji": "📤",
-  "firstMergedAt": "2026-03-28T00:40:50Z",
-  "lastMergedAt": "2026-03-28T00:40:50Z",
-  "name": "Resource commands can return structured results",
-  "prs": [
-    15622
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"New features","communityContributors":[],"description":"Resource commands can now return structured output (text or JSON) back to the caller. Results flow through the entire pipeline — model, gRPC, backchannel, Dashboard UI, CLI, and MCP tools — enabling commands like token generation to pipe their output directly to other tools.","docsRequired":true,"emoji":"📤","firstMergedAt":"2026-03-28T00:40:50Z","lastMergedAt":"2026-03-28T00:40:50Z","name":"Resource commands can return structured results","prs":[15622]}

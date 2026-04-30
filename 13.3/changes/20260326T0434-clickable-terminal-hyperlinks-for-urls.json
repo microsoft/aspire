@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": false,
-  "changeType": "Improvements",
-  "communityContributors": [],
-  "description": "CLI output now uses Spectre.Console link markup so terminal emulators that support hyperlinks render clickable URLs for endpoints, dashboard links, and docs references. Login tokens are hidden from the display text for dashboard URLs.",
-  "docsRequired": false,
-  "emoji": "🔗",
-  "firstMergedAt": "2026-03-26T04:34:27Z",
-  "lastMergedAt": "2026-03-26T04:34:27Z",
-  "name": "Clickable terminal hyperlinks for CLI URL output",
-  "prs": [
-    15573
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"CLI output now uses Spectre.Console link markup so terminal emulators that support hyperlinks render clickable URLs for endpoints, dashboard links, and docs references. Login tokens are hidden from the display text for dashboard URLs.","docsRequired":false,"emoji":"🔗","firstMergedAt":"2026-03-26T04:34:27Z","lastMergedAt":"2026-03-26T04:34:27Z","name":"Clickable terminal hyperlinks for CLI URL output","prs":[15573]}

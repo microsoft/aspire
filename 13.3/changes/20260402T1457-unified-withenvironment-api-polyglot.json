@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "New features",
-  "communityContributors": [],
-  "description": "Polyglot AppHosts can now use a single unified `withEnvironment(name, value)` API for setting environment values, accepting clusters, endpoints, parameters, connection strings, Key Vault secrets, and command outputs. The new `IExpressionValue` abstraction on the C# side enables this without breaking existing overloads.",
-  "docsRequired": true,
-  "emoji": "🌐",
-  "firstMergedAt": "2026-04-02T14:57:07Z",
-  "lastMergedAt": "2026-04-02T14:57:07Z",
-  "name": "Unified withEnvironment API for polyglot AppHosts",
-  "prs": [
-    15649
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"New features","communityContributors":[],"description":"Polyglot AppHosts can now use a single unified `withEnvironment(name, value)` API for setting environment values, accepting clusters, endpoints, parameters, connection strings, Key Vault secrets, and command outputs. The new `IExpressionValue` abstraction on the C# side enables this without breaking existing overloads.","docsRequired":true,"emoji":"🌐","firstMergedAt":"2026-04-02T14:57:07Z","lastMergedAt":"2026-04-02T14:57:07Z","name":"Unified withEnvironment API for polyglot AppHosts","prs":[15649]}

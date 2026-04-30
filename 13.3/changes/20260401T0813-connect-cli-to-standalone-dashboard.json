@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": false,
-  "changeType": "New features",
-  "communityContributors": [],
-  "description": "The `aspire agent mcp` and `aspire otel` commands now accept `--dashboard-url` and `--api-key` options, allowing direct connection to a standalone Aspire Dashboard without requiring an AppHost. This enables querying telemetry data via the CLI or MCP tools when running a standalone dashboard.",
-  "docsRequired": true,
-  "emoji": "🔌",
-  "firstMergedAt": "2026-04-01T08:13:22Z",
-  "lastMergedAt": "2026-04-01T08:13:22Z",
-  "name": "Connect CLI and MCP to standalone Aspire Dashboard",
-  "prs": [
-    15595
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"New features","communityContributors":[],"description":"The `aspire agent mcp` and `aspire otel` commands now accept `--dashboard-url` and `--api-key` options, allowing direct connection to a standalone Aspire Dashboard without requiring an AppHost. This enables querying telemetry data via the CLI or MCP tools when running a standalone dashboard.","docsRequired":true,"emoji":"🔌","firstMergedAt":"2026-04-01T08:13:22Z","lastMergedAt":"2026-04-01T08:13:22Z","name":"Connect CLI and MCP to standalone Aspire Dashboard","prs":[15595]}

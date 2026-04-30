@@ -1,16 +1,1 @@
-{
-  "area": "AppHost",
-  "areaEmoji": "🏠",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed regressions introduced in Aspire 13.2 where project resources using custom debug types (Azure Functions, AWS Lambda class libraries) or added via `AddResource` no longer received IDE execution in Visual Studio or VS Code. Debugging and symbol loading are now restored for these project types.",
-  "docsRequired": false,
-  "emoji": "🐛",
-  "firstMergedAt": "2026-04-01T17:50:00Z",
-  "lastMergedAt": "2026-04-01T17:50:00Z",
-  "name": "Fix 13.2 IDE execution regressions for Azure Functions and class library projects",
-  "prs": [
-    15714
-  ]
-}
+{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed regressions introduced in Aspire 13.2 where project resources using custom debug types (Azure Functions, AWS Lambda class libraries) or added via `AddResource` no longer received IDE execution in Visual Studio or VS Code. Debugging and symbol loading are now restored for these project types.","docsRequired":false,"emoji":"🐛","firstMergedAt":"2026-04-01T17:50:00Z","lastMergedAt":"2026-04-01T17:50:00Z","name":"Fix 13.2 IDE execution regressions for Azure Functions and class library projects","prs":[15714]}

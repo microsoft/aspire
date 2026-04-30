@@ -1,16 +1,1 @@
-{
-  "area": "CLI",
-  "areaEmoji": "💻",
-  "breaking": false,
-  "changeType": "Bug fixes",
-  "communityContributors": [],
-  "description": "Fixed a bug in the `aspire describe` command where dashboard URLs for resources were malformed, containing the login token path (`/login?t=...`) as part of the base URL. Resource links in describe output now point to the correct dashboard URL.",
-  "docsRequired": false,
-  "emoji": "🔗",
-  "firstMergedAt": "2026-03-27T04:30:24Z",
-  "lastMergedAt": "2026-03-27T04:30:24Z",
-  "name": "Fix malformed resource dashboard URLs in aspire describe",
-  "prs": [
-    15639
-  ]
-}
+{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Bug fixes","communityContributors":[],"description":"Fixed a bug in the `aspire describe` command where dashboard URLs for resources were malformed, containing the login token path (`/login?t=...`) as part of the base URL. Resource links in describe output now point to the correct dashboard URL.","docsRequired":false,"emoji":"🔗","firstMergedAt":"2026-03-27T04:30:24Z","lastMergedAt":"2026-03-27T04:30:24Z","name":"Fix malformed resource dashboard URLs in aspire describe","prs":[15639]}
