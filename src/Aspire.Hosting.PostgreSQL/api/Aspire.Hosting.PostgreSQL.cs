@@ -10,19 +10,19 @@ namespace Aspire.Hosting
 {
     public static partial class PostgresBuilderExtensions
     {
-        [AspireExport("addDatabase", Description = "Adds a PostgreSQL database")]
+        [AspireExport(Description = "Adds a PostgreSQL database")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string name, string? databaseName = null) { throw null; }
 
-        [AspireExport("addPostgres", Description = "Adds a PostgreSQL server resource")]
+        [AspireExport(Description = "Adds a PostgreSQL server resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> AddPostgres(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
-        [AspireExport("withCreationScript", Description = "Defines the SQL script for database creation")]
+        [AspireExport(Description = "Defines the SQL script for database creation")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> WithCreationScript(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> builder, string script) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a data bind mount for PostgreSQL")]
+        [AspireExport(Description = "Adds a data bind mount for PostgreSQL")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a data volume for PostgreSQL")]
+        [AspireExport(Description = "Adds a data volume for PostgreSQL")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [AspireExport("withPostgresHostPort", MethodName = "withHostPort", Description = "Sets the host port for PostgreSQL")]
@@ -38,24 +38,24 @@ namespace Aspire.Hosting
         [System.Obsolete("Use WithInitFiles instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithInitBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string source, bool isReadOnly = true) { throw null; }
 
-        [AspireExport("withInitFiles", Description = "Copies init files to PostgreSQL")]
+        [AspireExport(Description = "Copies init files to PostgreSQL")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithInitFiles(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, string source) { throw null; }
 
-        [AspireExport("withPassword", Description = "Configures the PostgreSQL password")]
+        [AspireExport(Description = "Configures the PostgreSQL password")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> password) { throw null; }
 
-        [AspireExport("withPgAdmin", Description = "Adds pgAdmin 4 management UI", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Adds pgAdmin 4 management UI", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithPgAdmin<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PgAdminContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.PostgresServerResource { throw null; }
 
-        [AspireExport("withPgWeb", Description = "Adds pgweb management UI", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Adds pgweb management UI", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithPgWeb(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PgWebContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
 
-        [AspireExport("withPostgresMcp", Description = "Adds Postgres MCP server", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Adds Postgres MCP server", RunSyncOnBackgroundThread = true)]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> WithPostgresMcp(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PostgresMcpContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
 
-        [AspireExport("withUserName", Description = "Configures the PostgreSQL user name")]
+        [AspireExport(Description = "Configures the PostgreSQL user name")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithUserName(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> userName) { throw null; }
     }
 }
@@ -64,7 +64,7 @@ namespace Aspire.Hosting.ApplicationModel
 {
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
     [AspireExport(ExposeProperties = true)]
-    public partial class PostgresDatabaseResource : Resource, IResourceWithParent<PostgresServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class PostgresDatabaseResource : Resource, IResourceWithParent<PostgresServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public PostgresDatabaseResource(string name, string databaseName, PostgresServerResource postgresParentResource) : base(default!) { }
 
@@ -82,7 +82,7 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [AspireExport(ExposeProperties = true)]
-    public partial class PostgresServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class PostgresServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public PostgresServerResource(string name, ParameterResource? userName, ParameterResource password) : base(default!, default) { }
 

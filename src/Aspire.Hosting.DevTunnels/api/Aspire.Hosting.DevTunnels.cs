@@ -23,7 +23,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.EndpointReference GetEndpoint<TResource>(this ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> tunnelBuilder, ApplicationModel.IResourceBuilder<TResource> resourceBuilder, string endpointName)
             where TResource : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [AspireExport("withAnonymousAccess", Description = "Configures the dev tunnel to allow anonymous access.")]
+        [AspireExport(Description = "Configures the dev tunnel to allow anonymous access.")]
         public static ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> WithAnonymousAccess(this ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> tunnelBuilder) { throw null; }
 
         [AspireExportIgnore(Reason = "DevTunnelPortOptions is not ATS-compatible. Use the overload with EndpointReference or EndpointReference + bool instead.")]

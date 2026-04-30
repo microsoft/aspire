@@ -10,28 +10,28 @@ namespace Aspire.Hosting
 {
     public static partial class AzureKeyVaultResourceExtensions
     {
-        [AspireExport("addAzureKeyVault", Description = "Adds an Azure Key Vault resource")]
+        [AspireExport(Description = "Adds an Azure Key Vault resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> AddAzureKeyVault(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport("addSecret", Description = "Adds a secret to the Azure Key Vault from a parameter resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameterResource) { throw null; }
 
         [AspireExportIgnore(Reason = "Raw ParameterResource overload; use the IResourceBuilder<ParameterResource> variant instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, ApplicationModel.ParameterResource parameterResource) { throw null; }
 
-        [AspireExport("addSecretFromExpression", Description = "Adds a secret to the Azure Key Vault from a reference expression")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, ApplicationModel.ReferenceExpression value) { throw null; }
 
-        [AspireExport("addSecretWithName", Description = "Adds a named secret to the Azure Key Vault from a parameter resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, string secretName, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameterResource) { throw null; }
 
         [AspireExportIgnore(Reason = "Raw ParameterResource overload; use the IResourceBuilder<ParameterResource> variant instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, string secretName, ApplicationModel.ParameterResource parameterResource) { throw null; }
 
-        [AspireExport("addSecretWithNameFromExpression", Description = "Adds a named secret to the Azure Key Vault from a reference expression")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultSecretResource> AddSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string name, string secretName, ApplicationModel.ReferenceExpression value) { throw null; }
 
-        [AspireExport("getSecret", Description = "Gets a secret reference from the Azure Key Vault")]
+        [AspireExport(Description = "Gets a secret reference from the Azure Key Vault")]
         public static Azure.IAzureKeyVaultSecretReference GetSecret(this ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> builder, string secretName) { throw null; }
 
         [AspireExportIgnore(Reason = "KeyVaultBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureKeyVaultRole-based overload instead.")]
@@ -42,7 +42,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureKeyVaultResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IAzureKeyVaultResource, ApplicationModel.IAzureResource, IAzurePrivateEndpointTarget
+    public partial class AzureKeyVaultResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IAzureKeyVaultResource, ApplicationModel.IAzureResource, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
     {
         public AzureKeyVaultResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -66,7 +66,7 @@ namespace Aspire.Hosting.Azure
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
 
@@ -76,7 +76,7 @@ namespace Aspire.Hosting.Azure
     }
 
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Secret = {SecretName}")]
-    public partial class AzureKeyVaultSecretResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureKeyVaultResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, IAzureKeyVaultSecretReference, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
+    public partial class AzureKeyVaultSecretResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureKeyVaultResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, IAzureKeyVaultSecretReference, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public AzureKeyVaultSecretResource(string name, string secretName, AzureKeyVaultResource parent, object value) : base(default!) { }
 

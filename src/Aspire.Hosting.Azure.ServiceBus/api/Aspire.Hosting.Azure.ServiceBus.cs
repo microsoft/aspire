@@ -10,20 +10,20 @@ namespace Aspire.Hosting
 {
     public static partial class AzureServiceBusExtensions
     {
-        [AspireExport("addAzureServiceBus", Description = "Adds an Azure Service Bus namespace resource")]
+        [AspireExport(Description = "Adds an Azure Service Bus namespace resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> AddAzureServiceBus(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExportIgnore(Reason = "Obsolete API with incorrect return type. Use AddServiceBusQueue instead.")]
         [System.Obsolete("This method is obsolete because it has the wrong return type and will be removed in a future version. Use AddServiceBusQueue instead to add an Azure Service Bus Queue.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> AddQueue(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> builder, string name) { throw null; }
 
-        [AspireExport("addServiceBusQueue", Description = "Adds an Azure Service Bus queue resource")]
+        [AspireExport(Description = "Adds an Azure Service Bus queue resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusQueueResource> AddServiceBusQueue(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> builder, string name, string? queueName = null) { throw null; }
 
-        [AspireExport("addServiceBusSubscription", Description = "Adds an Azure Service Bus subscription resource")]
+        [AspireExport(Description = "Adds an Azure Service Bus subscription resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusSubscriptionResource> AddServiceBusSubscription(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusTopicResource> builder, string name, string? subscriptionName = null) { throw null; }
 
-        [AspireExport("addServiceBusTopic", Description = "Adds an Azure Service Bus topic resource")]
+        [AspireExport(Description = "Adds an Azure Service Bus topic resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusTopicResource> AddServiceBusTopic(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> builder, string name, string? topicName = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Obsolete API. Use AddServiceBusSubscription instead.")]
@@ -38,16 +38,16 @@ namespace Aspire.Hosting
         [System.Obsolete("This method is obsolete because it has the wrong return type and will be removed in a future version. Use AddServiceBusTopic instead to add an Azure Service Bus Topic.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> AddTopic(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> builder, string name) { throw null; }
 
-        [AspireExport("runAsEmulator", Description = "Configures the Azure Service Bus resource to run with the local emulator", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Configures the Azure Service Bus resource to run with the local emulator", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource>>? configureContainer = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Action<JsonNode> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithConfiguration(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder, System.Action<System.Text.Json.Nodes.JsonNode> configJson) { throw null; }
 
-        [AspireExport("withConfigurationFile", Description = "Sets the emulator configuration file path")]
+        [AspireExport(Description = "Sets the emulator configuration file path")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithConfigurationFile(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder, string path) { throw null; }
 
-        [AspireExport("withHostPort", Description = "Sets the host port for the Service Bus emulator endpoint")]
+        [AspireExport(Description = "Sets the host port for the Service Bus emulator endpoint")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithHostPort(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder, int? port) { throw null; }
 
         [AspireExport("withQueueProperties", MethodName = "withProperties", Description = "Configures properties of an Azure Service Bus queue", RunSyncOnBackgroundThread = true)]
@@ -106,7 +106,7 @@ namespace Aspire.Hosting.Azure
 
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Queue = {QueueName}")]
     [AspireExport(ExposeProperties = true)]
-    public partial class AzureServiceBusQueueResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureServiceBusResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
+    public partial class AzureServiceBusQueueResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureServiceBusResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
     {
         public AzureServiceBusQueueResource(string name, string queueName, AzureServiceBusResource parent) : base(default!) { }
 
@@ -140,7 +140,7 @@ namespace Aspire.Hosting.Azure
     }
 
     [AspireExport]
-    public partial class AzureServiceBusResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig, ApplicationModel.IResourceWithEndpoints, IAzurePrivateEndpointTarget
+    public partial class AzureServiceBusResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig, ApplicationModel.IResourceWithEndpoints, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
     {
         public AzureServiceBusResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -164,7 +164,7 @@ namespace Aspire.Hosting.Azure
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
 
@@ -185,7 +185,7 @@ namespace Aspire.Hosting.Azure
 
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Subscription = {SubscriptionName}")]
     [AspireExport(ExposeProperties = true)]
-    public partial class AzureServiceBusSubscriptionResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureServiceBusTopicResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
+    public partial class AzureServiceBusSubscriptionResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureServiceBusTopicResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
     {
         public AzureServiceBusSubscriptionResource(string name, string subscriptionName, AzureServiceBusTopicResource parent) : base(default!) { }
 
@@ -218,7 +218,7 @@ namespace Aspire.Hosting.Azure
 
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Topic = {TopicName}")]
     [AspireExport(ExposeProperties = true)]
-    public partial class AzureServiceBusTopicResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureServiceBusResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
+    public partial class AzureServiceBusTopicResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureServiceBusResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, IResourceWithAzureFunctionsConfig
     {
         public AzureServiceBusTopicResource(string name, string topicName, AzureServiceBusResource parent) : base(default!) { }
 

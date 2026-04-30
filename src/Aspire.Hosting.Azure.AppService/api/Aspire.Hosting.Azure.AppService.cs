@@ -10,40 +10,43 @@ namespace Aspire.Hosting
 {
     public static partial class AzureAppServiceComputeResourceExtensions
     {
-        [AspireExport("publishAsAzureAppServiceWebsite", Description = "Publishes the compute resource as an Azure App Service website or deployment slot")]
+        [AspireExport(Description = "Publishes the compute resource as an Azure App Service website or deployment slot")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsAzureAppServiceWebsite<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Azure.AzureResourceInfrastructure, global::Azure.Provisioning.AppService.WebSite>? configure = null, System.Action<Azure.AzureResourceInfrastructure, global::Azure.Provisioning.AppService.WebSiteSlot>? configureSlot = null)
             where T : ApplicationModel.IComputeResource { throw null; }
 
-        [AspireExport("skipEnvironmentVariableNameChecks", Description = "Skips Azure App Service environment variable name validation for the compute resource")]
+        [AspireExport(Description = "Skips Azure App Service environment variable name validation for the compute resource")]
         public static ApplicationModel.IResourceBuilder<T> SkipEnvironmentVariableNameChecks<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
 
     public static partial class AzureAppServiceEnvironmentExtensions
     {
-        [AspireExport("addAzureAppServiceEnvironment", Description = "Adds an Azure App Service environment resource")]
+        [AspireExport(Description = "Adds an Azure App Service environment resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport("withAzureApplicationInsightsLocationParameter", Description = "Enables Azure Application Insights for the Azure App Service environment using a location parameter")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> applicationInsightsLocation) { throw null; }
 
-        [AspireExport("withAzureApplicationInsightsResource", Description = "Enables Azure Application Insights for the Azure App Service environment using an existing Application Insights resource")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> applicationInsightsBuilder) { throw null; }
 
-        [AspireExport("withAzureApplicationInsightsLocation", Description = "Enables Azure Application Insights for the Azure App Service environment with a specific location")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, string applicationInsightsLocation) { throw null; }
 
-        [AspireExport("withAzureApplicationInsights", Description = "Enables Azure Application Insights for the Azure App Service environment")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder) { throw null; }
 
-        [AspireExport("withDashboard", Description = "Configures whether the Aspire dashboard is included in the Azure App Service environment")]
+        [AspireExport(Description = "Configures whether the Aspire dashboard is included in the Azure App Service environment")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, bool enable = true) { throw null; }
 
-        [AspireExport("withDeploymentSlotParameter", Description = "Configures the deployment slot for all Azure App Services in the environment using a parameter")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDeploymentSlot(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> deploymentSlot) { throw null; }
 
-        [AspireExport("withDeploymentSlot", Description = "Configures the deployment slot for all Azure App Services in the environment")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDeploymentSlot(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, string deploymentSlot) { throw null; }
+
+        [AspireExport(Description = "Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, bool upgrade = true) { throw null; }
     }
 }
 

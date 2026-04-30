@@ -10,11 +10,20 @@ namespace Aspire.Hosting
 {
     public static partial class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     {
+        [AspireExport("addBingGroundingConnectionFromParameter", Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project using a parameter.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.BingGroundingConnectionResource> AddBingGroundingConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> bingResourceId) { throw null; }
+
+        [AspireExport(Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.BingGroundingConnectionResource> AddBingGroundingConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name, string bingResourceId) { throw null; }
+
         [AspireExport("addContainerRegistryConnection", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> registry) { throw null; }
 
         [AspireExport("addKeyVaultConnection", Description = "Adds an Azure Key Vault connection to a Microsoft Foundry project.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> keyVault) { throw null; }
+
+        [AspireExport("addSearchConnection", Description = "Adds an Azure AI Search connection to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureSearchResource> search) { throw null; }
 
         [AspireExport("addStorageConnection", Description = "Adds an Azure Storage connection to a Microsoft Foundry project.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
@@ -24,6 +33,9 @@ namespace Aspire.Hosting
 
         [AspireExportIgnore(Reason = "Raw AzureContainerRegistryResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, Azure.AzureContainerRegistryResource registry) { throw null; }
+
+        [AspireExport("addSearchConnectionFromResource", Description = "Adds an Azure AI Search connection to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, Azure.AzureSearchResource search) { throw null; }
 
         [AspireExportIgnore(Reason = "Raw AzureStorageResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectConnectionResource> AddConnection(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, Azure.AzureStorageResource storage) { throw null; }
@@ -40,25 +52,19 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "CapabilityHostBuilder is not ATS-compatible.")]
         public static Foundry.CapabilityHostBuilder AddCapabilityHost(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name) { throw null; }
 
-        [AspireExport("addModelDeploymentFromModel", Description = "Adds a model deployment to the parent Microsoft Foundry resource by using a model descriptor.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddModelDeployment(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name, Foundry.FoundryModel model) { throw null; }
 
-        [AspireExport("addModelDeployment", Description = "Adds a model deployment to the parent Microsoft Foundry resource.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddModelDeployment(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, string name, string modelName, string modelVersion, string format) { throw null; }
 
-        [AspireExport("addProject", Description = "Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.")]
+        [AspireExport(Description = "Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> AddProject(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder, string name) { throw null; }
 
-        [AspireExport("withAppInsights", Description = "Associates an Azure Application Insights resource with a Microsoft Foundry project.")]
+        [AspireExport(Description = "Associates an Azure Application Insights resource with a Microsoft Foundry project.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> WithAppInsights(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> appInsights) { throw null; }
 
-        [AspireExportIgnore(Reason = "IContainerRegistry is not ATS-compatible. Use the resource-builder overload instead.")]
-        public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> WithContainerRegistry(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IContainerRegistry registry) { throw null; }
-
-        [AspireExport("withContainerRegistry", Description = "Associates a container registry with a Microsoft Foundry project resource.")]
-        public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> WithContainerRegistry(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> registryBuilder) { throw null; }
-
-        [AspireExport("withKeyVault", Description = "Associates an Azure Key Vault resource with a Microsoft Foundry project.")]
+        [AspireExport(Description = "Associates an Azure Key Vault resource with a Microsoft Foundry project.")]
         public static ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> WithKeyVault(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureKeyVaultResource> keyVault) { throw null; }
 
         [AspireExportIgnore(Reason = "The standard WithReference export already covers this polyglot scenario.")]
@@ -68,16 +74,16 @@ namespace Aspire.Hosting
 
     public static partial class FoundryExtensions
     {
-        [AspireExport("addDeploymentFromModel", Description = "Adds a Microsoft Foundry deployment resource by using a Microsoft Foundry model descriptor.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder, string name, Foundry.FoundryModel model) { throw null; }
 
-        [AspireExport("addDeployment", Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> AddDeployment(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder, string name, string modelName, string modelVersion, string format) { throw null; }
 
-        [AspireExport("addFoundry", Description = "Adds a Microsoft Foundry resource to the distributed application model.")]
+        [AspireExport(Description = "Adds a Microsoft Foundry resource to the distributed application model.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryResource> AddFoundry(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport("runAsFoundryLocal", Description = "Configures the Microsoft Foundry resource to run by using Foundry Local.")]
+        [AspireExport(Description = "Configures the Microsoft Foundry resource to run by using Foundry Local.")]
         public static ApplicationModel.IResourceBuilder<Foundry.FoundryResource> RunAsFoundryLocal(this ApplicationModel.IResourceBuilder<Foundry.FoundryResource> builder) { throw null; }
 
         [AspireExport("withFoundryDeploymentProperties", MethodName = "withProperties", Description = "Configures properties of a Microsoft Foundry deployment resource.", RunSyncOnBackgroundThread = true)]
@@ -90,9 +96,6 @@ namespace Aspire.Hosting
 
     public static partial class HostedAgentResourceBuilderExtensions
     {
-        [AspireExport("addAndPublishPromptAgent", Description = "Adds and publishes a prompt agent to a Microsoft Foundry project.")]
-        public static ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> AddAndPublishPromptAgent(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> model, string name, string? instructions) { throw null; }
-
         [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented, so AsHostedAgent is not available in polyglot hosts.")]
         public static ApplicationModel.IResourceBuilder<T> AsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
             where T : ApplicationModel.ExecutableResource { throw null; }
@@ -103,11 +106,11 @@ namespace Aspire.Hosting
 
         [AspireExport("publishAsHostedAgentExecutable", MethodName = "publishAsHostedAgent", Description = "Publishes an executable resource as a hosted agent in Microsoft Foundry.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
-            where T : ApplicationModel.ExecutableResource { throw null; }
+            where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
 
         [AspireExportIgnore(Reason = "Subset of the full PublishAsHostedAgent overload which is exported.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Foundry.HostedAgentConfiguration> configure)
-            where T : ApplicationModel.ExecutableResource { throw null; }
+            where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
 
         [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented.")]
         public static ApplicationModel.IResourceBuilder<T> RunAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
@@ -117,10 +120,82 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> RunAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Foundry.HostedAgentConfiguration> configure)
             where T : ApplicationModel.ExecutableResource { throw null; }
     }
+
+    public static partial class PromptAgentBuilderExtensions
+    {
+        [AspireExport(Description = "Adds an Azure AI Search tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzureAISearchToolResource> AddAISearchTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, string? indexName = null) { throw null; }
+
+        [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzureFunctionToolResource> AddAzureFunctionTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, string functionName, string description, System.BinaryData parameters, string inputQueueEndpoint, string inputQueueName, string outputQueueEndpoint, string outputQueueName) { throw null; }
+
+        [AspireExport(Description = "Adds an Azure Function tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzureFunctionToolResource> AddAzureFunctionTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, string functionName, string description, string parametersJson, string inputQueueEndpoint, string inputQueueName, string outputQueueEndpoint, string outputQueueName) { throw null; }
+
+        [AspireExport(Description = "Adds a Bing Grounding tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> AddBingGroundingTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name) { throw null; }
+
+        [AspireExport(Description = "Adds a Code Interpreter tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.CodeInterpreterToolResource> AddCodeInterpreterTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name) { throw null; }
+
+        [AspireExport(Description = "Adds a Computer Use tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.ComputerToolResource> AddComputerUseTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, int displayWidth = 1024, int displayHeight = 768, string environment = "browser") { throw null; }
+
+        [AspireExport(Description = "Adds a Microsoft Fabric data agent tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.FabricToolResource> AddFabricTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, params string[] projectConnectionIds) { throw null; }
+
+        [AspireExport(Description = "Adds a File Search tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.FileSearchToolResource> AddFileSearchTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, params string[] vectorStoreIds) { throw null; }
+
+        [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.FunctionToolResource> AddFunctionTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, string functionName, System.BinaryData parameters, string? description = null, bool? strictModeEnabled = null) { throw null; }
+
+        [AspireExport(Description = "Adds an Image Generation tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.ImageGenerationToolResource> AddImageGenerationTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name) { throw null; }
+
+        [AspireExport(Description = "Adds a prompt agent to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> AddPromptAgent(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> model, string name, string? instructions = null) { throw null; }
+
+        [AspireExport(Description = "Adds a SharePoint grounding tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.SharePointToolResource> AddSharePointTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, params string[] projectConnectionIds) { throw null; }
+
+        [AspireExport(Description = "Adds a Web Search tool to a Microsoft Foundry project.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.WebSearchToolResource> AddWebSearchTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name) { throw null; }
+
+        [AspireExportIgnore(Reason = "IFoundryTool is not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> WithCustomTool(this ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> builder, Foundry.IFoundryTool tool) { throw null; }
+
+        [AspireExport(Description = "Links an Azure AI Search tool to a backing search resource.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzureAISearchToolResource> WithReference(this ApplicationModel.IResourceBuilder<Foundry.AzureAISearchToolResource> tool, ApplicationModel.IResourceBuilder<Azure.AzureSearchResource> search) { throw null; }
+
+        [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> WithReference(this ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> tool, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> bingResourceId) { throw null; }
+
+        [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> WithReference(this ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> tool, ApplicationModel.IResourceBuilder<Foundry.BingGroundingConnectionResource> bingConnection) { throw null; }
+
+        [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> WithReference(this ApplicationModel.IResourceBuilder<Foundry.BingGroundingToolResource> tool, string bingResourceId) { throw null; }
+
+        [AspireExport(Description = "Adds a tool to a prompt agent.")]
+        public static ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> WithTool(this ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> agent, ApplicationModel.IResourceBuilder<Foundry.FoundryToolResource> tool) { throw null; }
+    }
 }
 
 namespace Aspire.Hosting.Foundry
 {
+    [AspireExport]
+    public partial class AzureAISearchToolResource : FoundryToolResource
+    {
+        public AzureAISearchToolResource(string name, AzureCognitiveServicesProjectResource project) : base(default!, default!) { }
+
+        public string? IndexName { get { throw null; } set { } }
+
+        public Azure.AzureSearchResource? SearchResource { get { throw null; } }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
+    }
+
     public partial class AzureCognitiveServicesProjectConnectionResource : AzureProvisionableAspireResourceWithParent<global::Azure.Provisioning.CognitiveServices.CognitiveServicesProjectConnection, AzureCognitiveServicesProjectResource>
     {
         public AzureCognitiveServicesProjectConnectionResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure, AzureCognitiveServicesProjectResource parent) : base(default!, default!, default!) { }
@@ -130,7 +205,7 @@ namespace Aspire.Hosting.Foundry
         public override void SetName(global::Azure.Provisioning.CognitiveServices.CognitiveServicesProjectConnection provisionableResource, global::Azure.Provisioning.BicepValue<string> name) { }
     }
 
-    public partial class AzureCognitiveServicesProjectResource : AzureProvisionableAspireResourceWithParent<global::Azure.Provisioning.CognitiveServices.CognitiveServicesProject, FoundryResource>, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, Azure.IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource
+    public partial class AzureCognitiveServicesProjectResource : AzureProvisionableAspireResourceWithParent<global::Azure.Provisioning.CognitiveServices.CognitiveServicesProject, FoundryResource>, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, Azure.IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource
     {
         public AzureCognitiveServicesProjectResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure, FoundryResource parent) : base(default!, default!, default!) { }
 
@@ -165,6 +240,28 @@ namespace Aspire.Hosting.Foundry
         public bool TryGetAppIdentityResource(out Azure.IAppIdentityResource? identity) { throw null; }
     }
 
+    [AspireExport]
+    public sealed partial class AzureFunctionToolResource : FoundryToolResource
+    {
+        public AzureFunctionToolResource(string name, AzureCognitiveServicesProjectResource project, string functionName, string description, System.BinaryData parameters, string inputQueueEndpoint, string inputQueueName, string outputQueueEndpoint, string outputQueueName) : base(default!, default!) { }
+
+        public string Description { get { throw null; } }
+
+        public string FunctionName { get { throw null; } }
+
+        public string InputQueueEndpoint { get { throw null; } }
+
+        public string InputQueueName { get { throw null; } }
+
+        public string OutputQueueEndpoint { get { throw null; } }
+
+        public string OutputQueueName { get { throw null; } }
+
+        public System.BinaryData Parameters { get { throw null; } }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
+    }
+
     public partial class AzureHostedAgentResource : ApplicationModel.Resource, ApplicationModel.IComputeResource, ApplicationModel.IResource, ApplicationModel.IResourceWithEnvironment
     {
         public AzureHostedAgentResource(string name, ApplicationModel.IResource target, System.Action<HostedAgentConfiguration>? configure = null) : base(default!) { }
@@ -177,30 +274,36 @@ namespace Aspire.Hosting.Foundry
 
         public StaticValueProvider<string> Version { get { throw null; } }
 
-        public System.Threading.Tasks.Task<global::Azure.AI.Projects.OpenAI.AgentVersion> DeployAsync(Pipelines.PipelineStepContext context, AzureCognitiveServicesProjectResource project) { throw null; }
+        public System.Threading.Tasks.Task<global::Azure.AI.Projects.Agents.ProjectsAgentVersion> DeployAsync(Pipelines.PipelineStepContext context, AzureCognitiveServicesProjectResource project) { throw null; }
 
         public System.Threading.Tasks.Task PublishAsync(Publishing.ManifestPublishingContext ctx) { throw null; }
 
         public System.Threading.Tasks.Task<HostedAgentConfiguration> ToHostedAgentConfigurationAsync(Pipelines.PipelineStepContext context) { throw null; }
     }
 
-    public partial class AzurePromptAgentResource : ApplicationModel.ExecutableResource, ApplicationModel.IComputeResource, ApplicationModel.IResource
+    [AspireExport(ExposeProperties = true)]
+    public partial class AzurePromptAgentResource : ApplicationModel.Resource, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
-        public AzurePromptAgentResource(string name, string model, string? instructions) : base(default!, default!, default!) { }
+        public AzurePromptAgentResource(string name, string model, AzureCognitiveServicesProjectResource project, string? instructions = null) : base(default!) { }
+
+        public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public string Description { get { throw null; } set { } }
 
-        public string Instructions { get { throw null; } set { } }
+        public string? Instructions { get { throw null; } set { } }
 
         public System.Collections.Generic.IDictionary<string, string> Metadata { get { throw null; } init { } }
 
         public string Model { get { throw null; } set { } }
 
+        public AzureCognitiveServicesProjectResource Project { get { throw null; } }
+
+        [AspireExportIgnore(Reason = "IFoundryTool is a .NET extensibility point and is not ATS-compatible.")]
+        public System.Collections.Generic.IReadOnlyList<IFoundryTool> Tools { get { throw null; } }
+
         public StaticValueProvider<string> Version { get { throw null; } }
 
-        public System.Threading.Tasks.Task<global::Azure.AI.Projects.OpenAI.AgentVersion> DeployAsync(Pipelines.PipelineStepContext context, AzureCognitiveServicesProjectResource project) { throw null; }
-
-        public System.Threading.Tasks.Task PublishAsync(Publishing.ManifestPublishingContext ctx) { throw null; }
+        System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
     public static partial class AzureProvisionableAspireResourceExtensions
@@ -227,6 +330,24 @@ namespace Aspire.Hosting.Foundry
         public static T? GetProvisionableResource(Azure.AzureResourceInfrastructure infra, string bicepIdentifier) { throw null; }
 
         public abstract void SetName(T provisionableResource, global::Azure.Provisioning.BicepValue<string> name);
+    }
+
+    [AspireExport]
+    public partial class BingGroundingConnectionResource : AzureProvisionableAspireResourceWithParent<global::Azure.Provisioning.CognitiveServices.CognitiveServicesConnection, AzureCognitiveServicesProjectResource>
+    {
+        public BingGroundingConnectionResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure, AzureCognitiveServicesProjectResource parent) : base(default!, default!, default!) { }
+
+        public override global::Azure.Provisioning.CognitiveServices.CognitiveServicesConnection FromExisting(string bicepIdentifier) { throw null; }
+
+        public override void SetName(global::Azure.Provisioning.CognitiveServices.CognitiveServicesConnection provisionableResource, global::Azure.Provisioning.BicepValue<string> name) { }
+    }
+
+    [AspireExport]
+    public partial class BingGroundingToolResource : FoundryToolResource
+    {
+        public BingGroundingToolResource(string name, AzureCognitiveServicesProjectResource project) : base(default!, default!) { }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
     public partial class CapabilityHostBuilder
@@ -261,8 +382,50 @@ namespace Aspire.Hosting.Foundry
         public Azure.AzureStorageResource? Storage { get { throw null; } set { } }
     }
 
+    [AspireExport]
+    public sealed partial class CodeInterpreterToolResource : FoundryToolResource
+    {
+        public CodeInterpreterToolResource(string name, AzureCognitiveServicesProjectResource project) : base(default!, default!) { }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
+    }
+
+    [AspireExport]
+    public sealed partial class ComputerToolResource : FoundryToolResource
+    {
+        public ComputerToolResource(string name, AzureCognitiveServicesProjectResource project, int displayWidth = 1024, int displayHeight = 768, string environment = "browser") : base(default!, default!) { }
+
+        public int DisplayHeight { get { throw null; } }
+
+        public int DisplayWidth { get { throw null; } }
+
+        public string Environment { get { throw null; } }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
+    }
+
+    [AspireExport]
+    public sealed partial class FabricToolResource : FoundryToolResource
+    {
+        public FabricToolResource(string name, AzureCognitiveServicesProjectResource project, params string[] projectConnectionIds) : base(default!, default!) { }
+
+        public System.Collections.Generic.IList<string> ProjectConnectionIds { get { throw null; } }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
+    }
+
+    [AspireExport]
+    public sealed partial class FileSearchToolResource : FoundryToolResource
+    {
+        public FileSearchToolResource(string name, AzureCognitiveServicesProjectResource project) : base(default!, default!) { }
+
+        public System.Collections.Generic.IList<string> VectorStoreIds { get { throw null; } init { } }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
+    }
+
     [AspireExport(ExposeProperties = true)]
-    public partial class FoundryDeploymentResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<FoundryResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public partial class FoundryDeploymentResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<FoundryResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public FoundryDeploymentResource(string name, string modelName, string modelVersion, string format, FoundryResource parent) : base(default!) { }
 
@@ -296,39 +459,65 @@ namespace Aspire.Hosting.Foundry
 
         public static partial class AI21Labs
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AI21Jamba15Large;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AI21Jamba15Mini;
         }
 
         public static partial class Anthropic
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeHaiku45;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel ClaudeMythosPreview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeOpus41;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeOpus45;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeOpus46;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel ClaudeOpus47;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeSonnet45;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeSonnet46;
         }
 
         public static partial class BlackForestLabs
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Flux11Pro;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Flux1KontextPro;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Flux2Flex;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Flux2Pro;
         }
 
         public static partial class Cohere
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereCommandA;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereCommandR;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereCommandR082024;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereCommandRPlus;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereCommandRPlus082024;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereEmbedV3English;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereEmbedV3Multilingual;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereRerankV40Fast;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereRerankV40Pro;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel EmbedV40;
         }
 
@@ -341,67 +530,128 @@ namespace Aspire.Hosting.Foundry
 
         public static partial class DeepSeek
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekR1;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekR10528;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV3;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV30324;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV31;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV32;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV32Speciale;
         }
 
         public static partial class Local
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepseekR114b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepseekR115b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepseekR17b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptOss20b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Mistral7bV02;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel NemotronSpeechStreamingEn06b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi35Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Mini128k;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Mini4k;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4MiniReasoning;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen2505b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen2514b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen2515b;
             [System.Obsolete("This test variant is no longer available. Use Qwen2515b instead.")]
             [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly FoundryModel Qwen2515bInstructTestVitisNpu;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen257b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen25Coder05b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen25Coder14b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen25Coder15b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen25Coder7b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen306b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen314b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen317b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen34b;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Qwen3508b;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Qwen352b;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Qwen354b;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Qwen359b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen38b;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Qwen3Embedding06b;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Qwen3Embedding8b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen3Vl2bInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen3Vl4bInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Qwen3Vl8bInstruct;
         }
 
         public static partial class Meta
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Llama3211BVisionInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Llama3290BVisionInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Llama3370BInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Llama4Maverick17B128EInstructFP8;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Llama4Scout17B16EInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MetaLlama31405BInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MetaLlama3170BInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MetaLlama318BInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MetaLlama370BInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MetaLlama38BInstruct;
         }
 
         public static partial class Microsoft
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureAIContentSafety;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureAIContentUnderstanding;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureAIDocumentIntelligence;
             [System.Obsolete("Azure AI Language has been replaced with more granular services. Use AzureLanguageLanguageDetection, AzureLanguageTextPiiRedaction, or other specific services instead.")]
             [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
@@ -409,35 +659,70 @@ namespace Aspire.Hosting.Foundry
             [System.Obsolete("Azure AI Translator has been replaced with more granular services. Use AzureTranslatorTextTranslation or AzureTranslatorDocumentTranslation instead.")]
             [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly FoundryModel AzureAITranslator;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureAIVision;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureContentUnderstandingLayout;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureContentUnderstandingRead;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel AzureLanguageConversationalPiiRedaction;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureLanguageLanguageDetection;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureLanguageTextPiiRedaction;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureSpeechSpeechToText;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel AzureSpeechSpeechTranslation;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureSpeechTextToSpeech;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureSpeechTextToSpeechAvatar;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureSpeechVoiceLive;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureTranslatorDocumentTranslation;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel AzureTranslatorTextTranslation;
             [System.Obsolete("Use AzureLanguageLanguageDetection instead.")]
             [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
             public static readonly FoundryModel LanguageDetection;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MaiDSR1;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel MaiTranscribe1;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel MaiVoice1;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ModelRouter;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi35MiniInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi35MoEInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi35VisionInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Medium128kInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Medium4kInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Mini128kInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Mini4kInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Small128kInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi3Small8kInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4MiniInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4MiniReasoning;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4MultimodalInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Phi4Reasoning;
             [System.Obsolete("Use AzureLanguageTextPiiRedaction instead.")]
             [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
@@ -446,114 +731,213 @@ namespace Aspire.Hosting.Foundry
 
         public static partial class MistralAI
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Codestral2501;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Ministral3B;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralDocumentAi2505;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralDocumentAi2512;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralLarge2407;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralLarge2411;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralLarge3;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralMedium2505;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralNemo;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralSmall;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralSmall2503;
         }
 
         public static partial class OpenAI
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CodexMini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ComputerUsePreview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel DallE3;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Davinci002;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt35Turbo;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt35Turbo16k;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt35TurboInstruct;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt41;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt41Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt41Nano;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt432k;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt45Preview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4o;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oAudioPreview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oMini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oMiniAudioPreview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oMiniRealtimePreview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oMiniTranscribe;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oMiniTts;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oRealtimePreview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oTranscribe;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt4oTranscribeDiarize;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51Chat;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51Codex;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51CodexMax;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt51CodexMini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt52;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt52Chat;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt52Codex;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt53Chat;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt53Codex;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt54;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt54Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt54Nano;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt54Pro;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Gpt55;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5Chat;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5Codex;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5Nano;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5Pro;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptAudio;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptAudio15;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptAudioMini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptImage1;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptImage15;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptImage1Mini;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel GptImage2;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptOss120b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptOss20b;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptRealtime;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptRealtime15;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptRealtimeMini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O1;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O1Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O1Preview;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O3;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O3DeepResearch;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O3Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O3Pro;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel O4Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Sora;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel TextEmbedding3Large;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel TextEmbedding3Small;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel TextEmbeddingAda002;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Tts;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel TtsHd;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Whisper;
         }
 
         public static partial class StabilityAI
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel StableDiffusion35Large;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel StableImageCore;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel StableImageUltra;
         }
 
         public static partial class XAI
         {
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok3;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok3Mini;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok4;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok41FastNonReasoning;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok41FastReasoning;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Grok420NonReasoning;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Grok420Reasoning;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok4FastNonReasoning;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok4FastReasoning;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GrokCodeFast1;
         }
     }
 
     [AspireExport]
-    public partial class FoundryResource : Azure.AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public partial class FoundryResource : Azure.AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, Azure.IAzurePrivateEndpointTarget, Azure.IAzureNspAssociationTarget
     {
         public FoundryResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -569,6 +953,8 @@ namespace Aspire.Hosting.Foundry
 
         public Azure.BicepOutputReference Endpoint { get { throw null; } }
 
+        public Azure.BicepOutputReference Id { get { throw null; } }
+
         public bool IsEmulator { get { throw null; } }
 
         public Azure.BicepOutputReference NameOutputReference { get { throw null; } }
@@ -579,6 +965,36 @@ namespace Aspire.Hosting.Foundry
         public override global::Azure.Provisioning.CognitiveServices.CognitiveServicesAccount AddAsExistingResource(Azure.AzureResourceInfrastructure infra) { throw null; }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
+    }
+
+    [AspireExport]
+    public abstract partial class FoundryToolResource : ApplicationModel.Resource, IFoundryTool
+    {
+        protected FoundryToolResource(string name, AzureCognitiveServicesProjectResource project) : base(default!) { }
+
+        public AzureCognitiveServicesProjectResource Project { get { throw null; } }
+
+        public abstract System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default);
+    }
+
+    [AspireExport]
+    public sealed partial class FunctionToolResource : FoundryToolResource
+    {
+        public FunctionToolResource(string name, AzureCognitiveServicesProjectResource project, string functionName, System.BinaryData parameters, string? description = null, bool? strictModeEnabled = null) : base(default!, default!) { }
+
+        public string? Description { get { throw null; } }
+
+        public string FunctionName { get { throw null; } }
+
+        public System.BinaryData Parameters { get { throw null; } }
+
+        public bool? StrictModeEnabled { get { throw null; } }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
     [AspireExport(ExposeProperties = true)]
@@ -587,10 +1003,10 @@ namespace Aspire.Hosting.Foundry
         public HostedAgentConfiguration(string image) { }
 
         [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-        public System.Collections.Generic.IList<global::Azure.AI.Projects.OpenAI.ProtocolVersionRecord> ContainerProtocolVersions { get { throw null; } init { } }
+        public System.Collections.Generic.IList<global::Azure.AI.Projects.Agents.ProtocolVersionRecord> ContainerProtocolVersions { get { throw null; } init { } }
 
         [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-        public global::Azure.AI.Projects.OpenAI.ContentFilterConfiguration? ContentFilterConfiguration { get { throw null; } set { } }
+        public global::Azure.AI.Projects.Agents.ContentFilterConfiguration? ContentFilterConfiguration { get { throw null; } set { } }
 
         public decimal Cpu { get { throw null; } set { } }
 
@@ -612,29 +1028,37 @@ namespace Aspire.Hosting.Foundry
         public System.Collections.Generic.IDictionary<string, string> Metadata { get { throw null; } init { } }
 
         [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-        public System.Collections.Generic.IList<global::Azure.AI.Projects.OpenAI.AgentTool> Tools { get { throw null; } init { } }
+        public System.Collections.Generic.IList<global::Azure.AI.Projects.Agents.ProjectsAgentTool> Tools { get { throw null; } init { } }
 
-        public global::Azure.AI.Projects.AgentVersionCreationOptions ToAgentVersionCreationOptions() { throw null; }
+        public global::Azure.AI.Projects.Agents.ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions() { throw null; }
     }
 
-    public partial class PromptAgentConfiguration
+    public partial interface IFoundryTool
     {
-        public PromptAgentConfiguration(string model, string? instructions) { }
+        System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default);
+    }
 
-        public string Description { get { throw null; } set { } }
+    [AspireExport]
+    public sealed partial class ImageGenerationToolResource : FoundryToolResource
+    {
+        public ImageGenerationToolResource(string name, AzureCognitiveServicesProjectResource project) : base(default!, default!) { }
 
-        public string? Instructions { get { throw null; } set { } }
-
-        public System.Collections.Generic.IDictionary<string, string> Metadata { get { throw null; } init { } }
-
-        public string Model { get { throw null; } set { } }
-
-        public global::Azure.AI.Projects.AgentVersionCreationOptions ToAgentVersionCreationOptions() { throw null; }
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
     public partial class PublicHostingCognitiveServicesCapabilityHostProperties : global::Azure.Provisioning.CognitiveServices.CognitiveServicesCapabilityHostProperties
     {
         protected override void DefineProvisionableProperties() { }
+    }
+
+    [AspireExport]
+    public sealed partial class SharePointToolResource : FoundryToolResource
+    {
+        public SharePointToolResource(string name, AzureCognitiveServicesProjectResource project, params string[] projectConnectionIds) : base(default!, default!) { }
+
+        public System.Collections.Generic.IList<string> ProjectConnectionIds { get { throw null; } }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
     public partial class StaticValueProvider<T> : ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider
@@ -648,5 +1072,13 @@ namespace Aspire.Hosting.Foundry
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
         public void Set(T value) { }
+    }
+
+    [AspireExport]
+    public sealed partial class WebSearchToolResource : FoundryToolResource
+    {
+        public WebSearchToolResource(string name, AzureCognitiveServicesProjectResource project) : base(default!, default!) { }
+
+        public override System.Threading.Tasks.Task<OpenAI.Responses.ResponseTool> ToAgentToolAsync(System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 }
