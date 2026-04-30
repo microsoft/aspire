@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for project creation placing files in wrong location",
+  "mergedAt": "2026-04-09T04:32:48Z",
+  "number": 15976,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Create project output subfolder in VS Code extension mode"
+}

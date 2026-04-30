@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Removed a blocking CFSClean step from the release pipeline that was preventing NuGet packages from being published successfully.",
+  "docsRequired": false,
+  "emoji": "🚀",
+  "firstMergedAt": "2026-04-08T22:42:14Z",
+  "lastMergedAt": "2026-04-08T22:42:14Z",
+  "name": "Removed CFSClean step to unblock NuGet publishing",
+  "prs": [
+    15974
+  ]
+}

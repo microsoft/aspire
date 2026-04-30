@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Improved error messages for polyglot AppHost resource failures",
+  "mergedAt": "2026-04-09T19:17:13Z",
+  "number": 15230,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Improve polyglot and resource-scoped error messages"
+}

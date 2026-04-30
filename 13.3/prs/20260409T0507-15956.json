@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI debug logging improvement",
+  "mergedAt": "2026-04-09T05:07:51Z",
+  "number": 15956,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Reduce CLI diagnostic log noise and improve process logging"
+}

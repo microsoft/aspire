@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "VS Code extension PR build artifacts now use version 0.0.PR_NUMBER instead of the marketplace release version, making it easy to distinguish dogfooded extension builds from released ones.",
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-04-09T04:31:10Z",
+  "lastMergedAt": "2026-04-09T04:31:10Z",
+  "name": "PR-specific versioning for dogfood VS Code extension builds",
+  "prs": [
+    15892
+  ]
+}

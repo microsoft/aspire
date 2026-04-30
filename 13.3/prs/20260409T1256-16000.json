@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Trivial CI permissions fix with no user impact",
+  "mergedAt": "2026-04-09T12:56:57Z",
+  "number": 16000,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "excluded",
+  "title": "Fix pr-docs-check: remove invalid discussions permission"
+}

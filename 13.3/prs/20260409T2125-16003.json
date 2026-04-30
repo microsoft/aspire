@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Removed broken Foundry prompt agent APIs",
+  "mergedAt": "2026-04-09T21:25:53Z",
+  "number": 16003,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Remove non-working AddAndPublishPromptAgent and AzurePromptAgentResource"
+}

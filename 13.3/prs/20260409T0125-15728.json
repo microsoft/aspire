@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Configurable name validation improvement for AppHost resources",
+  "mergedAt": "2026-04-09T01:25:06Z",
+  "number": 15728,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Refactor name validation to NameValidationPolicyAnnotation with configurable rules"
+}

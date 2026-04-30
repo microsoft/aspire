@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Trivial line ending maintenance",
+  "mergedAt": "2026-04-09T17:47:21Z",
+  "number": 16002,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "excluded",
+  "title": "Stabilize ConfigurationSchema line endings"
+}

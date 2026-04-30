@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for aspire start CLI in VS Code integrated terminal",
+  "mergedAt": "2026-04-09T18:28:38Z",
+  "number": 15980,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Fix aspire start failing in VS Code integrated terminal"
+}

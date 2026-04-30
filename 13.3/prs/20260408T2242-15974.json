@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release pipeline fix that unblocked NuGet package publishing",
+  "mergedAt": "2026-04-08T22:42:14Z",
+  "number": 15974,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Remove CFSClean from release pipeline to unblock NuGet publishing"
+}

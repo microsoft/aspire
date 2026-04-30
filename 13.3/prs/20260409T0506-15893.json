@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for CodeLens positioning in VS Code extension",
+  "mergedAt": "2026-04-09T05:06:00Z",
+  "number": 15893,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Fix CodeLens positioned inside preceding code blocks"
+}

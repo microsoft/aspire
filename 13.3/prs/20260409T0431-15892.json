@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Engineering improvement for dogfooding VS Code extension builds",
+  "mergedAt": "2026-04-09T04:31:10Z",
+  "number": 15892,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Use PR-specific version for dogfood VS Code extension"
+}

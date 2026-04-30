@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "API rename in Azure Network hosting",
+  "mergedAt": "2026-04-09T22:56:44Z",
+  "number": 16004,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Rename NameOutput to NameOutputReference in Aspire.Hosting.Azure.Network"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI confirmation prompt styling improvement",
+  "mergedAt": "2026-04-09T08:17:22Z",
+  "number": 15998,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Use Spectre.Console built-in choices for confirm prompt styling"
+}

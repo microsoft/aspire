@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Test-only quarantine change (app/copilot-swe-agent), no product impact",
+  "mergedAt": "2026-04-09T04:30:42Z",
+  "number": 15977,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "excluded",
+  "title": "Quarantine flaky test: RunWithMissingAwaitShowsHelpfulError"
+}

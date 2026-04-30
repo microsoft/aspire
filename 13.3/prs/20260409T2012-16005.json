@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Integration package promoted to stable",
+  "mergedAt": "2026-04-09T20:12:19Z",
+  "number": 16005,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "included",
+  "title": "Stablize Aspire.Microsoft.Azure.StackExchangeRedis"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal agent skill update, not a product change",
+  "mergedAt": "2026-04-09T06:34:12Z",
+  "number": 15997,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "excluded",
+  "title": "Code review skill: warn before approving PRs with auto-merge enabled"
+}

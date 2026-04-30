@@ -4,13 +4,14 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "Added a /create-issue workflow command that automatically creates GitHub issues for failing tests discovered during CI runs, streamlining the triage and tracking process for test failures.",
+  "description": "Added a /create-issue workflow command that automatically creates GitHub issues for failing tests discovered during CI runs. Subsequent fixes improved workflow reliability and input handling.",
   "docsRequired": false,
   "emoji": "🐞",
   "firstMergedAt": "2026-04-08T17:41:57Z",
-  "lastMergedAt": "2026-04-08T17:41:57Z",
+  "lastMergedAt": "2026-04-09T06:14:05Z",
   "name": "Automated GitHub issue creation for failing CI tests",
   "prs": [
-    15780
+    15780,
+    15988
   ]
 }

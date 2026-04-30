@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Trivial VS Code setting change with no user-facing impact",
+  "mergedAt": "2026-04-09T19:53:43Z",
+  "number": 16009,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "excluded",
+  "title": "Disable auto restore for the Aspire repo"
+}

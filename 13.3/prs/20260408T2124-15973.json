@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Routine CI workflow maintenance with no user-facing impact",
+  "mergedAt": "2026-04-08T21:24:35Z",
+  "number": 15973,
+  "runDate": "2026-04-30T08:51:24Z",
+  "status": "excluded",
+  "title": "Fix create-failing-test-issue: remove --no-restore, add workflow_dispatch"
+}
