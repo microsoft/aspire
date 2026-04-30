@@ -2807,144 +2807,144 @@
     "status": "unprocessed"
   },
   {
-    "comment": null,
+    "comment": "CODEOWNERS maintenance update",
     "mergedAt": "2026-03-20T02:40:20Z",
     "number": 15391,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "CLI install scripts now emit compact download messages",
     "mergedAt": "2026-03-20T00:19:43Z",
     "number": 15405,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Security fix for CVE-2026-26127 in Aspire.Hosting.Foundry",
     "mergedAt": "2026-03-19T23:36:02Z",
     "number": 15410,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "CI configuration change for macOS PR selection",
     "mergedAt": "2026-03-19T20:37:51Z",
     "number": 15364,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only change to CLI E2E test",
     "mergedAt": "2026-03-19T19:42:43Z",
     "number": 15393,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated bot PR - disabled flaky test",
     "mergedAt": "2026-03-18T19:09:24Z",
     "number": 15360,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Merge release/13.2 into main branch",
     "mergedAt": "2026-03-18T16:58:23Z",
     "number": 15331,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "CI image update from 1es-azurelinux-3 to build.azurelinux.3",
     "mergedAt": "2026-03-17T21:00:22Z",
     "number": 15330,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Merge origin/release/13.2 into main branch",
     "mergedAt": "2026-03-17T16:52:28Z",
     "number": 15191,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated bot PR - playground manifest update",
     "mergedAt": "2026-03-13T18:24:23Z",
     "number": 15107,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "New AI models (GPT-5.4, GPT-5.4-Pro, Qwen3 VL) added to Foundry integration",
     "mergedAt": "2026-03-13T16:57:24Z",
     "number": 15210,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "CI test matrix fix - no user-facing change",
     "mergedAt": "2026-03-13T04:31:09Z",
     "number": 15200,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated localization file check-in",
     "mergedAt": "2026-03-12T21:44:49Z",
     "number": 15185,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Merge release/13.2 into main branch",
     "mergedAt": "2026-03-12T18:05:57Z",
     "number": 15151,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated bot PR - CI rerun",
     "mergedAt": "2026-03-12T00:48:24Z",
     "number": 15148,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated localization file check-in",
     "mergedAt": "2026-03-11T10:02:27Z",
     "number": 15131,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "CI infrastructure fix for test stability on AzDO",
     "mergedAt": "2026-03-11T06:39:05Z",
     "number": 15111,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Documentation-only change to AGENTS.md",
     "mergedAt": "2026-03-10T09:33:57Z",
     "number": 14973,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only fix for Python virtualenv tests on Helix",
     "mergedAt": "2026-03-10T06:39:43Z",
     "number": 15089,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated bot PR - playground manifest update",
     "mergedAt": "2026-03-10T04:26:45Z",
     "number": 14017,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:27:01Z",
+    "status": "excluded"
   },
   {
     "comment": "CI-only: fix AzDO playground and Helix retry failures",

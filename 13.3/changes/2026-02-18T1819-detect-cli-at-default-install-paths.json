@@ -3,7 +3,9 @@
   "areaEmoji": "🧩",
   "breaking": false,
   "changeType": "Improvements",
-  "communityContributors": [],
+  "communityContributors": [
+    "@adamint"
+  ],
   "description": "The VS Code extension now searches default CLI installation directories (~/.aspire/bin/ and ~/.dotnet/tools/) when the Aspire CLI is not found on PATH. This avoids requiring users to manually configure the CLI path after a fresh install.",
   "docsRequired": false,
   "emoji": "🔍",
