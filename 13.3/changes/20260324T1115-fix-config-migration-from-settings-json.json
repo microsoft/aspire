@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where `aspire.config.json` was not created when migrating from the legacy `.aspire/settings.json` format used in Aspire 13.1 and earlier. The migration was silently skipped if the app host was discovered via the legacy settings file.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-03-24T11:15:30Z",
+  "lastMergedAt": "2026-03-24T11:15:30Z",
+  "name": "Fix config migration from .aspire/settings.json when upgrading",
+  "prs": [
+    15524
+  ]
+}

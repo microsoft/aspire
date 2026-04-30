@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Resource endpoint URLs in the Aspire panel now have a right-click context menu, providing quick actions directly on endpoint links without needing to navigate elsewhere.",
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-03-23T21:06:13Z",
+  "lastMergedAt": "2026-03-23T21:06:13Z",
+  "name": "Right-click context menu on resource endpoint URLs",
+  "prs": [
+    15502
+  ]
+}
