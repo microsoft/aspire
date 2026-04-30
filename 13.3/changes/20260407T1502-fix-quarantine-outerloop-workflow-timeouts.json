@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed failures in the quarantine and outerloop CI workflows caused by empty timeout arguments being passed to test commands.",
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-04-07T15:02:38Z",
+  "lastMergedAt": "2026-04-07T15:02:38Z",
+  "name": "Fix empty timeout argument errors in quarantine/outerloop workflows",
+  "prs": [
+    15921
+  ]
+}

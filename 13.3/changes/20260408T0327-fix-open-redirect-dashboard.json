@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an open redirect vulnerability in ValidateTokenMiddleware where the returnUrl query parameter was used in Response.Redirect without validation, potentially allowing attackers to redirect users to external malicious sites after authentication.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-08T03:27:52Z",
+  "lastMergedAt": "2026-04-08T03:27:52Z",
+  "name": "Fix open redirect vulnerability in dashboard authentication",
+  "prs": [
+    15952
+  ]
+}

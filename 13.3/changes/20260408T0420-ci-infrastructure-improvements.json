@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Enhanced CI infrastructure with heartbeat monitoring, improved crash dump detection, refined timeouts, and better logging for more reliable test runs.",
+  "docsRequired": false,
+  "emoji": "🏗️",
+  "firstMergedAt": "2026-04-08T04:20:31Z",
+  "lastMergedAt": "2026-04-08T04:20:31Z",
+  "name": "CI infrastructure improvements: heartbeat, dump checks, timeouts, logging",
+  "prs": [
+    15950
+  ]
+}
