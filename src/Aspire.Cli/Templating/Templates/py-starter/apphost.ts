@@ -17,7 +17,7 @@ const app = await builder
     .withReference(cache)
     .waitFor(cache)
 // {{/redis}}
-    .withHttpHealthCheck("/health");
+    .withHttpHealthCheck({ path: "/health" });
 
 // Run the Vite frontend after the API and inject the API URL for local proxying.
 const frontend = await builder
