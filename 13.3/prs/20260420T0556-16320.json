@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring: extract ResolveResourceIds helpers, no user-facing changes",
+  "mergedAt": "2026-04-20T05:56:13Z",
+  "number": 16320,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "excluded",
+  "title": "Use GetRequiredService for DistributedApplicationModel, extract ResolveResourceIds helpers, and improve test coverage"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: trace ID is now a clickable terminal hyperlink in trace detail view",
+  "mergedAt": "2026-04-21T02:42:00Z",
+  "number": 16345,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Make trace ID a clickable link in trace detail view"
+}

@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Deployment pipeline steps now only block their dependents when they fail, rather than cancelling all running steps. Independent steps (e.g., Azure provisioning) continue to completion even when an unrelated step fails.",
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-04-20T16:41:27Z",
+  "lastMergedAt": "2026-04-20T16:41:27Z",
+  "name": "Independent deployment steps continue on sibling failure",
+  "prs": [
+    16299
+  ]
+}

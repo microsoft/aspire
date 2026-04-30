@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Deployment failures now surface stderr/stdout output for process-driven steps like dotnet publish, Docker/Podman builds, registry logins, and compose up, making it easier to diagnose opaque pipeline failures.",
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-04-20T01:57:56Z",
+  "lastMergedAt": "2026-04-20T01:57:56Z",
+  "name": "Deployment failures show process output",
+  "prs": [
+    16303
+  ]
+}

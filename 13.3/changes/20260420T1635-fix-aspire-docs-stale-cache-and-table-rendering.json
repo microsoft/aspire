@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed aspire docs returning stale content when the documentation source has changed (cache now revalidates against a content fingerprint), and fixed table rows and values like Azure:SubscriptionId being mangled in non-interactive terminals.",
+  "docsRequired": false,
+  "emoji": "📚",
+  "firstMergedAt": "2026-04-20T16:35:53Z",
+  "lastMergedAt": "2026-04-20T16:35:53Z",
+  "name": "Fix aspire docs stale cache and table rendering",
+  "prs": [
+    16304
+  ]
+}

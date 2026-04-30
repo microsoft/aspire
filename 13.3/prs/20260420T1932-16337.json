@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Improvement: aspire update continues when package missing from channel",
+  "mergedAt": "2026-04-20T19:32:46Z",
+  "number": 16337,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Warn instead of failing when a package is missing from the channel during aspire update"
+}

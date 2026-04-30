@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The trace ID in aspire traces detail view is now a clickable terminal hyperlink to the dashboard trace detail page, replacing the previous plain bold text display.",
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-04-21T02:42:00Z",
+  "lastMergedAt": "2026-04-21T02:42:00Z",
+  "name": "Clickable trace ID link in trace detail view",
+  "prs": [
+    16345
+  ]
+}

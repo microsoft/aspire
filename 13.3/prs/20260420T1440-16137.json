@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "New feature: Azure Front Door hosting integration",
+  "mergedAt": "2026-04-20T14:40:43Z",
+  "number": 16137,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Add Azure Front Door hosting integration"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test infrastructure refactoring: unifies E2E install helpers, no user-facing changes",
+  "mergedAt": "2026-04-20T11:27:20Z",
+  "number": 16298,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "excluded",
+  "title": "Unify deployment E2E install helpers"
+}

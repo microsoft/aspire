@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improvement: surfaces process stderr/stdout on deployment failures",
+  "mergedAt": "2026-04-20T01:57:56Z",
+  "number": 16303,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Surface process output on failure"
+}

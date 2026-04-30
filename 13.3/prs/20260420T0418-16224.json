@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Bug fix: aspire wait fails for JSON-emitted resource names",
+  "mergedAt": "2026-04-20T04:18:15Z",
+  "number": 16224,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Fix aspire wait for JSON-emitted resource names"
+}

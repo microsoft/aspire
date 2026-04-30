@@ -1,0 +1,9 @@
+{
+  "author": "jgbright",
+  "comment": "Bug fix: MCP list_console_logs empty results for resolved instance names",
+  "mergedAt": "2026-04-20T03:25:15Z",
+  "number": 16279,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Fix list_console_logs MCP tool to accept resolved resource instance names"
+}

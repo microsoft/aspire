@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an issue where FluentSelect and FluentCombobox dropdowns in the interactions dialog lost their bound value when options and value changed simultaneously. Also adds caching for Azure provisioning API calls to avoid redundant requests.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-20T02:28:14Z",
+  "lastMergedAt": "2026-04-20T02:28:14Z",
+  "name": "Fix dropdown value binding in interactions dialog",
+  "prs": [
+    16315
+  ]
+}

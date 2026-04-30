@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Dependency bump: Azure.Provisioning.Network to 1.1.0",
+  "mergedAt": "2026-04-20T23:14:51Z",
+  "number": 16274,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "excluded",
+  "title": "Update Azure.Provisioning.Network to 1.1.0"
+}

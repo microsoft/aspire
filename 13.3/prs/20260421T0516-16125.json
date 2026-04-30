@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Internal fix for PR hive channel version selection, not user-facing",
+  "mergedAt": "2026-04-21T05:16:40Z",
+  "number": 16125,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "excluded",
+  "title": "Fix PR channel version selection in Aspire CLI"
+}

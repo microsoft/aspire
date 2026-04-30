@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Improvement: removed stale Docker Engine tunnel warning from aspire doctor",
+  "mergedAt": "2026-04-20T22:52:05Z",
+  "number": 16343,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Remove obsolete Docker Engine tunnel warning from aspire doctor"
+}

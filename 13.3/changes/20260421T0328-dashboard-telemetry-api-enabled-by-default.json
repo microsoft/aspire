@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The dashboard telemetry API is now enabled by default with auto-generated ApiKey authentication. aspire otel commands can accept a dashboard login URL to automatically exchange the browser token for an API key, making the otel workflow seamless without manual configuration.",
+  "docsRequired": false,
+  "emoji": "🔑",
+  "firstMergedAt": "2026-04-21T03:28:16Z",
+  "lastMergedAt": "2026-04-21T03:28:16Z",
+  "name": "Dashboard telemetry API enabled by default with auto token exchange",
+  "prs": [
+    16326
+  ]
+}

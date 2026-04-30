@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: FluentSelect/FluentCombobox value binding in interactions dialog",
+  "mergedAt": "2026-04-20T02:28:14Z",
+  "number": 16315,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Fix FluentSelect/FluentCombobox value binding when options change"
+}

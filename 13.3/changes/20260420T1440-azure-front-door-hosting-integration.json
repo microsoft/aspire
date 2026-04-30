@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "New Aspire.Hosting.Azure.FrontDoor package adds Azure Front Door (Standard SKU) support. Use AddAzureFrontDoor() with WithOrigin() to provision a CDN profile, endpoint, and route traffic to your application services.",
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-04-20T14:40:43Z",
+  "lastMergedAt": "2026-04-20T14:40:43Z",
+  "name": "Azure Front Door hosting integration",
+  "prs": [
+    16137
+  ]
+}

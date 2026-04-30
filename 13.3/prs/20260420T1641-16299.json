@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improvement: independent deployment pipeline steps no longer cancelled when sibling fails",
+  "mergedAt": "2026-04-20T16:41:27Z",
+  "number": 16299,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Pipeline: only cancel dependent steps on failure, not all steps"
+}

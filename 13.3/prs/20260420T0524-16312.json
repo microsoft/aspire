@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New feature: AddSystemNodePool() for AKS VM size customization",
+  "mergedAt": "2026-04-20T05:24:01Z",
+  "number": 16312,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Add WithSystemNodePool() to customize AKS system node pool VM size"
+}

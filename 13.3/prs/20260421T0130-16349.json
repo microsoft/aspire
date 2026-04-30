@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dependency update: Spectre.Console 0.55.2 with code simplification, no user-facing change",
+  "mergedAt": "2026-04-21T01:30:50Z",
+  "number": 16349,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "excluded",
+  "title": "Update Spectre.Console to 0.55.2 and simplify EmojiWidth"
+}

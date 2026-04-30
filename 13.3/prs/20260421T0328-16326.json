@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New feature: dashboard telemetry API enabled by default with ApiKey auth and login token exchange",
+  "mergedAt": "2026-04-21T03:28:16Z",
+  "number": 16326,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Enable dashboard telemetry API by default with ApiKey auth and login token exchange"
+}

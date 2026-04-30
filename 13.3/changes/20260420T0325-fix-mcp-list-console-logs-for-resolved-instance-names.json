@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the list_console_logs MCP tool returning empty results for running resources when called with resolved instance names (e.g. apiservice-abc123), by matching against resolved resource names in addition to the canonical name.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-20T03:25:15Z",
+  "lastMergedAt": "2026-04-20T03:25:15Z",
+  "name": "Fix MCP list_console_logs for resolved instance names",
+  "prs": [
+    16279
+  ]
+}

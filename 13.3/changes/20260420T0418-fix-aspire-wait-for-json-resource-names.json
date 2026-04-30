@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed aspire wait failing when given JSON-emitted resource identifiers from aspire ps --format json. The command now resolves the input against current resource snapshots before invoking the wait RPC.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-20T04:18:15Z",
+  "lastMergedAt": "2026-04-20T04:18:15Z",
+  "name": "Fix aspire wait for JSON resource names",
+  "prs": [
+    16224
+  ]
+}

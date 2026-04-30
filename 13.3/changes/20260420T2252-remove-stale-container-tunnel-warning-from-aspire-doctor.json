@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Removed the obsolete aspire doctor warning telling Docker Engine (non-Desktop) users to set ASPIRE_ENABLE_CONTAINER_TUNNEL=true, since container tunneling is now enabled by default.",
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-04-20T22:52:05Z",
+  "lastMergedAt": "2026-04-20T22:52:05Z",
+  "name": "Remove stale container tunnel warning from aspire doctor",
+  "prs": [
+    16343
+  ]
+}

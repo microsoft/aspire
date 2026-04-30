@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix: aspire docs stale cache and broken table rendering",
+  "mergedAt": "2026-04-20T16:35:53Z",
+  "number": 16304,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "included",
+  "title": "Fix aspire docs cache and output rendering"
+}

@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added AddSystemNodePool() extension method on AzureKubernetesEnvironmentResource to override the default Standard_D2s_v5 VM size for the AKS system node pool, useful when the default SKU is unavailable in the target region.",
+  "docsRequired": true,
+  "emoji": "☸️",
+  "firstMergedAt": "2026-04-20T05:24:01Z",
+  "lastMergedAt": "2026-04-20T05:24:01Z",
+  "name": "Customize AKS system node pool VM size",
+  "prs": [
+    16312
+  ]
+}

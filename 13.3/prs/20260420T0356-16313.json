@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Internal engineering tool update for Azure VM sizes data generation, not user-facing",
+  "mergedAt": "2026-04-20T03:56:17Z",
+  "number": 16313,
+  "runDate": "2026-04-30T14:57:40Z",
+  "status": "excluded",
+  "title": "Update GenVmSizes to query all Azure regions for comprehensive VM size list"
+}
