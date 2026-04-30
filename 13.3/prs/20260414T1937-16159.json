@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Test-only fix for deployment E2E test TypeScript code",
+  "mergedAt": "2026-04-14T19:37:28Z",
+  "number": 16159,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Fix AcrPurgeTask deployment test TypeScript API calls"
+}

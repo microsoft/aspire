@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New Dockerfile builder API surface for TypeScript/Python/Java AppHosts",
+  "mergedAt": "2026-04-14T14:10:23Z",
+  "number": 15867,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "included",
+  "title": "Expose Dockerfile builder APIs to polyglot apphosts"
+}

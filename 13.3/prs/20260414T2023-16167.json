@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Temporary internal CI workflow, no user impact",
+  "mergedAt": "2026-04-14T20:23:42Z",
+  "number": 16167,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Add milestone auto-assignment workflow (temporary policy bot replacement)"
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added a --list-steps flag to aspire do, aspire publish, and aspire deploy that prints pipeline steps in execution order with their dependencies and tags, without actually running them.",
+  "docsRequired": true,
+  "emoji": "🗒️",
+  "firstMergedAt": "2026-04-14T02:41:42Z",
+  "lastMergedAt": "2026-04-14T02:41:42Z",
+  "name": "List pipeline steps without running them",
+  "prs": [
+    16085
+  ]
+}

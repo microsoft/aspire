@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "New aspire docs api list/search/get commands for browsing API reference from terminal",
+  "mergedAt": "2026-04-14T04:12:01Z",
+  "number": 15814,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "included",
+  "title": "Add aspire docs api * sub-commands to expose aspire.dev reference material"
+}

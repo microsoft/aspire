@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal CI tooling fix for pr-docs-check workflow",
+  "mergedAt": "2026-04-14T23:41:34Z",
+  "number": 16149,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Fix pr-docs-check docs PR flow"
+}

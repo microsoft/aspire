@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "ASPIRE_ENVIRONMENT env var now recognized by DistributedApplicationBuilder",
+  "mergedAt": "2026-04-14T14:11:28Z",
+  "number": 16098,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "included",
+  "title": "Read ASPIRE_ENVIRONMENT in DistributedApplicationBuilder"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New --list-steps flag for aspire do/publish/deploy to inspect pipeline steps without executing",
+  "mergedAt": "2026-04-14T02:41:42Z",
+  "number": 16085,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "included",
+  "title": "Add --list-steps flag to aspire do command"
+}

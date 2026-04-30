@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump",
+  "mergedAt": "2026-04-14T22:41:11Z",
+  "number": 16041,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Bump next from 15.5.14 to 15.5.15 in /extension"
+}

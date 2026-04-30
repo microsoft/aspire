@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The ASPIRE_ENVIRONMENT environment variable is now recognized by DistributedApplicationBuilder when launching via dotnet run, azd, or any non-CLI path. Priority order is: --environment flag > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default (Production).",
+  "docsRequired": true,
+  "emoji": "🌿",
+  "firstMergedAt": "2026-04-14T14:11:28Z",
+  "lastMergedAt": "2026-04-14T14:11:28Z",
+  "name": "ASPIRE_ENVIRONMENT variable support in AppHost",
+  "prs": [
+    16098
+  ]
+}

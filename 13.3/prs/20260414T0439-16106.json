@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-04-14T04:39:04Z",
+  "number": 16106,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Update Spectre.Console to 0.55.0"
+}

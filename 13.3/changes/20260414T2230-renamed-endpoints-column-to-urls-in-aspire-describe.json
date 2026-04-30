@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire describe command's resource table now shows 'URLs' instead of 'Endpoints', matching the terminology used in the Aspire Dashboard.",
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-04-14T22:30:52Z",
+  "lastMergedAt": "2026-04-14T22:30:52Z",
+  "name": "Renamed 'Endpoints' column to 'URLs' in aspire describe",
+  "prs": [
+    16144
+  ]
+}

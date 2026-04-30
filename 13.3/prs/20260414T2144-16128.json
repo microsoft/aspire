@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Dashboard clear actions now say 'Remove all telemetry' for clarity",
+  "mergedAt": "2026-04-14T21:44:18Z",
+  "number": 16128,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "included",
+  "title": "Clarify dashboard clear telemetry labels"
+}

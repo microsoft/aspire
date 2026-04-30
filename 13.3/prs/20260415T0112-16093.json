@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Container build failure output now shown in pipeline step messages",
+  "mergedAt": "2026-04-15T01:12:16Z",
+  "number": 16093,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "included",
+  "title": "Surface build output on failure for Docker, Podman, and dotnet publish"
+}

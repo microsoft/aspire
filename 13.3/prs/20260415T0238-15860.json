@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal pipeline WinGet and Homebrew stages now work on non-release branches",
+  "mergedAt": "2026-04-15T02:38:46Z",
+  "number": 15860,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "included",
+  "title": "Fix WinGet and Homebrew failures in manual internal pipeline runs"
+}

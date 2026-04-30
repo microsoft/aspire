@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Developers can now run the internal release pipeline on feature branches without failures in the WinGet and Homebrew preparation stages, enabling full end-to-end validation of changes before they reach a release branch.",
+  "docsRequired": false,
+  "emoji": "🏗️",
+  "firstMergedAt": "2026-04-15T02:38:46Z",
+  "lastMergedAt": "2026-04-15T02:38:46Z",
+  "name": "Installer preparation works on non-release branches",
+  "prs": [
+    15860
+  ]
+}

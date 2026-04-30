@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "New aspire docs api list, search, and get commands let you browse Aspire API reference material from aspire.dev directly in the terminal, with caching and ETag support for fast repeat lookups.",
+  "docsRequired": false,
+  "emoji": "📚",
+  "firstMergedAt": "2026-04-14T04:12:01Z",
+  "lastMergedAt": "2026-04-14T04:12:01Z",
+  "name": "API reference docs commands",
+  "prs": [
+    15814
+  ]
+}

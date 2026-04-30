@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When a container image build fails (Docker, Podman, or dotnet publish), the last 50 lines of build output are now surfaced directly in the pipeline step failure message, eliminating the need to re-run with debug logging to diagnose errors.",
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-04-15T01:12:16Z",
+  "lastMergedAt": "2026-04-15T01:12:16Z",
+  "name": "Container build failure output in pipeline steps",
+  "prs": [
+    16093
+  ]
+}

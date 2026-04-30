@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard notifications for start, stop, and restart actions now show the friendly resource name (e.g., 'apiservice') instead of the internal DCP resource ID (e.g., 'apiservice-abcdefgh').",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-14T14:00:37Z",
+  "lastMergedAt": "2026-04-14T14:00:37Z",
+  "name": "Fix resource names in lifecycle notifications",
+  "prs": [
+    16143
+  ]
+}

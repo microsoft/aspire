@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "CI maintenance fix, no user impact",
+  "mergedAt": "2026-04-14T21:17:33Z",
+  "number": 16174,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Fix milestone workflow: restore permissions and update github-script to v9"
+}

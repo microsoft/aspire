@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change, adds E2E coverage for existing CLI feature",
+  "mergedAt": "2026-04-14T01:30:27Z",
+  "number": 16111,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Add E2E test for aspire otel logs structured logs"
+}

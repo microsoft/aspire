@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal implementation revert, no user-facing impact",
+  "mergedAt": "2026-04-14T18:26:41Z",
+  "number": 16156,
+  "runDate": "2026-04-30T13:50:52Z",
+  "status": "excluded",
+  "title": "Revert Replace Semver NuGet package with internal SmolSemVer implementation"
+}
