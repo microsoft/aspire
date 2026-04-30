@@ -69,6 +69,7 @@
     <Compile Include="..\..\src\Aspire.Cli\Resources\AddCommandStrings.Designer.cs" Link="Resources\AddCommandStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.Designer.cs" Link="Resources\ConsoleActivityLoggerStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\HelpGroupStrings.Designer.cs" Link="Resources\HelpGroupStrings.Designer.cs" />
+    <Compile Include="..\..\src\Aspire.Cli\Resources\InteractionServiceStrings.Designer.cs" Link="Resources\InteractionServiceStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\RootCommandStrings.Designer.cs" Link="Resources\RootCommandStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\RunCommandStrings.Designer.cs" Link="Resources\RunCommandStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\SharedCommandStrings.Designer.cs" Link="Resources\SharedCommandStrings.Designer.cs" />
@@ -79,6 +80,7 @@
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\AddCommandStrings.resx" Link="Resources\AddCommandStrings.resx" LogicalName="Aspire.Cli.Resources.AddCommandStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.resx" Link="Resources\ConsoleActivityLoggerStrings.resx" LogicalName="Aspire.Cli.Resources.ConsoleActivityLoggerStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\HelpGroupStrings.resx" Link="Resources\HelpGroupStrings.resx" LogicalName="Aspire.Cli.Resources.HelpGroupStrings.resources" />
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\InteractionServiceStrings.resx" Link="Resources\InteractionServiceStrings.resx" LogicalName="Aspire.Cli.Resources.InteractionServiceStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\RootCommandStrings.resx" Link="Resources\RootCommandStrings.resx" LogicalName="Aspire.Cli.Resources.RootCommandStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\RunCommandStrings.resx" Link="Resources\RunCommandStrings.resx" LogicalName="Aspire.Cli.Resources.RunCommandStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\SharedCommandStrings.resx" Link="Resources\SharedCommandStrings.resx" LogicalName="Aspire.Cli.Resources.SharedCommandStrings.resources" />

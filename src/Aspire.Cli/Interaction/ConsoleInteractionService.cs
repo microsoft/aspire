@@ -153,7 +153,7 @@ internal class ConsoleInteractionService : IInteractionService
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            ValidateResolvedStringValue(value, required, validator, binding!.SymbolDisplayName);
+            ValidateResolvedStringValue(value, required, validator, binding!.SymbolDisplayName, binding.SuppressNonInteractiveErrorDisplay);
             return value;
         }
 
@@ -163,11 +163,11 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (binding.DefaultValue != null)
                 {
-                    ValidateResolvedStringValue(binding.DefaultValue, required, validator, binding.SymbolDisplayName);
+                    ValidateResolvedStringValue(binding.DefaultValue, required, validator, binding.SymbolDisplayName, binding.SuppressNonInteractiveErrorDisplay);
                     return binding.DefaultValue;
                 }
 
-                ThrowNonInteractiveError(binding.SymbolDisplayName);
+                ThrowNonInteractiveError(binding.SymbolDisplayName, binding.SuppressNonInteractiveErrorDisplay);
             }
 
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
@@ -234,7 +234,7 @@ internal class ConsoleInteractionService : IInteractionService
                     return MatchChoiceOrThrow(defaultValue, binding, choicesList, choiceFormatter);
                 }
 
-                ThrowNonInteractiveError(binding.SymbolDisplayName);
+                ThrowNonInteractiveError(binding.SymbolDisplayName, binding.SuppressNonInteractiveErrorDisplay);
             }
 
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
@@ -286,7 +286,7 @@ internal class ConsoleInteractionService : IInteractionService
                     return MatchChoicesOrThrow(defaultValue, binding, choicesList, choiceFormatter);
                 }
 
-                ThrowNonInteractiveError(binding.SymbolDisplayName);
+                ThrowNonInteractiveError(binding.SymbolDisplayName, binding.SuppressNonInteractiveErrorDisplay);
             }
 
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
@@ -502,7 +502,7 @@ internal class ConsoleInteractionService : IInteractionService
                     return binding.DefaultValue;
                 }
 
-                ThrowNonInteractiveError(binding.SymbolDisplayName);
+                ThrowNonInteractiveError(binding.SymbolDisplayName, binding.SuppressNonInteractiveErrorDisplay);
             }
 
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
@@ -626,17 +626,20 @@ internal class ConsoleInteractionService : IInteractionService
     }
 
     [DoesNotReturn]
-    private void ThrowNonInteractiveError(string symbolDisplayName)
+    private void ThrowNonInteractiveError(string symbolDisplayName, bool suppressNonInteractiveErrorDisplay)
     {
-        DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, symbolDisplayName));
+        if (!suppressNonInteractiveErrorDisplay)
+        {
+            DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, symbolDisplayName));
+        }
         throw new NonInteractiveException(symbolDisplayName);
     }
 
-    internal void ValidateResolvedStringValue(string value, bool required, Func<string, ValidationResult>? validator, string symbolDisplayName)
+    internal void ValidateResolvedStringValue(string value, bool required, Func<string, ValidationResult>? validator, string symbolDisplayName, bool suppressNonInteractiveErrorDisplay = false)
     {
         if (required && string.IsNullOrEmpty(value))
         {
-            ThrowNonInteractiveError(symbolDisplayName);
+            ThrowNonInteractiveError(symbolDisplayName, suppressNonInteractiveErrorDisplay);
         }
 
         if (validator is not null)

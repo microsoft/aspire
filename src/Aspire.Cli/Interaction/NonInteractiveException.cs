@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Resources;
+
 namespace Aspire.Cli.Interaction;
 
 /// <summary>
@@ -10,7 +13,7 @@ namespace Aspire.Cli.Interaction;
 internal sealed class NonInteractiveException : Exception
 {
     public NonInteractiveException(string symbolDisplayName)
-        : base($"Required input {symbolDisplayName} was not provided in non-interactive mode.")
+        : base(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissing, symbolDisplayName))
     {
         SymbolDisplayName = symbolDisplayName;
     }

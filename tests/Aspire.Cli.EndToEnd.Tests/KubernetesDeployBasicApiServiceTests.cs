@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -18,6 +20,50 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
     [Fact]
     [CaptureWorkspaceOnFailure]
     public async Task DeployK8sBasicApiService()
+        => await DeployK8sBasicApiServiceCoreAsync(
+            async (auto, counter, k8sNamespace) =>
+            {
+                await auto.AspireDeployInteractiveAsync(
+                    counter,
+                    parameterResponses:
+                    [
+                        ("registryendpoint", "localhost:5001"),
+                        ("namespace", k8sNamespace),
+                        ("chartversion", "0.1.0"),
+                    ]);
+            },
+            expectSuccess: true);
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DeployK8sBasicApiServiceNonInteractiveWithInputs()
+        => await DeployK8sBasicApiServiceCoreAsync(
+            (auto, counter, k8sNamespace) => auto.AspireDeployNonInteractiveAsync(
+                counter,
+                inputs:
+                [
+                    ("registryendpoint", "localhost:5001"),
+                    ("namespace", k8sNamespace),
+                    ("chartversion", "0.1.0"),
+                ]),
+            expectSuccess: true);
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DeployK8sBasicApiServiceNonInteractiveWithoutInputsFails()
+        => await DeployK8sBasicApiServiceCoreAsync(
+            async (auto, counter, _) =>
+            {
+                await auto.TypeAsync("aspire deploy --non-interactive");
+                await auto.EnterAsync();
+                await auto.WaitUntilTextAsync(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveRequiredInputMissing, "'registryendpoint'"), timeout: TimeSpan.FromMinutes(5));
+                await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
+            },
+            expectSuccess: false);
+
+    private async Task DeployK8sBasicApiServiceCoreAsync(
+        Func<Hex1bTerminalAutomator, SequenceCounter, string, Task> deployAsync,
+        bool expectSuccess)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -103,32 +149,24 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 output: output);
 
             // =====================================================================
-            // Phase 3: Run aspire deploy interactively
+            // Phase 3: Run aspire deploy
             // =====================================================================
 
-            // The deploy will prompt for parameters in code declaration order:
-            // 1. registryendpoint - the container registry (localhost:5001 for KinD local registry)
-            // 2. namespace - the K8s namespace
-            // 3. chartversion - the Helm chart version
-            await auto.AspireDeployInteractiveAsync(
-                counter,
-                parameterResponses:
-                [
-                    ("registryendpoint", "localhost:5001"),
-                    ("namespace", k8sNamespace),
-                    ("chartversion", "0.1.0"),
-                ]);
+            await deployAsync(auto, counter, k8sNamespace);
 
-            // =====================================================================
-            // Phase 4: Verify the deployment
-            // =====================================================================
+            if (expectSuccess)
+            {
+                // =====================================================================
+                // Phase 4: Verify the deployment
+                // =====================================================================
 
-            await auto.VerifyDeploymentAsync(
-                counter,
-                @namespace: k8sNamespace,
-                serviceName: "server",
-                localPort: 18080,
-                testPath: "/test-deployment");
+                await auto.VerifyDeploymentAsync(
+                    counter,
+                    @namespace: k8sNamespace,
+                    serviceName: "server",
+                    localPort: 18080,
+                    testPath: "/test-deployment");
+            }
 
             // =====================================================================
             // Phase 5: Cleanup

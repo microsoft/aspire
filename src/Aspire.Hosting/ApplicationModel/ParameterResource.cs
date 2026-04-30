@@ -128,6 +128,12 @@ public class ParameterResource : Resource, IExpressionValue
     public bool EnableDescriptionMarkdown { get; set; }
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+    /// <summary>
+    /// The prefix added to the input name when creating an interaction input from a parameter resource.
+    /// This allows the CLI to distinguish parameter inputs from other pipeline inputs.
+    /// </summary>
+    internal const string InputNamePrefix = "param-";
+
     internal InteractionInput CreateInput()
     {
         if (this.TryGetLastAnnotation<InputGeneratorAnnotation>(out var annotation))
@@ -138,7 +144,7 @@ public class ParameterResource : Resource, IExpressionValue
 
         var input = new InteractionInput
         {
-            Name = Name,
+            Name = $"{InputNamePrefix}{Name}",
             InputType = Secret ? InputType.SecretText : InputType.Text,
             Label = Name,
             Description = Description,

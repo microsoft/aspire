@@ -262,4 +262,20 @@
     <value>Available values: {0}</value>
     <comment>{0} is a comma-separated list of valid values</comment>
   </data>
+  <data name="NonInteractiveRequiredInputMissing" xml:space="preserve">
+    <value>Required input {0} was not provided in non-interactive mode.</value>
+    <comment>{0} is the input/argument display name like 'registryendpoint' or '--publisher'</comment>
+  </data>
+  <data name="NonInteractiveRequiredInputMissingWithOption" xml:space="preserve">
+    <value>Required input {0} was not provided in non-interactive mode. Specify the value with the {1} option.</value>
+    <comment>{0} is the input/argument display name. {1} is the option name like '--input'.</comment>
+  </data>
+  <data name="NonInteractiveRequiredInputMissingWithOptions" xml:space="preserve">
+    <value>Required input {0} was not provided in non-interactive mode. Specify the value with the {1} or {2} option.</value>
+    <comment>{0} is the input/argument display name. {1} and {2} are option names like '--input' and '--param'.</comment>
+  </data>
+  <data name="NonInteractiveRequiredParameterMissingWithOption" xml:space="preserve">
+    <value>Required parameter {0} was not provided in non-interactive mode. Specify the value with the {1} option.</value>
+    <comment>{0} is the parameter display name. {1} is the option name like '--param'.</comment>
+  </data>
 </root>

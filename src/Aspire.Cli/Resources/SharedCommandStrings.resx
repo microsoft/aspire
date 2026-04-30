@@ -169,4 +169,10 @@
   <data name="PipelineStepsSummaryTitle" xml:space="preserve">
     <value>Steps Summary:</value>
   </data>
+  <data name="PipelineInputOptionDescription" xml:space="preserve">
+    <value>Provide a value for a pipeline input prompt in name=value format. Can be specified multiple times, for example: --input environment=staging --input region=westus. The name must match the input name defined by the AppHost.</value>
+  </data>
+  <data name="PipelineParameterOptionDescription" xml:space="preserve">
+    <value>Provide a value for a pipeline parameter in name=value format. Can be specified multiple times, for example: --param environment=staging --param region=westus. The name must match the parameter name defined by the AppHost.</value>
+  </data>
 </root>

@@ -122,6 +122,26 @@
         <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
         <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiredInputMissing">
+        <source>Required input {0} was not provided in non-interactive mode.</source>
+        <target state="new">Required input {0} was not provided in non-interactive mode.</target>
+        <note>{0} is the input/argument display name like 'registryendpoint' or '--publisher'</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiredInputMissingWithOption">
+        <source>Required input {0} was not provided in non-interactive mode. Specify the value with the {1} option.</source>
+        <target state="new">Required input {0} was not provided in non-interactive mode. Specify the value with the {1} option.</target>
+        <note>{0} is the input/argument display name. {1} is the option name like '--input'.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiredInputMissingWithOptions">
+        <source>Required input {0} was not provided in non-interactive mode. Specify the value with the {1} or {2} option.</source>
+        <target state="new">Required input {0} was not provided in non-interactive mode. Specify the value with the {1} or {2} option.</target>
+        <note>{0} is the input/argument display name. {1} and {2} are option names like '--input' and '--param'.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiredParameterMissingWithOption">
+        <source>Required parameter {0} was not provided in non-interactive mode. Specify the value with the {1} option.</source>
+        <target state="new">Required parameter {0} was not provided in non-interactive mode. Specify the value with the {1} option.</target>
+        <note>{0} is the parameter display name. {1} is the option name like '--param'.</note>
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">A operação foi cancelada.</target>
