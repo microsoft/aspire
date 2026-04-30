@@ -9,7 +9,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Hosting.Resources;
+using Aspire.Hosting.Browsers.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Eventing;
@@ -56,14 +56,14 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Equal(web.Resource.Name, parentRelationship.Resource.Name);
 
         var command = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName);
-        Assert.Equal(CommandStrings.OpenTrackedBrowserName, command.DisplayName);
-        Assert.Equal(CommandStrings.OpenTrackedBrowserDescription, command.DisplayDescription);
+        Assert.Equal(BrowserCommandStrings.OpenTrackedBrowserName, command.DisplayName);
+        Assert.Equal(BrowserCommandStrings.OpenTrackedBrowserDescription, command.DisplayDescription);
         var configureCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        Assert.Equal(CommandStrings.ConfigureTrackedBrowserName, configureCommand.DisplayName);
-        Assert.Equal(CommandStrings.ConfigureTrackedBrowserDescription, configureCommand.DisplayDescription);
+        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserName, configureCommand.DisplayName);
+        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserDescription, configureCommand.DisplayDescription);
         var screenshotCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.CaptureScreenshotCommandName);
-        Assert.Equal(CommandStrings.CaptureScreenshotName, screenshotCommand.DisplayName);
-        Assert.Equal(CommandStrings.CaptureScreenshotDescription, screenshotCommand.DisplayDescription);
+        Assert.Equal(BrowserCommandStrings.CaptureScreenshotName, screenshotCommand.DisplayName);
+        Assert.Equal(BrowserCommandStrings.CaptureScreenshotDescription, screenshotCommand.DisplayDescription);
 
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Equal(BrowserLogsBuilderExtensions.BrowserResourceType, snapshot.ResourceType);
@@ -366,9 +366,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
-        Assert.Equal(CommandStrings.ConfigureTrackedBrowserName, interaction.Title);
-        Assert.Equal(CommandStrings.ConfigureTrackedBrowserPromptMessage, interaction.Message);
-        Assert.Equal(CommandStrings.ConfigureTrackedBrowserSaveButton, ((InputsDialogInteractionOptions)interaction.Options!).PrimaryButtonText);
+        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserName, interaction.Title);
+        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserPromptMessage, interaction.Message);
+        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserSaveButton, ((InputsDialogInteractionOptions)interaction.Options!).PrimaryButtonText);
         Assert.Collection(interaction.Inputs,
             input => Assert.Equal("scope", input.Name),
             input => Assert.Equal("browser", input.Name),
@@ -379,7 +379,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Assert.Equal("saveToUserSecrets", input.Name);
                 Assert.Equal("true", input.Value);
                 Assert.False(input.Disabled);
-                Assert.Equal(CommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured, input.Description);
+                Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured, input.Description);
             });
 
         interaction.Inputs["scope"].Value = "resource";
@@ -438,7 +438,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var saveToUserSecrets = interaction.Inputs["saveToUserSecrets"];
         Assert.True(saveToUserSecrets.Disabled);
         Assert.Null(saveToUserSecrets.Value);
-        Assert.Equal(CommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured, saveToUserSecrets.Description);
+        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured, saveToUserSecrets.Description);
 
         interaction.Inputs["scope"].Value = "resource";
         interaction.Inputs["browser"].Value = "msedge";
@@ -449,7 +449,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var result = await commandTask.DefaultTimeout();
 
         Assert.True(result.Success);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture, CommandStrings.ConfigureTrackedBrowserApplied, "web"), result.Message);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, BrowserCommandStrings.ConfigureTrackedBrowserApplied, "web"), result.Message);
         Assert.Empty(userSecretsManager.Secrets);
         Assert.Empty(userSecretsManager.DeletedSecrets);
 

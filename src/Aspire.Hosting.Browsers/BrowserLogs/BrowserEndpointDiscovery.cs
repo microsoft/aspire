@@ -2,11 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Hosting.Browsers.Resources;
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -139,10 +139,10 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             throw new InvalidOperationException(
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    MessageStrings.BrowserLogsTrackedBrowserProfileConflict,
+                    BrowserMessageStrings.BrowserLogsTrackedBrowserProfileConflict,
                     identity.UserDataRootPath,
-                    metadata.ProfileDirectoryName ?? MessageStrings.BrowserLogsDefaultProfileName,
-                    profileDirectoryName ?? MessageStrings.BrowserLogsDefaultProfileName));
+                    metadata.ProfileDirectoryName ?? BrowserMessageStrings.BrowserLogsDefaultProfileName,
+                    profileDirectoryName ?? BrowserMessageStrings.BrowserLogsDefaultProfileName));
         }
 
         return metadata with { Endpoint = endpoint.ToString() };

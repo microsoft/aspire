@@ -133,6 +133,7 @@
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Kubernetes" />
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Browsers" />
   </ItemGroup>
 
   <!-- Include the integration analyzer in the package -->

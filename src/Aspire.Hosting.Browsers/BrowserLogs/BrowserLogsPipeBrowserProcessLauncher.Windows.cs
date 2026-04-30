@@ -9,7 +9,6 @@ using System.Globalization;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
-using Aspire.Hosting.Dcp.Process;
 using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Hosting;
@@ -213,7 +212,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         builder.Append('"');
     }
 
-    private static async Task<ProcessResult> WaitForWindowsProcessAsync(SafeWaitHandle processHandle)
+    private static async Task<BrowserLogsProcessResult> WaitForWindowsProcessAsync(SafeWaitHandle processHandle)
     {
         return await Task.Run(() =>
         {
@@ -228,7 +227,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
                 throw CreateWindowsException("GetExitCodeProcess");
             }
 
-            return new ProcessResult(unchecked((int)exitCode));
+            return new BrowserLogsProcessResult(unchecked((int)exitCode));
         }).ConfigureAwait(false);
     }
 
@@ -300,7 +299,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
 
     private readonly record struct WindowsProcessInfo(int ProcessId, IntPtr ProcessHandle, IntPtr ThreadHandle);
 
-    private sealed class WindowsProcessLifetime(int processId, SafeWaitHandle processHandle, SafeWaitHandle? jobHandle, Task<ProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
+    private sealed class WindowsProcessLifetime(int processId, SafeWaitHandle processHandle, SafeWaitHandle? jobHandle, Task<BrowserLogsProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
     {
         public async ValueTask DisposeAsync()
         {

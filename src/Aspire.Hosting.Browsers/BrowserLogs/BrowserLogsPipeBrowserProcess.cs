@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Dcp.Process;
-
 namespace Aspire.Hosting;
 
 internal interface IBrowserLogsPipeBrowserProcess : IAsyncDisposable
@@ -13,14 +11,14 @@ internal interface IBrowserLogsPipeBrowserProcess : IAsyncDisposable
 
     Stream BrowserInput { get; }
 
-    Task<ProcessResult> ProcessTask { get; }
+    Task<BrowserLogsProcessResult> ProcessTask { get; }
 }
 
 internal sealed class BrowserLogsPipeBrowserProcess(
     int processId,
     Stream browserOutput,
     Stream browserInput,
-    Task<ProcessResult> processTask,
+    Task<BrowserLogsProcessResult> processTask,
     IBrowserLogsPipeBrowserProcessLifetime processLifetime) : IBrowserLogsPipeBrowserProcess
 {
     private readonly Stream _browserInput = browserInput;
@@ -34,7 +32,7 @@ internal sealed class BrowserLogsPipeBrowserProcess(
 
     public Stream BrowserInput => _browserInput;
 
-    public Task<ProcessResult> ProcessTask { get; } = processTask;
+    public Task<BrowserLogsProcessResult> ProcessTask { get; } = processTask;
 
     public async ValueTask DisposeAsync()
     {

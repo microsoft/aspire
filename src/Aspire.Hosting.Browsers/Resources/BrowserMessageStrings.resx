@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="BrowserLogsDefaultProfileName" xml:space="preserve">
+    <value>(default)</value>
+  </data>
+  <data name="BrowserLogsEmptyBrowserConfiguration" xml:space="preserve">
+    <value>Tracked browser configuration resolved an empty browser value.</value>
+  </data>
+  <data name="BrowserLogsEmptyProfileConfiguration" xml:space="preserve">
+    <value>Tracked browser configuration resolved an empty profile value.</value>
+  </data>
+  <data name="BrowserLogsProfileRequiresSharedUserDataMode" xml:space="preserve">
+    <value>Tracked browser configuration set '{0}' to '{1}' while '{2}' is '{3}'. Profiles can only be selected when '{2}' is '{4}'.</value>
+  </data>
+  <data name="BrowserLogsInvalidUserDataModeConfiguration" xml:space="preserve">
+    <value>Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</value>
+  </data>
+  <data name="BrowserLogsUnableToLocateBrowser" xml:space="preserve">
+    <value>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</value>
+  </data>
+  <data name="BrowserLogsAppHostPathShaNotAvailable" xml:space="preserve">
+    <value>Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</value>
+  </data>
+  <data name="BrowserLogsUserDataDirectoryNotFound" xml:space="preserve">
+    <value>Browser user data directory '{0}' was not found.</value>
+  </data>
+  <data name="BrowserLogsTrackedBrowserProfileConflict" xml:space="preserve">
+    <value>A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</value>
+  </data>
+  <data name="BrowserLogsUnableToReadProfileMetadata" xml:space="preserve">
+    <value>Unable to read Chromium profile metadata from '{0}' while resolving browser profile '{1}'.</value>
+  </data>
+  <data name="BrowserLogsInvalidProfileMetadata" xml:space="preserve">
+    <value>Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</value>
+  </data>
+  <data name="BrowserLogsProfileNotFound" xml:space="preserve">
+    <value>Browser profile '{0}' was not found under '{1}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.</value>
+  </data>
+  <data name="BrowserLogsAmbiguousProfile" xml:space="preserve">
+    <value>Browser profile '{0}' matched multiple Chromium profiles under '{1}'. Specify the profile directory name instead.</value>
+  </data>
+  <data name="BrowserLogsResourceMissingHttpEndpoint" xml:space="preserve">
+    <value>Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</value>
+  </data>
+  <data name="BrowserLogsEndpointNotAllocated" xml:space="preserve">
+    <value>Endpoint '{0}' for resource '{1}' has not been allocated yet.</value>
+  </data>
+</root>

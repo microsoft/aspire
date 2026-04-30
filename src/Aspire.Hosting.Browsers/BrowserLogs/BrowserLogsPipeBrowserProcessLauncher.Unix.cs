@@ -5,7 +5,6 @@
 
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using Aspire.Hosting.Dcp.Process;
 using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Hosting;
@@ -124,7 +123,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         return movedDescriptor;
     }
 
-    private static async Task<ProcessResult> WaitForPosixProcessAsync(int processId)
+    private static async Task<BrowserLogsProcessResult> WaitForPosixProcessAsync(int processId)
     {
         return await Task.Run(() =>
         {
@@ -133,7 +132,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
                 var result = waitpid(processId, out var status, 0);
                 if (result == processId)
                 {
-                    return new ProcessResult(GetPosixExitCode(status));
+                    return new BrowserLogsProcessResult(GetPosixExitCode(status));
                 }
 
                 if (Marshal.GetLastPInvokeError() != EINTR)
@@ -245,7 +244,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         }
     }
 
-    private sealed class PosixProcessLifetime(int processId, Task<ProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
+    private sealed class PosixProcessLifetime(int processId, Task<BrowserLogsProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
     {
         public async ValueTask DisposeAsync()
         {

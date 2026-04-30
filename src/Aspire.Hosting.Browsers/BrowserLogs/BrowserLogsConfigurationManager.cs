@@ -6,8 +6,8 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Globalization;
+using Aspire.Hosting.Browsers.Resources;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -37,18 +37,18 @@ internal sealed class BrowserLogsConfigurationManager(
 
         if (!interactionService.IsAvailable)
         {
-            return CommandResults.Failure(CommandStrings.ConfigureTrackedBrowserInteractionUnavailable);
+            return CommandResults.Failure(BrowserCommandStrings.ConfigureTrackedBrowserInteractionUnavailable);
         }
 
         var currentConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
         var inputs = CreateInputs(resource, currentConfiguration);
         var result = await interactionService.PromptInputsAsync(
-            CommandStrings.ConfigureTrackedBrowserName,
-            CommandStrings.ConfigureTrackedBrowserPromptMessage,
+            BrowserCommandStrings.ConfigureTrackedBrowserName,
+            BrowserCommandStrings.ConfigureTrackedBrowserPromptMessage,
             inputs,
             new InputsDialogInteractionOptions
             {
-                PrimaryButtonText = CommandStrings.ConfigureTrackedBrowserSaveButton,
+                PrimaryButtonText = BrowserCommandStrings.ConfigureTrackedBrowserSaveButton,
                 ShowDismiss = true,
                 EnableMessageMarkdown = true,
                 ValidationCallback = context => ValidateInputsAsync(resource, context)
@@ -71,10 +71,10 @@ internal sealed class BrowserLogsConfigurationManager(
 
         var scopeName = selected.Scope == BrowserLogsConfigurationScope.Resource
             ? resource.ParentResource.Name
-            : CommandStrings.ConfigureTrackedBrowserGlobalScopeResult;
+            : BrowserCommandStrings.ConfigureTrackedBrowserGlobalScopeResult;
         var resultMessage = selected.SaveToUserSecrets
-            ? CommandStrings.ConfigureTrackedBrowserSaved
-            : CommandStrings.ConfigureTrackedBrowserApplied;
+            ? BrowserCommandStrings.ConfigureTrackedBrowserSaved
+            : BrowserCommandStrings.ConfigureTrackedBrowserApplied;
 
         return new ExecuteCommandResult
         {
@@ -91,22 +91,22 @@ internal sealed class BrowserLogsConfigurationManager(
         var scopeInput = new InteractionInput
         {
             Name = ScopeInputName,
-            Label = CommandStrings.ConfigureTrackedBrowserScopeLabel,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserScopeLabel,
             InputType = InputType.Choice,
             Required = true,
             Value = ResourceScopeValue,
             Options =
             [
-                new(ResourceScopeValue, string.Format(CultureInfo.CurrentCulture, CommandStrings.ConfigureTrackedBrowserResourceScopeOption, resource.ParentResource.Name)),
-                new(GlobalScopeValue, CommandStrings.ConfigureTrackedBrowserGlobalScopeOption)
+                new(ResourceScopeValue, string.Format(CultureInfo.CurrentCulture, BrowserCommandStrings.ConfigureTrackedBrowserResourceScopeOption, resource.ParentResource.Name)),
+                new(GlobalScopeValue, BrowserCommandStrings.ConfigureTrackedBrowserGlobalScopeOption)
             ]
         };
 
         var browserInput = new InteractionInput
         {
             Name = BrowserInputName,
-            Label = CommandStrings.ConfigureTrackedBrowserBrowserLabel,
-            Description = CommandStrings.ConfigureTrackedBrowserBrowserDescription,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserBrowserLabel,
+            Description = BrowserCommandStrings.ConfigureTrackedBrowserBrowserDescription,
             InputType = InputType.Choice,
             Required = true,
             AllowCustomChoice = true,
@@ -117,7 +117,7 @@ internal sealed class BrowserLogsConfigurationManager(
         var userDataModeInput = new InteractionInput
         {
             Name = UserDataModeInputName,
-            Label = CommandStrings.ConfigureTrackedBrowserUserDataModeLabel,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserUserDataModeLabel,
             InputType = InputType.Choice,
             Required = true,
             Value = currentConfiguration.UserDataMode.ToString(),
@@ -131,8 +131,8 @@ internal sealed class BrowserLogsConfigurationManager(
         var profileInput = new InteractionInput
         {
             Name = ProfileInputName,
-            Label = CommandStrings.ConfigureTrackedBrowserProfileLabel,
-            Description = CommandStrings.ConfigureTrackedBrowserProfileDescription,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserProfileLabel,
+            Description = BrowserCommandStrings.ConfigureTrackedBrowserProfileDescription,
             InputType = InputType.Choice,
             Required = false,
             AllowCustomChoice = true,
@@ -159,12 +159,12 @@ internal sealed class BrowserLogsConfigurationManager(
         return new InteractionInput
         {
             Name = SaveToUserSecretsInputName,
-            Label = CommandStrings.ConfigureTrackedBrowserSaveToUserSecretsLabel,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsLabel,
             InputType = InputType.Boolean,
             Value = userSecretsManager.IsAvailable ? "true" : null,
             Description = userSecretsManager.IsAvailable
-                ? CommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured
-                : CommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured,
+                ? BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured
+                : BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured,
             EnableDescriptionMarkdown = true,
             Disabled = !userSecretsManager.IsAvailable
         };
@@ -173,9 +173,9 @@ internal sealed class BrowserLogsConfigurationManager(
     private static IReadOnlyList<KeyValuePair<string, string>> GetBrowserOptions(string currentBrowser)
     {
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        AddKnownBrowser("msedge", CommandStrings.ConfigureTrackedBrowserEdgeOption);
-        AddKnownBrowser("chrome", CommandStrings.ConfigureTrackedBrowserChromeOption);
-        AddKnownBrowser("chromium", CommandStrings.ConfigureTrackedBrowserChromiumOption);
+        AddKnownBrowser("msedge", BrowserCommandStrings.ConfigureTrackedBrowserEdgeOption);
+        AddKnownBrowser("chrome", BrowserCommandStrings.ConfigureTrackedBrowserChromeOption);
+        AddKnownBrowser("chromium", BrowserCommandStrings.ConfigureTrackedBrowserChromiumOption);
 
         if (!options.ContainsKey(currentBrowser))
         {
@@ -200,7 +200,7 @@ internal sealed class BrowserLogsConfigurationManager(
 
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            [BrowserDefaultProfileValue] = CommandStrings.ConfigureTrackedBrowserDefaultProfileOption
+            [BrowserDefaultProfileValue] = BrowserCommandStrings.ConfigureTrackedBrowserDefaultProfileOption
         };
 
         var disableProfileInput = true;
@@ -253,7 +253,7 @@ internal sealed class BrowserLogsConfigurationManager(
         {
             return string.Format(
                 CultureInfo.CurrentCulture,
-                CommandStrings.ConfigureTrackedBrowserProfileOptionWithDisplayName,
+                BrowserCommandStrings.ConfigureTrackedBrowserProfileOptionWithDisplayName,
                 profile.DirectoryName,
                 profile.DisplayName);
         }
@@ -268,14 +268,14 @@ internal sealed class BrowserLogsConfigurationManager(
         var hasValidationErrors = false;
         if (string.IsNullOrWhiteSpace(browser.Value))
         {
-            context.AddValidationError(browser, CommandStrings.ConfigureTrackedBrowserBrowserRequired);
+            context.AddValidationError(browser, BrowserCommandStrings.ConfigureTrackedBrowserBrowserRequired);
             hasValidationErrors = true;
         }
 
         var userDataMode = inputs[UserDataModeInputName];
         if (!Enum.TryParse<BrowserUserDataMode>(userDataMode.Value, ignoreCase: true, out var parsedUserDataMode))
         {
-            context.AddValidationError(userDataMode, CommandStrings.ConfigureTrackedBrowserUserDataModeRequired);
+            context.AddValidationError(userDataMode, BrowserCommandStrings.ConfigureTrackedBrowserUserDataModeRequired);
             hasValidationErrors = true;
         }
 
@@ -284,14 +284,14 @@ internal sealed class BrowserLogsConfigurationManager(
             !string.IsNullOrWhiteSpace(profile.Value) &&
             !string.Equals(profile.Value, BrowserDefaultProfileValue, StringComparison.Ordinal))
         {
-            context.AddValidationError(profile, CommandStrings.ConfigureTrackedBrowserProfileRequiresShared);
+            context.AddValidationError(profile, BrowserCommandStrings.ConfigureTrackedBrowserProfileRequiresShared);
             hasValidationErrors = true;
         }
 
         var saveToUserSecrets = inputs[SaveToUserSecretsInputName];
         if (IsSaveToUserSecretsRequested(inputs) && !userSecretsManager.IsAvailable)
         {
-            context.AddValidationError(saveToUserSecrets, CommandStrings.ConfigureTrackedBrowserUserSecretsUnavailable);
+            context.AddValidationError(saveToUserSecrets, BrowserCommandStrings.ConfigureTrackedBrowserUserSecretsUnavailable);
             hasValidationErrors = true;
         }
 
@@ -393,7 +393,7 @@ internal sealed class BrowserLogsConfigurationManager(
             throw new InvalidOperationException(
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    CommandStrings.ConfigureTrackedBrowserSaveFailed,
+                    BrowserCommandStrings.ConfigureTrackedBrowserSaveFailed,
                     key));
         }
     }
@@ -405,7 +405,7 @@ internal sealed class BrowserLogsConfigurationManager(
             throw new InvalidOperationException(
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    CommandStrings.ConfigureTrackedBrowserSaveFailed,
+                    BrowserCommandStrings.ConfigureTrackedBrowserSaveFailed,
                     key));
         }
     }

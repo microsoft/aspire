@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Hosting.Browsers.Resources;
 using System.Text.Json;
-using Aspire.Hosting.Resources;
 
 namespace Aspire.Hosting;
 
@@ -56,7 +56,7 @@ internal static class ChromiumBrowserResolver
 
         if (!Directory.Exists(userDataDirectory))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUserDataDirectoryNotFound, userDataDirectory));
+            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUserDataDirectoryNotFound, userDataDirectory));
         }
 
         if (TryResolveProfileDirectoryFromDirectoryEntries(userDataDirectory, profile) is { } directMatch)
@@ -92,25 +92,25 @@ internal static class ChromiumBrowserResolver
             catch (IOException ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
                     ex);
             }
             catch (UnauthorizedAccessException ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
                     ex);
             }
             catch (JsonException ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsInvalidProfileMetadata, localStatePath, profile),
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsInvalidProfileMetadata, localStatePath, profile),
                     ex);
             }
         }
 
         throw new InvalidOperationException(
-            string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsProfileNotFound, profile, userDataDirectory));
+            string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsProfileNotFound, profile, userDataDirectory));
     }
 
     /// <summary>
@@ -144,7 +144,7 @@ internal static class ChromiumBrowserResolver
             if (match is not null && !string.Equals(match, profileEntry.Name, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsAmbiguousProfile, profile, userDataDirectory));
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsAmbiguousProfile, profile, userDataDirectory));
             }
 
             match = profileEntry.Name;
