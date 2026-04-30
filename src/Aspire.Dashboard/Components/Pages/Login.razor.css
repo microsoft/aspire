@@ -1,5 +1,5 @@
 .token-backdrop {
-    background-color: var(--neutral-layer-4);
+    background: var(--aspire-surface-nav);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -8,21 +8,26 @@
 }
 
 [data-theme="dark"] .token-backdrop {
-    background-color: var(--neutral-layer-3);
+    background: var(--aspire-color-black);
 }
 
 .token-form-container {
     --error: #FF8181;
-    background-color: var(--neutral-layer-1);
+    background-color: var(--aspire-surface-card);
     padding: calc((var(--design-unit) * 5px));
-    border-radius: calc(var(--design-unit) * 2.5px);
+    border-radius: calc(var(--design-unit) * 3px);
     display: grid;
     grid-column-gap: calc(var(--design-unit) * 5px);
     grid-template-columns: auto 25em;
     grid-template-rows: auto;
     grid-template-areas:
         "logo entry";
-    box-shadow: 0px 0px 15px 0px rgba(0,0,0,0.75);
+    box-shadow: 0 8px 32px rgba(116, 85, 221, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--aspire-border-subtle);
+}
+
+[data-theme="dark"] .token-form-container {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(116, 85, 221, 0.15);
 }
 
 .token-logo {
