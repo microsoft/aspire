@@ -37,7 +37,7 @@ var orders = rmq.AddVirtualHost("orders");
 
 // Add queue and exchange on the virtual host
 var inbox  = orders.AddQueue("inbox");
-var events = orders.AddExchange("events", type: RabbitMQExchangeType.Topic);
+var events = orders.AddExchange("events", RabbitMQExchangeType.Topic);
 
 // Bind the exchange to the queue
 events.WithBinding(inbox, routingKey: "order.*");
@@ -54,7 +54,7 @@ var rmq = builder.AddRabbitMQ("rmq");
 
 // These create resources on the default "/" virtual host
 var queue    = rmq.AddQueue("my-queue");
-var exchange = rmq.AddExchange("my-exchange", type: RabbitMQExchangeType.Fanout);
+var exchange = rmq.AddExchange("my-exchange", RabbitMQExchangeType.Fanout);
 ```
 
 ### Shovels
@@ -90,7 +90,7 @@ var queue = vhost.AddQueue("inbox", type: RabbitMQQueueType.Quorum)
                      q.AutoDelete = false;
                  });
 
-var exchange = vhost.AddExchange("events", type: RabbitMQExchangeType.Topic)
+var exchange = vhost.AddExchange("events", RabbitMQExchangeType.Topic)
                     .WithProperties(e => e.Durable = true);
 ```
 
