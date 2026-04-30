@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Projects created via `aspire new` or `aspire init` now include a `.vscode/extensions.json` that recommends the Aspire VS Code extension. The extension also activates automatically on polyglot Aspire projects (TypeScript, Python) and has improved marketplace discoverability with expanded keywords and a branded gallery banner.",
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-04-02T15:43:18Z",
+  "lastMergedAt": "2026-04-02T15:43:18Z",
+  "name": "Improved VS Code extension discoverability and activation",
+  "prs": [
+    15760
+  ]
+}

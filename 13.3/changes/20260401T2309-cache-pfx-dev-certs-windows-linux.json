@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an issue on Windows and Linux where the PFX representation of the developer certificate could change between runs, causing the persistent container configuration hash to be invalidated unnecessarily. PFX certificates are now cached on all platforms consistently.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-01T23:09:14Z",
+  "lastMergedAt": "2026-04-01T23:09:14Z",
+  "name": "Cache PFX dev certs on Windows and Linux to prevent container hash invalidation",
+  "prs": [
+    15768
+  ]
+}

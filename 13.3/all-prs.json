@@ -2107,144 +2107,144 @@
     "status": "unprocessed"
   },
   {
-    "comment": null,
+    "comment": "aspire publish step summary now shows hierarchical steps with Unicode timeline ruler",
     "mergedAt": "2026-04-02T18:41:29Z",
     "number": 15530,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Unified YARP TypeScript route helpers for simpler addRoute/addCatchAllRoute API",
     "mergedAt": "2026-04-02T16:57:48Z",
     "number": 15729,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Improved VS Code extension discoverability via .vscode/extensions.json and activation events",
     "mergedAt": "2026-04-02T15:43:18Z",
     "number": 15760,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "New unified withEnvironment API for polyglot AppHosts with IExpressionValue abstraction",
     "mergedAt": "2026-04-02T14:57:07Z",
     "number": 15649,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Test-only: remove ActiveIssue attribute from NodeFunctionalTests",
     "mergedAt": "2026-04-02T07:04:46Z",
     "number": 15727,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Dependency update: outdated npm/pnpm packages",
     "mergedAt": "2026-04-02T03:55:52Z",
     "number": 15779,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Cache PFX dev certs on Windows and Linux to prevent persistent container hash invalidation",
     "mergedAt": "2026-04-01T23:09:14Z",
     "number": 15768,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Merge release/13.2 into main - merge commit, no new changes",
     "mergedAt": "2026-04-01T20:38:49Z",
     "number": 15540,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "New Aspire.Hosting.EntityFrameworkCore integration for EF Core migration management",
     "mergedAt": "2026-04-01T18:59:04Z",
     "number": 13481,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Remove stale .gitignore entries - trivial cleanup",
     "mergedAt": "2026-04-01T17:52:01Z",
     "number": 15758,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fixed 13.2 regressions: IDE execution for Azure Functions and class library projects in VS/VS Code",
     "mergedAt": "2026-04-01T17:50:00Z",
     "number": 15714,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fixed TypeScript codegen typing regression for reusable packages with separate .modules trees",
     "mergedAt": "2026-04-01T17:41:48Z",
     "number": 15631,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Playground sample refactoring, no user-facing changes",
     "mergedAt": "2026-04-01T16:37:51Z",
     "number": 15650,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Embed Aspire SKILL in-repo - internal engineering/documentation change",
     "mergedAt": "2026-04-01T16:18:45Z",
     "number": 15745,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fixed default NuGet packages restore folder to use NuGet standard logic instead of ~/.nuget/packages",
     "mergedAt": "2026-04-01T15:52:02Z",
     "number": 15416,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "VS Code extension: improved gutter icons, code lens, and tree view resource state indicators",
     "mergedAt": "2026-04-01T14:06:09Z",
     "number": 15688,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Internal CLI TelemetryManager DI and disposal fix for test cleanup",
     "mergedAt": "2026-04-01T09:15:50Z",
     "number": 15730,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "New --dashboard-url and --api-key options for aspire agent mcp and aspire otel commands",
     "mergedAt": "2026-04-01T08:13:22Z",
     "number": 15595,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Test-only fix for flaky ExternalService tests",
     "mergedAt": "2026-04-01T07:09:50Z",
     "number": 15747,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fixed empty Dashboard column in aspire ps for anonymous dashboard mode",
     "mergedAt": "2026-04-01T07:06:08Z",
     "number": 15731,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:37:45Z",
+    "status": "included"
   },
   {
     "comment": "Internal skill improvement - no user-facing product change",

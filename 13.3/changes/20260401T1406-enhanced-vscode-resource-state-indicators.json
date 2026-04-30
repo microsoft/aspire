@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension now shows distinct gutter icons (checkmark, triangle, X, hourglass) instead of colored dots to avoid confusion with breakpoints. The tree view panel shows health check child nodes with per-check status, rich resource descriptions including exit codes, and an expand-all button for quick navigation.",
+  "docsRequired": false,
+  "emoji": "🎯",
+  "firstMergedAt": "2026-04-01T14:06:09Z",
+  "lastMergedAt": "2026-04-01T14:06:09Z",
+  "name": "Enhanced VS Code resource state indicators in gutter, code lens, and tree view",
+  "prs": [
+    15688
+  ]
+}
