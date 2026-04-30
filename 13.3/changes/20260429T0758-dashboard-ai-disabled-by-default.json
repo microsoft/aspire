@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard AI feature is now disabled by default when Dashboard:AI:Disabled is not explicitly configured. Previously the default was to enable AI. Explicitly setting the value to true or false still works as before.",
+  "docsRequired": false,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-04-29T07:58:22Z",
+  "lastMergedAt": "2026-04-29T07:58:22Z",
+  "name": "Dashboard AI feature disabled by default",
+  "prs": [
+    16550
+  ]
+}

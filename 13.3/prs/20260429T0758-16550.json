@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard improvement (breaking): AI disabled by default",
+  "mergedAt": "2026-04-29T07:58:22Z",
+  "number": 16550,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Set Dashboard AI disabled default to true"
+}

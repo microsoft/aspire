@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": true,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "aspire init now delegates repo scanning, project discovery, AppHost wiring, and OTel setup to an agent skill (aspireify). The command drops a skeleton AppHost and aspire.config.json, then the skill completes the wiring for both C# and TypeScript AppHosts. A new aspirify eval playground provides rubrics for benchmarking the skill on real-world apps.",
+  "docsRequired": true,
+  "emoji": "🧠",
+  "firstMergedAt": "2026-04-29T07:03:20Z",
+  "lastMergedAt": "2026-04-29T07:03:20Z",
+  "name": "aspire init delegates wiring to the aspireify agent skill",
+  "prs": [
+    15918
+  ]
+}

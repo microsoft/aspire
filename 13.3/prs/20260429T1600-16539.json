@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "AppHost bug fix: Bicep identifier normalization for hyphenated App Service names",
+  "mergedAt": "2026-04-29T16:00:20Z",
+  "number": 16539,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Normalize App Service Application Insights Bicep identifiers"
+}

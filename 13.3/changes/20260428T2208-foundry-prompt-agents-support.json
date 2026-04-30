@@ -1,0 +1,16 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds Foundry Prompt Agents to AppHost projects. Declare a prompt agent with a model, instructions, and tools; Aspire provisions it on Azure AI Foundry during both run and publish. Consumer services receive connection strings and can invoke agents via the Azure.AI.Projects SDK.",
+  "docsRequired": true,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-04-28T22:08:15Z",
+  "lastMergedAt": "2026-04-28T22:08:15Z",
+  "name": "Azure AI Foundry Prompt Agent support",
+  "prs": [
+    16353
+  ]
+}

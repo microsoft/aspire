@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "JSDoc comments from [AspireExport.Description] are now emitted on generated TypeScript public interfaces and promise interfaces rather than on implementation classes. Methods like withYarn() now surface IntelliSense hints in editors when working with TypeScript AppHosts.",
+  "docsRequired": false,
+  "emoji": "💡",
+  "firstMergedAt": "2026-04-29T03:51:57Z",
+  "lastMergedAt": "2026-04-29T03:51:57Z",
+  "name": "IntelliSense hints in TypeScript AppHost generated SDK",
+  "prs": [
+    16547
+  ]
+}

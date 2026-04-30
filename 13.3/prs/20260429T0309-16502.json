@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI bug fix: Windows backchannel connection timeout on path case mismatch",
+  "mergedAt": "2026-04-29T03:09:51Z",
+  "number": 16502,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Fix Windows AppHost path casing mismatch for backchannel hashing"
+}

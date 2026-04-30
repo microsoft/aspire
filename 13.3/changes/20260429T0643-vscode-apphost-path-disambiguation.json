@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When multiple AppHosts share the same filename, the VS Code extension now shows just enough parent path segments to make each label unique in the tree view, dashboard quick-pick, and workspace AppHost label.",
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-04-29T06:43:18Z",
+  "lastMergedAt": "2026-04-29T06:43:18Z",
+  "name": "Clearer AppHost labels when multiple AppHosts share a filename",
+  "prs": [
+    16518
+  ]
+}

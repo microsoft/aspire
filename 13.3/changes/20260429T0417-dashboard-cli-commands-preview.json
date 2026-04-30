@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire dashboard and aspire dashboard run commands are now labeled as Preview in their descriptions, signaling that the standalone dashboard CLI feature is still evolving.",
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-04-29T04:17:46Z",
+  "lastMergedAt": "2026-04-29T04:17:46Z",
+  "name": "aspire dashboard commands labeled as Preview",
+  "prs": [
+    16548
+  ]
+}

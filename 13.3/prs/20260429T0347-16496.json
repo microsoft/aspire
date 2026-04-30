@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CLI new feature: Aspire CLI now available as a dotnet tool",
+  "mergedAt": "2026-04-29T03:47:51Z",
+  "number": 16496,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Ship Aspire CLI as a NativeAOT dotnet tool"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "tommasodotNET",
+  "comment": "New Foundry Prompt Agent support in AppHost",
+  "mergedAt": "2026-04-28T22:08:15Z",
+  "number": 16353,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Adds support for foundry prompt agents"
+}

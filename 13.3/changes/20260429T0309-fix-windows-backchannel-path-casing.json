@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes aspire start timing out on Windows when the AppHost project path uses different drive-letter casing between the CLI and the AppHost process. The fix normalizes the Windows drive letter before hashing, with a legacy hash fallback for backward compatibility with older AppHosts.",
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-04-29T03:09:51Z",
+  "lastMergedAt": "2026-04-29T03:09:51Z",
+  "name": "Fix Windows backchannel connection timeout caused by path casing",
+  "prs": [
+    16502
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: improved aspire docs markdown rendering",
+  "mergedAt": "2026-04-29T03:07:07Z",
+  "number": 16428,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Improve CLI docs markdown rendering and simplify DocsGetCommand"
+}

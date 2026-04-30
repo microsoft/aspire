@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes invalid Bicep identifiers generated for Log Analytics workspaces and Application Insights components when the Azure App Service environment name contains hyphens (e.g., env-1). Hyphens in environment names are now normalized to underscores in generated resource identifiers.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-29T16:00:20Z",
+  "lastMergedAt": "2026-04-29T16:00:20Z",
+  "name": "Fix Bicep identifier generation for hyphenated App Service environment names",
+  "prs": [
+    16539
+  ]
+}

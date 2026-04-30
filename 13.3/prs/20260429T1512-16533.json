@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Integrations improvement: DurableTask APIs marked Experimental",
+  "mergedAt": "2026-04-29T15:12:58Z",
+  "number": 16533,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Mark DurableTaskResourceExtensions methods as Experimental"
+}

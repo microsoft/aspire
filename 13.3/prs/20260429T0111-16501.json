@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Engineering improvement: daily smoke now covers dotnet tool install path",
+  "mergedAt": "2026-04-29T01:11:04Z",
+  "number": 16501,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Run CLI dotnet tool smoke tests in daily smoke workflow"
+}

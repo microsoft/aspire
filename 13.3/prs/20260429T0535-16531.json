@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "AppHost improvement: BrowserLogs dashboard configuration command",
+  "mergedAt": "2026-04-29T05:35:11Z",
+  "number": 16531,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Add BrowserLogs configuration command"
+}

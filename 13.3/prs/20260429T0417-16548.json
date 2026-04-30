@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: dashboard commands labeled as Preview",
+  "mergedAt": "2026-04-29T04:17:46Z",
+  "number": 16548,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Mark DashboardCommand and DashboardRunCommand as preview commands"
+}

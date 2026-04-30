@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "AppHost improvement: endpoint property expressions in polyglot SDKs",
+  "mergedAt": "2026-04-29T04:53:34Z",
+  "number": 16540,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Expose endpoint property expressions to ATS"
+}

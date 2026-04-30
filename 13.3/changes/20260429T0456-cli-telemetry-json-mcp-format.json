@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI telemetry commands (logs, traces, spans) now emit JSON in the same format used by the dashboard MCP tools, with camelCase property names, null stripping, full span/trace IDs, and a direct dashboardUrl string. This format works better with AI agents and tooling.",
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-04-29T04:56:45Z",
+  "lastMergedAt": "2026-04-29T04:56:45Z",
+  "name": "CLI telemetry JSON output aligned with MCP tool format",
+  "prs": [
+    16523
+  ]
+}

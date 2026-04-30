@@ -1,0 +1,9 @@
+{
+  "author": "AndriySvyryd",
+  "comment": "Integrations improvement: EF migrations bundle container during deploy",
+  "mergedAt": "2026-04-29T04:30:45Z",
+  "number": 16289,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Create a container for EF migrations bundle during deploy"
+}

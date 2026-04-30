@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extensions improvement: unique AppHost labels for duplicate filenames",
+  "mergedAt": "2026-04-29T06:43:18Z",
+  "number": 16518,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Disambiguate VS Code AppHost path labels"
+}

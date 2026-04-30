@@ -1,0 +1,16 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "DurableTaskResourceExtensions methods (AddDurableTaskScheduler, AddTaskHub, RunAsEmulator, WithTaskHubName) are now marked [Experimental] with diagnostic ID ASPIREDURABLETASK001, signaling that the API shape may change before going GA. Add #pragma warning disable ASPIREDURABLETASK001 to suppress the build warning.",
+  "docsRequired": false,
+  "emoji": "⚗️",
+  "firstMergedAt": "2026-04-29T15:12:58Z",
+  "lastMergedAt": "2026-04-29T15:12:58Z",
+  "name": "Durable Task Scheduler APIs marked as Experimental",
+  "prs": [
+    16533
+  ]
+}

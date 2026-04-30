@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension walkthrough now showcases both C# and TypeScript AppHost examples and uses language-neutral AppHost concepts throughout. The first-app flow reflects Aspire's polyglot positioning instead of reading as C#-only.",
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-04-29T04:46:31Z",
+  "lastMergedAt": "2026-04-29T04:46:31Z",
+  "name": "VS Code walkthrough updated for polyglot AppHosts",
+  "prs": [
+    16508
+  ]
+}

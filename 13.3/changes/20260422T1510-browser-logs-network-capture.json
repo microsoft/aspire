@@ -4,15 +4,16 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "New WithBrowserLogs() API attaches a tracked browser resource to any endpoint-capable resource. Aspire launches a Chromium-based browser, streams console logs, network requests, and errors back into the resource log stream. A new BrowserUserDataMode (Shared or Isolated) separates user data directory from browser profile, using persistent Aspire-managed browser hives and enabling session adoption across AppHost restarts. A capture-screenshot resource command backed by CDP saves screenshot PNGs as durable local command artifacts and returns compact JSON metadata for agents.",
+  "description": "New WithBrowserLogs() API attaches a tracked browser resource to any endpoint-capable resource. Aspire launches a Chromium-based browser and streams console logs, network requests, and errors into the resource log stream. A dashboard command lets developers configure scope, browser, user data mode, and profile at runtime, with optional persistence to AppHost user secrets. A capture-screenshot resource command saves screenshot PNGs as durable local artifacts.",
   "docsRequired": true,
   "emoji": "🌐",
   "firstMergedAt": "2026-04-22T15:10:09Z",
-  "lastMergedAt": "2026-04-27T20:22:32Z",
+  "lastMergedAt": "2026-04-29T05:35:11Z",
   "name": "Browser log, network capture, and screenshot with WithBrowserLogs()",
   "prs": [
     16310,
     16457,
-    16484
+    16484,
+    16531
   ]
 }

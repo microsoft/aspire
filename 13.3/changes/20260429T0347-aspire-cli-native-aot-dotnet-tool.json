@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The Aspire CLI is now distributed as a NativeAOT dotnet tool in addition to the native archive format. Install it globally with dotnet tool install -g Aspire.Cli and update with dotnet tool update -g Aspire.Cli. The CLI detects when it is running from the dotnet tool store and adjusts update guidance accordingly.",
+  "docsRequired": true,
+  "emoji": "🛠️",
+  "firstMergedAt": "2026-04-29T03:47:51Z",
+  "lastMergedAt": "2026-04-29T03:47:51Z",
+  "name": "Aspire CLI available as a dotnet tool",
+  "prs": [
+    16496
+  ]
+}

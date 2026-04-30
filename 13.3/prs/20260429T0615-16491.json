@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extensions improvement: suspends CLI polling when view hidden",
+  "mergedAt": "2026-04-29T06:15:29Z",
+  "number": 16491,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Reduce extension CLI polling when Aspire view is hidden"
+}

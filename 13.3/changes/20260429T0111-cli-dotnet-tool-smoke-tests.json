@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The daily smoke workflow now covers the dotnet tool install path alongside the native archive path. Prerelease packages are selected for dev/staging quality runs, the installed CLI version is recorded in the workflow summary, and failure issues include version details for faster triage.",
+  "docsRequired": false,
+  "emoji": "🧪",
+  "firstMergedAt": "2026-04-29T01:11:04Z",
+  "lastMergedAt": "2026-04-29T01:11:04Z",
+  "name": "Daily smoke workflow covers dotnet tool install path",
+  "prs": [
+    16501
+  ]
+}

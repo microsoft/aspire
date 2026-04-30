@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: better confirmation prompt appearance",
+  "mergedAt": "2026-04-29T09:27:46Z",
+  "number": 16553,
+  "runDate": "2026-04-30T22:55:33Z",
+  "status": "included",
+  "title": "Improve confirm prompt UX in ConsoleInteractionService"
+}

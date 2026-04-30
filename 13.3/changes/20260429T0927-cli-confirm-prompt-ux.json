@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The single-keypress CLI confirmation prompt now displays choices in blue with a trailing colon, echoes the default choice when Enter is pressed, and matches key input case-insensitively against the configured yes/no characters.",
+  "docsRequired": false,
+  "emoji": "✅",
+  "firstMergedAt": "2026-04-29T09:27:46Z",
+  "lastMergedAt": "2026-04-29T09:27:46Z",
+  "name": "Improved CLI confirmation prompt appearance",
+  "prs": [
+    16553
+  ]
+}
