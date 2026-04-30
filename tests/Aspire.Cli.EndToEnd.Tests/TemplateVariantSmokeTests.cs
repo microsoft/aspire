@@ -41,6 +41,10 @@ public sealed class TemplateVariantSmokeTests(ITestOutputHelper output)
 
         await auto.AspireNewAsync("JavaEmptyApp", counter, template: AspireTemplate.JavaEmptyAppHost);
 
+        GitIgnoreAssertions.AssertContainsEntry(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "JavaEmptyApp"),
+            ".aspire/");
+
         await auto.TypeAsync("cd JavaEmptyApp");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -105,6 +109,10 @@ public sealed class TemplateVariantSmokeTests(ITestOutputHelper output)
 
         await auto.AspireNewAsync("AspirePyReactApp", counter, template: AspireTemplate.PythonReact, useRedisCache: false);
 
+        GitIgnoreAssertions.AssertContainsEntry(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "AspirePyReactApp"),
+            ".aspire/");
+
         await auto.TypeAsync("cd AspirePyReactApp");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -139,6 +147,10 @@ public sealed class TemplateVariantSmokeTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.AspireNewAsync("TsEmptyApp", counter, template: AspireTemplate.TypeScriptEmptyAppHost);
+
+        GitIgnoreAssertions.AssertContainsEntry(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "TsEmptyApp"),
+            ".aspire/");
 
         await auto.TypeAsync("cd TsEmptyApp");
         await auto.EnterAsync();
@@ -176,6 +188,7 @@ public sealed class TemplateVariantSmokeTests(ITestOutputHelper output)
         await auto.AspireNewAsync("TsStarterApp", counter, template: AspireTemplate.ExpressReact);
 
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "TsStarterApp");
+        GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");
         var modulesDir = Path.Combine(projectRoot, ".modules");
 
         if (!Directory.Exists(modulesDir))

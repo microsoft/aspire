@@ -700,9 +700,9 @@ internal static class CliE2EAutomatorHelpers
             "new",
             templateName,
             "--name",
-            QuoteBashArg(projectName),
+            AspireCliShellCommandHelpers.QuoteBashArg(projectName),
             "--output",
-            QuoteBashArg($"./{projectName}"),
+            AspireCliShellCommandHelpers.QuoteBashArg($"./{projectName}"),
         };
 
         foreach (var arg in extraArgs)
@@ -745,7 +745,7 @@ internal static class CliE2EAutomatorHelpers
 
         await auto.TypeAsync(
             "(set -o pipefail; aspire run 2>&1 | tee " +
-            QuoteBashArg(containerOutputPath) +
+            AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath) +
             "; s=${PIPESTATUS[0]}; if [ \"$s\" -eq 130 ]; then exit 0; fi; exit \"$s\")");
         await auto.EnterAsync();
 
@@ -777,7 +777,7 @@ internal static class CliE2EAutomatorHelpers
         CliE2ETestHelpers.RegisterCaptureFile("_aspire-start.json", hostOutputPath);
 
         await auto.RunCommandAsync(
-            $"if [ -f {QuoteBashArg(AspireStartJsonFile)} ]; then cp {QuoteBashArg(AspireStartJsonFile)} {QuoteBashArg(containerOutputPath)}; fi",
+            $"if [ -f {AspireCliShellCommandHelpers.QuoteBashArg(AspireStartJsonFile)} ]; then cp {AspireCliShellCommandHelpers.QuoteBashArg(AspireStartJsonFile)} {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}; fi",
             counter);
     }
 
@@ -796,7 +796,7 @@ internal static class CliE2EAutomatorHelpers
 
         CliE2ETestHelpers.RegisterCaptureFile(outputFileName, hostOutputPath);
 
-        await auto.RunCommandAsync($"{command} > {QuoteBashArg(containerOutputPath)}", counter);
+        await auto.RunCommandAsync($"{command} > {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}", counter);
         return hostOutputPath;
     }
 
@@ -816,7 +816,7 @@ internal static class CliE2EAutomatorHelpers
         CliE2ETestHelpers.RegisterCaptureFile(outputFileName, hostOutputPath);
 
         await auto.RunCommandAsync(
-            $"LOG=$(ls -t {logGlob} 2>/dev/null | head -1) && test -n \"$LOG\" && cp \"$LOG\" {QuoteBashArg(containerOutputPath)}",
+            $"LOG=$(ls -t {logGlob} 2>/dev/null | head -1) && test -n \"$LOG\" && cp \"$LOG\" {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}",
             counter);
 
         return hostOutputPath;
@@ -835,7 +835,7 @@ internal static class CliE2EAutomatorHelpers
         var successMarker = $"{label}-http-200";
 
         await auto.TypeAsync(
-            $"curl -ksSL -o /dev/null -w '{successMarker}' {QuoteBashArg(url)} " +
+            $"curl -ksSL -o /dev/null -w '{successMarker}' {AspireCliShellCommandHelpers.QuoteBashArg(url)} " +
             $"|| echo '{label}-http-failed'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(successMarker, timeout: timeout ?? TimeSpan.FromSeconds(30));
@@ -856,13 +856,6 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.RunCommandAsync("aspire config set channel local -g", counter);
         await auto.RunCommandAsync("SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g", counter);
-    }
-
-    private static async Task LogInstalledAspireCliVersionAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
-    {
-        await auto.RunCommandAsync("aspire --version", counter);
     }
 
     private static async Task RunCommandAsync(
