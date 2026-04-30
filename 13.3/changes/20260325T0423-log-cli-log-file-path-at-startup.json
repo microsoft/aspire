@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire CLI now logs its log file path at startup alongside the version and build ID. When running with `--debug`, the log file path is printed to stderr so you can quickly locate the current session's diagnostic log.",
+  "docsRequired": false,
+  "emoji": "📄",
+  "firstMergedAt": "2026-03-25T04:23:58Z",
+  "lastMergedAt": "2026-03-25T04:23:58Z",
+  "name": "Log CLI log file path at startup",
+  "prs": [
+    15565
+  ]
+}

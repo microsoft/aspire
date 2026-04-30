@@ -1,0 +1,16 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug in `aspire new` where VS Code would switch to the new project workspace before the AI agent environment setup prompt was shown, causing the prompt to be lost. The OpenEditor call now occurs after the agent init prompt completes.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-03-24T22:17:47Z",
+  "lastMergedAt": "2026-03-24T22:17:47Z",
+  "name": "Fix `aspire new` agent init prompt lost on VS Code workspace switch",
+  "prs": [
+    15552
+  ]
+}

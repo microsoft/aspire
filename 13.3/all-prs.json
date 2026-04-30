@@ -2527,144 +2527,144 @@
     "status": "unprocessed"
   },
   {
-    "comment": null,
+    "comment": "Python AppHost code generator for polyglot support",
     "mergedAt": "2026-03-26T03:51:36Z",
     "number": 13947,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "MCP server and UI removed from Aspire Dashboard",
     "mergedAt": "2026-03-26T01:49:06Z",
     "number": 15528,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Test-only - re-enable Banner_NotDisplayedWithNoLogoFlag E2E test",
     "mergedAt": "2026-03-25T22:32:07Z",
     "number": 15570,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Java polyglot AppHost support improvements (experimental)",
     "mergedAt": "2026-03-25T21:44:20Z",
     "number": 15470,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "New IsDefaultReferenceEndpoint flag to exclude management endpoints from WithReference()",
     "mergedAt": "2026-03-25T20:25:33Z",
     "number": 15558,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Bot PR - update workflow action SHAs",
     "mergedAt": "2026-03-25T15:57:13Z",
     "number": 15544,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Update Azure Container Apps provisioning to latest library version",
     "mergedAt": "2026-03-25T15:15:51Z",
     "number": 15450,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Console interactions captured in CLI diagnostic log",
     "mergedAt": "2026-03-25T06:29:33Z",
     "number": 15521,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix Azure deployment links not clickable in terminal",
     "mergedAt": "2026-03-25T05:11:14Z",
     "number": 15542,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Test-only - regression test for RabbitMQ ACA publish",
     "mergedAt": "2026-03-25T04:36:24Z",
     "number": 15567,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Log CLI log file path at startup",
     "mergedAt": "2026-03-25T04:23:58Z",
     "number": 15565,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix Docker Swarm UpdateConfig property types (breaking: FailOnError renamed, Parallelism typed as int)",
     "mergedAt": "2026-03-25T03:50:19Z",
     "number": 15566,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix aspire update showing NuGet template packages as AppHost projects",
     "mergedAt": "2026-03-25T03:34:49Z",
     "number": 15388,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Improved AI agent init with location selection and standard skill support",
     "mergedAt": "2026-03-25T02:31:42Z",
     "number": 15022,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Non-HTTP endpoint links shown as non-clickable in Aspire VS Code panel",
     "mergedAt": "2026-03-25T00:51:16Z",
     "number": 15514,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Version bump for extension 1.0.7",
     "mergedAt": "2026-03-24T23:21:28Z",
     "number": 15554,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Remove generated .modules folders from git - repo housekeeping",
     "mergedAt": "2026-03-24T22:29:24Z",
     "number": 15549,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fix aspire new: agent init prompt lost when VS Code switches workspace",
     "mergedAt": "2026-03-24T22:17:47Z",
     "number": 15552,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Trivial lint fix - code style only, no user-facing change",
     "mergedAt": "2026-03-24T22:02:34Z",
     "number": 15548,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Bot PR - CI configuration update",
     "mergedAt": "2026-03-24T16:58:02Z",
     "number": 15501,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:57:33Z",
+    "status": "excluded"
   },
   {
     "comment": "Remove OtlpEndpointEnvironmentVariableName - breaking API removal",

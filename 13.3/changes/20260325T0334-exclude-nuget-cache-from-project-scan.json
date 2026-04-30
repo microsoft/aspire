@@ -1,0 +1,18 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@MO2k4"
+  ],
+  "description": "Fixed `aspire update` incorrectly surfacing NuGet template packages (such as `aspire.projecttemplates`) as updatable AppHost projects when run from a broad directory. The project file search now skips the NuGet packages cache directory. The `NUGET_PACKAGES` environment variable is respected for custom cache paths.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-03-25T03:34:49Z",
+  "lastMergedAt": "2026-03-25T03:34:49Z",
+  "name": "Fix `aspire update` showing NuGet template packages as AppHost projects",
+  "prs": [
+    15388
+  ]
+}

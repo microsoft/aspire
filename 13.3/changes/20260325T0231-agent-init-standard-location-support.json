@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The `aspire agent init` command now prompts you to choose which AI environment locations to configure (e.g., .agents/ standard locations) and which skills or MCP server configurations to install. Also adds a `dotnet inspect` skill and an updated `aspire` skill with TypeScript polyglot AppHost context. Fixes a bug where playwright-cli skill was never installed on Windows.",
+  "docsRequired": true,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-03-25T02:31:42Z",
+  "lastMergedAt": "2026-03-25T02:31:42Z",
+  "name": "Improved AI agent init with location selection and standard skill support",
+  "prs": [
+    15022
+  ]
+}

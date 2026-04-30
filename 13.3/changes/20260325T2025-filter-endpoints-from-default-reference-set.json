@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": true,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added `IsDefaultReferenceEndpoint` to `EndpointAnnotation`, allowing individual endpoints to be excluded from the default set of endpoints used by `WithReference()`. Management/admin endpoints on resources such as Keycloak, Azure CosmosDB Emulator, Event Hubs Emulator, and Service Bus Emulator are now excluded by default so they are not inadvertently injected as service discovery endpoints.",
+  "docsRequired": true,
+  "emoji": "🔎",
+  "firstMergedAt": "2026-03-25T20:25:33Z",
+  "lastMergedAt": "2026-03-25T20:25:33Z",
+  "name": "Exclude management endpoints from default WithReference() service discovery",
+  "prs": [
+    15558
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI console interactions — including status messages, prompts, confirmations, selections, and errors — are now captured in the CLI diagnostic log at `~/.aspire/logs/`. This makes it much easier to diagnose what happened during an interactive CLI session.",
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-03-25T06:29:33Z",
+  "lastMergedAt": "2026-03-25T06:29:33Z",
+  "name": "Console interactions captured in CLI diagnostic log",
+  "prs": [
+    15521
+  ]
+}
