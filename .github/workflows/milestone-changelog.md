@@ -171,25 +171,36 @@ steps:
       DATA_DIR="/tmp/gh-aw/pr-data"
       mkdir -p "$DATA_DIR"
 
-      # 0. Read previously processed PR numbers from repo-memory via API.
+      # 0. Read previously processed PR numbers from repo-memory.
       #    The gh-aw framework clones repo-memory AFTER user steps run,
-      #    so we fetch the data we need via the GitHub Contents API instead.
+      #    so we shallow-clone the memory branch to read the individual
+      #    PR tracker files from the prs/ directory.
+      #    This branch contains only changelog state files, so the clone
+      #    is lightweight even without sparse-checkout.
       MEMORY_REF="memory/milestone-changelog"
       PROCESSED_NUMBERS="[]"
-      ALL_PRS_CONTENT=$(gh api "repos/$REPO/contents/${MILESTONE}/all-prs.json?ref=$MEMORY_REF" \
-        --jq '.content' 2>/dev/null | base64 --decode 2>/dev/null || true)
-      # Extract processed PR numbers (status != "unprocessed") from all-prs.json
-      if [ -n "$ALL_PRS_CONTENT" ]; then
-        PRS_LISTING=$(echo "$ALL_PRS_CONTENT" | jq '[.[] | select(.status != "unprocessed") | .number]' 2>/dev/null || true)
-        # Validate: only use if it's actually a JSON array
-        if echo "$PRS_LISTING" | jq -e 'type == "array"' >/dev/null 2>&1; then
-          PROCESSED_NUMBERS="$PRS_LISTING"
+      FEEDBACK_FROM_MEMORY=""
+      MEMORY_TMP=$(mktemp -d)
+      if git clone --depth 1 --branch "$MEMORY_REF" \
+          "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
+          "$MEMORY_TMP/repo" 2>/dev/null; then
+        PRS_DIR="$MEMORY_TMP/repo/${MILESTONE}/prs"
+        # Since tracker files only exist for processed PRs, extract all numbers.
+        if [ -d "$PRS_DIR" ] && compgen -G "$PRS_DIR/*.json" > /dev/null 2>&1; then
+          PRS_LISTING=$(jq -s '[.[] | .number]' \
+            "$PRS_DIR/"*.json 2>/dev/null || true)
+          if echo "$PRS_LISTING" | jq -e 'type == "array"' >/dev/null 2>&1; then
+            PROCESSED_NUMBERS="$PRS_LISTING"
+          fi
+        fi
+
+        # Also grab the feedback issue number from repo-memory
+        FEEDBACK_FILE="$MEMORY_TMP/repo/${MILESTONE}/feedback-issue.txt"
+        if [ -f "$FEEDBACK_FILE" ]; then
+          FEEDBACK_FROM_MEMORY=$(tr -d '[:space:]' < "$FEEDBACK_FILE")
         fi
       fi
-
-      # Also grab the feedback issue number from repo-memory
-      FEEDBACK_FROM_MEMORY=$(gh api "repos/$REPO/contents/${MILESTONE}/feedback-issue.txt?ref=$MEMORY_REF" \
-        --jq '.content' 2>/dev/null | base64 --decode 2>/dev/null | tr -d '[:space:]' || true)
+      rm -rf "$MEMORY_TMP"
 
       # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
       gh pr list --repo "$REPO" --state merged --limit 5000 \
@@ -203,10 +214,11 @@ steps:
 
       # 2. Determine the batch of unprocessed PRs
 
-      # Filter all-milestone-prs to only unprocessed, take oldest BATCH_SIZE
+      # Filter all-milestone-prs to only unprocessed, take oldest BATCH_SIZE.
+      # Build a lookup object from processed numbers for O(1) membership checks.
       jq --argjson processed "$PROCESSED_NUMBERS" \
          --argjson batch_size "$BATCH_SIZE" \
-         '[.[] | select(.number as $n | $processed | index($n) | not)] | .[0:$batch_size]' \
+         '($processed | map({(tostring): true}) | add // {}) as $set | [.[] | select($set[.number | tostring] | not)] | .[0:$batch_size]' \
          "$DATA_DIR/all-milestone-prs.json" \
          > "$DATA_DIR/batch-prs.json"
 
@@ -285,34 +297,37 @@ large JSON files in their entirety — use `jq` to extract only the fields you n
 | Feedback issue file | `feedback-issue.txt` (under repo-memory directory) |
 | Batch file | `/tmp/gh-aw/pr-data/batch-prs.json` (computed from all PRs minus processed) |
 | Existing body file | `/tmp/gh-aw/pr-data/existing-body.md` (fetched from wiki) |
-| PR tracker file | `all-prs.json` (primary source of truth for PR processing status) |
+| PR tracker directory | `prs/` (under repo-memory directory; one JSON file per PR) |
 
 ## Step 1: Load existing changelog and feedback
 
 1. Check if the file `/tmp/gh-aw/pr-data/existing-body.md` exists (fetched from the
    wiki page during the pre-computation step). If it does, read its contents as the
    current changelog markdown. If it does not exist, there is no existing content yet.
-2. Read `/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json` (if it exists)
-   to determine which PRs have already been processed. Entries with `status` of
-   `"included"` or `"excluded"` are processed; entries with `"unprocessed"` are not.
-   If the file does not exist, no PRs have been processed yet.
+2. List the files in `/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/`.
+   Each file is named `{merge-date}-{number}.json` (where `{merge-date}`
+   is in `YYYYMMDDTHHmm` format) and contains a single PR tracker entry (see
+   Step 8b for the schema). Only processed PRs have tracker files — PRs without
+   a file are implicitly unprocessed. If the directory does not exist or is
+   empty, no PRs have been processed yet.
 3. List the files in `/tmp/gh-aw/repo-memory/default/${MILESTONE}/changes/`.
    Each file is named `{first-pr-merge-date}-{slug}.json` and contains a changelog
    entry (see Step 8 for the change file schema). Load these as the existing set of
    changelog entries. If the directory does not exist or is empty, there are no
    existing entries.
 4. Check if the file `/tmp/gh-aw/pr-data/feedback-issue-number.txt` exists. If it
-   does, read the issue number from it and then read **all** comments on that issue —
-   these contain editorial instructions (see Step 4). If the file does not exist,
-   there is no feedback to process.
+   does, read the issue number from it and then read **all** comments on that issue
+   into memory — these will be processed as editorial instructions in Step 4. If the
+   file does not exist, there is no feedback to process.
 
 ## Step 2: Review the pre-computed batch
 
 The pre-computation step (in the frontmatter) has already:
 - Fetched **all** merged PRs in the ${MILESTONE} milestone, sorted by merge date
   ascending (oldest first) → `/tmp/gh-aw/pr-data/all-milestone-prs.json`
-- Compared each PR against `all-prs.json` in repo-memory to identify which PRs
-  have not yet been processed (status `"unprocessed"` or absent)
+- Compared each PR against the individual PR tracker files in `prs/` in
+  repo-memory to identify which PRs have not yet been processed (no tracker
+  file present)
 - Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
 
 Each entry in `batch-prs.json` contains: `number`, `title`, `author` (object with
@@ -333,10 +348,10 @@ unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry conta
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** `app/copilot-swe-agent` which makes product changes on behalf of
    developers and should be processed normally.
-   Record each excluded bot PR in `all-prs.json` with `status: "excluded"` in
-   Step 8b so they are not re-processed on future runs.
-2. If the batch has fewer than ${BATCH_SIZE} PRs, all remaining PRs have been processed
-   and the backlog is fully caught up.
+   Record each excluded bot PR as an individual tracker file in `prs/` with
+   `status: "excluded"` in Step 8b so they are not re-processed on future runs.
+2. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
+   processing it, the backlog will be fully caught up.
 
 For each remaining (non-bot) PR, use the `pull_request_read` tool to fetch its
 full body/description and changed file paths. Collect: number, title, author,
@@ -482,8 +497,9 @@ Omit flag lines entirely when a flag does not apply.
 
 ### 5d. Group related PRs
 
-If multiple PRs represent the same logical change (e.g., a feature spread across
-several PRs), combine them into **one** changelog entry listing all related PR numbers.
+If multiple PRs **within the current batch** represent the same logical change
+(e.g., a feature spread across several PRs), combine them into **one** changelog
+entry listing all related PR numbers.
 
 Also check whether a new PR extends or refines a feature that already has an
 existing change file (loaded in Step 1). If so, **update the existing change file**
@@ -561,9 +577,6 @@ summary in the Table of Contents after the area name, separated by ` — `.
 Use this exact format:
 
 ```markdown
-> Last updated: <current date and time in UTC>  
-> PRs analyzed through: [#<number>](https://github.com/microsoft/aspire/pull/<number>) merged <merge date of the newest PR processed in this run, in UTC>
-
 ## Table of Contents
 
 3 new features, 2 improvements, 1 bug fix
@@ -574,9 +587,9 @@ Use this exact format:
 
 ## What's New
 
-- [2026-4-22 — 🏠 App Host - 🧭 Feature name](#-apphost)
+- [2026-4-22 — 🏠 AppHost - 🧭 Feature name](#-apphost)
 - [2026-4-21 — 💻 CLI - 🆕 New CLI command](#-cli)
-- [2026-4-20 — 🏠 App Host - 🚀 Another feature](#-apphost)
+- [2026-4-20 — 🏠 AppHost - 🚀 Another feature](#-apphost)
 
 ## 🏠 AppHost
 
@@ -636,22 +649,25 @@ Use this exact format:
 (e.g., "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678").*
 
 **PRs processed:** ✅ 6 included · ❌ 1 excluded · ⏳ 93 unprocessed · 100 total merged in milestone
-([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/${MILESTONE}/all-prs.json))
+([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/${MILESTONE}/prs/))
+**PRs analyzed through:** [#<number>](https://github.com/microsoft/aspire/pull/<number>) merged <merge date of the newest PR processed in this run, in UTC>
 ```
 
 At the bottom of the page (after the footer), include a **PRs processed** summary
-line and a link to the full PR tracker JSON file in repo-memory:
+line, a link to the PR tracker directory in repo-memory, and a **PRs analyzed
+through** line showing the newest PR processed in this run:
 
 ```
 **PRs processed:** ✅ <N> included · ❌ <N> excluded · ⏳ <N> unprocessed · <N> total merged in milestone
-([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/${MILESTONE}/all-prs.json))
+([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/${MILESTONE}/prs/))
+**PRs analyzed through:** [#<number>](https://github.com/microsoft/aspire/pull/<number>) merged <date>
 ```
 
-Compute the counts from `all-prs.json`:
-- **included** = entries in `all-prs.json` with `status: "included"`
-- **excluded** = entries in `all-prs.json` with `status: "excluded"`
-- **unprocessed** = entries in `all-prs.json` with `status: "unprocessed"`
-- **total** = total number of entries in `all-prs.json`
+Compute the counts:
+- **included** = number of tracker files in `prs/` with `status: "included"`
+- **excluded** = number of tracker files in `prs/` with `status: "excluded"`
+- **unprocessed** = total merged PRs in milestone (from `/tmp/gh-aw/pr-data/all-milestone-prs.json`) minus included minus excluded
+- **total** = total merged PRs in milestone
 
 ## Step 7: Validate and publish the changelog to the wiki
 
@@ -670,7 +686,7 @@ if it exists) and check that:
 3. **All new entries reference only PR numbers from the current batch** — any PR number
    appearing in a new `Changes:` line that was not in the existing body must be present
    in `/tmp/gh-aw/pr-data/batch-prs.json`.
-4. **Header metadata updates are expected** — changes to "Last updated", "PRs analyzed
+4. **Footer and metadata updates are expected** — changes to "PRs analyzed
    through", "PRs processed" counts, "What's New" section, and Table of Contents
    summaries are normal and should not be flagged.
 
@@ -765,65 +781,70 @@ jq --sort-keys '.' "<filepath>" > /tmp/change-fmt.json \
 
 ### 8b. Update the PR tracker
 
-Update the consolidated tracker at:
-`/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json`
+Write or update individual PR tracker files in:
+`/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/`
 
-This is the **primary source of truth** for which PRs have been processed.
-It is a JSON array of objects, one per merged PR in the milestone.
-Sort entries by `mergedAt` **descending** (newest first). Schema:
+This directory is the **primary source of truth** for which PRs have been processed.
+Each merged PR in the milestone gets its own JSON file. Create the `prs/` directory
+(via `mkdir -p`) if it does not exist.
+
+Filename format: `{merge-date-time}-{number}.json`
+
+Where:
+- `{merge-date-time}` is the PR's merge date in `YYYYMMDDTHHmm` format
+  (e.g., `20260422T1830`)
+- `{number}` is the PR number (e.g., `1240`)
+
+Example: `20260422T1830-1240.json`
+
+Schema:
 
 ```json
-[
-  {
-    "comment": "New CLI command for scaffolding resources",
-    "mergedAt": "2026-04-22T18:30:00Z",
-    "number": 1240,
-    "runDate": "2026-04-27T03:49:58Z",
-    "status": "included"
-  },
-  {
-    "comment": "Internal refactoring with no user-facing changes",
-    "mergedAt": "2026-04-17T16:50:00Z",
-    "number": 1235,
-    "runDate": "2026-04-27T03:49:58Z",
-    "status": "excluded"
-  },
-  {
-    "comment": null,
-    "mergedAt": "2026-04-10T08:00:00Z",
-    "number": 1230,
-    "runDate": null,
-    "status": "unprocessed"
-  }
-]
+{
+  "author": "username",
+  "comment": "New CLI command for scaffolding resources",
+  "mergedAt": "2026-04-22T18:30:00Z",
+  "number": 1240,
+  "runDate": "2026-04-27T03:49:58Z",
+  "status": "included",
+  "title": "Add scaffolding command to CLI"
+}
 ```
 
 Field names use camelCase to match the `gh pr list --json` output format.
 
 Field definitions:
-- **number**: PR number
-- **mergedAt**: ISO 8601 UTC merge timestamp
-- **status**: One of `"included"`, `"excluded"`, or `"unprocessed"`
-- **runDate**: ISO 8601 UTC timestamp of the workflow run that processed this PR,
-  or `null` if unprocessed
+- **author**: GitHub username of the PR author
 - **comment**: Brief explanation of why the PR was included or excluded
   (e.g., "New resource type for Redis clustering", "Bot dependency bump",
-  "Test-only changes to playground apps"). `null` for unprocessed PRs.
+  "Test-only changes to playground apps")
+- **mergedAt**: ISO 8601 UTC merge timestamp
+- **number**: PR number
+- **runDate**: ISO 8601 UTC timestamp of the workflow run that processed this PR
+- **status**: One of `"included"` or `"excluded"`
+- **title**: Original PR title
 
-To build/update this:
-1. If `all-prs.json` already exists in repo-memory, read it as the base.
-   Otherwise start with an empty array.
-2. Merge in all PRs from `/tmp/gh-aw/pr-data/all-milestone-prs.json` — add any
-   PRs that are not yet in the tracker with `status: "unprocessed"`.
-3. For each PR in the current batch, update its entry: set `status` to `"included"`
-   or `"excluded"`, set `comment` to a brief explanation, and set `runDate` to the
-   current ISO 8601 UTC timestamp.
-4. Sort by `mergedAt` descending.
+To build/update:
+1. Read existing PR tracker files from
+   `/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/` (if any exist). To check
+   whether a tracker file already exists for a given PR, search for a file whose
+   name ends with `-{number}.json` (e.g., `*-1240.json`). The PR number suffix
+   is unique, so this is sufficient.
+2. For each PR in the current batch, create or update its tracker file: set
+   `status` to `"included"` or `"excluded"`, set `comment` to a brief
+   explanation, and set `runDate` to the current ISO 8601 UTC timestamp.
+   For bot-excluded PRs (which skip the `pull_request_read` call in Step 3),
+   populate `author` from `author.login` and `title` from the batch data
+   (`batch-prs.json`).
 
-After writing, normalize formatting:
+Do **not** create tracker files for unprocessed PRs. PRs without a tracker file
+are implicitly unprocessed — the frontmatter script already treats absent PRs as
+unprocessed when computing the batch.
+
+After writing each file, **normalize formatting** by running:
 ```bash
-jq --sort-keys '.' "/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json" > /tmp/prs-fmt.json \
-  && mv /tmp/prs-fmt.json "/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json"
+jq --sort-keys '.' "<filepath>" > /tmp/pr-fmt.json \
+  && mv /tmp/pr-fmt.json "<filepath>"
 ```
 
 ### 8c. Save feedback issue number
@@ -838,8 +859,7 @@ This avoids a GitHub search API call on subsequent runs.
 
 - **Never remove existing change files** unless editorial feedback explicitly
   requests it.
-- **Never change the status of a PR in `all-prs.json`** from `"included"` or
-  `"excluded"` back to `"unprocessed"` unless editorial feedback explicitly
+- **Never delete an existing PR tracker file** unless editorial feedback explicitly
   requests reprocessing.
 - If no new PRs were found since the last run, do not modify the existing entries.
 - Keep descriptions concise — this is a changelog, not release notes prose.
