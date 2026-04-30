@@ -112,4 +112,7 @@ public class RabbitMQServerResource : ContainerResource, IResourceWithConnection
         yield return new("Password", ReferenceExpression.Create($"{PasswordParameter}"));
         yield return new("Uri", UriExpression);
     }
+
+    internal List<RabbitMQVirtualHostResource> VirtualHosts { get; } = [];
+    internal bool HasPluginFileCallback { get; set; }
 }
