@@ -14,6 +14,8 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Polly;
+using Polly.Retry;
 
 namespace Aspire.Hosting.Kubernetes;
 
@@ -977,44 +979,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             context.Logger.LogInformation(
                 "Waiting for Gateway '{GatewayName}' to be assigned a hostname address...", gatewayName);
 
-            string? discoveredFqdn = null;
-            var maxAttempts = 60; // 5 minutes with 5s intervals
-            for (var attempt = 0; attempt < maxAttempts; attempt++)
-            {
-                var getArgs = $"get gateway {gatewayName} --namespace {@namespace} -o json";
-                if (environment.KubeConfigPath is not null)
-                {
-                    getArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
-                }
-
-                var stdout = new List<string>();
-                var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
-                {
-                    Arguments = getArgs,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true,
-                    OnOutputData = stdout.Add,
-                    OnErrorData = _ => { }
-                });
-
-                await using (getDisposable.ConfigureAwait(false))
-                {
-                    var result = await getResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (result.ExitCode == 0 && stdout.Count > 0)
-                    {
-                        discoveredFqdn = ExtractHostnameFromGatewayJson(string.Join("", stdout));
-                        if (discoveredFqdn is not null)
-                        {
-                            break;
-                        }
-                    }
-                }
-
-                if (attempt < maxAttempts - 1)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(5), context.CancellationToken).ConfigureAwait(false);
-                }
-            }
+            var discoveredFqdn = await DiscoverGatewayFqdnAsync(
+                gatewayName, @namespace, environment, context).ConfigureAwait(false);
 
             if (string.IsNullOrEmpty(discoveredFqdn))
             {
@@ -1181,6 +1147,64 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 try { tempDir.Delete(recursive: true); } catch { }
             }
         }
+    }
+
+    /// <summary>
+    /// Polls for the Gateway's assigned hostname address using a Polly retry pipeline.
+    /// Retries up to 60 times with 5-second delays (5 minutes total).
+    /// </summary>
+    private static async Task<string?> DiscoverGatewayFqdnAsync(
+        string gatewayName,
+        string @namespace,
+        KubernetesEnvironmentResource environment,
+        PipelineStepContext context)
+    {
+        var pipeline = new ResiliencePipelineBuilder<string?>()
+            .AddRetry(new RetryStrategyOptions<string?>
+            {
+                MaxRetryAttempts = 59,
+                Delay = TimeSpan.FromSeconds(5),
+                BackoffType = DelayBackoffType.Constant,
+                ShouldHandle = new PredicateBuilder<string?>().HandleResult(r => r is null),
+                OnRetry = args =>
+                {
+                    context.Logger.LogDebug(
+                        "Gateway '{GatewayName}' address not yet available (attempt {Attempt}).",
+                        gatewayName, args.AttemptNumber + 1);
+                    return default;
+                }
+            })
+            .Build();
+
+        return await pipeline.ExecuteAsync(async ct =>
+        {
+            var getArgs = $"get gateway {gatewayName} --namespace {@namespace} -o json";
+            if (environment.KubeConfigPath is not null)
+            {
+                getArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+            }
+
+            var stdout = new List<string>();
+            var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            {
+                Arguments = getArgs,
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true,
+                OnOutputData = stdout.Add,
+                OnErrorData = _ => { }
+            });
+
+            await using (getDisposable.ConfigureAwait(false))
+            {
+                var result = await getResult.WaitAsync(ct).ConfigureAwait(false);
+                if (result.ExitCode == 0 && stdout.Count > 0)
+                {
+                    return ExtractHostnameFromGatewayJson(string.Join("", stdout));
+                }
+            }
+
+            return null;
+        }, context.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
