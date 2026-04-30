@@ -22,7 +22,6 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" IsAspireProjectResource="false" />
-    <ProjectReference Include="..\..\src\Aspire.Hosting.Browsers\Aspire.Hosting.Browsers.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Python\Aspire.Hosting.Python.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.TypeSystem\Aspire.TypeSystem.csproj" IsAspireProjectResource="false" />

@@ -3,7 +3,7 @@
 
 using System.Text;
 
-namespace Aspire.Hosting.Tests;
+namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
 public class BrowserLogsCdpProtocolTests
