@@ -26,6 +26,12 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed partial class TelemetryRepository : IDisposable
 {
+    internal const int MaxResourceViewCount = 10_000;
+    internal const int MaxInstrumentCount = 10_000;
+    internal const int MaxDimensionCount = 10_000;
+    internal const int MaxKnownAttributeValueCount = 10_000;
+    internal const int MaxKnownAttributeValuesPerKey = 10_000;
+
     private readonly PauseManager _pauseManager;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
     private readonly ILogger _logger;
@@ -46,15 +52,20 @@ public sealed partial class TelemetryRepository : IDisposable
     private readonly ConcurrentDictionary<ResourceKey, OtlpResource> _resources = new();
 
     private readonly ReaderWriterLockSlim _logsLock = new();
+    // Bounded by the number of unique instrumentation scope names across log producers. Cleared when all logs are cleared.
     private readonly Dictionary<string, OtlpScope> _logScopes = new();
     private readonly CircularBuffer<OtlpLogEntry> _logs;
+    // Bounded by _resources count * MaxAttributeCount. Cleared per-resource or when all logs are cleared.
     private readonly HashSet<(OtlpResource Resource, string PropertyKey)> _logPropertyKeys = new();
+    // Bounded by _resources count * MaxAttributeCount. Cleared per-resource or when all traces are cleared.
     private readonly HashSet<(OtlpResource Resource, string PropertyKey)> _tracePropertyKeys = new();
     private readonly Dictionary<ResourceKey, int> _resourceUnviewedErrorLogs = new();
 
     private readonly ReaderWriterLockSlim _tracesLock = new();
+    // Bounded by the number of unique instrumentation scope names across trace producers. Cleared when all traces are cleared.
     private readonly Dictionary<string, OtlpScope> _traceScopes = new();
     private readonly CircularBuffer<OtlpTrace> _traces;
+    // Bounded by total span link count across traces in _traces. Cleaned up on trace eviction and clear.
     private readonly List<OtlpSpanLink> _spanLinks = new();
     private readonly List<IDisposable> _peerResolverSubscriptions = new();
     internal readonly OtlpContext _otlpContext;
@@ -235,6 +246,12 @@ public sealed partial class TelemetryRepository : IDisposable
         {
             resource.SetUninstrumentedPeer(uninstrumentedPeer);
             return (Resource: resource, IsNew: false);
+        }
+
+        // Check resource limit before adding a new resource.
+        if (_resources.Count >= _otlpContext.Options.MaxResourceCount)
+        {
+            throw new InvalidOperationException($"Resource limit of {_otlpContext.Options.MaxResourceCount} reached. Resource '{key}' will not be added.");
         }
 
         // Slower get or add path.
@@ -792,22 +809,36 @@ public sealed partial class TelemetryRepository : IDisposable
             {
                 // Nothing selected, clear everything.
                 _traces.Clear();
+                _traceScopes.Clear();
+                _tracePropertyKeys.Clear();
+                _spanLinks.Clear();
             }
             else
             {
                 for (var i = _traces.Count - 1; i >= 0; i--)
                 {
+                    var trace = _traces[i];
                     // Remove trace if any span matches one of the resources. This matches filter behavior.
-                    if (MatchResources(_traces[i], resources))
+                    if (MatchResources(trace, resources))
                     {
+                        // Remove span links for the removed trace.
+                        foreach (var span in trace.Spans)
+                        {
+                            foreach (var link in span.Links)
+                            {
+                                _spanLinks.Remove(link);
+                            }
+                        }
+
                         _traces.RemoveAt(i);
                         continue;
                     }
                 }
 
-                // Update HasTraces flag for cleared resources
+                // Remove property keys for cleared resources.
                 foreach (var resource in resources)
                 {
+                    _tracePropertyKeys.RemoveWhere(k => k.Resource.ResourceKey == resource.ResourceKey);
                     SetResourceHasTraces(resource, false);
                 }
             }
@@ -836,6 +867,8 @@ public sealed partial class TelemetryRepository : IDisposable
             {
                 // Nothing selected, clear everything.
                 _logs.Clear();
+                _logScopes.Clear();
+                _logPropertyKeys.Clear();
             }
             else
             {
@@ -848,9 +881,10 @@ public sealed partial class TelemetryRepository : IDisposable
                     }
                 }
 
-                // Update HasLogs flag for cleared resources
+                // Update HasLogs flag and remove property keys for cleared resources.
                 foreach (var resource in resources)
                 {
+                    _logPropertyKeys.RemoveWhere(k => k.Resource.ResourceKey == resource.ResourceKey);
                     SetResourceHasLogs(resource, false);
                     _resourceUnviewedErrorLogs.Remove(resource.ResourceKey);
                 }

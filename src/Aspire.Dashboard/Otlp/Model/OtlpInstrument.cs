@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
+using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
 
@@ -63,6 +64,11 @@ public class OtlpInstrument
         // Need to add dimensions using durable attributes instance after scope is created.
         if (!Dimensions.TryGetValue(comparableAttributes, out var dimension))
         {
+            if (Dimensions.Count >= TelemetryRepository.MaxDimensionCount)
+            {
+                throw new InvalidOperationException($"Dimension limit of {TelemetryRepository.MaxDimensionCount} reached for instrument '{Summary.Name}'.");
+            }
+
             dimension = CreateDimensionScope(comparableAttributes);
             Dimensions.Add(dimension.Attributes, dimension);
         }
@@ -78,28 +84,35 @@ public class OtlpInstrument
         var keys = KnownAttributeValues.Keys.Union(durableAttributes.Select(a => a.Key)).Distinct();
         foreach (var key in keys)
         {
-            ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(KnownAttributeValues, key, out _);
+            ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(KnownAttributeValues, key, out var existed);
             // Adds to dictionary if not present.
             if (values == null)
             {
+                if (!existed && KnownAttributeValues.Count > TelemetryRepository.MaxKnownAttributeValueCount)
+                {
+                    // Over limit. Remove the default entry that GetValueRefOrAddDefault added.
+                    KnownAttributeValues.Remove(key);
+                    continue;
+                }
+
                 values = new List<string?>();
 
                 // If the key is new and there are already dimensions, add an empty value because there are dimensions without this key.
                 if (!isFirst)
                 {
-                    TryAddValue(values, null);
+                    TryAddValue(values, null, TelemetryRepository.MaxKnownAttributeValuesPerKey);
                 }
             }
 
             var currentDimensionValue = OtlpHelpers.GetValue(durableAttributes, key);
-            TryAddValue(values, currentDimensionValue);
+            TryAddValue(values, currentDimensionValue, TelemetryRepository.MaxKnownAttributeValuesPerKey);
         }
 
         return dimension;
 
-        static void TryAddValue(List<string?> values, string? value)
+        static void TryAddValue(List<string?> values, string? value, int maxValues)
         {
-            if (!values.Contains(value))
+            if (values.Count < maxValues && !values.Contains(value))
             {
                 values.Add(value);
             }

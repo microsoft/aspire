@@ -45,6 +45,8 @@ public class OtlpResource : IOtlpResource
     public ResourceKey ResourceKey => new ResourceKey(ResourceName, InstanceId);
 
     private readonly ReaderWriterLockSlim _metricsLock = new();
+    // Bounded by the number of unique instrumentation scope names. Constrained by TelemetryRepository.MaxInstrumentCount
+    // because each instrument requires a meter/scope.
     private readonly Dictionary<string, OtlpScope> _meters = new();
     private readonly Dictionary<OtlpInstrumentKey, OtlpInstrument> _instruments = new();
     private readonly ConcurrentDictionary<KeyValuePair<string, string>[], OtlpResourceView> _resourceViews = new(ResourceViewKeyComparer.Instance);
@@ -86,25 +88,34 @@ public class OtlpResource : IOtlpResource
                         }
 
                         var instrumentKey = new OtlpInstrumentKey(scope.Name, metric.Name);
-                        ref var instrumentRef = ref CollectionsMarshal.GetValueRefOrAddDefault(_instruments, instrumentKey, out _);
+                        ref var instrumentRef = ref CollectionsMarshal.GetValueRefOrAddDefault(_instruments, instrumentKey, out var instrumentExists);
                         if (instrumentRef == null)
                         {
-                            // Adds to dictionary if not present.
-                            instrumentRef = new OtlpInstrument
+                            if (instrumentExists || _instruments.Count <= TelemetryRepository.MaxInstrumentCount)
                             {
-                                Summary = new OtlpInstrumentSummary
+                                // Adds to dictionary if not present.
+                                instrumentRef = new OtlpInstrument
                                 {
-                                    Name = metric.Name,
-                                    Description = metric.Description,
-                                    Unit = metric.Unit,
-                                    Type = MapMetricType(metric.DataCase),
-                                    AggregationTemporality = MapAggregationTemporality(metric),
-                                    Parent = scope
-                                },
-                                Context = Context
-                            };
+                                    Summary = new OtlpInstrumentSummary
+                                    {
+                                        Name = metric.Name,
+                                        Description = metric.Description,
+                                        Unit = metric.Unit,
+                                        Type = MapMetricType(metric.DataCase),
+                                        AggregationTemporality = MapAggregationTemporality(metric),
+                                        Parent = scope
+                                    },
+                                    Context = Context
+                                };
 
-                            Context.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrumentRef.Summary.Name, scope.Name);
+                                Context.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrumentRef.Summary.Name, scope.Name);
+                            }
+                            else
+                            {
+                                // Over limit. Remove the default entry that GetValueRefOrAddDefault added.
+                                _instruments.Remove(instrumentKey);
+                                throw new InvalidOperationException($"Instrument limit of {TelemetryRepository.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
+                            }
                         }
 
                         instrument = instrumentRef;
@@ -207,6 +218,7 @@ public class OtlpResource : IOtlpResource
         try
         {
             _instruments.Clear();
+            _meters.Clear();
         }
         finally
         {
@@ -294,6 +306,11 @@ public class OtlpResource : IOtlpResource
         if (_resourceViews.TryGetValue(view.Properties, out var resourceView))
         {
             return resourceView;
+        }
+
+        if (_resourceViews.Count >= TelemetryRepository.MaxResourceViewCount)
+        {
+            throw new InvalidOperationException($"Resource view limit of {TelemetryRepository.MaxResourceViewCount} reached.");
         }
 
         return _resourceViews.GetOrAdd(view.Properties, view);
