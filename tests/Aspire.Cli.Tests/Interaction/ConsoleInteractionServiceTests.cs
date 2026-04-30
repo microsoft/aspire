@@ -20,8 +20,8 @@ public class ConsoleInteractionServiceTests
     private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
     private static readonly DirectoryInfo s_logsDirectory = s_tempRoot.CreateSubdirectory("logs");
 
-    private static CliExecutionContext CreateExecutionContext(bool debugMode = false) =>
-        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, "test.log", debugMode: debugMode);
+    private static CliExecutionContext CreateExecutionContext(bool debugMode = false, string? logFilePath = null) =>
+        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", debugMode: debugMode);
 
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
     {
@@ -474,6 +474,66 @@ public class ConsoleInteractionServiceTests
         Assert.Null(exception);
         var outputString = output.ToString();
         Assert.Contains("C:\\Users\\test [Dev]\\logs\\aspire.log", outputString);
+    }
+
+    [Fact]
+    public void DisplayMessage_WithCurrentLogFilePath_RendersClickableFileLink()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = int.MaxValue;
+
+        var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
+
+        interactionService.DisplayMessage(KnownEmojis.PageFacingUp, $"See logs at {logFilePath}");
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
+            .Replace("[", "%5B", StringComparison.Ordinal)
+            .Replace("]", "%5D", StringComparison.Ordinal);
+        Assert.Contains($";{fileUri}\u001b\\", outputString);
+        Assert.Contains(logFilePath, outputString);
+        Assert.Contains("\u001b]8;;\u001b\\", outputString);
+    }
+
+    [Fact]
+    public void DisplayError_WithCurrentLogFilePath_RendersClickableFileLink()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = int.MaxValue;
+
+        var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
+
+        interactionService.DisplayError($"The project could not be built. See logs at {logFilePath}");
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
+            .Replace("[", "%5B", StringComparison.Ordinal)
+            .Replace("]", "%5D", StringComparison.Ordinal);
+        var lines = outputString.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("The project could not be built.", lines[0]);
+        Assert.DoesNotContain(logFilePath, lines[0]);
+        Assert.Contains("See logs at", lines[1]);
+        Assert.Contains($";{fileUri}\u001b\\", outputString);
+        Assert.Contains(logFilePath, outputString);
+        Assert.Contains("\u001b]8;;\u001b\\", outputString);
     }
 
     [Fact]
