@@ -20,8 +20,8 @@ jobs:
         with:
           script: |
             const branchToMilestone = {
-              'main': '13.3',
-              'release/13.2': '13.2.x',
+              'main': '13.4',
+              'release/13.3': '13.3.x',
             };
 
             const baseBranch = context.payload.pull_request.base.ref;

@@ -124,7 +124,7 @@
     <value>Select a publisher:</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
   </data>
   <data name="OutputPathArgumentDescription" xml:space="preserve">
     <value>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</value>

@@ -31,7 +31,7 @@ import {
     AppHostDisplayInfo,
     ResourceJson,
     ViewMode,
-    shortenPath,
+    shortenPaths,
 } from './AppHostDataRepository';
 
 type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem;
@@ -55,9 +55,8 @@ function stripResourceSuffix(url: string): string {
 }
 
 class AppHostItem extends vscode.TreeItem {
-    constructor(public readonly appHost: AppHostDisplayInfo) {
-        const name = shortenPath(appHost.appHostPath);
-        super(name, vscode.TreeItemCollapsibleState.Expanded);
+    constructor(public readonly appHost: AppHostDisplayInfo, label: string) {
+        super(label, vscode.TreeItemCollapsibleState.Expanded);
         this.id = `apphost:${appHost.appHostPid}`;
         this.description = pidDescription(appHost.appHostPid);
         this.iconPath = appHostIcon(appHost.appHostPath);
@@ -453,7 +452,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _getGlobalChildren(element?: TreeElement): TreeElement[] {
         if (!element) {
-            return this._repository.appHosts.map(appHost => new AppHostItem(appHost));
+            const appHosts = this._repository.appHosts;
+            const labels = shortenPaths(appHosts.map(appHost => appHost.appHostPath));
+            return appHosts.map((appHost, index) => new AppHostItem(appHost, labels[index]));
         }
 
         if (element instanceof AppHostItem) {
@@ -571,8 +572,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 if (appHosts.length === 1) {
                     url = appHosts[0].dashboardUrl;
                 } else if (appHosts.length > 1) {
-                    const items = appHosts.map(a => ({
-                        label: shortenPath(a.appHostPath),
+                    const labels = shortenPaths(appHosts.map(a => a.appHostPath));
+                    const items = appHosts.map((a, index) => ({
+                        label: labels[index],
                         description: pidDescription(a.appHostPid),
                         dashboardUrl: a.dashboardUrl!,
                     }));

@@ -139,7 +139,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.NpmProvenanceCheckerFactory);
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();
-        services.AddSingleton<IScaffoldingService, ScaffoldingService>();
+        services.AddSingleton(options.ScaffoldingServiceFactory);
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         services.AddSingleton(options.AppHostServerSessionFactory);
         services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
@@ -437,6 +437,15 @@ internal sealed class CliServiceCollectionTestOptions
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment);
+    };
+
+    public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    {
+        var appHostServerProjectFactory = serviceProvider.GetRequiredService<IAppHostServerProjectFactory>();
+        var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
+        var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
+        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger);
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>

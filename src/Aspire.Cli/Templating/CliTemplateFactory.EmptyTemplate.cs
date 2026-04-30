@@ -108,16 +108,12 @@ internal sealed partial class CliTemplateFactory
 
     private async Task<bool> ResolveUseLocalhostTldAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var binding = PromptBinding.CreateBoolAsSelection(parseResult, _localhostTldOption);
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, _localhostTldOption, defaultValue: false);
 
-        var selected = await _interactionService.PromptForSelectionAsync(
+        var useLocalhostTld = await _interactionService.PromptConfirmAsync(
             TemplatingStrings.UseLocalhostTld_Prompt,
-            [TemplatingStrings.No, TemplatingStrings.Yes],
-            choice => choice,
             binding: binding,
             cancellationToken: cancellationToken);
-
-        var useLocalhostTld = string.Equals(selected, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput);
 
         if (useLocalhostTld)
         {

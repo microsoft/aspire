@@ -1020,6 +1020,11 @@ pub mod well_known_pipeline_steps {
         serde_json::from_value::<String>(serde_json::json!("push-prereq"))
             .expect("generated exported value should deserialize")
     }
+    /// The step that validates compute resources are assigned to unambiguous compute environments.
+    pub fn validate_compute_environments() -> String {
+        serde_json::from_value::<String>(serde_json::json!("validate-compute-environments"))
+            .expect("generated exported value should deserialize")
+    }
 }
 
 pub mod well_known_pipeline_tags {
@@ -9216,6 +9221,15 @@ impl IDistributedApplicationPipeline {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Disables publish and deploy validation for unconsumed build-only containers.
+    pub fn disable_build_only_container_validation(&self) -> Result<IDistributedApplicationPipeline, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("pipeline".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/disableBuildOnlyContainerValidation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IDistributedApplicationPipeline::new(handle, self.client.clone()))
     }
 
     /// Adds a pipeline step to the application

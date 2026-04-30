@@ -35,7 +35,7 @@ Ejemplos:
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
+        <source>The path to the Aspire AppHost project file or a directory to search. If not specified, searches for a project file in the current directory.</source>
         <target state="needs-review-translation">La ruta de acceso al archivo del proyecto host de la aplicación Aspire. Si no se especifica, se busca un archivo de proyecto en el directorio actual.</target>
         <note />
       </trans-unit>

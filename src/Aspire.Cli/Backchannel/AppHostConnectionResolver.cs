@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,11 @@ internal sealed class AppHostConnectionResult
     public bool Success => Connection is not null;
 
     public string? ErrorMessage { get; init; }
+
+    public int? ExitCode { get; init; }
+
+    [MemberNotNullWhen(true, nameof(ExitCode))]
+    public bool IsProjectResolutionError => ExitCode is ExitCodeConstants.FailedToFindProject or ExitCodeConstants.SdkNotInstalled;
 }
 
 /// <summary>
@@ -34,6 +40,7 @@ internal sealed class AppHostConnectionResult
 internal sealed class AppHostConnectionResolver(
     IAuxiliaryBackchannelMonitor backchannelMonitor,
     IInteractionService interactionService,
+    IProjectLocator projectLocator,
     CliExecutionContext executionContext,
     ILogger logger)
 {
@@ -83,6 +90,48 @@ internal sealed class AppHostConnectionResolver(
         // Fast path: If --apphost was specified, check directly for its socket
         if (projectFile is not null)
         {
+            var explicitDirectory = Directory.Exists(projectFile.FullName);
+
+            if (explicitDirectory)
+            {
+                try
+                {
+                    var searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
+                        projectFile,
+                        MultipleAppHostProjectsFoundBehavior.Throw,
+                        createSettingsFile: false,
+                        cancellationToken).ConfigureAwait(false);
+
+                    projectFile = searchResult.SelectedProjectFile;
+                }
+                catch (ProjectLocatorException ex)
+                {
+                    var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex, projectOptionSpecifiedAsDirectory: true);
+                    return new AppHostConnectionResult
+                    {
+                        ErrorMessage = errorMessage,
+                        ExitCode = exitCode,
+                    };
+                }
+
+                if (projectFile is null)
+                {
+                    return new AppHostConnectionResult
+                    {
+                        ErrorMessage = InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts,
+                        ExitCode = ExitCodeConstants.FailedToFindProject,
+                    };
+                }
+            }
+            else if (!projectFile.Exists)
+            {
+                return new AppHostConnectionResult
+                {
+                    ErrorMessage = InteractionServiceStrings.ProjectOptionDoesntExist,
+                    ExitCode = ExitCodeConstants.FailedToFindProject,
+                };
+            }
+
             var targetPath = projectFile.FullName;
             var matchingSockets = AppHostHelper.FindMatchingSockets(
                 targetPath,
@@ -106,7 +155,12 @@ internal sealed class AppHostConnectionResolver(
                 }
             }
 
-            return new AppHostConnectionResult { ErrorMessage = notFoundMessage };
+            var displayPath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, targetPath);
+
+            return new AppHostConnectionResult
+            {
+                ErrorMessage = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath)
+            };
         }
 
         // Socket-first approach: Scan for running AppHosts via their sockets

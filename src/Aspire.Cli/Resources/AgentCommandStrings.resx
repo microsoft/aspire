@@ -126,6 +126,9 @@
   <data name="SkillDescription_DotnetInspect" xml:space="preserve">
     <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
   </data>
+  <data name="SkillDescription_Aspireify" xml:space="preserve">
+    <value>One-time setup: wire up AppHost with discovered projects</value>
+  </data>
   <data name="SkillLocation_StandardName" xml:space="preserve">
     <value>Standard (.agents/skills/)</value>
   </data>

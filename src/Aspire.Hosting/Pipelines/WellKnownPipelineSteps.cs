@@ -75,6 +75,12 @@ public static class WellKnownPipelineSteps
     public const string Diagnostics = "diagnostics";
 
     /// <summary>
+    /// The step that validates compute resources are assigned to unambiguous compute environments.
+    /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
+    public const string ValidateComputeEnvironments = "validate-compute-environments";
+
+    /// <summary>
     /// The step that runs before the application starts.
     /// </summary>
     public const string BeforeStart = "before-start";

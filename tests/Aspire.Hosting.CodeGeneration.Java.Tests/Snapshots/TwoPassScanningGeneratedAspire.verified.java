@@ -12001,6 +12001,13 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Disables publish and deploy validation for unconsumed build-only containers. */
+    public IDistributedApplicationPipeline disableBuildOnlyContainerValidation() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
+        return (IDistributedApplicationPipeline) getClient().invokeCapability("Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs);
+    }
+
     /** Adds a pipeline step to the application */
     public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -22437,6 +22444,9 @@ public final class WellKnownPipelineSteps {
 
     /** The prerequisite step that runs before any push operations. */
     public static final String PushPrereq = "push-prereq";
+
+    /** The step that validates compute resources are assigned to unambiguous compute environments. */
+    public static final String ValidateComputeEnvironments = "validate-compute-environments";
 
 }
 

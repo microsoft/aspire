@@ -179,6 +179,15 @@
   <data name="ProjectOptionDoesntExist" xml:space="preserve">
     <value>The --apphost option specified a project that does not exist.</value>
   </data>
+  <data name="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts" xml:space="preserve">
+    <value>The --apphost option specified a directory that contains multiple AppHost project files.</value>
+  </data>
+  <data name="ProjectOptionSpecifiedDirectoryContainsNoAppHosts" xml:space="preserve">
+    <value>The --apphost option specified a directory that does not contain any AppHost project files.</value>
+  </data>
+  <data name="NoSupportedAppHostsFound" xml:space="preserve">
+    <value>No supported app hosts were found.</value>
+  </data>
   <data name="ProjectOptionNotSpecifiedMultipleAppHostsFound" xml:space="preserve">
     <value>The --apphost option was not specified and multiple AppHost project files were detected.</value>
   </data>

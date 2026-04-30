@@ -1864,6 +1864,8 @@ WellKnownPipelineSteps.PublishPrereq = "publish-prereq"
 WellKnownPipelineSteps.Push = "push"
 # The prerequisite step that runs before any push operations.
 WellKnownPipelineSteps.PushPrereq = "push-prereq"
+# The step that validates compute resources are assigned to unambiguous compute environments.
+WellKnownPipelineSteps.ValidateComputeEnvironments = "validate-compute-environments"
 
 WellKnownPipelineTags = types.SimpleNamespace()
 # Tag for steps that build compute resources.
@@ -2367,6 +2369,15 @@ class AbstractDistributedApplicationPipeline:
     def handle(self) -> Handle:
         """The underlying object reference handle."""
         return self._handle
+
+    def disable_build_only_container_validation(self) -> AbstractDistributedApplicationPipeline:
+        """Disables publish and deploy validation for unconsumed build-only containers."""
+        rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/disableBuildOnlyContainerValidation',
+            rpc_args,
+        )
+        return typing.cast(AbstractDistributedApplicationPipeline, result)
 
     def add_step(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None) -> None:
         """Adds a pipeline step to the application"""

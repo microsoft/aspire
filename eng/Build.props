@@ -52,9 +52,13 @@
     <ProjectToBuild Include="$(RepoRoot)eng\dashboardpack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
 
     <!-- Exclude only the MAUI client project as it requires the .NET MAUI workload.
-         Other projects in the AspireWithMaui playground can still be built. -->
+         Other projects in the AspireWithMaui playground can still be built.
+         The aspireify-eval projects are intentionally un-aspirified sample apps used
+         as eval inputs for the aspireify skill — they do not import the repo's
+         Directory.Build.props/targets and are not meant to be built by CI. -->
     <ProjectToBuild Include="$(RepoRoot)playground\**\*.csproj"
-                    Exclude="$(RepoRoot)playground\AspireWithMaui\AspireWithMaui.MauiClient\*.csproj"
+                    Exclude="$(RepoRoot)playground\AspireWithMaui\AspireWithMaui.MauiClient\*.csproj;
+                             $(RepoRoot)playground\aspireify-eval\**\*.csproj"
                     Condition="'$(SkipPlaygroundProjects)' != 'true'"/>
   </ItemGroup>
 

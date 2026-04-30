@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.AppContainers" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Search" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Foundry" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />

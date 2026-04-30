@@ -847,6 +847,26 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task AddAppServiceWithApplicationInsightsNormalizesBicepIdentifiers()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureAppServiceEnvironment("env-1").WithAzureApplicationInsights();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var environment = Assert.Single(model.Resources.OfType<AzureAppServiceEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(environment);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
     public async Task AddAppServiceWithApplicationInsightsLocationParam()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

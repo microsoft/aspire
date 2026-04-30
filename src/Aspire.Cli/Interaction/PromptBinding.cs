@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Interaction;
 
@@ -23,12 +22,24 @@ internal sealed class PromptBinding<T>
         Func<ParseResult, (bool WasProvided, T? Value)> resolver,
         T? defaultValue,
         bool hasExplicitDefault)
+        : this(parseResult, symbolDisplayName, resolver, defaultValue, hasExplicitDefault, hasExplicitDefault ? defaultValue : default)
+    {
+    }
+
+    internal PromptBinding(
+        ParseResult? parseResult,
+        string symbolDisplayName,
+        Func<ParseResult, (bool WasProvided, T? Value)> resolver,
+        T? defaultValue,
+        bool hasExplicitDefault,
+        T? nonInteractiveDefaultValue)
     {
         _parseResult = parseResult;
         SymbolDisplayName = symbolDisplayName;
         _resolver = resolver;
         DefaultValue = defaultValue;
         HasExplicitDefault = hasExplicitDefault;
+        NonInteractiveDefaultValue = nonInteractiveDefaultValue;
     }
 
     /// <summary>
@@ -38,9 +49,14 @@ internal sealed class PromptBinding<T>
     public string SymbolDisplayName { get; }
 
     /// <summary>
-    /// Gets the default value to use when non-interactive and the symbol was not provided.
+    /// Gets the default value to use for interactive prompts when the symbol was not provided.
     /// </summary>
     public T? DefaultValue { get; }
+
+    /// <summary>
+    /// Gets the default value to use when non-interactive and the symbol was not provided.
+    /// </summary>
+    public T? NonInteractiveDefaultValue { get; }
 
     /// <summary>
     /// Gets whether a default value was explicitly specified when this binding was created.
@@ -67,7 +83,7 @@ internal sealed class PromptBinding<T>
     /// Creates a new <see cref="PromptBinding{T}"/> with the same resolver but a different default value.
     /// </summary>
     public PromptBinding<T> WithDefault(T? newDefault) =>
-        new(_parseResult, SymbolDisplayName, _resolver, newDefault, hasExplicitDefault: true);
+        new(_parseResult, SymbolDisplayName, _resolver, newDefault, hasExplicitDefault: true, nonInteractiveDefaultValue: newDefault);
 }
 
 /// <summary>
@@ -115,16 +131,39 @@ internal static class PromptBinding
         new(parseResult, FormatOptionName(option), BuildResolver<bool?, bool>(option, value => value != true), defaultValue, hasExplicitDefault: true);
 
     /// <summary>
-    /// Creates a <see cref="PromptBinding{T}"/> for a <c>bool?</c> option that maps to Yes/No selection choices.
-    /// When the option is explicitly provided, resolves to <paramref name="trueValue"/> or <paramref name="falseValue"/>.
-    /// When not provided in non-interactive mode, defaults to <paramref name="falseValue"/>.
+    /// Creates a <see cref="PromptBinding{T}"/> for a <c>bool?</c> option that maps to a confirmation prompt.
+    /// When the option is explicitly provided, the binding resolves to <c>true</c> only when the option value is <c>true</c>.
+    /// When the option is not explicitly provided, <paramref name="defaultValue"/> is used as the confirmation default,
+    /// including as the interactive prompt default when the user accepts the prompt by pressing Enter.
     /// </summary>
-    public static PromptBinding<string?> CreateBoolAsSelection(ParseResult parseResult, Option<bool?> option, string? trueValue = null, string? falseValue = null)
-    {
-        trueValue ??= TemplatingStrings.Yes;
-        falseValue ??= TemplatingStrings.No;
-        return new(parseResult, FormatOptionName(option), BuildResolver<bool?, string?>(option, value => value == true ? trueValue : falseValue), falseValue, hasExplicitDefault: true);
-    }
+    /// <param name="parseResult">The parse result used to determine whether <paramref name="option"/> was explicitly provided.</param>
+    /// <param name="option">The nullable Boolean option to bind to the confirmation prompt.</param>
+    /// <param name="defaultValue">The default confirmation value to use when <paramref name="option"/> was not explicitly provided.</param>
+    /// <returns>
+    /// A <see cref="PromptBinding{T}"/> that resolves the explicitly provided <c>bool?</c> option to a <see cref="bool"/>,
+    /// where <c>true</c> maps to <c>true</c> and any other value maps to <c>false</c>, and otherwise exposes
+    /// <paramref name="defaultValue"/> as the prompt default.
+    /// </returns>
+    public static PromptBinding<bool> CreateBoolConfirm(ParseResult parseResult, Option<bool?> option, bool defaultValue) =>
+        CreateBoolConfirm(parseResult, option, interactiveDefault: defaultValue, nonInteractiveDefault: defaultValue);
+
+    /// <summary>
+    /// Creates a <see cref="PromptBinding{T}"/> for a <c>bool?</c> option that maps to a confirmation prompt.
+    /// When the option is explicitly provided, the binding resolves to <c>true</c> only when the option value is <c>true</c>.
+    /// When the option is not explicitly provided, <paramref name="interactiveDefault"/> is used as the confirmation prompt default,
+    /// and <paramref name="nonInteractiveDefault"/> is used when interactive input is not available.
+    /// </summary>
+    /// <param name="parseResult">The parse result used to determine whether <paramref name="option"/> was explicitly provided.</param>
+    /// <param name="option">The nullable Boolean option to bind to the confirmation prompt.</param>
+    /// <param name="interactiveDefault">The default confirmation value to use for the interactive prompt.</param>
+    /// <param name="nonInteractiveDefault">The default confirmation value to use when interactive input is not available.</param>
+    /// <returns>
+    /// A <see cref="PromptBinding{T}"/> that resolves the explicitly provided <c>bool?</c> option to a <see cref="bool"/>,
+    /// where <c>true</c> maps to <c>true</c> and any other value maps to <c>false</c>, and otherwise exposes
+    /// <paramref name="interactiveDefault"/> as the prompt default.
+    /// </returns>
+    public static PromptBinding<bool> CreateBoolConfirm(ParseResult parseResult, Option<bool?> option, bool interactiveDefault, bool nonInteractiveDefault) =>
+        new(parseResult, FormatOptionName(option), BuildResolver<bool?, bool>(option, value => value == true), interactiveDefault, hasExplicitDefault: true, nonInteractiveDefaultValue: nonInteractiveDefault);
 
     private static string FormatOptionName<T>(Option<T> option) => $"'{option.Name}'";
 

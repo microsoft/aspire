@@ -33,15 +33,15 @@ jobs:
       - name: Check for changes to backmerge
         id: check
         run: |
-          git fetch origin main release/13.2
-          BEHIND_COUNT=$(git rev-list --count origin/main..origin/release/13.2)
+          git fetch origin main release/13.3
+          BEHIND_COUNT=$(git rev-list --count origin/main..origin/release/13.3)
           echo "behind_count=$BEHIND_COUNT" >> $GITHUB_OUTPUT
           if [ "$BEHIND_COUNT" -gt 0 ]; then
             echo "changes=true" >> $GITHUB_OUTPUT
-            echo "Found $BEHIND_COUNT commits in release/13.2 not in main"
+            echo "Found $BEHIND_COUNT commits in release/13.3 not in main"
           else
             echo "changes=false" >> $GITHUB_OUTPUT
-            echo "No changes to backmerge - release/13.2 is up-to-date with main"
+            echo "No changes to backmerge - release/13.3 is up-to-date with main"
           fi
 
       - name: Attempt merge and create branch
@@ -52,12 +52,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git checkout origin/main
-          git checkout -b backmerge/release-13.2-to-main
+          git checkout -b backmerge/release-13.3-to-main
 
           # Attempt the merge
-          if git merge origin/release/13.2 --no-edit; then
+          if git merge origin/release/13.3 --no-edit; then
             echo "merge_success=true" >> $GITHUB_OUTPUT
-            git push origin backmerge/release-13.2-to-main --force
+            git push origin backmerge/release-13.3-to-main --force
             echo "Merge successful, branch pushed"
           else
             echo "merge_success=false" >> $GITHUB_OUTPUT
@@ -72,7 +72,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           # Check if a PR already exists for this branch
-          EXISTING_PR=$(gh pr list --head backmerge/release-13.2-to-main --base main --json number --jq '.[0].number // empty')
+          EXISTING_PR=$(gh pr list --head backmerge/release-13.3-to-main --base main --json number --jq '.[0].number // empty')
 
           if [ -n "$EXISTING_PR" ]; then
             echo "PR #$EXISTING_PR already exists, updating it"
@@ -80,7 +80,7 @@ jobs:
           else
             PR_BODY="## Automated Backmerge
           
-          This PR merges changes from \`release/13.2\` back into \`main\`.
+          This PR merges changes from \`release/13.3\` back into \`main\`.
           
           **Commits to merge:** ${{ steps.check.outputs.behind_count }}
           
@@ -94,9 +94,9 @@ jobs:
             PR_BODY=$(echo "$PR_BODY" | sed 's/^          //')
 
             PR_URL=$(gh pr create \
-              --head backmerge/release-13.2-to-main \
+              --head backmerge/release-13.3-to-main \
               --base main \
-              --title "[Automated] Backmerge release/13.2 to main" \
+              --title "[Automated] Backmerge release/13.3 to main" \
               --body "$PR_BODY" \
               --assignee joperezr,radical \
               --label area-engineering-systems)
@@ -142,7 +142,7 @@ jobs:
             const issueBody = [
               '## Backmerge Conflict',
               '',
-              'The automated backmerge from `release/13.2` to `main` failed due to merge conflicts.',
+              'The automated backmerge from `release/13.3` to `main` failed due to merge conflicts.',
               '',
               '### What to do',
               '',
@@ -150,7 +150,7 @@ jobs:
               '   ```bash',
               '   git checkout main',
               '   git pull origin main',
-              '   git merge origin/release/13.2',
+              '   git merge origin/release/13.3',
               '   ```',
               '2. Resolve the conflicts',
               '3. Push the merge commit or create a PR manually',
@@ -167,7 +167,7 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '[Backmerge] Merge conflicts between release/13.2 and main',
+              title: '[Backmerge] Merge conflicts between release/13.3 and main',
               body: issueBody,
               assignees: ['joperezr', 'radical'],
               labels: ['area-engineering-systems', 'backmerge-conflict']

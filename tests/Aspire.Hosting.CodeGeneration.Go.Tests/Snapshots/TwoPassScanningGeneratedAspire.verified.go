@@ -574,6 +574,7 @@ var WellKnownPipelineSteps = struct {
 	PublishPrereq string
 	Push string
 	PushPrereq string
+	ValidateComputeEnvironments string
 }{
 	Build: "build",
 	BuildPrereq: "build-prereq",
@@ -587,6 +588,7 @@ var WellKnownPipelineSteps = struct {
 	PublishPrereq: "publish-prereq",
 	Push: "push",
 	PushPrereq: "push-prereq",
+	ValidateComputeEnvironments: "validate-compute-environments",
 }
 
 var WellKnownPipelineTags = struct {
@@ -10147,6 +10149,18 @@ func NewIDistributedApplicationPipeline(handle *Handle, client *AspireClient) *I
 	return &IDistributedApplicationPipeline{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// DisableBuildOnlyContainerValidation disables publish and deploy validation for unconsumed build-only containers.
+func (s *IDistributedApplicationPipeline) DisableBuildOnlyContainerValidation() (*IDistributedApplicationPipeline, error) {
+	reqArgs := map[string]any{
+		"pipeline": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IDistributedApplicationPipeline), nil
 }
 
 // AddStep adds a pipeline step to the application

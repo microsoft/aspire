@@ -913,7 +913,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandWithEmptyTemplateAndCSharpPromptsForLocalhostTldAndUsesSelection()
+    public async Task NewCommandWithEmptyTemplateAndCSharpPromptsForLocalhostTldAndUsesConfirmation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var localhostPrompted = false;
@@ -924,17 +924,16 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService
             {
-                ConfirmCallback = (_, _) => false,
-                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                ConfirmCallback = (promptText, defaultValue) =>
                 {
                     if (string.Equals(promptText, TemplatingStrings.UseLocalhostTld_Prompt, StringComparison.Ordinal))
                     {
                         localhostPrompted = true;
-                        return choices.Cast<object>().Single(choice =>
-                            string.Equals(choiceFormatter(choice), TemplatingStrings.Yes, StringComparisons.CliInputOrOutput));
+                        Assert.False(defaultValue);
+                        return true;
                     }
 
-                    return choices.Cast<object>().First();
+                    return false;
                 }
             };
             options.NewCommandPrompterFactory = (sp) =>
@@ -1037,7 +1036,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandWithEmptyTemplateAndTypeScriptPromptsForLocalhostTldAndUsesSelection()
+    public async Task NewCommandWithEmptyTemplateAndTypeScriptPromptsForLocalhostTldAndUsesConfirmation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scaffoldingInvoked = false;
@@ -1049,17 +1048,16 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService
             {
-                ConfirmCallback = (_, _) => false,
-                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                ConfirmCallback = (promptText, defaultValue) =>
                 {
                     if (string.Equals(promptText, TemplatingStrings.UseLocalhostTld_Prompt, StringComparison.Ordinal))
                     {
                         localhostPrompted = true;
-                        return choices.Cast<object>().Single(choice =>
-                            string.Equals(choiceFormatter(choice), TemplatingStrings.Yes, StringComparisons.CliInputOrOutput));
+                        Assert.False(defaultValue);
+                        return true;
                     }
 
-                    return choices.Cast<object>().First();
+                    return false;
                 }
             };
             options.NewCommandPrompterFactory = (sp) =>
