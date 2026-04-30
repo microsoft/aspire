@@ -179,7 +179,10 @@ steps:
       PRS_LISTING=$(gh api "repos/$REPO/contents/${MILESTONE}/prs?ref=$MEMORY_REF" \
         --jq '[.[] | select(.name | endswith(".json")) | .name | rtrimstr(".json") | tonumber]' \
         2>/dev/null || true)
-      if [ -n "$PRS_LISTING" ] && [ "$PRS_LISTING" != "null" ]; then
+      # Validate: gh api --jq outputs the raw error body on non-2xx responses,
+      # so PRS_LISTING could be a JSON object like {"message":"...","status":"404"}.
+      # Only use it if it's actually a JSON array.
+      if echo "$PRS_LISTING" | jq -e 'type == "array"' >/dev/null 2>&1; then
         PROCESSED_NUMBERS="$PRS_LISTING"
       fi
 
