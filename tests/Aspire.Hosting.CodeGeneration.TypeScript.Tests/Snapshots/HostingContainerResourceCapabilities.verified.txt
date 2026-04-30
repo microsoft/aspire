@@ -266,20 +266,6 @@
     ]
   },
   {
-    CapabilityId: Aspire.Hosting/withBrowserLogs,
-    MethodName: withBrowserLogs,
-    TargetType: {
-      TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints,
-      IsInterface: true
-    },
-    ExpandedTargetTypes: [
-      {
-        TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource,
-        IsInterface: false
-      }
-    ]
-  },
-  {
     CapabilityId: Aspire.Hosting/withBuildArg,
     MethodName: withBuildArg,
     TargetType: {
