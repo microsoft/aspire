@@ -43,9 +43,7 @@ public sealed class PythonReactTemplateTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Verify the generated TypeScript AppHost builds successfully.
-        await auto.TypeAsync("npm run build");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Start and stop the project
         await auto.AspireStartAsync(counter);
