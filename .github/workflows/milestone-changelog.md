@@ -1,7 +1,7 @@
 ---
 description: |
   Generates and maintains a changelog for a configured Aspire milestone by
-  analyzing merged pull requests. Runs every hour and can be triggered manually.
+  analyzing merged pull requests. Runs every 30 minutes and can be triggered manually.
   Creates or updates a wiki page named "<milestone>-Change-log" with a list
   of new features, improvements, and notable bug fixes. A companion GitHub issue collects
   editorial feedback (e.g., exclude a change, rename an entry, merge entries).
@@ -599,7 +599,7 @@ Use this exact format:
 (e.g., "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678").*
 
 **PRs processed:** ✅ 6 included · ❌ 1 excluded · ⏳ 93 unprocessed · 100 total merged in milestone
-([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/memory/milestone-changelog/all-prs.json))
+([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/${MILESTONE}/all-prs.json))
 ```
 
 At the bottom of the page (after the footer), include a **PRs processed** summary
@@ -607,7 +607,7 @@ line and a link to the full PR tracker JSON file in repo-memory:
 
 ```
 **PRs processed:** ✅ <N> included · ❌ <N> excluded · ⏳ <N> unprocessed · <N> total merged in milestone
-([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/memory/milestone-changelog/all-prs.json))
+([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/${MILESTONE}/all-prs.json))
 ```
 
 Compute the counts from the per-PR summary files and the all-milestone-prs list:
