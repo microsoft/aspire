@@ -31,11 +31,12 @@
 .trace-tag {
     display: flex;
     align-items: center;
-    border: 1px solid rgb(217, 217, 217);
+    border: 1px solid var(--aspire-border-muted);
     padding: 2px 7px;
     font-size: 12px;
     background-color: var(--neutral-fill-rest);
     color: var(--neutral-foreground-rest);
+    border-radius: 3px;
 }
 
 .trace-service-tag {

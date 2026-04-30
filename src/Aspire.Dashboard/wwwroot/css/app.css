@@ -1,3 +1,90 @@
+/* ============================================================
+   Aspire Brand Fonts
+   ============================================================ */
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-400.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-500.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-600.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('../fonts/poppins/poppins-latin-700.woff2') format('woff2');
+}
+
+/* ============================================================
+   Aspire Brand Token System
+   ============================================================ */
+:root {
+    /* Brand core palette */
+    --aspire-color-primary: #7455DD;
+    --aspire-color-purple: #512BD4;
+    --aspire-color-secondary: #B9AAEE;
+    --aspire-color-muted: #DCD5F6;
+    --aspire-color-grey: #DCE0E8;
+    --aspire-color-black: #1F1E33;
+    --aspire-color-white: #FFFFFF;
+
+    /* Brand accent colors */
+    --aspire-accent-magenta: #B30F87;
+    --aspire-accent-flamingo: #F65163;
+    --aspire-accent-blue: #0078D7;
+    --aspire-accent-cyan: #0B7E84;
+    --aspire-accent-yellow: #9B8308;
+
+    /* Brand gradients */
+    --aspire-gradient-purple-magenta: linear-gradient(90deg, #7455DD 0%, #B30F87 100%);
+    --aspire-gradient-blue-purple: linear-gradient(90deg, #0078D7 0%, #7455DD 100%);
+    --aspire-gradient-flamingo-purple: linear-gradient(90deg, #F65163 0%, #7455DD 100%);
+    --aspire-gradient-purple-cyan: linear-gradient(90deg, #7455DD 0%, #0B7E84 100%);
+
+    /* Typography - override Fluent body-font */
+    --body-font: 'Poppins', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+    /* Brand-themed surfaces (light defaults, overridden in dark) */
+    --aspire-surface-nav: #F7F5FC;
+    --aspire-surface-header: var(--aspire-color-white);
+    --aspire-surface-page: var(--aspire-color-white);
+    --aspire-surface-card: var(--aspire-color-white);
+    --aspire-border-subtle: #EDEAF7;
+    --aspire-border-muted: var(--aspire-color-grey);
+    --aspire-accent-gradient: var(--aspire-gradient-purple-magenta);
+    --aspire-nav-active-border: var(--aspire-gradient-purple-magenta);
+    --aspire-hover-fill: rgba(116, 85, 221, 0.06);
+    --aspire-focus-ring-color: var(--aspire-color-primary);
+}
+
+[data-theme="dark"] {
+    --aspire-surface-nav: #1A1930;
+    --aspire-surface-header: #1A1930;
+    --aspire-surface-page: #1F1E33;
+    --aspire-surface-card: #272640;
+    --aspire-border-subtle: #332F55;
+    --aspire-border-muted: #3D3960;
+    --aspire-hover-fill: rgba(185, 170, 238, 0.08);
+}
+
 * {
     scrollbar-color: var(--scrollbar-color) transparent;
 }
@@ -7,6 +94,8 @@
     grid-template-columns: auto 1fr auto;
     grid-template-areas: "dialog-icon dialog-title dialog-format";
     grid-column-gap: 10px;
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
 }
 
 fluent-toolbar fluent-divider {
@@ -50,7 +139,7 @@ fluent-toolbar::part(end) {
 }
 
 :root {
-    --scrollbar-color: #8B8B8B;
+    --scrollbar-color: var(--aspire-color-secondary);
     --log-critical: #F8ECEB;
     --log-error: #F8ECEB;
     --log-warning: #FBF3DD;
@@ -64,12 +153,12 @@ fluent-toolbar::part(end) {
     --foreground-subtext-hover: #6C6C6C;
     --foreground-settings-text: var(--foreground-subtext-rest);
     --error-ui-foreground-color: #131313;
-    --error-ui-accent-foreground-color: #1d00d0;
+    --error-ui-accent-foreground-color: var(--aspire-color-purple);
     --reconnection-ui-bg: rgb(255, 255, 255);
     --error-counter-badge-foreground-color: var(--neutral-fill-rest);
     --kbd-background-color: var(--neutral-layer-4);
     --dialog-background-color: #ffffff;
-    --dialog-border-color: #e5e5e5;
+    --dialog-border-color: var(--aspire-border-subtle);
     --messagebar-success-background-color: #f1faf1;
     --messagebar-success-border-color: #9fd89f;
     --messagebar-error-background-color: #FDF3F4;
@@ -79,9 +168,9 @@ fluent-toolbar::part(end) {
     --messagebar-info-background-color: #f5f5f5;
     --messagebar-info-border-color: #d1d1d1;
     --chat-background-color: var(--neutral-layer-floating);
-    --chat-user-background-color: #f7f7f7;
+    --chat-user-background-color: #F7F5FC;
     --chat-codeblock-background-color: var(--neutral-fill-hover);
-    --table-header-border-color: var(--neutral-stroke-rest);
+    --table-header-border-color: var(--aspire-border-subtle);
     --table-body-border-color: #f2f2f2;
     --layout-toolbar-padding: calc(var(--design-unit) * 1.5px);
     --layout-left-padding: calc(var(--design-unit) * 4.5px);
@@ -92,7 +181,7 @@ fluent-toolbar::part(end) {
         we can default the datagrid hover color to that and just override it as
         necessary elsewhere (e.g. in the details view)
     */
-    --datagrid-hover-color: var(--neutral-layer-2-hover);
+    --datagrid-hover-color: var(--aspire-hover-fill);
     --property-grid-background-color: #fbfbfb;
     --property-grid-genai-dialog-background-color: #fbfbfb;
     /* highlight JS theme variables */
@@ -141,38 +230,38 @@ fluent-toolbar::part(end) {
 }
 
 [data-theme="dark"] {
-    --scrollbar-color: #9F9F9F;
+    --scrollbar-color: var(--aspire-color-secondary);
     --log-critical: #493634;
     --log-error: #493634;
     --log-warning: #3F3A2B;
-    --foreground-subtext-rest: #8D8D8D;
-    --foreground-subtext-hover: #A1A1A1;
-    --foreground-settings-text: #A8A8A8;
+    --foreground-subtext-rest: #A8A3C0;
+    --foreground-subtext-hover: #C4BFDB;
+    --foreground-settings-text: #B8B3D0;
     --error-ui-foreground-color: #000000;
-    --error-ui-accent-foreground-color: #512bd4;
+    --error-ui-accent-foreground-color: var(--aspire-color-secondary);
     --reconnection-ui-bg: #D6D6D6;
     --error-counter-badge-foreground-color: #ffffff;
     --kbd-background-color: var(--fill-color);
-    --dialog-background-color: #272727;
-    --dialog-border-color: #3d3d3d;
+    --dialog-background-color: var(--aspire-surface-card);
+    --dialog-border-color: var(--aspire-border-muted);
     --messagebar-success-background-color: #052505;
     --messagebar-success-border-color: #107C10;
     --messagebar-error-background-color: #3F1011;
     --messagebar-error-border-color: #D13438;
     --messagebar-warning-background-color: #411200;
     --messagebar-warning-border-color: #DA3B01;
-    --messagebar-info-background-color: #141414;
-    --messagebar-info-border-color: #666;
-    --chat-background-color: #212121;
-    --chat-user-background-color: #333;
-    --chat-codeblock-background-color: var(--neutral-layer-4);
-    --table-header-border-color: var(--neutral-stroke-rest);
-    --table-body-border-color: #474747;
+    --messagebar-info-background-color: #1A1930;
+    --messagebar-info-border-color: #4A4570;
+    --chat-background-color: #1A1930;
+    --chat-user-background-color: #272640;
+    --chat-codeblock-background-color: var(--aspire-color-black);
+    --table-header-border-color: var(--aspire-border-muted);
+    --table-body-border-color: #332F55;
     /* overrides of default fluentui-blazor styling */
     --error: #E10B11 !important;
     color-scheme: dark;
-    --property-grid-background-color: #333333;
-    --property-grid-genai-dialog-background-color: #383838;
+    --property-grid-background-color: #272640;
+    --property-grid-genai-dialog-background-color: #2D2B48;
     /* highlight JS theme variables */
     --hljs-default: #f8f8f2;
     --hljs-comment: #d4d0ab;
@@ -181,10 +270,10 @@ fluent-toolbar::part(end) {
     --hljs-attribute: gold;
     --hljs-string: #abe338;
     --hljs-section: #00e0e0;
-    --hljs-keyword: #dcc6e0;
+    --hljs-keyword: var(--aspire-color-muted);
     /* geni visualizer */
-    --main-container-background-color: #333333;
-    --main-sidebar-background-color: #272727;
+    --main-container-background-color: var(--aspire-surface-card);
+    --main-sidebar-background-color: var(--aspire-surface-nav);
     --events-background-color: var(--neutral-fill-layer-rest);
     --llm-background-color: #00666d;
     --llm-color: #a6e9ed;
@@ -231,6 +320,84 @@ fluent-toolbar::part(end) {
     color-scheme: light;
 }
 
+/* ============================================================
+   Aspire Brand - Navigation Active States
+   ============================================================ */
+.fluent-appbar-item[appearance="active"],
+.fluent-appbar-item.active {
+    border-left: 3px solid var(--aspire-color-primary);
+}
+
+.fluent-appbar-item:hover {
+    background-color: var(--aspire-hover-fill);
+}
+
+/* ============================================================
+   Aspire Brand - Focus & Interactive States
+   ============================================================ */
+fluent-button:focus-visible::part(control),
+fluent-anchor:focus-visible::part(control),
+fluent-text-field:focus-within,
+fluent-search:focus-within,
+fluent-select:focus-within {
+    outline: 2px solid var(--aspire-color-primary);
+    outline-offset: 1px;
+}
+
+/* DataGrid header styling */
+.fluent-data-grid-row[row-type='header'] td,
+.fluent-data-grid-row[row-type='sticky-header'] td {
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--foreground-subtext-rest);
+    border-bottom: 1px solid var(--aspire-border-subtle) !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+}
+
+[data-theme="light"] .fluent-data-grid-row[row-type='header'] td,
+[data-theme="light"] .fluent-data-grid-row[row-type='sticky-header'] td {
+    background-color: transparent;
+}
+
+[data-theme="dark"] .fluent-data-grid-row[row-type='header'] td,
+[data-theme="dark"] .fluent-data-grid-row[row-type='sticky-header'] td {
+    background-color: transparent;
+}
+
+/* Data rows - more spacious and modern */
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) {
+    border-bottom: 1px solid var(--aspire-border-subtle) !important;
+    transition: background-color 0.15s ease;
+}
+
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+}
+
+/* Hover effect - subtle purple glow */
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
+    background-color: var(--aspire-hover-fill) !important;
+}
+
+[data-theme="dark"] .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
+    background-color: rgba(116, 85, 221, 0.08) !important;
+}
+
+/* Selected row accent */
+.selected-row {
+    border-left: 3px solid var(--aspire-color-primary) !important;
+    background-color: var(--aspire-hover-fill);
+}
+
+[data-theme="dark"] .selected-row {
+    background-color: rgba(116, 85, 221, 0.1);
+}
+
 fluent-select.resource-list {
     /* overrides of default fluentui-blazor styling */
     --disabled-opacity: 0.7;
@@ -242,10 +409,13 @@ fluent-select.resource-list {
 }
 
 h1 {
+    font-family: 'Poppins', var(--body-font);
     font-size: var(--type-ramp-plus-4-font-size);
     line-height: var(--type-ramp-plus-4-line-height);
+    font-weight: 600;
     margin-top: 0.25rem;
     margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
 }
 
 #components-reconnect-modal {
@@ -797,6 +967,12 @@ fluent-switch.table-switch::part(label) {
 
 .fluent-data-grid {
     height: auto !important; /* override height in table style attribute */
+    border-spacing: 0;
+}
+
+/* Remove default Fluent row borders to use our own */
+.fluent-data-grid-row {
+    border: none !important;
 }
 
 .main-grid-expand-container {
@@ -962,4 +1138,98 @@ fluent-tooltip[anchor="dialog_close"] > div {
 
 fluent-dialog#chat-modal-dialog fluent-button[appearance=stealth]:not(:hover)::part(control) {
     background: var(--chat-background-color);
+}
+
+/* ============================================================
+   Aspire Brand - Modern Grid & UI Refinements
+   ============================================================ */
+
+/* Tab bar modernization */
+fluent-tabs::part(tablist) {
+    border-bottom: 1px solid var(--aspire-border-subtle);
+    gap: 4px;
+}
+
+fluent-tab {
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 500;
+    font-size: 13px;
+    border-radius: 6px 6px 0 0;
+    padding: 8px 16px;
+}
+
+fluent-tab[aria-selected="true"]::part(content) {
+    font-weight: 600;
+}
+
+fluent-tab::part(content) {
+    padding: 4px 8px;
+}
+
+/* Toolbar section refinements */
+fluent-toolbar[orientation=horizontal] {
+    border-bottom: 1px solid var(--aspire-border-subtle);
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+/* Search box modernization */
+fluent-search::part(root) {
+    border-radius: 8px;
+    border-color: var(--aspire-border-muted);
+}
+
+fluent-search:hover::part(root) {
+    border-color: var(--aspire-color-secondary);
+}
+
+fluent-search:focus-within::part(root) {
+    border-color: var(--aspire-color-primary);
+}
+
+/* Resource name links - make them more brand-prominent */
+fluent-anchor[appearance=lightweight]::part(control),
+fluent-button[appearance=lightweight]::part(control) {
+    color: var(--aspire-color-primary);
+}
+
+[data-theme="dark"] fluent-anchor[appearance=lightweight]::part(control),
+[data-theme="dark"] fluent-button[appearance=lightweight]::part(control) {
+    color: var(--aspire-color-secondary);
+}
+
+fluent-anchor[appearance=lightweight]:hover::part(control),
+fluent-button[appearance=lightweight]:hover::part(control) {
+    color: var(--aspire-color-purple);
+}
+
+[data-theme="dark"] fluent-anchor[appearance=lightweight]:hover::part(control),
+[data-theme="dark"] fluent-button[appearance=lightweight]:hover::part(control) {
+    color: var(--aspire-color-muted);
+}
+
+/* Badge/pill modernization */
+fluent-badge::part(control) {
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+}
+
+/* Accordion in property grid - softer corners */
+.property-grid-container fluent-accordion-item {
+    border-radius: 8px !important;
+    overflow: hidden;
+}
+
+/* Modern scrollbar - thinner, brand-colored */
+* {
+    scrollbar-width: thin;
+}
+
+/* Footer items count - subtle style */
+.items-footer .result-count {
+    font-size: 12px;
+    color: var(--foreground-subtext-rest);
+    font-weight: 500;
 }
