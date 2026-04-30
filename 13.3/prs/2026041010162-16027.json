@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Test-only addition",
+  "mergedAt": "2026-04-10T10:16:27Z",
+  "number": 16027,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "excluded",
+  "title": "Add NSP + Storage + KeyVault deployment E2E test"
+}

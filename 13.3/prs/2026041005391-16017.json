@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Trivial internal tooling change (1-line issue template update)",
+  "mergedAt": "2026-04-10T05:39:17Z",
+  "number": 16017,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "excluded",
+  "title": "Make feature issue template use Feature issue type, rather than use a tag"
+}

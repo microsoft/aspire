@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improvement: WithEndpoint now idempotent, updates instead of throwing",
+  "mergedAt": "2026-04-10T23:52:00Z",
+  "number": 16039,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Make WithEndpoint update existing endpoints instead of throwing"
+}

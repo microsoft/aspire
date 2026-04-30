@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal API compat suppression, no user impact",
+  "mergedAt": "2026-04-10T02:19:53Z",
+  "number": 16022,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "excluded",
+  "title": "Add compatibility suppressions for NameOutput rename in Azure.Network"
+}

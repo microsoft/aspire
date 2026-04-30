@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Bug fix: aspire stop not cleaning up containers on all platforms",
+  "mergedAt": "2026-04-11T06:43:12Z",
+  "number": 16006,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Fix issue 15806 (aspire stop is not cleaning up application containers)"
+}

@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "HTTP endpoints in Azure App Service deployments are now automatically upgraded to HTTPS:443, matching the platform's actual behavior and aligning with the existing Azure Container Apps implementation. Use WithHttpsUpgrade(false) to opt out.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-12T05:03:38Z",
+  "lastMergedAt": "2026-04-12T05:03:38Z",
+  "name": "Automatic HTTPS upgrade for Azure App Service endpoints",
+  "prs": [
+    16060
+  ]
+}

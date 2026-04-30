@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "AzureOpenAIResource and FoundryResource now support private endpoints via IAzurePrivateEndpointTarget, enabling secure private network connectivity and automatically disabling public network access when a private endpoint is added.",
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-04-10T20:04:49Z",
+  "lastMergedAt": "2026-04-10T20:04:49Z",
+  "name": "Private endpoint support for Azure OpenAI and Foundry resources",
+  "prs": [
+    15945
+  ]
+}

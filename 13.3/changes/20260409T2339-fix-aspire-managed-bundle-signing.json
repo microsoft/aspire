@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the CLI bundle signing pipeline so the aspire-managed binary is signed before being packed into the bundle archive, ensuring the shipped binary carries a valid code signature.",
+  "docsRequired": false,
+  "emoji": "✍️",
+  "firstMergedAt": "2026-04-09T23:39:40Z",
+  "lastMergedAt": "2026-04-09T23:39:40Z",
+  "name": "Fix aspire-managed bundle payload signing",
+  "prs": [
+    16016
+  ]
+}

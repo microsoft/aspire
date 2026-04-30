@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "New private endpoint support for Azure OpenAI and Foundry resources",
+  "mergedAt": "2026-04-10T20:04:49Z",
+  "number": 15945,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Add IAzurePrivateEndpointTarget support to AzureOpenAIResource and FoundryResource"
+}

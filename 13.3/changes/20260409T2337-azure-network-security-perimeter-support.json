@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Azure Network Security Perimeters (NSP) can now be added to secure PaaS services (Storage, Key Vault, Cosmos DB, SQL) within a logical network boundary using AddNetworkSecurityPerimeter(), WithAccessRule(), and AssociateWith() APIs.",
+  "docsRequired": true,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-09T23:37:16Z",
+  "lastMergedAt": "2026-04-09T23:37:16Z",
+  "name": "Azure Network Security Perimeter support",
+  "prs": [
+    15711
+  ]
+}

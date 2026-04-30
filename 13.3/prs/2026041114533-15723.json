@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New feature: Kubernetes deployment support with Helm",
+  "mergedAt": "2026-04-11T14:53:33Z",
+  "number": 15723,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Add Kubernetes deploy pipeline with Helm engine"
+}

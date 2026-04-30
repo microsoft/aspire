@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the aspire-managed binary on macOS crashing at launch due to missing JIT entitlements under the hardened runtime, and restored execute permissions that were lost during MicroBuild signing.",
+  "docsRequired": false,
+  "emoji": "🍎",
+  "firstMergedAt": "2026-04-11T05:11:21Z",
+  "lastMergedAt": "2026-04-11T05:11:21Z",
+  "name": "Fix aspire-managed macOS crash due to JIT entitlements and permissions",
+  "prs": [
+    16053
+  ]
+}

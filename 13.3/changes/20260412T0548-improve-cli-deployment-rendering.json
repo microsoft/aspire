@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI deployment output symbols (✓, ✗, △) now render consistently as text rather than emoji across all platforms, and log level parsing was unified to a shared helper for cleaner code.",
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-04-12T05:48:35Z",
+  "lastMergedAt": "2026-04-12T05:48:35Z",
+  "name": "Consistent symbol rendering in CLI deployment output",
+  "prs": [
+    16080
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "WithEndpoint, WithHttpEndpoint, and WithHttpsEndpoint now update an existing endpoint when one with the same name already exists instead of throwing an exception, making it easy to customize ports on resources that auto-create endpoints (e.g., Vite apps, Keycloak).",
+  "docsRequired": true,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-04-10T23:52:00Z",
+  "lastMergedAt": "2026-04-10T23:52:00Z",
+  "name": "WithEndpoint now updates existing endpoints instead of throwing",
+  "prs": [
+    16039
+  ]
+}

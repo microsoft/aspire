@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Engineering fix for CLI bundle signing pipeline",
+  "mergedAt": "2026-04-09T23:39:40Z",
+  "number": 16016,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Fix signing for aspire-managed bundle payload"
+}

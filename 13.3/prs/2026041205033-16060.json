@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improvement: HTTP endpoints auto-upgraded to HTTPS in Azure App Service",
+  "mergedAt": "2026-04-12T05:03:38Z",
+  "number": 16060,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Upgrade HTTP endpoints to HTTPS in Azure App Service"
+}

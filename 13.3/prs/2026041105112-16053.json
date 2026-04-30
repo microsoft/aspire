@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Bug fix: macOS binary was crashing due to missing JIT entitlements",
+  "mergedAt": "2026-04-11T05:11:21Z",
+  "number": 16053,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Fix aspire-managed macOS signing, permissions, and add CI verification"
+}

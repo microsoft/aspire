@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix for un-awaited TypeScript AppHost fluent chains dropping RPCs",
+  "mergedAt": "2026-04-10T07:50:30Z",
+  "number": 15901,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Auto-resolve promises in TypeScript codegen to prevent silent RPC drops"
+}

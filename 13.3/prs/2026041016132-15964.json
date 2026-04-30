@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal CI maintenance",
+  "mergedAt": "2026-04-10T16:13:26Z",
+  "number": 15964,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "excluded",
+  "title": "Replace dotnet/actions-create-pull-request with local composite action"
+}

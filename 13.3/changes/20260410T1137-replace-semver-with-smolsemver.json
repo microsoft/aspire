@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Semver NuGet package (which had an expired transitive dependency certificate causing NuGet signature verification failures) was replaced with an internal SmolSemVer implementation, unblocking CI deployment tests.",
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-04-10T11:37:47Z",
+  "lastMergedAt": "2026-04-10T11:37:47Z",
+  "name": "Replace Semver package with internal SmolSemVer implementation",
+  "prs": [
+    16033
+  ]
+}

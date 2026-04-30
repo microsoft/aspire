@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: consistent symbol rendering in CLI deployment output",
+  "mergedAt": "2026-04-12T05:48:35Z",
+  "number": 16080,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Improve CLI deployment rendering: symbol fixes, log level helper, render scenarios"
+}

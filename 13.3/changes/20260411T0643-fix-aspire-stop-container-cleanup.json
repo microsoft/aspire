@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed aspire stop not cleaning up application containers by implementing graceful shutdown (SIGTERM on Unix, Ctrl+Break on Windows) instead of killing the entire process tree, which was preventing DCP from performing proper cleanup.",
+  "docsRequired": false,
+  "emoji": "🛑",
+  "firstMergedAt": "2026-04-11T06:43:12Z",
+  "lastMergedAt": "2026-04-11T06:43:12Z",
+  "name": "Fix aspire stop not cleaning up application containers",
+  "prs": [
+    16006
+  ]
+}

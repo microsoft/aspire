@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI export command and MCP tools now retrieve all available telemetry data instead of silently truncating results at default limits (100 traces, 200 logs), making exports complete and accurate.",
+  "docsRequired": false,
+  "emoji": "📤",
+  "firstMergedAt": "2026-04-10T01:30:30Z",
+  "lastMergedAt": "2026-04-10T01:30:30Z",
+  "name": "Remove silent telemetry data limits in CLI export",
+  "prs": [
+    16020
+  ]
+}

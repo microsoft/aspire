@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: removes silent truncation in CLI export telemetry",
+  "mergedAt": "2026-04-10T01:30:30Z",
+  "number": 16020,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Remove telemetry API data limits and refactor URL builders"
+}

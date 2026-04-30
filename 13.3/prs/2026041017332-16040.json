@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Test-only enhancement",
+  "mergedAt": "2026-04-10T17:33:26Z",
+  "number": 16040,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "excluded",
+  "title": "Enhance NSP deployment test with resource connectivity verification"
+}

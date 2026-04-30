@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "AppHost HTTP commands can now return response bodies that are surfaced in the CLI, dashboard, and generated polyglot SDKs via the new HttpCommandResultMode and HttpCommandOptions.ResultMode APIs.",
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-04-10T23:55:44Z",
+  "lastMergedAt": "2026-04-10T23:55:44Z",
+  "name": "HTTP command result support for AppHost commands",
+  "prs": [
+    15664
+  ]
+}

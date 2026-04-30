@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Engineering fix for expired NuGet signing cert on transitive dependency",
+  "mergedAt": "2026-04-10T11:37:47Z",
+  "number": 16033,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Replace Semver NuGet package with internal SmolSemVer implementation"
+}

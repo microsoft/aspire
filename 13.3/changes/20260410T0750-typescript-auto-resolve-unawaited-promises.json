@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "TypeScript AppHost generated code now automatically resolves un-awaited fluent chains, preventing silent RPC drops when resources are configured without explicit await.",
+  "docsRequired": false,
+  "emoji": "⏳",
+  "firstMergedAt": "2026-04-10T07:50:30Z",
+  "lastMergedAt": "2026-04-10T07:50:30Z",
+  "name": "Fix silent RPC drops for un-awaited TypeScript AppHost chains",
+  "prs": [
+    15901
+  ]
+}

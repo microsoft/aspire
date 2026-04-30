@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "New Azure NSP resources for securing PaaS services",
+  "mergedAt": "2026-04-09T23:37:16Z",
+  "number": 15711,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Add Azure Network Security Perimeter (NSP) support"
+}

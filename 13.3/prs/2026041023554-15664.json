@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New feature: HTTP commands can return response bodies",
+  "mergedAt": "2026-04-10T23:55:44Z",
+  "number": 15664,
+  "runDate": "2026-04-30T12:27:38Z",
+  "status": "included",
+  "title": "Add HTTP command result support for AppHost HTTP commands"
+}
