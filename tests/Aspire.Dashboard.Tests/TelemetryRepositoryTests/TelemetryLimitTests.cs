@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
-using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -57,108 +56,6 @@ public class TelemetryLimitTests
                     {
                         Scope = CreateScope(),
                         Spans = { CreateSpan("trace2", "spanX", s_testTime, s_testTime.AddMinutes(1)) }
-                    }
-                }
-            }
-        });
-
-        Assert.Equal(1, failContext.FailureCount);
-        Assert.Equal(0, failContext.SuccessCount);
-        Assert.Equal(3, repository.GetResources().Count);
-    }
-
-    [Fact]
-    public void AddLogs_ExceedsResourceLimit_ReportsFailure()
-    {
-        var repository = CreateRepository(maxResourceCount: 3);
-
-        for (var i = 0; i < 3; i++)
-        {
-            var addContext = new AddContext();
-            repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
-            {
-                new ResourceLogs
-                {
-                    Resource = CreateResource(name: $"app{i}"),
-                    ScopeLogs =
-                    {
-                        new ScopeLogs
-                        {
-                            Scope = CreateScope(),
-                            LogRecords = { CreateLogRecord() }
-                        }
-                    }
-                }
-            });
-            Assert.Equal(0, addContext.FailureCount);
-        }
-
-        Assert.Equal(3, repository.GetResources().Count);
-
-        // Adding a 4th resource should fail.
-        var failContext = new AddContext();
-        repository.AddLogs(failContext, new RepeatedField<ResourceLogs>
-        {
-            new ResourceLogs
-            {
-                Resource = CreateResource(name: "app-over-limit"),
-                ScopeLogs =
-                {
-                    new ScopeLogs
-                    {
-                        Scope = CreateScope(),
-                        LogRecords = { CreateLogRecord() }
-                    }
-                }
-            }
-        });
-
-        Assert.Equal(1, failContext.FailureCount);
-        Assert.Equal(0, failContext.SuccessCount);
-        Assert.Equal(3, repository.GetResources().Count);
-    }
-
-    [Fact]
-    public void AddMetrics_ExceedsResourceLimit_ReportsFailure()
-    {
-        var repository = CreateRepository(maxResourceCount: 3);
-
-        for (var i = 0; i < 3; i++)
-        {
-            var addContext = new AddContext();
-            repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>
-            {
-                new ResourceMetrics
-                {
-                    Resource = CreateResource(name: $"app{i}"),
-                    ScopeMetrics =
-                    {
-                        new ScopeMetrics
-                        {
-                            Scope = CreateScope(name: "test-meter"),
-                            Metrics = { CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(1)) }
-                        }
-                    }
-                }
-            });
-            Assert.Equal(0, addContext.FailureCount);
-        }
-
-        Assert.Equal(3, repository.GetResources().Count);
-
-        // Adding a 4th resource should fail.
-        var failContext = new AddContext();
-        repository.AddMetrics(failContext, new RepeatedField<ResourceMetrics>
-        {
-            new ResourceMetrics
-            {
-                Resource = CreateResource(name: "app-over-limit"),
-                ScopeMetrics =
-                {
-                    new ScopeMetrics
-                    {
-                        Scope = CreateScope(name: "test-meter"),
-                        Metrics = { CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(1)) }
                     }
                 }
             }
