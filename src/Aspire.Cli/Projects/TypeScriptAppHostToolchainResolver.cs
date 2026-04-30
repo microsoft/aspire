@@ -24,6 +24,7 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string BunLockFileName = "bun.lock";
     private const string BunBinaryLockFileName = "bun.lockb";
     private const string YarnLockFileName = "yarn.lock";
+    private const string YarnClassicLockFileVersionLine = "# yarn lockfile v1";
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
@@ -70,8 +71,14 @@ internal static class TypeScriptAppHostToolchainResolver
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Pnpm, PnpmLockFileName, candidateDirectory);
             }
 
-            if (File.Exists(Path.Combine(candidateDirectory.FullName, YarnLockFileName)))
+            var yarnLockFilePath = Path.Combine(candidateDirectory.FullName, YarnLockFileName);
+            if (File.Exists(yarnLockFilePath))
             {
+                if (IsYarnClassicLockFile(yarnLockFilePath))
+                {
+                    throw CreateYarnClassicNotSupportedException($"the Yarn lockfile at {yarnLockFilePath}");
+                }
+
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Yarn, YarnLockFileName, candidateDirectory);
             }
 
@@ -265,6 +272,11 @@ internal static class TypeScriptAppHostToolchainResolver
             var packageManagerName = packageManager.Split('@', 2)[0];
             if (TryParseToolchain(packageManagerName, out toolchain))
             {
+                if (toolchain == TypeScriptAppHostToolchain.Yarn && IsYarnClassicPackageManager(packageManager))
+                {
+                    throw CreateYarnClassicNotSupportedException($"'{packageManager}' in {packageJsonPath}");
+                }
+
                 reason = $"packageManager '{packageManager}' found in {packageJsonPath}";
                 return true;
             }
@@ -292,6 +304,55 @@ internal static class TypeScriptAppHostToolchainResolver
 
         toolchain = result ?? default;
         return result.HasValue;
+    }
+
+    private static bool IsYarnClassicPackageManager(string packageManager)
+    {
+        const string yarnPackageManagerPrefix = "yarn@";
+
+        if (!packageManager.StartsWith(yarnPackageManagerPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var version = packageManager[yarnPackageManagerPrefix.Length..];
+        return version.Length > 0 &&
+            version[0] == '1' &&
+            (version.Length == 1 || !char.IsAsciiDigit(version[1]));
+    }
+
+    private static InvalidOperationException CreateYarnClassicNotSupportedException(string upgradeTarget)
+    {
+        return new InvalidOperationException(
+            $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
+    }
+
+    private static bool IsYarnClassicLockFile(string yarnLockFilePath)
+    {
+        try
+        {
+            var linesRead = 0;
+            foreach (var line in File.ReadLines(yarnLockFilePath))
+            {
+                if (line.Trim().Equals(YarnClassicLockFileVersionLine, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                linesRead++;
+                if (linesRead >= 5)
+                {
+                    return false;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or SecurityException or NotSupportedException)
+        {
+            return false;
+        }
+
+        return false;
     }
 
     private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory)
