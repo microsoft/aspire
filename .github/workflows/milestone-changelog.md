@@ -171,31 +171,21 @@ steps:
       DATA_DIR="/tmp/gh-aw/pr-data"
       mkdir -p "$DATA_DIR"
 
-      # 0. Clone repo-memory branch to read previously processed PRs.
+      # 0. Read previously processed PR numbers from repo-memory via API.
       #    The gh-aw framework clones repo-memory AFTER user steps run,
-      #    so we need our own early clone to compute the correct batch.
-      MEMORY_BRANCH="memory/milestone-changelog"
-      MEMORY_TMP=$(mktemp -d)
+      #    so we fetch the data we need via the GitHub Contents API instead.
+      MEMORY_REF="memory/milestone-changelog"
       PROCESSED_NUMBERS="[]"
-      if git clone --depth 1 --branch "$MEMORY_BRANCH" \
-           "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
-           "$MEMORY_TMP/repo-memory" 2>/dev/null; then
-        PRS_DIR="$MEMORY_TMP/repo-memory/${MILESTONE}/prs"
-        if [ -d "$PRS_DIR" ]; then
-          PROCESSED_NUMBERS=$(ls "$PRS_DIR"/*.json 2>/dev/null \
-            | xargs -I{} basename {} .json \
-            | jq -R 'tonumber' | jq -s '.' || echo "[]")
-        fi
-
-        # Also grab the feedback issue number while we have the clone
-        FEEDBACK_MEM_FILE="$MEMORY_TMP/repo-memory/${MILESTONE}/feedback-issue.txt"
-        if [ -f "$FEEDBACK_MEM_FILE" ]; then
-          FEEDBACK_FROM_MEMORY=$(tr -d '[:space:]' < "$FEEDBACK_MEM_FILE")
-        fi
-      else
-        echo "No repo-memory branch found (first run)"
+      PRS_LISTING=$(gh api "repos/$REPO/contents/${MILESTONE}/prs?ref=$MEMORY_REF" \
+        --jq '[.[] | select(.name | endswith(".json")) | .name | rtrimstr(".json") | tonumber]' \
+        2>/dev/null || true)
+      if [ -n "$PRS_LISTING" ] && [ "$PRS_LISTING" != "null" ]; then
+        PROCESSED_NUMBERS="$PRS_LISTING"
       fi
-      rm -rf "$MEMORY_TMP"
+
+      # Also grab the feedback issue number from repo-memory
+      FEEDBACK_FROM_MEMORY=$(gh api "repos/$REPO/contents/${MILESTONE}/feedback-issue.txt?ref=$MEMORY_REF" \
+        --jq '.content' 2>/dev/null | base64 --decode 2>/dev/null | tr -d '[:space:]' || true)
 
       # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
       gh pr list --repo "$REPO" --state merged --limit 5000 \
