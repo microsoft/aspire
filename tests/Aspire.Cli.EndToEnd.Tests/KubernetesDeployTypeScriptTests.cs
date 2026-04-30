@@ -20,34 +20,26 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
     [CaptureWorkspaceOnFailure]
     public async Task DeployTypeScriptAppToKubernetes()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
         var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
         var k8sNamespace = $"test-{clusterName[..16]}";
 
         output.WriteLine($"Cluster name: {clusterName}");
         output.WriteLine($"Namespace: {k8sNamespace}");
 
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // Prepare environment
-        await auto.PrepareEnvironmentAsync(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (isCI)
-        {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
-
-        await auto.AssertAspireVersionAsync(counter, output);
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         try
         {
@@ -71,8 +63,7 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
             // Add Kubernetes hosting package
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(2));
 
             // Regenerate TypeScript SDK with Kubernetes types
             await auto.TypeAsync("aspire restore");

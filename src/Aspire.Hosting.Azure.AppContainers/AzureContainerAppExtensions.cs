@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics;
@@ -8,7 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppContainers;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.ContainerRegistry;
@@ -38,16 +40,51 @@ public static class AzureContainerAppExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer lifecycle hook runs before AzureContainerAppsInfrastructure
         builder.AddAzureProvisioning();
 
-        // AzureContainerAppsInfrastructure will handle adding role assignments,
+        // The per-environment prepare-azure-container-apps-{name} steps handle role assignments,
         // so Azure resources don't need to add the default role assignments themselves
         builder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddEventingSubscriber<AzureContainerAppsInfrastructure>();
+        // Register the pipeline step idempotently. AddAzureContainerAppsInfrastructureCore can be
+        // called more than once (e.g. when AddAzureContainerAppEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating ContainerApp resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on AzureContainerAppEnvironmentResource.
+        // This global step only validates that no resource has a PublishAs* annotation when there are
+        // no AzureContainerAppEnvironmentResource instances in the model.
+        if (builder.Services.All(d => d.ServiceType != typeof(ContainerAppsPipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<ContainerAppsPipelineStepMarker>();
+
+            builder.Pipeline.AddStep(
+                name: ContainerAppsPipelineStepMarker.StepName,
+                action: ctx =>
+                {
+                    if (!ctx.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<AzureContainerAppCustomizationAnnotation>() ||
+                                r.HasAnnotationOfType<AzureContainerAppJobCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure Container App, but there are no '{nameof(AzureContainerAppEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddAzureContainerAppEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+        }
 
         return builder;
+    }
+
+    private sealed class ContainerAppsPipelineStepMarker
+    {
+        public const string StepName = "validate-azure-container-apps";
     }
 
     /// <summary>
@@ -503,28 +540,16 @@ public static class AzureContainerAppExtensions
     {
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, resourceName) =>
+            ContainerRegistryInfrastructure.ConfigureContainerRegistry(infrastructure,
+                configureNewRegistry: (newRegistry, infra) =>
                 {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = resourceName;
-                    return resource;
-                },
-                (infra) =>
-                {
-                    var newRegistry = new ContainerRegistryService(infra.AspireResource.GetBicepIdentifier())
-                    {
-                        Sku = new ContainerRegistrySku { Name = ContainerRegistrySkuName.Basic },
-                        Tags = { { "aspire-resource-name", infra.AspireResource.Name } }
-                    };
-
                     if (containerAppEnvironment.UseAzdNamingConvention)
                     {
                         var resourceToken = new ProvisioningVariable("resourceToken", typeof(string))
                         {
                             Value = BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)
                         };
-                        infrastructure.Add(resourceToken);
+                        infra.Add(resourceToken);
 
                         newRegistry.Name = new FunctionCallExpression(
                             new IdentifierExpression("replace"),
@@ -535,13 +560,7 @@ public static class AzureContainerAppExtensions
                             new StringLiteralExpression("-"),
                             new StringLiteralExpression(""));
                     }
-
-                    return newRegistry;
                 });
-
-            infrastructure.Add(registry);
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer });
         };
 
         var resource = new AzureContainerRegistryResource(name, configureInfrastructure);

@@ -8,6 +8,7 @@ using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Agents.Playwright;
 
@@ -144,7 +145,8 @@ internal sealed class PlaywrightCliInstaller(
         var installedVersion = await playwrightCliRunner.GetVersionAsync(cancellationToken);
         if (installedVersion is not null)
         {
-            if (installedVersion.IsAtLeast(packageInfo.Version))
+            var comparison = SemVersion.ComparePrecedence(installedVersion, packageInfo.Version);
+            if (comparison >= 0)
             {
                 logger.LogDebug(
                     "playwright-cli {InstalledVersion} is already installed (target: {TargetVersion}), skipping installation.",

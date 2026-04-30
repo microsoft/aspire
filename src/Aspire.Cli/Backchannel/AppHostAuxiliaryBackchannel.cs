@@ -256,7 +256,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
-    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
 
@@ -269,10 +269,13 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
                 [],
                 cancellationToken).ConfigureAwait(false) ?? [];
 
-            // Sort resources by name for consistent ordering.
-            snapshots.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            if (!includeHidden)
+            {
+                snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
+            }
 
-            return snapshots;
+            // Sort resources by name for consistent ordering.
+            return snapshots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
         catch (RemoteMethodNotFoundException ex)
         {
@@ -282,7 +285,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
 
@@ -309,6 +312,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
+            if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+            {
+                continue;
+            }
+
             yield return snapshot;
         }
     }
@@ -463,7 +471,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         if (!SupportsV2)
         {
             // Fall back to v1
-            var snapshots = await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+            var snapshots = await GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
 
             // Apply filter if specified
             if (!string.IsNullOrEmpty(request?.Filter))
@@ -503,7 +511,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             // Fall back to v1
             var filter = request?.Filter;
-            await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var snapshot in WatchResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false))
             {
                 if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 {

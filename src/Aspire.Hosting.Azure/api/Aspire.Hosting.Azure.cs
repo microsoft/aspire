@@ -236,7 +236,7 @@ namespace Aspire.Hosting.Azure
         public object? Subscription { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public sealed partial class AzureEnvironmentResource : ApplicationModel.Resource
     {
         public const string ProvisionInfrastructureStepName = "provision-azure-bicep-resources";
@@ -404,7 +404,7 @@ namespace Aspire.Hosting.Azure
         public System.Collections.Generic.IReadOnlySet<RoleDefinition> Roles { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public sealed partial class DelegatedSubnetAnnotation : ApplicationModel.IResourceAnnotation
     {
         public DelegatedSubnetAnnotation(ApplicationModel.ReferenceExpression subnetId) { }
@@ -469,7 +469,7 @@ namespace Aspire.Hosting.Azure
     {
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public partial interface IAzureDelegatedSubnetResource : ApplicationModel.IResource
     {
         string DelegatedSubnetServiceName { get; }
@@ -499,7 +499,7 @@ namespace Aspire.Hosting.Azure
         ApplicationModel.IResource? SecretOwner { get; set; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public partial interface IAzurePrivateEndpointTarget : ApplicationModel.IResource
     {
         BicepOutputReference Id { get; }
@@ -513,7 +513,7 @@ namespace Aspire.Hosting.Azure
         void ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public sealed partial class PrivateEndpointTargetAnnotation : ApplicationModel.IResourceAnnotation
     {
         public PrivateEndpointTargetAnnotation(AzureProvisioningResource privateEndpointResource) { }

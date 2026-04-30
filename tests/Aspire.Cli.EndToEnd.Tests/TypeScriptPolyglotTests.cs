@@ -16,14 +16,26 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 {
-    [Fact]
-    public async Task CreateTypeScriptAppHostWithViteApp()
+    public static TheoryData<string> AlternativeToolchains => new()
+    {
+        "bun",
+        "yarn",
+        "pnpm"
+    };
+
+    [Theory]
+    [MemberData(nameof(AlternativeToolchains))]
+    [CaptureWorkspaceOnFailure]
+    public async Task CreateTypeScriptAppHostWithViteApp_UsesConfiguredToolchain(string toolchain)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -32,18 +44,21 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Step 1: Create TypeScript AppHost using aspire init with interactive language selection
-        await auto.TypeAsync("aspire init");
+        output.WriteLine($"Testing TypeScript AppHost toolchain: {toolchain}");
+
+        // Step 1: Create TypeScript AppHost
+        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        // Navigate down to "TypeScript (Node.js)" which is the 2nd option
-        await auto.DownAsync();
-        await auto.WaitUntilTextAsync("> TypeScript (Node.js)", timeout: TimeSpan.FromSeconds(5));
-        await auto.EnterAsync(); // select TypeScript
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
+
+        TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+        }
 
         // Step 2: Create a Vite app using npm create vite
         // Using --template vanilla-ts for a minimal TypeScript Vite app
@@ -63,8 +78,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // the version is auto-selected without prompting.
         await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 5: Modify apphost.ts to add the Vite app
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
@@ -87,7 +101,17 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Step 6: Run the apphost
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText("Select an AppHost to use:"))
+            {
+                throw new InvalidOperationException(
+                    "Unexpected apphost selection prompt detected! " +
+                    "This indicates multiple apphosts were incorrectly detected.");
+            }
+
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
 
         // Step 7: Stop the apphost
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
@@ -102,13 +126,13 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
     public async Task InitTypeScriptAppHost_AugmentsExistingViteRepoAtRoot()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, workspace, installMode,
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -122,11 +146,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
-
+        await auto.InstallAspireCliAsync(strategy, counter);
         await auto.EnablePolyglotSupportAsync(counter);
-
-        await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
 
         // Create brownfield Vite project
         await auto.TypeAsync("mkdir brownfield && cd brownfield");
@@ -214,7 +235,17 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Run the apphost to verify it works
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText("Select an AppHost to use:"))
+            {
+                throw new InvalidOperationException(
+                    "Unexpected apphost selection prompt detected! " +
+                    "This indicates multiple apphosts were incorrectly detected.");
+            }
+
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);

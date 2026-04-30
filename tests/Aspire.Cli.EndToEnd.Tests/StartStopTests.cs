@@ -4,6 +4,7 @@
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -16,10 +17,12 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class StartStopTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16191")]
     public async Task CreateStartAndStopAspireProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var projectSuffix = Guid.NewGuid().ToString("N")[..6];
         var projectName = $"StarterApp_{projectSuffix}";
 
@@ -31,48 +34,74 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        var testBodyFailed = false;
 
-        // Prepare Docker environment (prompt counting, umask, env vars)
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        try
+        {
+            // Prepare Docker environment (prompt counting, umask, env vars)
+            await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
 
-        // Install the Aspire CLI
-        await auto.InstallAspireCliAsync(strategy, counter);
+            // Install the Aspire CLI
+            await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Create a new project using aspire new
-        await auto.AspireNewAsync(projectName, counter);
+            // Create a new project using aspire new
+            await auto.AspireNewAsync(projectName, counter);
 
-        // Navigate to the AppHost directory
-        await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+            // Navigate to the AppHost directory
+            await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
-        // Start the AppHost in the background using aspire start
-        await auto.TypeAsync("aspire start");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+            // Start the AppHost in the background using aspire start
+            await auto.TypeAsync("aspire start");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
 
-        // Stop the AppHost using aspire stop
-        await auto.TypeAsync("aspire stop");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+            // Stop the AppHost using aspire stop
+            await auto.TypeAsync("aspire stop");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+            await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.ClearScreenAsync(counter);
+            await auto.ClearScreenAsync(counter);
 
-        // Ensure the test-specific Docker network is cleaned up (which signifies end of container cleanup) 
-        await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(2));
+            // Docker network cleanup can lag behind aspire stop on contended CI runners.
+            await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(5));
+        }
+        catch
+        {
+            testBodyFailed = true;
+            throw;
+        }
+        finally
+        {
+            try
+            {
+                await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
+            }
+            catch { } // Best effort
 
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
+            try
+            {
+                await auto.TypeAsync("exit");
+                await auto.EnterAsync();
+                await pendingRun;
+            }
+            catch
+            {
+                if (!testBodyFailed)
+                {
+                    throw;
+                }
+            }
+        }
     }
 
     [Fact]
     public async Task StopWithNoRunningAppHostExitsSuccessfully()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
@@ -105,7 +134,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
     public async Task AddPackageWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
@@ -161,7 +190,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
     public async Task AddPackageInteractiveWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

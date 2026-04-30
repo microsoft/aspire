@@ -37,6 +37,11 @@ if ! command -v dotnet &> /dev/null; then
 fi
 
 echo "All prerequisites satisfied."
+
+# Ensure we run from the extension directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo ""
 echo "Running yarn install..."
 yarn install

@@ -108,9 +108,9 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
 
         if (effectiveApiAuthMode is ApiAuthMode.ApiKey)
         {
-            // Check if any API key is configured
-            var hasApiKey = !string.IsNullOrEmpty(options.Api.PrimaryApiKey);
-            if (!hasApiKey)
+            // PrimaryApiKey should always be present when AuthMode is ApiKey because
+            // PostConfigureDashboardOptions generates a key when one isn't specified.
+            if (string.IsNullOrEmpty(options.Api.PrimaryApiKey))
             {
                 errorMessages.Add($"PrimaryApiKey is required when API authentication mode is ApiKey. Specify Dashboard:Api:PrimaryApiKey.");
             }

@@ -13,13 +13,13 @@ with create_builder() as builder:
     db = cosmos.add_cosmos_database("resource")
     # 4) addContainer (single partition key path)
     db.add_container("resource", "image")
-    # 5) addContainerWithPartitionKeyPaths (IEnumerable<string> export)
-    db.add_container_with_partition_key_paths("resource")
+    # 5) addContainer (IEnumerable<string> partition key paths)
+    db.add_container("resource", ["/tenantId", "/eventId"])
     # 6) withAccessKeyAuthentication
     cosmos.with_access_key_authentication()
-    # 7) withAccessKeyAuthenticationWithKeyVault
+    # 7) withAccessKeyAuthentication(keyVault)
     key_vault = builder.add_azure_key_vault("resource")
-    cosmos.with_access_key_authentication_with_key_vault()
+    cosmos.with_access_key_authentication(key_vault)
     # 8) runAsEmulator + emulator container configuration methods
     cosmos_emulator = builder.add_azure_cosmos_db("resource")
     cosmos_emulator.run_as_emulator()

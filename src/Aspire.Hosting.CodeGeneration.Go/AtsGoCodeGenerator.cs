@@ -4,9 +4,17 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Nodes;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go;
+
+internal sealed class GoExportedValueTreeNode
+{
+    public Dictionary<string, GoExportedValueTreeNode> Children { get; } = new(StringComparer.Ordinal);
+
+    public AtsExportedValueInfo? Value { get; set; }
+}
 
 /// <summary>
 /// Generates a Go SDK using the ATS (Aspire Type System) capability-based API.
@@ -64,6 +72,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
         var enumTypes = context.EnumTypes;
+        var exportedValues = context.ExportedValues;
 
         _enumNames.Clear();
         foreach (var enumType in enumTypes)
@@ -84,6 +93,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteHeader();
         GenerateEnumTypes(enumTypes);
         GenerateDtoTypes(dtoTypes);
+        GenerateExportedValues(exportedValues, dtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
         GenerateHandleTypes(handleTypes, capabilitiesByTarget);
         GenerateHandleWrapperRegistrations(handleTypes, collectionTypes);
         GenerateConnectionHelpers();
@@ -192,6 +202,166 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private void GenerateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (exportedValues.Count == 0)
+        {
+            return;
+        }
+
+        var root = BuildExportedValueTree(exportedValues);
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Exported Values");
+        WriteLine("// ============================================================================");
+        WriteLine();
+
+        foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            WriteLine($"var {name} = {RenderGoExportedValueType(node, indentLevel: 0)}{RenderGoExportedValueValue(node, dtoTypesById, indentLevel: 0)}");
+            WriteLine();
+        }
+    }
+
+    private string RenderGoExportedValueType(GoExportedValueTreeNode node, int indentLevel)
+    {
+        var indent = new string('\t', indentLevel);
+        var nestedIndent = new string('\t', indentLevel + 1);
+        var sb = new StringBuilder();
+        sb.AppendLine("struct {");
+
+        foreach (var (name, child) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (child.Value is { } valueInfo)
+            {
+                sb.Append(nestedIndent);
+                sb.Append(name);
+                sb.Append(' ');
+                sb.AppendLine(MapTypeRefToGo(valueInfo.Type, isOptional: false));
+            }
+            else
+            {
+                sb.Append(nestedIndent);
+                sb.Append(name);
+                sb.Append(' ');
+                sb.Append(RenderGoExportedValueType(child, indentLevel + 1));
+                sb.AppendLine();
+            }
+        }
+
+        sb.Append(indent);
+        sb.Append('}');
+        return sb.ToString();
+    }
+
+    private string RenderGoExportedValueValue(
+        GoExportedValueTreeNode node,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        int indentLevel)
+    {
+        var indent = new string('\t', indentLevel);
+        var nestedIndent = new string('\t', indentLevel + 1);
+        var sb = new StringBuilder();
+        sb.AppendLine("{");
+
+        foreach (var (name, child) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            sb.Append(nestedIndent);
+            sb.Append(name);
+            sb.Append(": ");
+            if (child.Value is { } valueInfo)
+            {
+                sb.Append(RenderGoExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById));
+            }
+            else
+            {
+                sb.Append(RenderGoExportedValueType(child, indentLevel + 1));
+                sb.Append(RenderGoExportedValueValue(child, dtoTypesById, indentLevel + 1));
+            }
+
+            sb.AppendLine(",");
+        }
+
+        sb.Append(indent);
+        sb.Append('}');
+        return sb.ToString();
+    }
+
+    private string RenderGoExportedValue(
+        JsonNode? value,
+        AtsTypeRef typeRef,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (value is null)
+        {
+            return "nil";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => value.ToRelaxedJsonString(),
+            AtsTypeCategory.Enum => $"{MapTypeRefToGo(typeRef, isOptional: false)}({value.ToRelaxedJsonString()})",
+            AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
+                => RenderGoDtoValue(obj, dtoInfo, dtoTypesById),
+            AtsTypeCategory.Array or AtsTypeCategory.List when value is JsonArray arr
+                => $"[]{MapTypeRefToGo(typeRef.ElementType, isOptional: false)}{{{string.Join(", ", arr.Select(item => RenderGoExportedValue(item, typeRef.ElementType!, dtoTypesById)))}}}",
+            AtsTypeCategory.Dict when value is JsonObject obj
+                => $"map[{MapTypeRefToGo(typeRef.KeyType, isOptional: false)}]{MapTypeRefToGo(typeRef.ValueType, isOptional: false)}{{{string.Join(", ", obj.Select(pair => $"{AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}: {RenderGoExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)}"))}}}",
+            _ => value.ToRelaxedJsonString()
+        };
+    }
+
+    private string RenderGoDtoValue(
+        JsonObject value,
+        AtsDtoTypeInfo dtoInfo,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var sb = new StringBuilder();
+        sb.Append('&');
+        sb.Append(_dtoNames[dtoInfo.TypeId]);
+        sb.Append('{');
+
+        var members = new List<string>();
+        foreach (var property in dtoInfo.Properties)
+        {
+            if (!value.TryGetPropertyValue(property.Name, out var propertyValue))
+            {
+                continue;
+            }
+
+            members.Add($"{ToPascalCase(property.Name)}: {RenderGoExportedValue(propertyValue, property.Type, dtoTypesById)}");
+        }
+
+        sb.Append(string.Join(", ", members));
+        sb.Append('}');
+        return sb.ToString();
+    }
+
+    private static GoExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        var root = new GoExportedValueTreeNode();
+        foreach (var exportedValue in exportedValues)
+        {
+            var current = root;
+            foreach (var segment in exportedValue.PathSegments)
+            {
+                if (!current.Children.TryGetValue(segment, out var child))
+                {
+                    child = new GoExportedValueTreeNode();
+                    current.Children[segment] = child;
+                }
+
+                current = child;
+            }
+
+            current.Value = exportedValue;
+        }
+
+        return root;
     }
 
     private void GenerateHandleTypes(
@@ -523,7 +693,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("\t\t\tresolvedOptions[\"ProjectDirectory\"] = pwd");
         WriteLine("\t\t}");
         WriteLine("\t}");
-        WriteLine("\tresult, err := client.InvokeCapability(\"Aspire.Hosting/createBuilderWithOptions\", map[string]any{\"options\": resolvedOptions})");
+        WriteLine("\tresult, err := client.InvokeCapability(\"Aspire.Hosting/createBuilder\", map[string]any{\"argsOrOptions\": resolvedOptions})");
         WriteLine("\tif err != nil {");
         WriteLine("\t\treturn nil, err");
         WriteLine("\t}");
@@ -574,14 +744,19 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             _structNames[typeId] = CreateStructName(typeId);
         }
 
-        var handleTypeMap = context.HandleTypes.ToDictionary(t => t.AtsTypeId, StringComparer.Ordinal);
+        var handleTypeMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Any(t => t.IsResourceBuilder),
+                StringComparer.Ordinal);
         var results = new List<GoHandleType>();
         foreach (var typeId in handleTypeIds)
         {
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.IsResourceBuilder;
+                isResourceBuilder = typeInfo;
             }
 
             results.Add(new GoHandleType(typeId, _structNames[typeId], isResourceBuilder));

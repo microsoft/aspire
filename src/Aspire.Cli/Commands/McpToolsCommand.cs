@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -37,12 +38,13 @@ internal sealed class McpToolsCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
         ILogger<McpToolsCommand> logger)
         : base("tools", McpCommandStrings.ToolsCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Options.Add(s_appHostOption);
         Options.Add(s_formatOption);
@@ -62,12 +64,11 @@ internal sealed class McpToolsCommand : BaseCommand
 
         if (!result.Success)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Information, result.ErrorMessage);
-            return ExitCodeConstants.Success;
+            return AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService);
         }
 
         var connection = result.Connection!;
-        var snapshots = await connection.GetResourceSnapshotsAsync(cancellationToken);
+        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken);
         var resourcesWithTools = snapshots.Where(r => r.McpServer is not null).ToList();
 
         if (resourcesWithTools.Count == 0)

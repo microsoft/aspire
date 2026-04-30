@@ -16,11 +16,13 @@ internal static class TestHelpers
     {
         return new TestCliHostEnvironment(supportsInteractiveInput: false, supportsInteractiveOutput: false, supportsAnsi: false);
     }
+}
 
-    private sealed class TestCliHostEnvironment(bool supportsInteractiveInput, bool supportsInteractiveOutput, bool supportsAnsi) : ICliHostEnvironment
-    {
-        public bool SupportsInteractiveInput => supportsInteractiveInput;
-        public bool SupportsInteractiveOutput => supportsInteractiveOutput;
-        public bool SupportsAnsi => supportsAnsi;
-    }
+internal sealed class TestCliHostEnvironment(bool supportsInteractiveInput = false, bool supportsInteractiveOutput = false, bool supportsAnsi = true) : ICliHostEnvironment
+{
+    public bool SupportsInteractiveInput => supportsInteractiveInput;
+
+    public bool SupportsInteractiveOutput => supportsInteractiveOutput;
+
+    public bool SupportsAnsi => supportsAnsi;
 }

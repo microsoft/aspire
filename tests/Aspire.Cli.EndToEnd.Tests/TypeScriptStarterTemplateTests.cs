@@ -15,11 +15,12 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 {
+    [CaptureWorkspaceOnFailure]
     [Fact]
     public async Task CreateAndRunTypeScriptStarterProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -37,6 +38,7 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 
         // Step 1.5: Verify starter creation also restored the generated TypeScript SDK.
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "TsStarterApp");
+        GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");
         var modulesDir = Path.Combine(projectRoot, ".modules");
 
         if (!Directory.Exists(modulesDir))

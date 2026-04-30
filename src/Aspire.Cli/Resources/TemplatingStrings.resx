@@ -124,7 +124,7 @@
     <value>Starter App (ASP.NET Core/Blazor)</value>
   </data>
   <data name="AspireJsFrontendStarter_Description" xml:space="preserve">
-    <value>Starter App (ASP.NET Core/React)</value>
+    <value>Starter App (ASP.NET Core/React, C# AppHost)</value>
   </data>
   <data name="AspireJavaStarter_Description" xml:space="preserve">
     <value>Starter App (Java AppHost/Express/React)</value>
@@ -140,9 +140,6 @@
   </data>
   <data name="AspireServiceDefaults_Description" xml:space="preserve">
     <value>Service defaults</value>
-  </data>
-  <data name="AspirePyStarter_Description" xml:space="preserve">
-    <value>Starter App (FastAPI/React)</value>
   </data>
   <data name="AspireAppHostSingleFile_Description" xml:space="preserve">
     <value>Empty AppHost</value>

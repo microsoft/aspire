@@ -35,9 +35,10 @@
     URL to the release notes page. If not specified, derived from the version
     (e.g., "13.2.0" -> "https://aspire.dev/whats-new/aspire-13-2/").
 
-.PARAMETER ValidateUrls
-    When specified, verifies that all installer URLs are accessible (HTTP HEAD request)
-    before downloading them to compute SHA256 hashes.
+.PARAMETER SkipUrlValidation
+    When specified, skips all URL operations: both the HEAD-request validation and downloading
+    installer files to compute SHA256 hashes. Placeholder hashes are used instead.
+    This is useful for PR validation where the installer URLs have not been published yet.
 
 .EXAMPLE
     ./generate-manifests.ps1 -Version "13.3.0-preview.1.26111.5" `
@@ -47,7 +48,7 @@
     ./generate-manifests.ps1 -Version "13.2.0" `
         -ArtifactVersion "13.2.0-preview.1.26111.5" `
         -TemplateDir "./eng/winget/microsoft.aspire" `
-        -Rids "win-x64,win-arm64" -ValidateUrls
+        -Rids "win-x64,win-arm64"
 #>
 
 [CmdletBinding()]
@@ -74,7 +75,7 @@ param(
     [string]$ReleaseNotesUrl,
 
     [Parameter(Mandatory = $false)]
-    [switch]$ValidateUrls
+    [switch]$SkipUrlValidation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -264,8 +265,33 @@ foreach ($rid in $ridList) {
     $installerEntries += @{ Rid = $rid; Architecture = $arch; Url = $url }
 }
 
-# Validate URLs are accessible before downloading (fast-fail)
-if ($ValidateUrls) {
+if ($ArchiveRoot) {
+    Write-Host "Computing SHA256 hashes from local archives in $ArchiveRoot..."
+
+    $installersYaml = "Installers:"
+    foreach ($entry in $installerEntries) {
+        $archivePath = Get-LocalArchivePath -ArchiveRoot $ArchiveRoot -Rid $entry.Rid -Version $Version
+        $sha256 = Get-LocalFileSha256 -Path $archivePath -Description "$($entry.Rid) installer"
+
+        $installersYaml += "`n- Architecture: $($entry.Architecture)"
+        $installersYaml += "`n  InstallerUrl: $($entry.Url)"
+        $installersYaml += "`n  InstallerSha256: $sha256"
+    }
+} elseif ($SkipUrlValidation) {
+    Write-Host "SkipUrlValidation specified — using placeholder SHA256 hashes (installer URLs will not be validated or downloaded)"
+    Write-Host ""
+
+    $installersYaml = "Installers:"
+    foreach ($entry in $installerEntries) {
+        $placeholderHash = "0" * 64
+        Write-Host "  $($entry.Rid): URL=$($entry.Url), SHA256=$placeholderHash (placeholder)"
+
+        $installersYaml += "`n- Architecture: $($entry.Architecture)"
+        $installersYaml += "`n  InstallerUrl: $($entry.Url)"
+        $installersYaml += "`n  InstallerSha256: $placeholderHash"
+    }
+} else {
+    # Validate URLs are accessible before downloading (fast-fail)
     Write-Host "Validating installer URLs..."
     $failed = $false
     foreach ($entry in $installerEntries) {
@@ -285,23 +311,17 @@ if ($ValidateUrls) {
         exit 1
     }
     Write-Host ""
-}
 
-Write-Host "Computing SHA256 hashes..."
+    Write-Host "Computing SHA256 hashes by downloading from URLs..."
 
-$installersYaml = "Installers:"
-foreach ($entry in $installerEntries) {
-    if ($ArchiveRoot) {
-        $archivePath = Get-LocalArchivePath -ArchiveRoot $ArchiveRoot -Rid $entry.Rid -Version $Version
-        $sha256 = Get-LocalFileSha256 -Path $archivePath -Description "$($entry.Rid) installer"
-    }
-    else {
+    $installersYaml = "Installers:"
+    foreach ($entry in $installerEntries) {
         $sha256 = Get-RemoteFileSha256 -Url $entry.Url -Description "$($entry.Rid) installer"
-    }
 
-    $installersYaml += "`n- Architecture: $($entry.Architecture)"
-    $installersYaml += "`n  InstallerUrl: $($entry.Url)"
-    $installersYaml += "`n  InstallerSha256: $sha256"
+        $installersYaml += "`n- Architecture: $($entry.Architecture)"
+        $installersYaml += "`n  InstallerUrl: $($entry.Url)"
+        $installersYaml += "`n  InstallerSha256: $sha256"
+    }
 }
 
 # Define substitutions

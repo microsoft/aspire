@@ -1,15 +1,13 @@
 ﻿---
 apiVersion: "v1"
-kind: "ConfigMap"
+kind: "Secret"
 metadata:
-  name: "special-app-config"
+  name: "special-app-secrets"
   labels:
     app.kubernetes.io/name: "my-chart"
     app.kubernetes.io/component: "SpeciaL-ApP"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-data:
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.SpeciaL_ApP.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
-  ConnectionStrings__api-cs2: "{{ .Values.config.SpeciaL_ApP.ConnectionStrings__api_cs2 }}"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.SpeciaL_ApP.OTEL_EXPORTER_OTLP_ENDPOINT }}"
-  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.SpeciaL_ApP.OTEL_EXPORTER_OTLP_PROTOCOL }}"
-  OTEL_SERVICE_NAME: "{{ .Values.config.SpeciaL_ApP.OTEL_SERVICE_NAME }}"
+stringData:
+  param3: "{{ .Values.secrets.SpeciaL_ApP.param3 }}"
+  ConnectionStrings__api-cs: "Url={{ .Values.config.SpeciaL_ApP.param0 }}, Secret={{ .Values.secrets.SpeciaL_ApP.param1 }}"
+type: "Opaque"

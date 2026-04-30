@@ -17,6 +17,7 @@ public static class AspireStoreExtensions
     /// <param name="sourceFilename">An existing file.</param>
     /// <returns>A deterministic file path with the same content as <paramref name="sourceFilename"/>.</returns>
     /// <exception cref="FileNotFoundException">Thrown when the source file does not exist.</exception>
+    [AspireExport(Description = "Gets a deterministic file path for the specified file contents")]
     public static string GetFileNameWithContent(this IAspireStore aspireStore, string filenameTemplate, string sourceFilename)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filenameTemplate);

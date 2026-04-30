@@ -1,10 +1,13 @@
 {
 	"extension.title": "Aspire VSCode",
 	"extension.description": "Official Aspire extension for Visual Studio Code",
-	"extension.debug.program": "Path to the AppHost to run",
+  "extension.debug.program": "Path to the AppHost to run",
   "extension.debug.debuggers": "Configuration to apply when launching resources of specific types",
 	"extension.debug.command": "The Aspire CLI command to execute (run, deploy, publish, or do)",
 	"extension.debug.step": "The pipeline step name to execute when command is 'do'",
+	"extension.debug.args": "Additional arguments to pass to the Aspire CLI command",
+	"extension.debug.env": "Environment variables to set when launching the Aspire AppHost",
+
 	"extension.debug.defaultConfiguration.name": "Aspire: Launch default AppHost",
 	"extension.debug.defaultConfiguration.description": "Launch the effective Aspire AppHost in your workspace",
 	"command.add": "Add an integration",

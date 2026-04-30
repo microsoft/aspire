@@ -69,6 +69,53 @@ internal static class ConfigurationHelper
         return Path.Combine(workingDirectory, ".aspire", "settings.json");
     }
 
+    internal static DirectoryInfo? GetLegacySettingsRootDirectory(FileInfo settingsFile)
+    {
+        if (!string.Equals(settingsFile.Name, AspireJsonConfiguration.FileName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var settingsDirectory = settingsFile.Directory;
+        if (settingsDirectory is null || !string.Equals(settingsDirectory.Name, AspireJsonConfiguration.SettingsFolder, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return settingsDirectory.Parent;
+    }
+
+    internal static DirectoryInfo GetConfigRootDirectory(DirectoryInfo startDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(startDirectory);
+
+        var configPath = FindNearestConfigFilePath(startDirectory);
+        if (configPath is null)
+        {
+            return startDirectory;
+        }
+
+        var configFile = new FileInfo(configPath);
+
+        // Legacy layout: <root>/.aspire/settings.json -> <root>
+        var legacyRoot = GetLegacySettingsRootDirectory(configFile);
+        if (legacyRoot is not null)
+        {
+            return legacyRoot;
+        }
+
+        // Modern layout: <root>/aspire.config.json -> <root>
+        return configFile.Directory is { Exists: true } configDirectory
+            ? configDirectory
+            : startDirectory;
+    }
+
+    internal static DirectoryInfo GetWorkspaceAspireDirectory(DirectoryInfo startDirectory)
+    {
+        var configRoot = GetConfigRootDirectory(startDirectory);
+        return new DirectoryInfo(Path.Combine(configRoot.FullName, AspireJsonConfiguration.SettingsFolder));
+    }
+
     /// <summary>
     /// Searches upward from <paramref name="startDirectory"/> for the nearest
     /// <c>aspire.config.json</c> or legacy <c>.aspire/settings.json</c>.
@@ -95,6 +142,56 @@ internal static class ConfigurationHelper
         }
 
         return null;
+    }
+
+    internal static bool TryLoadSettingsFile(string filePath, out IConfigurationRoot configuration)
+    {
+        configuration = new ConfigurationRoot([]);
+
+        if (!File.Exists(filePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var content = File.ReadAllText(filePath);
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return false;
+            }
+
+            var node = JsonNode.Parse(content, documentOptions: ParseOptions);
+            if (node is not JsonObject)
+            {
+                return false;
+            }
+
+            var cleanJson = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
+            configuration = new ConfigurationBuilder()
+                .AddJsonStream(new MemoryStream(bytes))
+                .Build();
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

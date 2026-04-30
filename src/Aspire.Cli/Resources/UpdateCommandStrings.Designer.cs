@@ -81,6 +81,7 @@ namespace Aspire.Cli.Resources {
     internal static string FailedDiscoverNuGetConfig => ResourceManager.GetString("FailedDiscoverNuGetConfig", resourceCulture);
     internal static string FailedFetchItemsAndPropertiesFormat => ResourceManager.GetString("FailedFetchItemsAndPropertiesFormat", resourceCulture);
     internal static string NoPackageFoundFormat => ResourceManager.GetString("NoPackageFoundFormat", resourceCulture);
+    internal static string PackageNotFoundInChannelWarningFormat => ResourceManager.GetString("PackageNotFoundInChannelWarningFormat", resourceCulture);
     internal static string CouldNotFindRootProjectElementFormat => ResourceManager.GetString("CouldNotFindRootProjectElementFormat", resourceCulture);
     internal static string CouldNotFindSdkElementFormat => ResourceManager.GetString("CouldNotFindSdkElementFormat", resourceCulture);
     internal static string ProjectReferenceNoFullPath => ResourceManager.GetString("ProjectReferenceNoFullPath", resourceCulture);
@@ -116,5 +117,7 @@ namespace Aspire.Cli.Resources {
     internal static string RegeneratingSdkCode => ResourceManager.GetString("RegeneratingSdkCode", resourceCulture);
     internal static string RegeneratedSdkCode => ResourceManager.GetString("RegeneratedSdkCode", resourceCulture);
     internal static string SelfOptionDescription => ResourceManager.GetString("SelfOptionDescription", resourceCulture);
+    internal static string YesOptionDescription => ResourceManager.GetString("YesOptionDescription", resourceCulture);
+    internal static string NuGetConfigDirOptionDescription => ResourceManager.GetString("NuGetConfigDirOptionDescription", resourceCulture);
     }
 }

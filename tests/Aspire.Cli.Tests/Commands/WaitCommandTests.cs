@@ -17,7 +17,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait --help");
@@ -32,7 +32,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait");
@@ -47,7 +47,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait myresource --help");
@@ -61,7 +61,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait myresource --apphost /path/to/project.csproj --help");
@@ -75,7 +75,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait myresource --status up --help");
@@ -89,7 +89,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait myresource --timeout 60 --help");
@@ -106,7 +106,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"wait myresource --status {status} --help");
@@ -123,7 +123,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"wait myresource --status {status} --help");
@@ -153,7 +153,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait nonexistent --timeout 5");
@@ -178,7 +178,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait myapp --status up --timeout 5");
@@ -203,7 +203,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait mydb --status healthy --timeout 5");
@@ -233,7 +233,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait mydb --status healthy --timeout 2");
@@ -258,7 +258,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait worker --status down --timeout 5");
@@ -288,7 +288,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("wait myapp --status up --timeout 5");

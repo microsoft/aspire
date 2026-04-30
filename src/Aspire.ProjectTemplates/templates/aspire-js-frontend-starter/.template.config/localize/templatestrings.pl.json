@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "Docelowa platforma net9.0",
   "symbols/Framework/choices/net10.0/description": "Docelowa platforma net10.0",
   "symbols/UseRedisCache/displayName": "_Skorzystaj z magazynu danych Redis na potrzeby buforowania (wymaga obsługiwanego środowiska uruchomieniowego kontenera)",
-  "symbols/UseRedisCache/description": "Określa, czy konfigurować aplikację do korzystania z magazynu danych Redis na potrzeby buforowania. Wymaga obsługiwanego środowiska uruchomieniowego kontenera na potrzeby uruchomienia lokalnego. Aby uzyskać więcej informacji, zobacz https://aka.ms/dotnet/aspire/containers.",
+  "symbols/UseRedisCache/description": "Określa, czy konfigurować aplikację do korzystania z magazynu danych Redis na potrzeby buforowania. Wymaga obsługiwanego środowiska uruchomieniowego kontenera na potrzeby uruchomienia lokalnego. Aby uzyskać więcej informacji, zobacz https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP OTLP w pliku launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Numer portu do użycia dla punktu końcowego HTTP usługi zasobów w pliku launchSettings.json projektu AppHost.",

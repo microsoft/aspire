@@ -284,16 +284,20 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
         }
 
-        var args = configuration.Arguments.Select(a => a.Value);
+        var args = configuration.Arguments.ToList();
         if (modelContainer is ContainerResource { ShellExecution: true })
         {
-            spec.Args = ["-c", $"{string.Join(' ', args)}"];
+            spec.Args = ["-c", $"{string.Join(' ', args.Select(a => a.Value))}"];
         }
         else
         {
-            spec.Args = args.ToList();
+            spec.Args = args.Select(a => a.Value).ToList();
         }
-        dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, configuration.Arguments.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive)));
+
+        var appLaunchArgumentAnnotations = modelContainer is ContainerResource { ShellExecution: true }
+            ? args.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive))
+            : args.Select((a, index) => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: index));
+        dcpContainer.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, appLaunchArgumentAnnotations);
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
         spec.CreateFiles = createFiles;
@@ -415,7 +419,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     /// </summary>
     internal async Task CreateTunnelAsync(ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
-        // Container creation tasks need to figure out dependencies of each container 
+        // Container creation tasks need to figure out dependencies of each container
         // and then create Service and TunnelConfiguration definitions for each of them.
         cctx.ContainerServicesSpecReady.Wait(cancellationToken);
         cctx.ContainerServicesChan.Writer.Complete();
@@ -456,11 +460,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         if (resource.TryGetAnnotationsOfType<OtlpExporterAnnotation>(out _))
         {
-            var maybeDashboard = _model.Resources.Where(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard))
-                    .Select(HostResourceWithEndpoints.Create).FirstOrDefault();
-            if (maybeDashboard is HostResourceWithEndpoints dashboardResource)
+            if (_model.Resources.TryGetByName(KnownResourceNames.AspireDashboard, out var dashboardResource)
+                && HostResourceWithEndpoints.Create(dashboardResource) is HostResourceWithEndpoints dashboard)
             {
-                hostDependencies.Add(dashboardResource);
+                hostDependencies.Add(dashboard);
             }
         }
 
@@ -538,7 +541,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
                 PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
             })
-            .AddExecutionConfigurationGatherer(new OtlpEndpointReferenceGatherer())
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
             .ConfigureAwait(false);
 

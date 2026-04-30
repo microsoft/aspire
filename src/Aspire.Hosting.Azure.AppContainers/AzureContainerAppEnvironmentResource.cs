@@ -11,6 +11,9 @@ using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.AppContainers;
 
@@ -38,6 +41,20 @@ public class AzureContainerAppEnvironmentResource :
         {
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
+
+            // Add prepare-azure-container-apps-{name} step that materializes deployment targets
+            // for compute resources targeted to this environment. Runs during BeforeStart so that
+            // BeforeStartEvent subscribers (and downstream code) can observe the deployment targets.
+            var prepareStep = new PipelineStep
+            {
+                Name = $"prepare-azure-container-apps-{name}",
+                Description = $"Prepares Azure Container Apps deployment targets for {name}.",
+                Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+
+            steps.Add(prepareStep);
 
             // Add print-dashboard-url step
             var printDashboardUrlStep = new PipelineStep
@@ -139,6 +156,68 @@ public class AzureContainerAppEnvironmentResource :
             CompletionState.Completed,
             context.CancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Materializes Azure Container Apps deployment targets for compute resources targeted to this
+    /// environment. Invoked by the per-environment <c>prepare-azure-container-apps-{name}</c>
+    /// pipeline step, which runs after <c>azure-prepare-resources</c> so role-assignment resources
+    /// are present in the model and can be referenced by the generated
+    /// <see cref="DeploymentTargetAnnotation"/> instances.
+    /// </summary>
+    private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
+    {
+        var appModel = context.Model;
+        var executionContext = context.ExecutionContext;
+        var services = context.Services;
+        var cancellationToken = context.CancellationToken;
+
+        if (!executionContext.IsPublishMode)
+        {
+            return;
+        }
+
+        // Remove the default container registry from the model if an explicit registry is configured
+        if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
+            DefaultContainerRegistry is not null)
+        {
+            appModel.Resources.Remove(DefaultContainerRegistry);
+            DefaultContainerRegistry = null;
+        }
+
+        var logger = services.GetRequiredService<ILogger<AzureContainerAppEnvironmentResource>>();
+        var options = services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
+
+        var containerAppEnvironmentContext = new ContainerAppEnvironmentContext(
+            logger,
+            executionContext,
+            this,
+            services);
+
+        foreach (var r in appModel.GetComputeResources())
+        {
+            // Skip resources that are explicitly targeted to a different compute environment
+            var resourceComputeEnvironment = r.GetComputeEnvironment();
+            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
+
+            // Capture information about the container registry used by the
+            // container app environment in the deployment target information
+            // associated with each compute resource that needs an image
+            r.Annotations.Add(new DeploymentTargetAnnotation(containerApp)
+            {
+                ContainerRegistry = this,
+                ComputeEnvironment = this
+            });
+        }
+
+        // Log once about all HTTP endpoints upgraded to HTTPS
+        containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
+    }
+
     internal bool UseAzdNamingConvention { get; set; }
 
     internal bool UseCompactResourceNaming { get; set; }

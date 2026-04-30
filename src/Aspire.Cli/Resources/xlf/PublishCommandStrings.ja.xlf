@@ -33,12 +33,12 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The output path for the generated artifacts. Defaults to './aspire-output' if not specified.</source>
+        <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
         <target state="needs-review-translation">生成された成果物の出力パス。指定がない場合、既定値は './aspire-output' です。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file</source>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Aspire アプリ ホスティング プロセス プロジェクト ファイルへのパス。</target>
         <note />
       </trans-unit>

@@ -1,8 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <ToolPackageRuntimeIdentifiers>$(RuntimeIdentifiers)</ToolPackageRuntimeIdentifiers>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -32,14 +33,31 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>aspire</ToolCommandName>
     <PackageId>Aspire.Cli</PackageId>
-    <RollForward>Major</RollForward>
     <PackageTags>aspire cli</PackageTags>
     <Description>Command line tool for Aspire developers.</Description>
-    <!-- For 9.5 we want to keep the tool platform-independent, framework-dependent.
-         To do this we make sure it doesn't PublishAOT, and ensure that it doesn't publish for any RIDs at all. -->
-    <PublishAot>false</PublishAot>
+    <!-- Tool packages are packed from prebuilt NativeAOT binaries. Clear the default
+         RuntimeIdentifiers list so clipack can pack one RID-specific tool package at a time
+         using RuntimeIdentifier and PreBuiltCliBinaryPath. -->
     <RuntimeIdentifiers></RuntimeIdentifiers>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PreBuiltCliBinaryPath)' != '' and '$(IsCliToolProject)' == 'true'">
+    <IsPublishable>false</IsPublishable>
+    <PublishDepsFilePath></PublishDepsFilePath>
+    <PublishRuntimeConfigFilePath></PublishRuntimeConfigFilePath>
+  </PropertyGroup>
+
+  <Target Name="_PreparePreBuiltCliBinaryForPackTool"
+          BeforeTargets="PackTool"
+          Condition="'$(IsCliToolProject)' == 'true'">
+
+    <Error Condition="'$(PreBuiltCliBinaryPath)' == '' or !Exists('$(PreBuiltCliBinaryPath)')"
+           Text="Could not find %24(PreBuiltCliBinaryPath) = '$(PreBuiltCliBinaryPath)'. Aspire.Cli.Tool.csproj requires PreBuiltCliBinaryPath to pack NativeAOT tool packages. Use eng/clipack to build tool packages." />
+
+    <RemoveDir Directories="$(PublishDir)" />
+    <MakeDir Directories="$(PublishDir)" />
+    <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+  </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
     <LinkerArg Condition="'$(RuntimeIdentifier)' == 'linux-musl-x64'" Include="--target=x86_64-alpine-linux-musl" />
@@ -47,6 +65,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
+    <PackageReference Include="Markdig" />
     <PackageReference Include="Spectre.Console" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
@@ -56,7 +75,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-
+    <PackageReference Include="Semver" />
     <PackageReference Include="Sigstore" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
@@ -74,10 +93,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)SmolSemVer.cs" Link="SmolSemVer.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
@@ -120,6 +139,7 @@
     <Compile Include="$(SharedDir)Otlp\Serialization\OtlpJsonSerializerContext.cs" Link="Otlp\OtlpJsonSerializerContext.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\TelemetryApiResponse.cs" Link="Otlp\TelemetryApiResponse.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\ResourceInfoJson.cs" Link="Otlp\ResourceInfoJson.cs" />
+    <Compile Include="$(SharedDir)Model\Serialization\TelemetryValidateTokenJson.cs" Link="Otlp\TelemetryValidateTokenJson.cs" />
     <Compile Include="$(SharedDir)Export\ExportArchive.cs" Link="Export\ExportArchive.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\AnsiParser.cs" Link="ConsoleLogs\AnsiParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntries.cs" Link="ConsoleLogs\LogEntries.cs" />
@@ -225,6 +245,15 @@
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+    <EmbeddedResource Include="..\..\.agents\skills\aspireify\**\*" LogicalName="skills.aspireify/%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <!-- Markdown content is stored as a separate file to avoid the C# preprocessor
+         erroring on # characters (CS1024). Uses .txt extension to avoid markdown linters. -->
+    <EmbeddedResource Include="Commands\MarkdownShowcase.txt" LogicalName="MarkdownShowcase.txt" />
   </ItemGroup>
 
   <ItemGroup>

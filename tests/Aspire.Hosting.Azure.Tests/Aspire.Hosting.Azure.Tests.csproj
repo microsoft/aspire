@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.CosmosDB\Aspire.Hosting.Azure.CosmosDB.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.EventHubs\Aspire.Hosting.Azure.EventHubs.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.FrontDoor\Aspire.Hosting.Azure.FrontDoor.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Functions\Aspire.Hosting.Azure.Functions.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.KeyVault\Aspire.Hosting.Azure.KeyVault.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Kusto\Aspire.Hosting.Azure.Kusto.csproj" />

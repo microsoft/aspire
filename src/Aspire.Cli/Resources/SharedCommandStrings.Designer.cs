@@ -69,6 +69,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string AppHostNotRunningAtPath {
+            get {
+                return ResourceManager.GetString("AppHostNotRunningAtPath", resourceCulture);
+            }
+        }
+
         internal static string AppHostOptionDescription {
             get {
                 return ResourceManager.GetString("AppHostOptionDescription", resourceCulture);
@@ -102,6 +108,12 @@ namespace Aspire.Cli.Resources {
         internal static string PromptRunAgentInit {
             get {
                 return ResourceManager.GetString("PromptRunAgentInit", resourceCulture);
+            }
+        }
+
+        internal static string AgentInitOptionDescription {
+            get {
+                return ResourceManager.GetString("AgentInitOptionDescription", resourceCulture);
             }
         }
 

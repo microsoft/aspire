@@ -22,6 +22,9 @@ on:
     # Run daily at 6 AM UTC
     - cron: '0 6 * * *'
 
+permissions:
+  contents: read
+
 jobs:
   smoke-test:
     name: CLI Smoke Test (${{ inputs.quality || 'dev' }})
@@ -31,6 +34,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
@@ -46,24 +51,173 @@ jobs:
       - name: Run smoke tests against daily build
         env:
           ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'dev' }}
+          ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR: ${{ github.workspace }}/testresults/cli-versions
         run: |
-          dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+          dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
             --no-build \
             -- \
-            --filter-class "*.SmokeTests" \
+            --report-trx \
+            --report-trx-filename "DailyCliSmoke.trx" \
+            --results-directory ${{ github.workspace }}/testresults \
+            --filter-class "*SmokeTests" \
             --filter-not-trait "quarantined=true" \
             --filter-not-trait "outerloop=true" \
-            --hangdump --hangdump-timeout 15m
+            --hangdump --hangdump-type none --hangdump-timeout 15m
 
-      - name: Upload test recordings
+      - name: Upload logs and test results
+        id: upload-logs
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: smoke-test-recordings-${{ inputs.quality || 'dev' }}
+          name: smoke-test-results-${{ inputs.quality || 'dev' }}
           path: |
-            testresults/recordings/*.cast
+            testresults/**
             **/TestResults/**/*.log
           if-no-files-found: ignore
+
+      - name: Generate test results summary
+        if: always()
+        continue-on-error: true
+        env:
+          SMOKE_TEST_RESULTS_ARTIFACT_URL: ${{ steps.upload-logs.outputs.artifact-url }}
+        run: |
+          if [ -d "${{ github.workspace }}/testresults" ]; then
+            summary_args=(
+              run
+              --project
+              "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj"
+              --
+              "${{ github.workspace }}/testresults"
+            )
+
+            artifact_url="${SMOKE_TEST_RESULTS_ARTIFACT_URL:-}"
+            if [ -n "$artifact_url" ]; then
+              summary_args+=("-u" "$artifact_url")
+            fi
+
+            dotnet "${summary_args[@]}"
+          fi
+
+      - name: Add Aspire CLI version summary
+        if: always()
+        continue-on-error: true
+        run: |
+          versions_dir="${{ github.workspace }}/testresults/cli-versions"
+
+          escape_markdown() {
+            local value="${1:-}"
+            value="${value//$'\r'/}"
+            value="${value//$'\n'/ }"
+            local escaped=""
+            local char
+            local i
+
+            for ((i = 0; i < ${#value}; i++)); do
+              char="${value:i:1}"
+              case "$char" in
+                \\|\`|\*|_|"{"|"}"|"["|"]"|"("|")"|"#"|"+"|"-"|"."|"!"|\||"<"|">")
+                  escaped+="\\$char"
+                  ;;
+                *)
+                  escaped+="$char"
+                  ;;
+              esac
+            done
+
+            printf '%s' "$escaped"
+          }
+
+          format_code() {
+            local value="${1:-}"
+            value="${value//$'\r'/}"
+            value="${value//$'\n'/ }"
+            if [ -z "$value" ]; then
+              printf '-'
+            else
+              local max_run=0
+              local rest="$value"
+              while [ -n "$rest" ]; do
+                local prefix="${rest%%\`*}"
+                if [ "$prefix" = "$rest" ]; then
+                  break
+                fi
+
+                rest="${rest#"$prefix"}"
+                local ticks="${rest%%[!\`]*}"
+                if [ ${#ticks} -gt $max_run ]; then
+                  max_run=${#ticks}
+                fi
+                rest="${rest#"$ticks"}"
+              done
+
+              local delimiter=""
+              local i
+              for ((i = 0; i <= max_run; i++)); do
+                delimiter+="\`"
+              done
+
+              local padding=""
+              if [[ "$value" == \`* || "$value" == *\` ]]; then
+                padding=" "
+              fi
+
+              printf '%s%s%s%s%s' "$delimiter" "$padding" "$value" "$padding" "$delimiter"
+            fi
+          }
+
+          {
+            echo ""
+            echo "## Aspire CLI versions installed"
+            echo ""
+
+            if compgen -G "$versions_dir/*.env" > /dev/null; then
+              declare -A group_tests=()
+              declare -A group_routes=()
+              declare -A group_versions=()
+              groups=()
+
+              for version_file in "$versions_dir"/*.env; do
+                test_name=""
+                mode=""
+                strategy=""
+                version=""
+
+                while IFS='=' read -r key value; do
+                  case "$key" in
+                    test) test_name="$value" ;;
+                    mode) mode="$value" ;;
+                    strategy) strategy="$value" ;;
+                    version) version="$value" ;;
+                  esac
+                done < "$version_file"
+
+                route="${strategy:-$mode}"
+                group_key="${#route}:$route${#version}:$version"
+                if [ -z "${group_routes[$group_key]+set}" ]; then
+                  groups+=("$group_key")
+                  group_routes["$group_key"]="$route"
+                  group_versions["$group_key"]="$version"
+                fi
+
+                group_tests["$group_key"]+="$test_name"$'\n'
+              done
+
+              for group_key in "${groups[@]}"; do
+                echo "### $(escape_markdown "${group_routes[$group_key]}"): $(format_code "${group_versions[$group_key]}")"
+                echo ""
+
+                while IFS= read -r test_name; do
+                  if [ -n "$test_name" ]; then
+                    echo "- $(format_code "$test_name")"
+                  fi
+                done <<< "${group_tests[$group_key]}"
+
+                echo ""
+              done
+            else
+              echo "No Aspire CLI version records were produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   create-issue-on-failure:
     name: Create Issue on Failure
@@ -71,61 +225,204 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ failure() && github.event_name == 'schedule' }}
     permissions:
+      actions: read
       issues: write
     steps:
+      - name: Download smoke test results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: smoke-test-results-${{ inputs.quality || 'dev' }}
+          path: smoke-test-results
+
       - name: Create GitHub Issue
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const quality = context.payload.inputs?.quality ?? 'dev';
             const date = new Date().toISOString().split('T')[0];
+            const cliVersionSummary = getCliVersionSummary(process.env.GITHUB_WORKSPACE, message => core.warning(message));
 
             const issueTitle = `[Daily Smoke] CLI smoke test failure - ${date}`;
-            const issueBody = `## Daily CLI Smoke Test Failure
+            const issueBody = [
+              '## Daily CLI Smoke Test Failure',
+              '',
+              `The daily CLI smoke tests failed on ${date}.`,
+              '',
+              `**Workflow Run:** ${runUrl}`,
+              `**Quality:** ${quality} (daily build)`,
+              '',
+              cliVersionSummary,
+              '',
+              '### Next Steps',
+              '1. Check the workflow run for detailed error logs',
+              '2. Download test recordings from artifacts',
+              '3. Compare with the latest daily build changes',
+              '4. Investigate and fix the regression',
+              '',
+              'This issue was automatically created by the daily CLI smoke test workflow.'
+            ].join('\n');
 
-            The daily CLI smoke tests failed on ${date}.
+            let todayIssue = null;
+            try {
+              const existingIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'area-cli,failing-test',
+                per_page: 10
+              });
 
-            **Workflow Run:** ${runUrl}
-            **Quality:** dev (daily build)
-
-            ### Next Steps
-            1. Check the workflow run for detailed error logs
-            2. Download test recordings from artifacts
-            3. Compare with the latest daily build changes
-            4. Investigate and fix the regression
-
-            This issue was automatically created by the daily CLI smoke test workflow.
-            `;
-
-            // Check if a similar issue already exists (created today)
-            const existingIssues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'area-cli,failing-test',
-              per_page: 10
-            });
-
-            const todayIssue = existingIssues.data.find(issue =>
-              issue.title.includes(date) && issue.title.includes('[Daily Smoke]')
-            );
+              todayIssue = existingIssues.data.find(issue =>
+                issue.title.includes(date) && issue.title.includes('[Daily Smoke]')
+              );
+            }
+            catch (error) {
+              core.warning(`Could not query existing daily smoke issues; creating a new issue to avoid losing the failure report. ${getErrorMessage(error)}`);
+            }
 
             if (todayIssue) {
-              console.log(`Issue already exists for today: ${todayIssue.html_url}`);
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: todayIssue.number,
-                body: `Another failure occurred. See: ${runUrl}`
-              });
-            } else {
-              const issue = await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: issueTitle,
-                body: issueBody,
-                labels: ['area-cli', 'failing-test']
-              });
-              console.log(`Created issue: ${issue.data.html_url}`);
+              core.info(`Issue already exists for today: ${todayIssue.html_url}`);
+              const body = [
+                `Another failure occurred. See: ${runUrl}`,
+                '',
+                cliVersionSummary
+              ].join('\n');
+
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: todayIssue.number,
+                  body
+                });
+                return;
+              }
+              catch (error) {
+                core.warning(`Failed to comment on the existing daily smoke issue; creating a new issue instead. ${getErrorMessage(error)}`);
+              }
+            }
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: issueTitle,
+              body: issueBody,
+              labels: ['area-cli', 'failing-test']
+            });
+
+            core.info(`Created issue: ${issue.data.html_url}`);
+
+            function getCliVersionSummary(workspace) {
+              const noVersionRecordsSummary = [
+                '### Aspire CLI versions tested',
+                '',
+                'No Aspire CLI version records were available in the uploaded smoke test artifact.'
+              ].join('\n');
+              const versionsDir = path.join(workspace, 'smoke-test-results', 'testresults', 'cli-versions');
+
+              try {
+                if (!fs.existsSync(versionsDir)) {
+                  return noVersionRecordsSummary;
+                }
+
+                const versionFiles = fs.readdirSync(versionsDir, { withFileTypes: true })
+                  .filter(entry => entry.isFile() && entry.name.endsWith('.env'))
+                  .map(entry => entry.name)
+                  .sort((left, right) => left.localeCompare(right));
+
+                if (versionFiles.length === 0) {
+                  return noVersionRecordsSummary;
+                }
+
+                const groups = new Map();
+                for (const versionFile of versionFiles) {
+                  const record = parseCliVersionRecord(path.join(versionsDir, versionFile));
+                  const route = record.strategy || record.mode || '(unknown install route)';
+                  const version = record.version || '(unknown version)';
+                  const key = `${route}\0${version}`;
+
+                  if (!groups.has(key)) {
+                    groups.set(key, { route, version, tests: [] });
+                  }
+
+                  groups.get(key).tests.push(record.test || '(unknown test)');
+                }
+
+                const lines = ['### Aspire CLI versions tested', ''];
+                for (const group of groups.values()) {
+                  lines.push(`#### ${escapeMarkdownText(group.route)}: ${formatInlineCode(group.version)}`);
+                  lines.push('');
+
+                  for (const testName of group.tests) {
+                    lines.push(`- ${formatInlineCode(testName)}`);
+                  }
+
+                  lines.push('');
+                }
+
+                return lines.join('\n').trimEnd();
+              }
+              catch (error) {
+                const message = `Unable to read Aspire CLI version records from the smoke test artifact: ${getErrorMessage(error)}`;
+                core.warning(message);
+                return [
+                  '### Aspire CLI versions tested',
+                  '',
+                  message
+                ].join('\n');
+              }
+            }
+
+            function parseCliVersionRecord(filePath) {
+              const record = {};
+              let content;
+              try {
+                content = fs.readFileSync(filePath, 'utf8');
+              }
+              catch (error) {
+                core.warning(`Unable to read Aspire CLI version record '${filePath}': ${getErrorMessage(error)}`);
+                return record;
+              }
+
+              for (const line of content.split(/\r?\n/)) {
+                const separatorIndex = line.indexOf('=');
+                if (separatorIndex < 0) {
+                  continue;
+                }
+
+                const key = line.slice(0, separatorIndex);
+                if (!key) {
+                  continue;
+                }
+
+                record[key] = line.slice(separatorIndex + 1);
+              }
+
+              return record;
+            }
+
+            function escapeMarkdownText(value) {
+              return String(value)
+                .replace(/\r?\n/g, ' ')
+                .replace(/([\\`*_{}\[\]()#+\-.!|<>])/g, '\\$1');
+            }
+
+            function formatInlineCode(value) {
+              const normalized = String(value).replace(/\r?\n/g, ' ');
+              const runs = normalized.match(/`+/g) ?? [];
+              const delimiterLength = Math.max(0, ...runs.map(run => run.length)) + 1;
+              const delimiter = '`'.repeat(delimiterLength);
+              const padding = normalized.startsWith('`') || normalized.endsWith('`') ? ' ' : '';
+
+              return `${delimiter}${padding}${normalized}${padding}${delimiter}`;
+            }
+
+            function getErrorMessage(error) {
+              return error instanceof Error ? error.message : String(error);
             }

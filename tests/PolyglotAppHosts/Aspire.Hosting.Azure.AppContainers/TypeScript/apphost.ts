@@ -7,7 +7,7 @@ const builder = await createBuilder();
 
 // === Azure Container App Environment ===
 // Test addAzureContainerAppEnvironment factory method
-const env = builder.addAzureContainerAppEnvironment("myenv");
+const env = await builder.addAzureContainerAppEnvironment("myenv");
 
 // Test fluent chaining on AzureContainerAppEnvironmentResource
 await env
@@ -17,7 +17,7 @@ await env
     .withHttpsUpgrade({ upgrade: false });
 
 // Test withDashboard with no args (uses default)
-const env2 = builder.addAzureContainerAppEnvironment("myenv2");
+const env2 = await builder.addAzureContainerAppEnvironment("myenv2");
 await env2.withDashboard();
 
 // Test withHttpsUpgrade with no args (uses default)
@@ -26,42 +26,44 @@ await env2.withHttpsUpgrade();
 // === WithAzureLogAnalyticsWorkspace ===
 // Test withAzureLogAnalyticsWorkspace with a Log Analytics Workspace resource
 const laws = await builder.addAzureLogAnalyticsWorkspace("laws");
-const env3 = builder.addAzureContainerAppEnvironment("myenv3");
+const env3 = await builder.addAzureContainerAppEnvironment("myenv3");
 await env3.withAzureLogAnalyticsWorkspace(laws);
 const customDomain = await builder.addParameter("customDomain");
 const certificateName = await builder.addParameter("certificateName");
 
 // === PublishAsAzureContainerApp ===
 // Test publishAsAzureContainerApp on a container resource with callback
-const web = builder.addContainer("web", "myregistry/web:latest");
+const web = await builder.addContainer("web", "myregistry/web:latest");
 await web.publishAsAzureContainerApp(async (infrastructure, app) => {
     await app.configureCustomDomain(customDomain, certificateName);
 });
 
 // Test publishAsAzureContainerAppJob on an executable resource
-const api = builder.addExecutable("api", "dotnet", ".", ["run"]);
+const api = await builder.addExecutable("api", "dotnet", ".", ["run"]);
 await api.publishAsAzureContainerAppJob();
 
 // === PublishAsAzureContainerAppJob ===
 // Test publishAsAzureContainerAppJob (parameterless - manual trigger)
-const worker = builder.addContainer("worker", "myregistry/worker:latest");
+const worker = await builder.addContainer("worker", "myregistry/worker:latest");
 await worker.publishAsAzureContainerAppJob();
 
-// Test publishAsConfiguredAzureContainerAppJob (with callback)
-const processor = builder.addContainer("processor", "myregistry/processor:latest");
-await processor.publishAsConfiguredAzureContainerAppJob(async (infrastructure, job) => {
+// Test publishAsAzureContainerAppJob (with callback)
+const processor = await builder.addContainer("processor", "myregistry/processor:latest");
+await processor.publishAsAzureContainerAppJob({
+    configure: async (infrastructure, job) => {
     // Configure the container app job here
+    }
 });
 
 // Test publishAsScheduledAzureContainerAppJob (simple - no callback)
-const scheduler = builder.addContainer("scheduler", "myregistry/scheduler:latest");
+const scheduler = await builder.addContainer("scheduler", "myregistry/scheduler:latest");
 await scheduler.publishAsScheduledAzureContainerAppJob("0 0 * * *");
 
-// Test publishAsConfiguredScheduledAzureContainerAppJob (with callback)
-const reporter = builder.addContainer("reporter", "myregistry/reporter:latest");
-await reporter.publishAsConfiguredScheduledAzureContainerAppJob("0 */6 * * *", {
+// Test publishAsScheduledAzureContainerAppJob (with callback)
+const reporter = await builder.addContainer("reporter", "myregistry/reporter:latest");
+await reporter.publishAsScheduledAzureContainerAppJob("0 */6 * * *", {
     configure: async (infrastructure, job) => {
-        // Configure the scheduled job here
+    // Configure the scheduled job here
     }
 });
 

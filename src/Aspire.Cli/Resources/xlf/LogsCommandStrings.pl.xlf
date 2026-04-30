@@ -12,6 +12,11 @@
         <target state="needs-review-translation">Przesyłaj dzienniki w czasie rzeczywistym podczas ich zapisywania.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Dzienniki wyjściowe w formacie JSON (NDJSON).</target>

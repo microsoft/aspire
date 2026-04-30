@@ -124,7 +124,7 @@
     <value>The name of the integration to add (e.g. redis, postgres)</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file to add the integration to</value>
+    <value>The Aspire AppHost project file, or a directory to search, to add the integration to</value>
   </data>
   <data name="VersionArgumentDescription" xml:space="preserve">
     <value>The version of the integration to add</value>
@@ -134,6 +134,10 @@
   </data>
   <data name="SearchingForAspirePackages" xml:space="preserve">
     <value>Searching for Aspire integrations...</value>
+  </data>
+  <data name="SearchingForSpecifiedPackageVersion" xml:space="preserve">
+    <value>Searching for version '{1}' of {0}...</value>
+    <comment>{0} is the package name, {1} is the requested version.</comment>
   </data>
   <data name="NoIntegrationPackagesFound" xml:space="preserve">
     <value>No integration packages were found. Please check your internet connection or NuGet source configuration.</value>
@@ -168,6 +172,14 @@
   <data name="NoPackagesMatchedSearchTerm" xml:space="preserve">
     <value>No packages matched your search term '{0}'. Showing all available packages.</value>
     <comment>{0} is the search term provided by the user.</comment>
+  </data>
+  <data name="SpecifiedVersionNotFoundForPackage" xml:space="preserve">
+    <value>The requested version '{1}' was not found for package '{0}'.</value>
+    <comment>{0} is the package name, {1} is the requested version.</comment>
+  </data>
+  <data name="SpecifiedVersionRequiresExactPackageMatch" xml:space="preserve">
+    <value>When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</value>
+    <comment>{0} is the integration name provided by the user.</comment>
   </data>
   <data name="UsePrereleasePackages" xml:space="preserve">
     <value>Use pre-release packages</value>

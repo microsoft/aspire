@@ -5,6 +5,8 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
+#pragma warning disable ASPIREDOTNETTOOL
+
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
 builder.Services.AddHealthChecks().AddAsyncCheck("health-test", async (ct) =>
@@ -12,6 +14,27 @@ builder.Services.AddHealthChecks().AddAsyncCheck("health-test", async (ct) =>
     await Task.Delay(5_000, ct);
     return HealthCheckResult.Healthy();
 });
+
+var manualArgSource = builder.AddExecutable("manual-arg-source", "dotnet", Environment.CurrentDirectory)
+    .WithHttpEndpoint(targetPort: 8088);
+var manualArgEndpoint = manualArgSource.GetEndpoint("http");
+
+manualArgSource.WithArgs("--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
+
+builder.AddProject<Projects.Stress_Empty>("manual-project-args", launchProfileName: null)
+    .WithArgs("--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
+
+builder.AddContainer("manual-container-args", "alpine")
+    .WithEntrypoint("sleep")
+    .WithArgs("3600", "--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
+
+builder.AddDotnetTool("manual-dotnet-tool-args", "dotnet-dump")
+    .WithArgs("--version", "--dashboard-port")
+    .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)))
+    .WithExplicitStart();
 
 for (var i = 0; i < 2; i++)
 {
@@ -28,6 +51,8 @@ for (var i = 0; i < 2; i++)
 }
 
 builder.AddParameter("testParameterResource", () => "value", secret: true);
+var apiKeyParam = builder.AddParameter("api-key", secret: true);
+var connectionStringParam = builder.AddParameter("db-connection-string");
 builder.AddContainer("hiddenContainer", "alpine")
     .WithInitialState(new CustomResourceSnapshot
     {
@@ -40,6 +65,8 @@ builder.AddContainer("hiddenContainer", "alpine")
 // See https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/RELEASENOTES.md#1100
 var serviceBuilder = builder.AddProject<Projects.Stress_ApiService>("stress-apiservice", launchProfileName: null)
     .WithEnvironment("OTEL_DOTNET_EXPERIMENTAL_METRICS_EMIT_OVERFLOW_ATTRIBUTE", "true")
+    .WithEnvironment("API_KEY", apiKeyParam)
+    .WithEnvironment("DB_CONNECTION_STRING", connectionStringParam)
     .WithIconName("Server");
 serviceBuilder
     .WithEnvironment("HOST", $"{serviceBuilder.GetEndpoint("http").Property(EndpointProperty.Host)}")

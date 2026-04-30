@@ -7,12 +7,14 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Otlp.Serialization;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -46,6 +48,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
@@ -58,7 +61,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -91,7 +94,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -112,8 +115,8 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
     }
@@ -153,8 +156,20 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            var resourceSpans = apiResponse?.Data?.ResourceSpans;
+            var traces = SharedAIHelpers.GetTracesFromOtlpData(resourceSpans);
+            var trace = traces.FirstOrDefault();
+            if (trace is null)
+            {
+                // Shouldn't happen since API would return 404 if trace not found.
+                _interactionService.DisplayRawText("[]", ConsoleOutput.Standard);
+            }
+            else
+            {
+                Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allOtlpResources);
+                _interactionService.DisplayRawText(SharedAIHelpers.SerializeTraceToJson(trace, getResourceName, dashboardUrl), ConsoleOutput.Standard);
+            }
         }
         else
         {
@@ -202,8 +217,10 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            var resourceSpans = apiResponse?.Data?.ResourceSpans;
+            Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allOtlpResources);
+            _interactionService.DisplayRawText(SharedAIHelpers.SerializeTracesToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
         }
         else
         {
@@ -315,9 +332,12 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             }
         }
 
+        var shortTraceId = OtlpHelpers.ToShortenedId(traceId);
+        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, shortTraceId);
+
         if (spans.Count == 0)
         {
-            _interactionService.DisplayMarkupLine($"[bold]Trace: {traceId}[/]");
+            _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
             _interactionService.DisplayMarkupLine("[dim]No spans found[/]");
             return;
         }
@@ -327,7 +347,6 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var totalDuration = rootSpans.Count > 0 ? rootSpans.Max(s => s.Duration) : spans.Max(s => s.Duration);
 
         // Header
-        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, traceId);
         _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
         _interactionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
         _interactionService.DisplayEmptyLine();

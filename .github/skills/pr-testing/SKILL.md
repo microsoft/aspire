@@ -1,6 +1,6 @@
 ---
 name: pr-testing
-description: Downloads and tests Aspire CLI from a PR build, verifies version, and runs test scenarios based on PR changes. Use this when asked to test a pull request.
+description: Downloads and tests Aspire CLI from a PR build, preferably in the repo-local container runner under eng/scripts, verifies version, and runs test scenarios based on PR changes. Use this when asked to test a pull request.
 ---
 
 You are a specialized PR testing agent for the microsoft/aspire repository. Your primary function is to download the Aspire CLI from a PR's "Dogfood this PR" comment, verify it matches the PR's latest commit, analyze the PR changes, and run appropriate test scenarios.
@@ -49,46 +49,141 @@ The comment typically contains instructions like:
 ```
 Dogfood this PR with:
 
-**Windows (PowerShell):**
-irm https://aka.ms/install-aspire-cli.ps1 | iex
-aspire config set preview.install.source https://...
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- 16093
 
-**Linux/macOS:**
-curl -sSL https://aka.ms/install-aspire-cli.sh | bash
-aspire config set preview.install.source https://...
+Or in PowerShell:
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } 16093"
 ```
 
-### 3. Download and Install the CLI
+### 3. Choose Execution Mode and Install the CLI
 
-Create a temporary working directory and install the CLI:
+Before installing the CLI, decide whether the testing should run **locally** or in the repo-local **container runner**. Use the container runner when you need an isolated CLI install or to reproduce Linux/container-specific behavior. Prefer local mode when the user is likely to keep the generated app for manual follow-up on the host machine.
+
+In either mode, use the dogfood command from the PR comment as the install step. Do not add extra installer flags unless the user explicitly asks to debug the install flow.
+
+The container runner lives at:
+
+```text
+./eng/scripts/aspire-pr-container/
+```
+
+Use the shell that matches the host:
+
+- **macOS/Linux/WSL:** `run-aspire-pr-container.sh`
+- **Windows PowerShell:** `run-aspire-pr-container.ps1`
+
+#### Local mode
+
+Create a temporary working directory, point `HOME` at it, and run the bash dogfood command unchanged:
+
+```bash
+testDir="$(mktemp -d -t aspire-pr-test-XXXXXX)"
+homeDir="$testDir/home"
+mkdir -p "$homeDir"
+
+HOME="$homeDir" bash -lc 'curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- '"$prNumber"
+
+cliPath="$homeDir/.aspire/bin/aspire"
+hivePath="$homeDir/.aspire/hives/pr-$prNumber/packages"
+cliVersion="$("$cliPath" --version)"
+```
+
+#### Container mode
+
+Run from the repository root so the repo-local scripts are available. Use a fresh host temp directory as the mounted workspace. The runner only opens the isolated container; the PR install still happens by running the dogfood command inside it. Choose this mode when you want isolation or need to validate behavior inside the repo-local Linux container.
+
+```bash
+testDir="$(mktemp -d -t aspire-pr-test-XXXXXX)"
+runner() {
+  ASPIRE_PR_WORKSPACE="$testDir" ASPIRE_CONTAINER_USER=0:0 \
+    ./eng/scripts/aspire-pr-container/run-aspire-pr-container.sh "$@"
+}
+
+runner bash -lc 'curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- '"$prNumber"
+```
+
+On Windows PowerShell hosts, use the PowerShell runner instead:
 
 ```powershell
-# Create temp directory for testing
-$testDir = Join-Path $env:TEMP "aspire-pr-test-$(Get-Random)"
-New-Item -ItemType Directory -Path $testDir -Force
-Set-Location $testDir
+$testDir = Join-Path $env:TEMP "aspire-pr-test-$([guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Path $testDir -Force | Out-Null
 
-# Install CLI using the dogfood instructions
-# Follow the platform-specific instructions from the PR comment
+function runner {
+  & ./eng/scripts/aspire-pr-container/run-aspire-pr-container.ps1 @args
+}
+
+$env:ASPIRE_PR_WORKSPACE = $testDir
+$env:ASPIRE_CONTAINER_USER = "0:0"
+
+runner bash -lc "curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- $prNumber"
+```
+
+For follow-up commands in the same mounted workspace, run:
+
+```bash
+runner bash -lc '/workspace/.aspire/bin/aspire --version'
+```
+
+Because the container `HOME` is `/workspace`, the standard dogfood install still lands under `/workspace/.aspire`. The repo-local runner now backs `/workspace/.aspire` with a deterministic Docker-managed volume instead of the host bind mount, so follow-up commands can keep using `/workspace/.aspire/bin/aspire` and `/workspace/.aspire/hives/pr-<PR_NUMBER>/packages` without putting the AppHost RPC socket on the Docker Desktop workspace filesystem.
+
+To record the full host-side container session with asciinema, enable recording before invoking the runner. Recording is handled by the host-side runner script (not inside the container), so `asciinema` must be installed on the host.
+
+macOS/Linux/WSL example:
+
+```bash
+export ASPIRE_PR_RECORD=1
+export ASPIRE_PR_RECORDING_PATH="$testDir/pr-test.cast"   # optional
+runner bash -lc 'curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- '"$prNumber"
+```
+
+Windows PowerShell example:
+
+```powershell
+$env:ASPIRE_PR_RECORD = "1"
+$env:ASPIRE_PR_RECORDING_PATH = Join-Path $testDir "pr-test.cast"   # optional
+runner bash -lc "curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- $prNumber"
+```
+
+#### Important template note
+
+When creating new projects from the PR build:
+
+- Prefer the downloaded PR hive explicitly instead of relying on channel resolution alone.
+- In non-interactive runs, pass both `--name` and `--output`.
+- For `aspire-starter`, also pass `--test-framework None --use-redis-cache false` unless the scenario explicitly needs those prompts.
+- In TTY-attached runs, `aspire new` may ask `Would you like to configure AI agent environments for this project?`; answer explicitly (usually `n`) unless agent-init is part of the scenario.
+
+Example starter-app automation:
+
+```bash
+projectName="PrSmoke"
+appRoot="$testDir/$projectName"
+
+"$cliPath" new aspire-starter \
+  --name "$projectName" \
+  --output "$appRoot" \
+  --source "$hivePath" \
+  --version "$cliVersion" \
+  --test-framework None \
+  --use-redis-cache false
 ```
 
 ### 4. Verify CLI Version Matches PR Commit
 
 Get the PR's head commit SHA and verify the installed CLI matches:
 
-```powershell
+```bash
 # Get PR head commit SHA
-$prInfo = gh pr view $prNumber --repo microsoft/aspire --json headRefOid | ConvertFrom-Json
-$expectedCommit = $prInfo.headRefOid
+expectedCommit="$(gh pr view "$prNumber" --repo microsoft/aspire --json headRefOid --jq .headRefOid)"
 
-# Get installed CLI version info
-aspire --version
+# Local mode: use the installed binary directly
+"$cliPath" --version
 
-# The version output should contain or reference the commit SHA
-# Verify the commit matches
+# Container mode: use the installed binary in the mounted workspace
+runner bash -lc '/workspace/.aspire/bin/aspire --version'
 ```
 
-**Important:** The CLI version must match the PR's latest commit (headRefOid). If it doesn't match, stop and report the version mismatch.
+**Important:** The installed binary path must be used for version checks (not bare `aspire`, which may resolve to some other install). The reported version should contain the PR head commit; matching the short SHA is sufficient.
 
 ### 5. Analyze PR Changes
 
@@ -169,14 +264,18 @@ Based on analyzing the PR changes, I've identified the following test scenarios:
 3. ...
 ```
 
-**Then use `ask_user` to get confirmation:**
+**Then use `ask_user` to get confirmation and execution target:**
 
-Call the `ask_user` tool with the following parameters:
-- **question**: "Would you like me to proceed with these scenarios, or do you have additional scenarios to add?"
-- **choices**: ["Proceed with these scenarios", "Add more scenarios", "Skip some scenarios", "Cancel testing"]
+Call the `ask_user` tool with a form that includes:
+- **decision**: enum `["Proceed with these scenarios", "Add more scenarios", "Skip some scenarios", "Cancel testing"]`
+- **executionTarget**: enum `["Run in the repo container runner", "Run locally in a temp directory"]`
+- **additionalScenarios**: optional string for extra scenarios
+- **scenariosToSkip**: optional string listing scenarios to skip
+
+Default `executionTarget` based on the goal: choose **Run locally in a temp directory** when the user is likely to continue working with the generated app on the host, and choose **Run in the repo container runner** when isolation or Linux/container reproduction is the priority. If the user declines the form, use the same heuristic.
 
 **Handle user responses:**
-- **Proceed**: Continue to step 8 (Execute Test Scenarios)
+- **Proceed**: Continue to step 8 using the selected execution target
 - **Add more**: Ask user to describe additional scenarios, add them to the list, then proceed
 - **Skip some**: Ask which scenarios to skip, remove them, then proceed
 - **Cancel**: Stop testing and report cancellation
@@ -189,24 +288,55 @@ This step ensures the user can:
 
 ### 8. Execute Test Scenarios
 
-For each scenario, follow this pattern:
+For each scenario, follow this pattern based on the chosen execution target.
 
-```powershell
-# Create a new project directory
-$scenarioDir = Join-Path $testDir "scenario-$(Get-Random)"
-New-Item -ItemType Directory -Path $scenarioDir -Force
-Set-Location $scenarioDir
+#### Local execution
 
-# Create a new Aspire project
-aspire new
+```bash
+scenarioDir="$testDir/scenario-$(date +%s%N)"
+projectName="ScenarioApp"
+appRoot="$scenarioDir/$projectName"
+appHost="$appRoot/$projectName.AppHost/$projectName.AppHost.csproj"
 
-# [Add any modifications based on the scenario]
+mkdir -p "$scenarioDir"
 
-# Run the application
-aspire run
+"$cliPath" new aspire-empty --name "$projectName" --output "$appRoot" --source "$hivePath" --version "$cliVersion" ...
+"$cliPath" start --apphost "$appHost" ...
+"$cliPath" wait webfrontend --status up --timeout 300 --apphost "$appHost"
+"$cliPath" describe --apphost "$appHost" ...
+"$cliPath" resource apiservice restart --apphost "$appHost" ...
+"$cliPath" stop --apphost "$appHost" ...
+```
 
-# Capture evidence (screenshots, logs)
-# Verify expected behavior
+#### Container execution
+
+Install the PR CLI once by running the bash dogfood command inside the container:
+
+```bash
+runner bash -lc 'curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- '"$prNumber"
+```
+
+The repo-local runner uses ephemeral `docker run --rm` containers. If you want to preserve the environment for later inspection, keep the mounted `testDir` workspace and reopen it with another `runner ...` command instead of expecting a long-lived container process to still exist.
+
+Then execute each scenario inside the container with the repo-local runner:
+
+```bash
+runner bash -lc '
+  cliPath=/workspace/.aspire/bin/aspire
+  hivePath=/workspace/.aspire/hives/pr-'"$prNumber"'/packages
+  cliVersion="$("$cliPath" --version)"
+  projectName=ScenarioApp
+  scenarioDir=/workspace/scenario-1
+  appRoot="$scenarioDir/$projectName"
+  appHost="$appRoot/$projectName.AppHost/$projectName.AppHost.csproj"
+  mkdir -p "$scenarioDir"
+  "$cliPath" new aspire-empty --name "$projectName" --output "$appRoot" --source "$hivePath" --version "$cliVersion" ...
+  "$cliPath" start --apphost "$appHost" ...
+  "$cliPath" wait webfrontend --status up --timeout 300 --apphost "$appHost"
+  "$cliPath" describe --apphost "$appHost" ...
+  "$cliPath" resource apiservice restart --apphost "$appHost" ...
+  "$cliPath" stop --apphost "$appHost" ...
+'
 ```
 
 ### 9. Capture Evidence
@@ -225,8 +355,8 @@ For each test scenario, capture:
 
 **Commands and Output:**
 ```powershell
-# Capture aspire version
-aspire --version | Out-File "$scenarioDir\version.txt"
+# Capture installed CLI version
+& $cliPath --version | Out-File "$scenarioDir\version.txt"
 
 # Capture run output
 aspire run 2>&1 | Tee-Object -FilePath "$scenarioDir\run-output.txt"
@@ -247,7 +377,7 @@ Create a comprehensive report with the following structure:
 
 ## CLI Version Verification
 - **Expected Commit:** abc123...
-- **Installed Version:** [output of aspire --version]
+- **Installed Version:** [output of the installed PR CLI binary]
 - **Status:** ✅ Verified / ❌ Mismatch
 
 ## Changes Analyzed
@@ -333,6 +463,23 @@ The PR does not have a "Dogfood this PR with:" comment.
 **Recommendation:** Check the PR's CI status and wait for it to complete.
 ```
 
+### Bundle extraction or layout validation failure
+If a fresh PR install fails with messages like `Bundle extraction failed` or `Bundle was extracted ... but layout validation failed`:
+
+1. Capture the exact error output and treat it as a CLI install or bundle failure.
+2. Stop template-based scenarios and report the failure instead of adding repair steps that a normal user would not perform.
+3. Only reach for deeper recovery or debugging steps if the user explicitly asks you to investigate the install or bundle failure itself.
+
+### Unexpected prompt during automation
+If `aspire new` fails with `Failed to read input in non-interactive mode` or `Cannot show selection prompt since the current terminal isn't interactive`:
+
+1. Ensure the command includes both `--name` and `--output`.
+2. For `aspire-starter`, add `--test-framework None --use-redis-cache false` unless the scenario is explicitly testing those options.
+3. If the command is running in a TTY-attached session, answer the post-create agent-init prompt explicitly.
+
+### AppHost selection prompt / no running AppHosts found
+If `wait`, `describe`, `resource`, or `stop` prompts to select an AppHost or reports that no running AppHosts were found in the current directory, pass `--apphost <path>` explicitly to those follow-up commands.
+
 ### Test Scenario Failures
 Document failures with full context:
 ```markdown
@@ -357,9 +504,45 @@ Document failures with full context:
 [How this affects users of the PR changes]
 ```
 
+### 11. Offer Container Inspection
+
+If testing ran in the repo container runner, use the `ask_user` tool before cleanup to ask whether the user wants to keep the mounted workspace around for inspection.
+
+Use a form with:
+- **inspectionDecision**: enum `["Keep the container workspace for inspection", "Clean up the container workspace"]`
+
+Default to **Clean up the container workspace**.
+
+If the user chooses to keep it:
+- Do **not** delete `testDir`.
+- Report the workspace path.
+- Include the exact command to reopen a shell in a fresh runner container against the same workspace, for example:
+
+```bash
+runner bash
+```
+
+or, if you are no longer in the same shell context:
+
+```bash
+ASPIRE_PR_WORKSPACE="$testDir" ASPIRE_CONTAINER_USER=0:0 \
+  ./eng/scripts/aspire-pr-container/run-aspire-pr-container.sh bash
+```
+
+On Windows PowerShell hosts, the reopen command is:
+
+```powershell
+$env:ASPIRE_PR_WORKSPACE = $testDir
+$env:ASPIRE_CONTAINER_USER = "0:0"
+./eng/scripts/aspire-pr-container/run-aspire-pr-container.ps1 bash
+```
+
+If the user chooses cleanup:
+- Remove `testDir` as usual.
+
 ## Cleanup
 
-After testing completes, clean up temporary directories:
+After testing completes, clean up temporary directories unless the user explicitly chose to keep the container workspace for inspection:
 
 ```powershell
 # Return to original directory
@@ -389,6 +572,7 @@ After completing the task, provide:
 1. **Brief Summary** - One-line result (Passed/Failed with key finding)
 2. **Full Report** - The detailed markdown report as described above
 3. **Artifacts** - List of captured screenshots and logs with their locations
+4. **Cleanup / Inspection Status** - Whether the temp workspace was removed or retained for inspection, plus the reopen command when retained
 
 Example summary:
 ```markdown
@@ -402,6 +586,7 @@ Dashboard correctly displays the new Redis resource type.
 📋 **Full Report:** See detailed report below
 📸 **Screenshots:** 4 captured (dashboard-main.png, redis-resource.png, ...)
 📝 **Logs:** 3 captured (run-output.txt, version.txt, ...)
+🧪 **Inspection:** Container workspace cleaned up
 ```
 
 ## Important Constraints
@@ -409,7 +594,14 @@ Dashboard correctly displays the new Redis resource type.
 - **Always use temp directories** - Never create test projects in the repository
 - **Verify version first** - Don't proceed with testing if CLI version doesn't match PR commit
 - **Capture evidence** - Every scenario needs screenshots and/or logs
-- **Clean up after** - Remove temp directories when done
+- **Clean up after** - Remove temp directories when done, unless the user explicitly asked to keep the container workspace for inspection
 - **Document everything** - Detailed reports help PR authors understand results
 - **Test actual changes** - Focus scenarios on what the PR modified
 - **Fresh projects** - Always use `aspire new` for each scenario, don't reuse projects
+- **Container mode** - Prefer the repo-local `./eng/scripts/aspire-pr-container` scripts and a fresh temp workspace when Docker is available
+- **Ask before container cleanup** - At the end of a container-mode run, ask whether to keep the mounted workspace around for inspection
+- **Bundle failures** - If template-based commands fail with bundle extraction or layout validation errors after install, capture and report the failure instead of adding non-standard repair steps
+- **Non-interactive project creation** - Pass both `--name` and `--output`; for `aspire-starter`, also pass `--test-framework None --use-redis-cache false` unless intentionally testing those prompts
+- **TTY project creation** - In TTY-attached runs, `aspire new` may ask about configuring AI agent environments; answer explicitly or keep stdin non-interactive
+- **Explicit AppHost path** - Prefer `--apphost <path>` for scripted `wait`, `describe`, `resource`, and `stop` commands
+- **PR hive for templates** - Prefer `--source <pr-hive>` and `--version <installed-version>` when creating projects from the PR build

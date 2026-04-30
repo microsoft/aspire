@@ -35,7 +35,7 @@
       <_TestBlameArguments Include="--crashdump-type Full" />
 
       <!-- Using `dotnet test` for the project directly here -->
-      <_TestRunCommandArguments Include="dotnet test -- --results-directory $(_HelixLogsPath) --report-trx --report-trx-filename TestResults.trx" />
+      <_TestRunCommandArguments Include="dotnet test --no-launch-profile -- --results-directory $(_HelixLogsPath) --report-trx --report-trx-filename TestResults.trx" />
       <_TestRunCommandArguments Include="@(_TestBlameArguments, ' ')" />
 
       <_TestRunCommandArguments Include="--filter-not-trait &quot;quarantined=true&quot;" />

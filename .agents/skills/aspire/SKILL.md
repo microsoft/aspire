@@ -12,7 +12,7 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 ## Use this skill for
 
 - Starting, restarting, and stopping AppHosts with `aspire start` and `aspire stop`
-- Initializing Aspire in an existing app with `aspire init`
+- Initializing Aspire in an existing app with `aspire init` (drops skeleton files; use the `aspireify` skill to complete wiring)
 - Inspecting resources, logs, traces, and docs
 - Adding integrations with `aspire add`
 - Recovering missing TypeScript AppHost support files with `aspire restore`
@@ -33,15 +33,16 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 1. Confirm that the workspace is an Aspire app and identify the AppHost.
 2. Start the app with `aspire start`. Use `--isolated` in git worktrees or whenever shared local state would be risky.
 3. Use `aspire wait <resource>` before interacting with a resource that needs to be healthy.
-4. Inspect state with `aspire describe`, then use `aspire otel logs`, `aspire logs`, `aspire otel traces`, and `aspire export` before making code changes.
-5. Before adding an integration, introducing a custom dashboard/resource command, or using an unfamiliar AppHost API, run `aspire docs search <topic>` and then `aspire docs get <slug>` for the pattern or API you plan to implement.
+4. Inspect state with `aspire describe`, then use `aspire otel logs`, `aspire logs`, `aspire otel traces`, and `aspire export` before making code changes. Display returned data using the formatting rules in [references/monitoring.md](references/monitoring.md).
+5. Before adding an integration, introducing a custom dashboard/resource command, or using an unfamiliar AppHost API, use `aspire docs search <topic>` and `aspire docs get <slug>` for workflow guidance, then use `aspire docs api search <query> --language csharp|typescript` and `aspire docs api get <id>` when you need the API reference entry itself.
 6. Re-run `aspire start` after AppHost changes. In git worktrees, re-run `aspire start --isolated` instead of switching to `aspire run`.
 
 ## C# AppHosts
 
-When the AppHost is implemented in C# such as `AppHost.cs`, `apphost.cs`, or a `Program.cs`-based AppHost, use Aspire docs to understand the documented API or pattern before editing.
+When the AppHost is implemented in C# such as `AppHost.cs`, `apphost.cs`, or a `Program.cs`-based AppHost, use Aspire docs for workflow guidance and Aspire API docs for the reference entry before editing.
 
-- Use `aspire docs search <topic>` and `aspire docs get <slug>` when you need official guidance for an unfamiliar C# API, resource builder pattern, or command shape.
+- Use `aspire docs search <topic>` and `aspire docs get <slug>` when you need the documented workflow or pattern.
+- Use `aspire docs api search <query> --language csharp` and `aspire docs api get <id>` when you need the C# API reference entry for a resource builder, extension method, or member.
 - If the `dotnet-inspect` skill is available, use it to inspect local C# APIs, overloads, and builder chains when you need help understanding how the API surface is exposed in code.
 - Keep `dotnet-inspect` scoped to understanding APIs and symbols; use Aspire docs for the documented workflow and recommended pattern.
 
@@ -60,8 +61,8 @@ When the AppHost is `apphost.ts`, the `.modules/` folder at the project root con
 - Re-running `aspire start` is the restart path. In git worktrees, `aspire start --isolated` is both the start and restart command. Do not combine `aspire stop` and `aspire run`.
 - Use `--apphost <path>` when the workspace has multiple AppHosts or discovery is ambiguous.
 - Use `--format Json` when another tool or script needs machine-readable output.
-- Do not guess the integration or command shape for unfamiliar AppHost changes. Use `aspire docs search` first, then `aspire docs get` before editing AppHost code for integrations, `WithCommand`, or other non-trivial Aspire APIs.
-- For unfamiliar C# AppHost APIs, use Aspire docs as the primary API reference and, if available, use `dotnet-inspect` only to inspect local symbols, overloads, and builder chains.
+- Do not guess the integration or command shape for unfamiliar AppHost changes. Use `aspire docs search` and `aspire docs get` for the documented pattern, then use `aspire docs api search` and `aspire docs api get` when you need the specific reference entry.
+- For unfamiliar C# AppHost APIs, use Aspire API docs as the primary reference and, if available, use `dotnet-inspect` only to inspect local symbols, overloads, and builder chains.
 - Never install the obsolete Aspire workload.
 - When a TypeScript AppHost uses `.modules/`, do not edit generated files directly. Use `aspire add` to regenerate APIs and inspect `.modules/aspire.ts` afterward.
 - Prefer official docs from `aspire.dev`.

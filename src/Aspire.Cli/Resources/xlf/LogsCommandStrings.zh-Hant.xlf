@@ -12,6 +12,11 @@
         <target state="needs-review-translation">在寫入記錄時即時串流這些記錄。</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">輸出記錄採用 JSON 格式 (NDJSON)。</target>

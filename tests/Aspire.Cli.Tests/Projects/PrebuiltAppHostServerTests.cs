@@ -6,9 +6,9 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -151,19 +151,20 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void Constructor_UsesUserAspireDirectoryForWorkingDirectory()
+    public void Constructor_UsesWorkspaceAspireDirectoryForWorkingDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
+            appHostDirectory.FullName,
             "test.sock",
             new LayoutConfiguration(),
             nugetService,
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
-            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
@@ -172,7 +173,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
 
-        var rootDirectory = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "bundle-hosts");
+        var rootDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bundle-hosts");
         var isUnderRoot = workingDirectory.StartsWith(rootDirectory, StringComparison.OrdinalIgnoreCase);
         var parentDirectory = Path.GetDirectoryName(workingDirectory);
         var isDirectChildOfRoot = parentDirectory is not null &&
@@ -188,6 +189,59 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             if (isSafeToDelete && Directory.Exists(workingDirectory))
             {
                 Directory.Delete(workingDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Constructor_UsesDistinctWorkingDirectoriesForMultipleAppHostsInSameWorkspace()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
+        var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
+
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+
+        PrebuiltAppHostServer CreateServer(string appHostDirectory) => new(
+            appHostDirectory,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
+            new TestConfigurationService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        var firstServer = CreateServer(firstAppHost.FullName);
+        var secondServer = CreateServer(secondAppHost.FullName);
+
+        var workingDirectoryField = typeof(PrebuiltAppHostServer)
+            .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var firstWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(firstServer));
+        var secondWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(secondServer));
+
+        var bundleHostsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bundle-hosts");
+
+        try
+        {
+            Assert.StartsWith(bundleHostsRoot, firstWorkingDirectory, StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith(bundleHostsRoot, secondWorkingDirectory, StringComparison.OrdinalIgnoreCase);
+            Assert.NotEqual(firstWorkingDirectory, secondWorkingDirectory);
+        }
+        finally
+        {
+            foreach (var dir in new[] { firstWorkingDirectory, secondWorkingDirectory })
+            {
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
             }
         }
     }
@@ -209,7 +263,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             OnGetConfiguration = key => key == "channel" ? "pr-old" : null
         };
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
             workspace.WorkspaceRoot.FullName,
             "test.sock",
@@ -217,7 +271,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
-            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             configurationService,
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 

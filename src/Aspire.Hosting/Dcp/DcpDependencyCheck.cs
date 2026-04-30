@@ -245,12 +245,12 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
         if (!installed)
         {
-            logger.LogWarning("Container runtime '{Runtime}' could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.", containerRuntime);
+            logger.LogWarning("Container runtime '{Runtime}' could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.", containerRuntime);
 
             logger.LogDebug("The error from the container runtime check was: {Error}", error);
             if (throwIfUnhealthy)
             {
-                throw new DistributedApplicationException($"Container runtime '{containerRuntime}' could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.");
+                throw new DistributedApplicationException($"Container runtime '{containerRuntime}' could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.");
             }
         }
         else if (!running)

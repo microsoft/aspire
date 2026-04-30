@@ -7,7 +7,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;

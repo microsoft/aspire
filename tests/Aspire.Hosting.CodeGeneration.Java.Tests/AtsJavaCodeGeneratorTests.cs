@@ -43,6 +43,23 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var testConfigsJava = files["TestConfigs.java"];
+
+        Assert.Contains("public final class TestConfigs", testConfigsJava);
+        Assert.Contains("static final TestConfigDto Default", testConfigsJava);
+        Assert.Contains("static final class Profiles", testConfigsJava);
+        Assert.Contains("static final TestConfigDto Development", testConfigsJava);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithTestTypes_IncludesCapabilities()
     {
         // Arrange
@@ -161,7 +178,7 @@ public class AtsJavaCodeGeneratorTests
         var withReference = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting/withReference");
         Assert.True(withReference.ReturnsBuilder);
 
-        var waitFor = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting/waitForResource");
+        var waitFor = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting/waitFor");
         Assert.True(waitFor.ReturnsBuilder);
     }
 
@@ -226,6 +243,17 @@ public class AtsJavaCodeGeneratorTests
             .Any(i => i.TypeId.Contains("IResourceWithEnvironment"));
         Assert.True(hasEnvironmentInterface,
             "TestRedisResource should implement IResourceWithEnvironment via ContainerResource");
+    }
+
+    [Fact]
+    public void TwoPassScanning_GeneratesDerivedResourceInheritance()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var testRedisJava = files["TestRedisResource.java"];
+
+        Assert.Contains("public class TestRedisResource extends ContainerResource", testRedisJava);
     }
 
     [Fact]

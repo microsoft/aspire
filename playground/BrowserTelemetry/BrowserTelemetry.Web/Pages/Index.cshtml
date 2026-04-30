@@ -1,4 +1,41 @@
 ﻿@page
 <div class="container">
-    <p>Hello world</p>
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <h1 class="display-6">Browser logs demo</h1>
+            <p class="lead">
+                Use the <strong>web-browser-logs</strong> resource in the dashboard to open a tracked browser session, then
+                use the buttons below to emit browser-side console logs, network requests, and unhandled failures.
+            </p>
+        </div>
+        <div class="col-lg-4">
+            <div class="alert alert-secondary mb-0" id="browser-log-status">
+                Waiting for browser interaction.
+            </div>
+        </div>
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 g-3 mt-1">
+        <div class="col">
+            <button class="btn btn-primary w-100" id="emit-console-log" type="button">Emit console.log</button>
+        </div>
+        <div class="col">
+            <button class="btn btn-warning w-100" id="emit-console-warn" type="button">Emit console.warn</button>
+        </div>
+        <div class="col">
+            <button class="btn btn-danger w-100" id="emit-console-error" type="button">Emit console.error</button>
+        </div>
+        <div class="col">
+            <button class="btn btn-dark w-100" id="emit-unhandled-exception" type="button">Throw unhandled exception</button>
+        </div>
+        <div class="col">
+            <button class="btn btn-outline-danger w-100" id="emit-unhandled-rejection" type="button">Reject unhandled promise</button>
+        </div>
+        <div class="col">
+            <button class="btn btn-outline-primary w-100" id="emit-successful-fetch" type="button">Fetch successful request</button>
+        </div>
+        <div class="col">
+            <button class="btn btn-outline-secondary w-100" id="emit-failing-fetch" type="button">Fetch failing request</button>
+        </div>
+    </div>
 </div>

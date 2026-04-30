@@ -13,7 +13,7 @@ public class ListIntegrationsToolTests
     [Fact]
     public void ListIntegrationsTool_HasCorrectName()
     {
-        var tool = new ListIntegrationsTool(new MockPackagingService(), TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
+        var tool = new ListIntegrationsTool(MockPackagingServiceFactory.Create(), TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
 
         Assert.Equal("list_integrations", tool.Name);
     }
@@ -21,7 +21,7 @@ public class ListIntegrationsToolTests
     [Fact]
     public void ListIntegrationsTool_HasCorrectDescription()
     {
-        var tool = new ListIntegrationsTool(new MockPackagingService(), TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
+        var tool = new ListIntegrationsTool(MockPackagingServiceFactory.Create(), TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
 
         Assert.Contains("List available Aspire hosting integrations", tool.Description);
         Assert.Contains("This tool does not require a running AppHost", tool.Description);
@@ -30,7 +30,7 @@ public class ListIntegrationsToolTests
     [Fact]
     public void ListIntegrationsTool_GetInputSchema_ReturnsValidSchema()
     {
-        var tool = new ListIntegrationsTool(new MockPackagingService(), TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
+        var tool = new ListIntegrationsTool(MockPackagingServiceFactory.Create(), TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
         var schema = tool.GetInputSchema();
 
         Assert.Equal(JsonValueKind.Object, schema.ValueKind);
@@ -47,7 +47,7 @@ public class ListIntegrationsToolTests
     [Fact]
     public async Task ListIntegrationsTool_CallToolAsync_ReturnsEmptyJsonArray_WhenNoPackagesFound()
     {
-        var mockPackagingService = new MockPackagingService();
+        var mockPackagingService = MockPackagingServiceFactory.Create();
         var tool = new ListIntegrationsTool(mockPackagingService, TestExecutionContextFactory.CreateTestContext(), new MockAuxiliaryBackchannelMonitor());
 
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
@@ -68,7 +68,7 @@ public class ListIntegrationsToolTests
     [Fact]
     public async Task ListIntegrationsTool_CallToolAsync_ReturnsJsonWithPackages_WhenPackagesFound()
     {
-        var mockPackagingService = new MockPackagingService(new[]
+        var mockPackagingService = MockPackagingServiceFactory.Create(new[]
         {
             new Aspire.Shared.NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.0.0" },
             new Aspire.Shared.NuGetPackageCli { Id = "Aspire.Hosting.PostgreSQL", Version = "9.0.0" }
@@ -107,7 +107,7 @@ public class ListIntegrationsToolTests
     public async Task ListIntegrationsTool_UsesDefaultChannelOnly()
     {
         // This test verifies that only the default (first) channel is used
-        var mockPackagingService = new MockPackagingService(new[]
+        var mockPackagingService = MockPackagingServiceFactory.Create(new[]
         {
             new Aspire.Shared.NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.0.0" }
         });

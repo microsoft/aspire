@@ -26,7 +26,7 @@ namespace Aspire.Hosting.Docker;
 /// <remarks>
 /// Initializes a new instance of the <see cref="DockerComposeEnvironmentResource"/> class.
 /// </remarks>
-[global::Aspire.Hosting.AspireExport(ExposeProperties = true)]
+[AspireExport(ExposeProperties = true, ExposeMethods = true)]
 public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource
 {
     private const string DockerComposeUpTag = "docker-compose-up";
@@ -64,6 +64,16 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         {
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
+
+            var prepareDeploymentTargetsStep = new PipelineStep
+            {
+                Name = $"prepare-deployment-targets-{Name}",
+                Description = $"Prepares Docker Compose deployment targets for {Name}.",
+                Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+            steps.Add(prepareDeploymentTargetsStep);
 
             var publishStep = new PipelineStep
             {
@@ -109,7 +119,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 Name = $"prepare-{Name}",
                 Description = $"Prepares the Docker Compose environment {Name} for deployment.",
-                Action = ctx => PrepareAsync(ctx)
+                Action = ctx => PrepareAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments]
             };
             prepareStep.DependsOn(WellKnownPipelineSteps.Publish);
             prepareStep.DependsOn(WellKnownPipelineSteps.Build);
@@ -273,6 +284,101 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             context.CancellationToken);
 
         return dockerComposePublishingContext.WriteModelAsync(context.Model, this);
+    }
+
+    /// <summary>
+    /// Materializes Docker Compose deployment targets for compute resources targeted to this
+    /// environment. Invoked by the per-environment <c>prepare-deployment-targets-{name}</c>
+    /// pipeline step.
+    /// </summary>
+    private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
+    {
+        var appModel = context.Model;
+        var services = context.Services;
+        var executionContext = context.ExecutionContext;
+
+        if (executionContext.IsRunMode)
+        {
+            return;
+        }
+
+        var logger = services.GetRequiredService<ILogger<DockerComposeEnvironmentResource>>();
+        var cancellationToken = context.CancellationToken;
+
+        var dockerComposeEnvironmentContext = new DockerComposeEnvironmentContext(this, logger);
+
+        if (DashboardEnabled && Dashboard?.Resource is DockerComposeAspireDashboardResource dashboard)
+        {
+            // Ensure the dashboard resource is created (even though it's not part of the main application model)
+            var dashboardService = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
+
+            dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
+            {
+                ComputeEnvironment = this,
+                ContainerRegistry = GetContainerRegistry(this, appModel)
+            });
+        }
+
+        foreach (var r in appModel.GetComputeResources())
+        {
+            // Skip resources that are explicitly targeted to a different compute environment
+            var resourceComputeEnvironment = r.GetComputeEnvironment();
+            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            // Configure OTLP for resources if dashboard is enabled (before creating the service resource)
+            if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+            {
+                ConfigureOtlp(r, otlpGrpcEndpoint);
+            }
+
+            // Create a Docker Compose compute resource for the resource
+            var serviceResource = await dockerComposeEnvironmentContext.CreateDockerComposeServiceResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+
+            // Add deployment target annotation to the resource
+            r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
+            {
+                ComputeEnvironment = this,
+                ContainerRegistry = GetContainerRegistry(this, appModel)
+            });
+        }
+    }
+
+    private static IContainerRegistry GetContainerRegistry(DockerComposeEnvironmentResource environment, DistributedApplicationModel appModel)
+    {
+        // Check for explicit container registry reference annotation on the environment
+        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
+        {
+            return annotation.Registry;
+        }
+
+        // Check if there's a single container registry in the app model
+        var registries = appModel.Resources.OfType<IContainerRegistry>().ToArray();
+        if (registries.Length == 1)
+        {
+            return registries[0];
+        }
+
+        // Fall back to local container registry for Docker Compose scenarios
+        return LocalContainerRegistry.Instance;
+    }
+
+    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    {
+        // Only configure OTLP for resources that have the OtlpExporterAnnotation and implement IResourceWithEnvironment
+        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        {
+            // Configure OTLP environment variables
+            resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+            {
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                return Task.CompletedTask;
+            }));
+        }
     }
 
     private async Task DockerComposeUpAsync(PipelineStepContext context)

@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Docker.Resources.ServiceNodes;
 /// The <see cref="Volume"/> class is used to define properties and options for volumes in a Docker environment.
 /// Volumes are used to persist data beyond the lifecycle of a container and can be shared among multiple containers.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Volume : NamedComposeMember
 {

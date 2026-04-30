@@ -293,34 +293,6 @@ public class AddViteAppTests
     }
 
     [Fact]
-    public async Task VerifyDockerfileWithNodeVersionFromPackageJson()
-    {
-        using var tempDir = new TestTempDirectory();
-
-        // Create a package.json with engines.node specification
-        var packageJson = """
-            {
-              "name": "test-vite",
-              "engines": {
-                "node": ">=20.12"
-              }
-            }
-            """;
-        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), packageJson);
-
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
-            .WithNpm();
-
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
-
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
-
-        // Should detect version 20 from package.json
-        Assert.Contains("FROM node:20-slim", dockerfileContents);
-    }
-
-    [Fact]
     public async Task VerifyDockerfileWithNodeVersionFromNvmrc()
     {
         using var tempDir = new TestTempDirectory();
@@ -383,6 +355,57 @@ public class AddViteAppTests
 
         // Should detect version 19 from .tool-versions
         Assert.Contains("FROM node:19-slim", dockerfileContents);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWithNodeVersionFromToolVersionsUsingTabs()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        // Create a .tool-versions file using tabs between the tool name and version
+        var toolVersions = string.Join(Environment.NewLine,
+        [
+            "ruby 3.2.0",
+            "nodejs\t19.8.1",
+            "python 3.11.0"
+        ]);
+        File.WriteAllText(Path.Combine(tempDir.Path, ".tool-versions"), toolVersions);
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+            .WithNpm();
+
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+
+        Assert.Contains("FROM node:19-slim", dockerfileContents);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileIgnoresPackageJsonEnginesWhenNoPinnedVersionExists()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var packageJson = """
+            {
+              "name": "test-vite",
+              "engines": {
+                "node": "18.x"
+              }
+            }
+            """;
+        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), packageJson);
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+            .WithNpm();
+
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+
+        Assert.Contains("FROM node:22-slim", dockerfileContents);
     }
 
     [Fact]

@@ -93,18 +93,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearAllResources">
-        <source>Remove all</source>
-        <target state="translated">Supprimer tout</target>
+        <source>Remove all telemetry</source>
+        <target state="needs-review-translation">Supprimer tout</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
-        <source>Remove for resource</source>
-        <target state="translated">Supprimer pour la ressource</target>
+        <source>Remove telemetry for resource</source>
+        <target state="needs-review-translation">Supprimer pour la ressource</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
-        <source>Remove for {0}</source>
-        <target state="translated">Supprimer pour {0}</target>
+        <source>Remove telemetry for {0}</source>
+        <target state="needs-review-translation">Supprimer pour {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
@@ -357,6 +357,11 @@
         <target state="translated">Barre d’outils de la page</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterSetValueAction">
+        <source>Click to set parameter value</source>
+        <target state="new">Click to set parameter value</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterValueNotSet">
         <source>Value not set</source>
         <target state="translated">Valeur non définie</target>
@@ -435,6 +440,11 @@
       <trans-unit id="ResourceDetailsResourceHeader">
         <source>Resource</source>
         <target state="translated">Ressource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsStateDescriptionHeader">
+        <source>State details</source>
+        <target state="new">State details</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">

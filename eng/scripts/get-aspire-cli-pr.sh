@@ -2,6 +2,8 @@
 
 # get-aspire-cli-pr.sh - Download and unpack the Aspire CLI from a specific PR's build artifacts
 # Usage: ./get-aspire-cli-pr.sh PR_NUMBER [OPTIONS]
+#        ./get-aspire-cli-pr.sh --run-id WORKFLOW_RUN_ID [OPTIONS]
+#        ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts [OPTIONS]
 
 set -euo pipefail
 
@@ -26,6 +28,8 @@ readonly RESET='\033[0m'
 INSTALL_PREFIX=""
 PR_NUMBER=""
 WORKFLOW_RUN_ID=""
+LOCAL_DIR=""
+HIVE_LABEL=""
 OS_ARG=""
 ARCH_ARG=""
 SHOW_HELP=false
@@ -57,12 +61,20 @@ DESCRIPTION:
 USAGE:
     ./get-aspire-cli-pr.sh PR_NUMBER [OPTIONS]
     ./get-aspire-cli-pr.sh PR_NUMBER --run-id WORKFLOW_RUN_ID [OPTIONS]
+    ./get-aspire-cli-pr.sh --run-id WORKFLOW_RUN_ID [OPTIONS]
+    ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts [OPTIONS]
 
-    PR_NUMBER                   Pull request number (required)
-    --run-id, -r WORKFLOW_ID    Workflow run ID to download from (optional)
+    PR_NUMBER                   Pull request number (required unless --run-id or --local-dir is used alone)
+    --run-id, -r WORKFLOW_ID    Workflow run ID to download from (optional with PR, required without)
+    --local-dir PATH            Use pre-downloaded artifacts from a local directory instead of downloading
+                                from GitHub. Mutually exclusive with PR_NUMBER and --run-id.
+                                The directory must contain CLI archive files (aspire-cli-*.tar.gz or .zip)
+                                and optionally NuGet packages (*.nupkg).
+    --hive-label LABEL          Override the NuGet hive label (default: pr-<PR_NUMBER>, run-<RUN_ID>,
+                                or run-<GITHUB_RUN_ID> (or run-local if GITHUB_RUN_ID is unset) for --local-dir)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
                                 CLI installs to: <install-path>/bin
-                                NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages
+                                NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages (or run-<RUN_ID>)
     --os OS                     Override OS detection (win, linux, linux-musl, osx)
     --arch ARCH                 Override architecture detection (x64, arm64)
     --hive-only                 Only install NuGet packages to the hive, skip CLI download
@@ -77,6 +89,9 @@ USAGE:
 EXAMPLES:
     ./get-aspire-cli-pr.sh 1234
     ./get-aspire-cli-pr.sh 1234 --run-id 12345678
+    ./get-aspire-cli-pr.sh --run-id 12345678
+    ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts
+    ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts --hive-label my-build
     ./get-aspire-cli-pr.sh 1234 --install-path ~/my-aspire
     ./get-aspire-cli-pr.sh 1234 --os linux --arch arm64 --verbose
     ./get-aspire-cli-pr.sh 1234 --hive-only
@@ -88,7 +103,7 @@ EXAMPLES:
     curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
 
 REQUIREMENTS:
-    - GitHub CLI (gh) must be installed and authenticated
+    - GitHub CLI (gh) must be installed and authenticated (not needed with --local-dir)
     - Permissions to download artifacts from the target repository
     - VS Code extension installation requires VS Code CLI (code) to be available in PATH
 
@@ -111,24 +126,27 @@ parse_args() {
 
     # Check that at least one argument is provided
     if [[ $# -lt 1 ]]; then
-        say_error "At least one argument is required. The first argument must be a PR number."
+        say_error "At least one argument is required. Provide a PR number or --run-id <ID>."
         say_info "Use --help for usage information."
         exit 1
     fi
 
-    # First argument must be the PR number (cannot start with --)
-    if [[ "$1" == --* ]]; then
-        say_error "First argument must be a PR number, not an option. Got: '$1'"
+    # First argument can be a PR number, --run-id, or --local-dir for direct artifact installation
+    if [[ "$1" == "--run-id" || "$1" == "-r" ]]; then
+        # No PR number — install directly from workflow run ID
+        PR_NUMBER=""
+    elif [[ "$1" == "--local-dir" ]]; then
+        # No PR number — install from local directory
+        PR_NUMBER=""
+    elif [[ "$1" == --* ]]; then
+        say_error "First argument must be a PR number, --run-id <ID>, or --local-dir <PATH>. Got: '$1'"
         say_info "Use --help for usage information."
         exit 1
-    fi
-
-    # Validate that the first argument is a valid PR number (positive integer)
-    if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
+    elif [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
         PR_NUMBER="$1"
         shift
     else
-        say_error "First argument must be a valid PR number"
+        say_error "First argument must be a valid PR number, --run-id <ID>, or --local-dir <PATH>"
         say_info "Use --help for usage information."
         exit 1
     fi
@@ -148,6 +166,24 @@ parse_args() {
                     exit 1
                 fi
                 WORKFLOW_RUN_ID="$2"
+                shift 2
+                ;;
+            --local-dir)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    say_error "Option '$1' requires a non-empty value"
+                    say_info "Use --help for usage information."
+                    exit 1
+                fi
+                LOCAL_DIR="$2"
+                shift 2
+                ;;
+            --hive-label)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    say_error "Option '$1' requires a non-empty value"
+                    say_info "Use --help for usage information."
+                    exit 1
+                fi
+                HIVE_LABEL="$2"
                 shift 2
                 ;;
             -i|--install-path)
@@ -522,7 +558,7 @@ add_to_shell_profile() {
     esac
 
     # Get the appropriate shell config file
-    local config_file
+    local config_file=""
 
     # Find the first existing config file
     for file in $config_files; do
@@ -611,12 +647,33 @@ get_pr_head_sha() {
 
     say_verbose "Getting HEAD SHA for PR #$pr_number"
 
-    local head_sha
-    if ! head_sha=$(gh_api_call "${GH_REPOS_BASE}/pulls/$pr_number" ".head.sha" "Failed to get HEAD SHA for PR #$pr_number"); then
-        say_info "This could mean:"
-        say_info "  - The PR number does not exist"
-        say_info "  - You don't have access to the repository"
+    local repo_owner repo_name
+    if [[ "$REPO" =~ ^([^/]+)/([^/]+)$ ]]; then
+        repo_owner="${BASH_REMATCH[1]}"
+        repo_name="${BASH_REMATCH[2]}"
+    else
+        say_error "Invalid repository format '$REPO'. Expected 'owner/name'."
         exit 1
+    fi
+
+    local graphql_query='query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { headRefOid } } }'
+    local gh_cmd=(gh api graphql -f query="$graphql_query" -f owner="$repo_owner" -f name="$repo_name" -F number="$pr_number" --jq ".data.repository.pullRequest.headRefOid")
+
+    say_verbose "Calling GitHub API: ${gh_cmd[*]}"
+
+    local head_sha
+    if head_sha=$("${gh_cmd[@]}" 2>/dev/null) && [[ -n "$head_sha" && "$head_sha" != "null" ]]; then
+        # GraphQL succeeded with a valid SHA
+        :
+    else
+        say_verbose "GraphQL PR head lookup failed or returned empty, falling back to REST API"
+
+        if ! head_sha=$(gh_api_call "${GH_REPOS_BASE}/pulls/$pr_number" ".head.sha" "Failed to get HEAD SHA for PR #$pr_number using REST fallback"); then
+            say_info "This could mean:"
+            say_info "  - The PR number does not exist"
+            say_info "  - You don't have access to the repository"
+            exit 1
+        fi
     fi
 
     if [[ -z "$head_sha" || "$head_sha" == "null" ]]; then
@@ -944,6 +1001,93 @@ install_aspire_cli() {
     return 0
 }
 
+# Main function to install from a local directory of pre-built artifacts
+install_from_local_dir() {
+    local local_dir="$1"
+
+    if [[ ! -d "$local_dir" ]]; then
+        say_error "Local directory does not exist: $local_dir"
+        return 1
+    fi
+
+    say_info "Installing from local directory: $local_dir"
+
+    # Set installation paths
+    local cli_install_dir="$INSTALL_PREFIX/bin"
+    local hive_label
+    if [[ -n "$HIVE_LABEL" ]]; then
+        hive_label="$HIVE_LABEL"
+    elif [[ -n "${GITHUB_RUN_ID:-}" ]]; then
+        hive_label="run-$GITHUB_RUN_ID"
+    else
+        hive_label="run-local"
+    fi
+    local nuget_hive_dir="$INSTALL_PREFIX/hives/$hive_label/packages"
+
+    say_info "Using hive label: $hive_label"
+
+    # Compute RID
+    local rid
+    if ! rid=$(get_runtime_identifier "$OS_ARG" "$ARCH_ARG"); then
+        return 1
+    fi
+    say_verbose "Computed RID: $rid"
+
+    # Find CLI archive in local directory
+    if [[ "$HIVE_ONLY" == true ]]; then
+        say_info "Skipping CLI installation due to --hive-only flag"
+    else
+        local -a cli_files=()
+        while IFS= read -r -d '' f; do
+            cli_files+=("$f")
+        done < <(find "$local_dir" -type f \( -name "${ASPIRE_CLI_ARTIFACT_NAME_PREFIX}-*.tar.gz" -o -name "${ASPIRE_CLI_ARTIFACT_NAME_PREFIX}-*.zip" \) -print0 | sort -z)
+
+        if [[ ${#cli_files[@]} -eq 0 ]]; then
+            say_error "No CLI archive found in local directory. Expected ${ASPIRE_CLI_ARTIFACT_NAME_PREFIX}-*.tar.gz or .zip in: $local_dir"
+            say_info "Showing up to first 25 files under local directory (for debugging):"
+            find "$local_dir" -type f | head -25 | sed 's/^/  /'
+            return 1
+        fi
+        if [[ ${#cli_files[@]} -gt 1 ]]; then
+            say_error "Multiple CLI archives found (expected exactly one). Matches:"
+            printf '  %s\n' "${cli_files[@]}"
+            return 1
+        fi
+
+        local cli_archive_path="${cli_files[0]}"
+        say_verbose "Using CLI archive: $cli_archive_path"
+
+        if ! install_aspire_cli "$cli_archive_path" "$cli_install_dir"; then
+            return 1
+        fi
+    fi
+
+    # Install NuGet packages from local directory
+    if ! install_built_nugets "$local_dir" "$nuget_hive_dir"; then
+        say_error "Failed to install nuget packages from local directory"
+        return 1
+    fi
+
+    # Extract and print the version suffix from packages
+    local version_suffix
+    if version_suffix=$(extract_version_suffix_from_packages "$local_dir"); then
+        say_info "Package version suffix: $version_suffix"
+    else
+        say_warn "Could not extract version suffix from local packages"
+    fi
+
+    # Save the global channel setting
+    if [[ "$HIVE_ONLY" != true ]]; then
+        local cli_path
+        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
+            cli_path="$cli_install_dir/aspire.exe"
+        else
+            cli_path="$cli_install_dir/aspire"
+        fi
+        save_global_settings "$cli_path" "channel" "$hive_label" || true
+    fi
+}
+
 # Main function to download and install from PR or workflow run ID
 download_and_install_from_pr() {
     # Parameters:
@@ -954,9 +1098,17 @@ download_and_install_from_pr() {
     # If a workflow run ID was explicitly provided via arguments, use that directly.
     # (Previously this checked the uninitialized local variable 'workflow_run_id', which was always empty.)
     if [[ -n "$WORKFLOW_RUN_ID" ]]; then
-        say_info "Starting download and installation for PR #$PR_NUMBER with workflow run ID: $WORKFLOW_RUN_ID"
+        if [[ -n "$PR_NUMBER" ]]; then
+            say_info "Starting download and installation for PR #$PR_NUMBER with workflow run ID: $WORKFLOW_RUN_ID"
+        else
+            say_info "Starting download and installation for workflow run ID: $WORKFLOW_RUN_ID"
+        fi
         workflow_run_id="$WORKFLOW_RUN_ID"
     else
+        if [[ -z "$PR_NUMBER" ]]; then
+            say_error "Either a PR number or --run-id <ID> must be provided."
+            return 1
+        fi
         # When only PR number is provided, find the workflow run
         say_info "Starting download and installation for PR #$PR_NUMBER"
 
@@ -974,7 +1126,15 @@ download_and_install_from_pr() {
 
     # Set installation paths
     local cli_install_dir="$INSTALL_PREFIX/bin"
-    local nuget_hive_dir="$INSTALL_PREFIX/hives/pr-$PR_NUMBER/packages"
+    local hive_label
+    if [[ -n "$HIVE_LABEL" ]]; then
+        hive_label="$HIVE_LABEL"
+    elif [[ -n "$PR_NUMBER" ]]; then
+        hive_label="pr-$PR_NUMBER"
+    else
+        hive_label="run-$workflow_run_id"
+    fi
+    local nuget_hive_dir="$INSTALL_PREFIX/hives/$hive_label/packages"
 
     # First, download both artifacts
     local cli_archive_path nuget_download_dir
@@ -1050,77 +1210,100 @@ download_and_install_from_pr() {
             cli_path="$cli_install_dir/aspire"
         fi
         # Non-fatal: channel can be set manually if this fails
-        save_global_settings "$cli_path" "channel" "pr-$PR_NUMBER" || true
+        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 
-# =============================================================================
-# Main Execution
-# =============================================================================
+# Main entry point — wraps everything after function definitions.
+# Guarded so that `source get-aspire-cli-pr.sh` loads functions without
+# executing the main flow (enables Tier-1 unit tests).
+main() {
+    # Parse command line arguments
+    parse_args "$@"
 
-# Parse command line arguments
-parse_args "$@"
+    if [[ "$SHOW_HELP" == true ]]; then
+        show_help
+        exit 0
+    fi
 
-if [[ "$SHOW_HELP" == true ]]; then
-    show_help
-    exit 0
-fi
+    HOST_OS=$(detect_os)
 
-HOST_OS=$(detect_os)
+    if [[ "$HOST_OS" == "unsupported" ]]; then
+        say_error "Unsupported operating system detected: $(uname -s). Supported values: win (Git Bash/MinGW/MSYS), linux, linux-musl, osx. Use --os to override when appropriate."
+        exit 1
+    fi
 
-if [[ "$HOST_OS" == "unsupported" ]]; then
-    say_error "Unsupported operating system detected: $(uname -s). Supported values: win (Git Bash/MinGW/MSYS), linux, linux-musl, osx. Use --os to override when appropriate."
-    exit 1
-fi
+    # Validate mutually exclusive options
+    if [[ -n "$LOCAL_DIR" ]]; then
+        if [[ -n "$PR_NUMBER" || -n "$WORKFLOW_RUN_ID" ]]; then
+            say_error "--local-dir is mutually exclusive with PR_NUMBER and --run-id"
+            exit 1
+        fi
+    fi
 
-# Check gh dependency
-check_gh_dependency
+    # Check gh dependency (not needed for --local-dir mode)
+    if [[ -z "$LOCAL_DIR" ]]; then
+        check_gh_dependency
+    fi
 
-# Set default install prefix if not provided
-if [[ -z "$INSTALL_PREFIX" ]]; then
-    INSTALL_PREFIX="$HOME/.aspire"
-    INSTALL_PREFIX_UNEXPANDED="\$HOME/.aspire"
-else
-    INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
-fi
-
-# Set paths based on install prefix
-cli_install_dir="$INSTALL_PREFIX/bin"
-INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
-
-# Create a temporary directory for downloads
-if [[ "$DRY_RUN" == true ]]; then
-    temp_dir="/tmp/aspire-cli-pr-dry-run"
-else
-    temp_dir=$(mktemp -d -t aspire-cli-pr-download-XXXXXX)
-    say_verbose "Creating temporary directory: $temp_dir"
-fi
-
-# Set trap for cleanup on exit
-cleanup() {
-    remove_temp_dir "$temp_dir"
-}
-trap cleanup EXIT
-
-# Download and install from PR or workflow run ID
-if ! download_and_install_from_pr "$temp_dir"; then
-    exit 1
-fi
-
-# Add to shell profile for persistent PATH
-if [[ "$HIVE_ONLY" != true ]]; then
-    if [[ "$SKIP_PATH" == true ]]; then
-        say_info "Skipping PATH configuration due to --skip-path flag"
+    # Set default install prefix if not provided
+    if [[ -z "$INSTALL_PREFIX" ]]; then
+        INSTALL_PREFIX="$HOME/.aspire"
+        INSTALL_PREFIX_UNEXPANDED="\$HOME/.aspire"
     else
-        add_to_shell_profile "$cli_install_dir" "$INSTALL_PATH_UNEXPANDED"
+        INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
+    fi
 
-        # Add to current session PATH, if the path is not already in PATH
-        if  [[ ":$PATH:" != *":$cli_install_dir:"* ]]; then
-            if [[ "$DRY_RUN" == true ]]; then
-                say_info "[DRY RUN] Would add $cli_install_dir to PATH"
-            else
-                export PATH="$cli_install_dir:$PATH"
+    # Set paths based on install prefix
+    cli_install_dir="$INSTALL_PREFIX/bin"
+    INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+
+    # Create a temporary directory for downloads
+    if [[ "$DRY_RUN" == true ]]; then
+        temp_dir="/tmp/aspire-cli-pr-dry-run"
+    else
+        temp_dir=$(mktemp -d -t aspire-cli-pr-download-XXXXXX)
+        say_verbose "Creating temporary directory: $temp_dir"
+    fi
+
+    # Set trap for cleanup on exit
+    cleanup() {
+        remove_temp_dir "$temp_dir"
+    }
+    trap cleanup EXIT
+
+    # Download and install from PR/workflow run ID, or install from local directory
+    if [[ -n "$LOCAL_DIR" ]]; then
+        if ! install_from_local_dir "$LOCAL_DIR"; then
+            exit 1
+        fi
+    else
+        if ! download_and_install_from_pr "$temp_dir"; then
+            exit 1
+        fi
+    fi
+
+    # Add to shell profile for persistent PATH
+    if [[ "$HIVE_ONLY" != true ]]; then
+        if [[ "$SKIP_PATH" == true ]]; then
+            say_info "Skipping PATH configuration due to --skip-path flag"
+        else
+            add_to_shell_profile "$cli_install_dir" "$INSTALL_PATH_UNEXPANDED"
+
+            # Add to current session PATH, if the path is not already in PATH
+            if  [[ ":$PATH:" != *":$cli_install_dir:"* ]]; then
+                if [[ "$DRY_RUN" == true ]]; then
+                    say_info "[DRY RUN] Would add $cli_install_dir to PATH"
+                else
+                    export PATH="$cli_install_dir:$PATH"
+                fi
             fi
         fi
     fi
+}
+
+# Only run main when executed directly (not when sourced for unit tests).
+# Use ${BASH_SOURCE[0]:-$0} so the guard works under `curl | bash -s` where BASH_SOURCE is unset.
+if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
+    main "$@"
 fi

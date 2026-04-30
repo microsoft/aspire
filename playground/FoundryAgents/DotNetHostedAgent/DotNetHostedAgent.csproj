@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Suppress experimental API warnings from Agent Framework Foundry packages -->
+    <NoWarn>$(NoWarn);OPENAI001;MAIF001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.Projects" VersionOverride="2.1.0-beta.1" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" VersionOverride="1.2.0-preview.260421.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" VersionOverride="10.5.0" />
+    <PackageReference Include="ModelContextProtocol" VersionOverride="1.1.0" />
+  </ItemGroup>
+
+</Project>

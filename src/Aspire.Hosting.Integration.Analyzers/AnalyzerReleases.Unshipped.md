@@ -17,3 +17,4 @@ ASPIREEXPORT009 | Design | Warning | AspireExportAnalyzer, [Documentation](https
 ASPIREEXPORT010 | Design | Warning | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT010)
 ASPIREEXPORT011 | Design | Warning | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT011)
 ASPIREEXPORT012 | Design | Warning | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT012)
+ASPIREEXPORT013 | Design | Warning | AspireExportAnalyzer, [Documentation](https://aka.ms/aspire/diagnostics/ASPIREEXPORT013)

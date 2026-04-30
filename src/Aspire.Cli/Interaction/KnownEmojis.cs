@@ -30,7 +30,6 @@ internal readonly struct KnownEmoji(string name, string? textColor = null)
 internal static class KnownEmojis
 {
     public static readonly KnownEmoji Bug = new("bug", "red");
-    public static readonly KnownEmoji CheckMark = new("check_mark", "green");
     public static readonly KnownEmoji CheckMarkButton = new("check_mark_button", "green");
     public static readonly KnownEmoji CrossMark = new("cross_mark", "red");
     public static readonly KnownEmoji FileFolder = new("file_folder", "yellow");
@@ -49,6 +48,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji PageFacingUp = new("page_facing_up", "white");
     public static readonly KnownEmoji Rocket = new("rocket", "darkorange");
     public static readonly KnownEmoji RunningShoe = new("running_shoe", "green");
+    public static readonly KnownEmoji Dizzy = new("dizzy");
     public static readonly KnownEmoji StopSign = new("stop_sign", "red");
     public static readonly KnownEmoji UpButton = new("up_button", "blue");
     public static readonly KnownEmoji Warning = new("warning", "yellow");

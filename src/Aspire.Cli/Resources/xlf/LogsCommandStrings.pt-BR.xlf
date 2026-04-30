@@ -12,6 +12,11 @@
         <target state="needs-review-translation">Transmita logs em tempo real conforme eles são gravados.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Logs de saída no formato JSON (NDJSON).</target>

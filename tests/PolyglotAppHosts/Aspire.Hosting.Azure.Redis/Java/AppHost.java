@@ -7,7 +7,7 @@ void main() throws Exception {
         var accessKeyCache = builder.addAzureManagedRedis("cache-access-key");
         var containerCache = builder.addAzureManagedRedis("cache-container");
         accessKeyCache.withAccessKeyAuthentication();
-        accessKeyCache.withAccessKeyAuthenticationWithKeyVault(keyVault);
+        accessKeyCache.withAccessKeyAuthentication(keyVault);
         containerCache.runAsContainer((container) -> {
                 container.withVolume("/data");
             });

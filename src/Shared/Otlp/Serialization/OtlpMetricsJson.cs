@@ -289,10 +289,11 @@ internal sealed class OtlpHistogramDataPointJson
     public double? Sum { get; set; }
 
     /// <summary>
-    /// Bucket counts for each bucket.
+    /// Bucket counts for each bucket. Serialized as strings per protojson spec for uint64.
     /// </summary>
     [JsonPropertyName("bucketCounts")]
-    public string[]? BucketCounts { get; set; }
+    [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
+    public ulong[]? BucketCounts { get; set; }
 
     /// <summary>
     /// Explicit bucket boundaries.
@@ -439,7 +440,8 @@ internal sealed class OtlpExponentialHistogramBucketsJson
     /// An array of count values. Serialized as strings per protojson spec for uint64.
     /// </summary>
     [JsonPropertyName("bucketCounts")]
-    public string[]? BucketCounts { get; set; }
+    [JsonNumberHandling(JsonNumberHandling.WriteAsString | JsonNumberHandling.AllowReadingFromString)]
+    public ulong[]? BucketCounts { get; set; }
 }
 
 /// <summary>

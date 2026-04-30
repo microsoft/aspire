@@ -23,6 +23,11 @@ internal sealed class PythonModuleBuilder
     public StringBuilder DtoClasses { get; } = new();
 
     /// <summary>
+    /// Gets the exported value definitions.
+    /// </summary>
+    public StringBuilder ExportedValues { get; } = new();
+
+    /// <summary>
     /// Gets the type class definitions (context types, wrapper types).
     /// </summary>
     public Dictionary<string, StringBuilder> TypeClasses { get; } = new();
@@ -117,6 +122,16 @@ internal sealed class PythonModuleBuilder
             output.AppendLine("# ============================================================================");
             output.AppendLine();
             output.Append(DtoClasses);
+        }
+
+        if (ExportedValues.Length > 0)
+        {
+            output.AppendLine();
+            output.AppendLine("# ============================================================================");
+            output.AppendLine("# Exported Values");
+            output.AppendLine("# ============================================================================");
+            output.AppendLine();
+            output.Append(ExportedValues);
         }
 
         // Type Classes
@@ -235,6 +250,7 @@ internal sealed class PythonModuleBuilder
         import time
         import abc
         import datetime
+        import types
         import typing
         from functools import cached_property as _cached_property
         from contextlib import AbstractContextManager
@@ -1732,8 +1748,8 @@ internal sealed class PythonModuleBuilder
 
             def __enter__(self) -> DistributedApplicationBuilder:
                 self._handle = self._client.invoke_capability(
-                    'Aspire.Hosting/createBuilderWithOptions',
-                    {'options': self._options}
+                    'Aspire.Hosting/createBuilder',
+                    {'argsOrOptions': self._options}
                 )
                 return self
 

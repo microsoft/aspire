@@ -46,6 +46,7 @@
                             }
                             <FluentSearch @bind-Value="_filter"
                                           @bind-Value:after="HandleAfterFilterBindAsync"
+                                          Name="spans-search"
                                           Immediate="true"
                                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                                           Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -71,6 +72,7 @@
                 {
                     <FluentSearch @bind-Value="_filter"
                                   @bind-Value:after="HandleAfterFilterBindAsync"
+                                  Name="spans-search"
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"

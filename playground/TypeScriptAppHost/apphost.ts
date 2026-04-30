@@ -23,14 +23,13 @@ const dir = await builder.appHostDirectory.get();
 console.log(`AppHost directory: ${dir}`);
 
 // Add PostgreSQL server and database
-const postgres = builder.addPostgres("postgres");
-const db = postgres.addDatabase("db");
+const postgres = await builder.addPostgres("postgres");
+const db = await postgres.addDatabase("db");
 
 console.log("Added PostgreSQL server with database 'db'");
 
 // Add Express API that connects to PostgreSQL (uses npm run dev with tsx)
-// No await needed — withReference/waitFor accept promises directly
-const api = builder
+const api = await builder
     .addNodeApp("api", "./express-api", "src/server.ts")
     .withRunScript("dev")
     .withHttpEndpoint({ env: "PORT" })
@@ -40,21 +39,20 @@ const api = builder
 console.log("Added Express API with reference to PostgreSQL database");
 
 // Redis
-builder
-    .addRedis("cache")
-    .withLifetime(ContainerLifetime.Persistent);
+const cache = await builder.addRedis("cache");
+await cache.withLifetime(ContainerLifetime.Persistent);
 
 console.log("Added Redis cache");
 
-// Vite frontend — withReference/waitFor accept the un-awaited 'api' promise
-builder
+// Vite frontend
+await builder
     .addViteApp("frontend", "./vite-frontend")
     .withReference(api)
     .waitFor(api)
     .withEnvironment("CUSTOM_ENV", "value")
     .withEnvironmentCallback(async (ctx: EnvironmentCallbackContext) => {
         // await needed here because getEndpoint returns a value we use
-        var ep = await api.getEndpoint("http");
+        const ep = await api.getEndpoint("http");
         await ctx.environmentVariables.set("API_ENDPOINT", refExpr`${ep}`);
     });
 

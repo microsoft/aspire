@@ -7,9 +7,19 @@
         <target state="needs-review-translation">La connexion à l’hôte de l’application a été perdue : {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostConnectionLostGeneric">
+        <source>The connection to the application was lost.</source>
+        <target state="new">The connection to the application was lost.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
         <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">La version de l’AppHost n’est pas compatible. Veuillez mettre à jour l’AppHost ou l’interface CLI Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostShutDown">
+        <source>The application shut down.</source>
+        <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
@@ -73,8 +83,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
-        <source>Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal.</source>
-        <target state="translated">La saisie interactive n'est pas prise en charge dans cet environnement. Utilisez l’indicateur --non-interactive ou assurez-vous que la CLI s’exécute dans un terminal interactif.</target>
+        <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
+        <target state="needs-review-translation">La saisie interactive n'est pas prise en charge dans cet environnement. Utilisez l’indicateur --non-interactive ou assurez-vous que la CLI s’exécute dans un terminal interactif.</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
@@ -91,6 +101,26 @@
         <source>No items available for selection: {0}</source>
         <target state="translated">Aucun élément disponible pour la sélection : {0}</target>
         <note>{0} is the original selection prompt text.</note>
+      </trans-unit>
+      <trans-unit id="NoSupportedAppHostsFound">
+        <source>No supported app hosts were found.</source>
+        <target state="new">No supported app hosts were found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveAvailableValues">
+        <source>Available values: {0}</source>
+        <target state="new">Available values: {0}</target>
+        <note>{0} is a comma-separated list of valid values</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveInvalidValue">
+        <source>The value '{0}' is not valid for {1}.</source>
+        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <note>{0} is the provided value. {1} is the option/argument display name.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveOptionRequired">
+        <source>The {0} option must be specified when running in non-interactive mode.</source>
+        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
@@ -120,6 +150,16 @@
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
         <source>The project argument was not specified and no AppHost project files were detected.</source>
         <target state="needs-review-translation">L'argument de projet n'a pas été spécifié et aucun fichier de projet hôte d'application n'a été détecté.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
+        <source>The --apphost option specified a directory that contains multiple AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that contains multiple AppHost project files.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsNoAppHosts">
+        <source>The --apphost option specified a directory that does not contain any AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that does not contain any AppHost project files.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">

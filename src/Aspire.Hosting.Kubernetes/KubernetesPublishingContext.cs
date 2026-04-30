@@ -75,7 +75,9 @@ internal sealed class KubernetesPublishingContext(
 
         foreach (var resource in resources)
         {
-            if (resource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget is KubernetesResource serviceResource)
+            // Check for deployment target matching this environment or its parent (e.g., AKS)
+            var targetEnv = (IComputeEnvironmentResource?)environment.OwningComputeEnvironment ?? environment;
+            if (resource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget is KubernetesResource serviceResource)
             {
                 // Materialize Dockerfile factory if present
                 if (serviceResource.TargetResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) &&
@@ -103,8 +105,34 @@ internal sealed class KubernetesPublishingContext(
                     }
                 }
 
+                // Apply node pool nodeSelector if the resource has a node pool annotation
+                if (serviceResource.TargetResource.TryGetLastAnnotation<KubernetesNodePoolAnnotation>(out var nodePoolAnnotation))
+                {
+                    ApplyNodePoolSelector(serviceResource, nodePoolAnnotation.NodePool);
+                }
+
                 await WriteKubernetesTemplatesForResource(resource, serviceResource.GetTemplatedResources()).ConfigureAwait(false);
                 await AppendResourceContextToHelmValuesAsync(resource, serviceResource).ConfigureAwait(false);
+            }
+        }
+
+        // Write Ingress resources as standalone templates.
+        foreach (var ingressResource in resources.OfType<KubernetesIngressResource>())
+        {
+            if (ingressResource.Parent == environment && ingressResource.GeneratedIngress is { } generatedIngress)
+            {
+                await WriteKubernetesTemplatesForResource(ingressResource, [generatedIngress]).ConfigureAwait(false);
+            }
+        }
+
+        // Write Gateway API resources (Gateway + HTTPRoutes) as standalone templates.
+        foreach (var gatewayResource in resources.OfType<KubernetesGatewayResource>())
+        {
+            if (gatewayResource.Parent == environment && gatewayResource.GeneratedGateway is { } generatedGateway)
+            {
+                var gatewayObjects = new List<BaseKubernetesResource> { generatedGateway };
+                gatewayObjects.AddRange(gatewayResource.GeneratedHttpRoutes);
+                await WriteKubernetesTemplatesForResource(gatewayResource, gatewayObjects).ConfigureAwait(false);
             }
         }
 
@@ -188,6 +216,21 @@ internal sealed class KubernetesPublishingContext(
             else
             {
                 value = helmExpressionWithValue.Value;
+
+                // If the value has an IValueProvider source, capture it for deploy-time
+                // resolution. Write an empty placeholder now and resolve at deploy time.
+                // This handles Bicep output references, connection strings, and any other
+                // deferred value source without requiring Azure-specific knowledge.
+                if (helmExpressionWithValue.ValueProviderSource is { } valueProvider)
+                {
+                    value = string.Empty;
+                    environment?.CapturedHelmValueProviders.Add(
+                        new KubernetesEnvironmentResource.CapturedHelmValueProvider(
+                            helmKey,
+                            resource.Name.ToHelmValuesSectionName(),
+                            valuesKey,
+                            valueProvider));
+                }
             }
 
             paramValues[valuesKey] = value ?? string.Empty;
@@ -272,5 +315,16 @@ internal sealed class KubernetesPublishingContext(
         var outputFile = Path.Combine(OutputPath, "Chart.yaml");
         Directory.CreateDirectory(OutputPath);
         await File.WriteAllTextAsync(outputFile, chartYaml, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void ApplyNodePoolSelector(KubernetesResource serviceResource, KubernetesNodePoolResource nodePool)
+    {
+        var podSpec = serviceResource.Workload?.PodTemplate?.Spec;
+        if (podSpec is null)
+        {
+            return;
+        }
+
+        podSpec.NodeSelector[nodePool.NodeSelectorLabelKey] = nodePool.Name;
     }
 }

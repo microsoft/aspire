@@ -5,6 +5,8 @@ namespace Aspire.Hosting.Dcp.Process;
 
 internal sealed class ProcessSpec
 {
+    public const int DefaultRetainedOutputLineCount = 256;
+
     public string ExecutablePath { get; }
     public string? WorkingDirectory { get; init; }
     public IDictionary<string, string> EnvironmentVariables { get; init; } = new Dictionary<string, string>();
@@ -16,6 +18,7 @@ internal sealed class ProcessSpec
     public Action<int>? OnStop { get; init; }
     public bool KillEntireProcessTree { get; init; } = true;
     public bool ThrowOnNonZeroReturnCode { get; init; } = true;
+    public int? RetainedOutputLineCount { get; init; }
     public string? StandardInputContent { get; init; }
 
     public ProcessSpec(string executablePath)

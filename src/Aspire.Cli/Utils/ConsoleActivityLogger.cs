@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils.Markdown;
 using Aspire.Shared;
 using Spectre.Console;
 
@@ -188,9 +189,9 @@ internal sealed class ConsoleActivityLogger
         WriteCompletion(taskKey, FailureSymbol, message, ActivityState.Failure, seconds);
     }
 
-    public void Info(string taskKey, string message)
+    public void Info(string taskKey, string message, bool dim = false)
     {
-        WriteLine(taskKey, InfoSymbol, message, ActivityState.Info);
+        WriteLine(taskKey, InfoSymbol, message, ActivityState.Info, dim);
     }
 
     public void Continuation(string message)
@@ -397,7 +398,7 @@ internal sealed class ConsoleActivityLogger
         var timelineLabel = SharedCommandStrings.PipelineStepTimelineLabel;
         var totalTimeline = orderedRecords.Max(r => r.EndOffset > TimeSpan.Zero ? r.EndOffset : r.Duration);
         var durationWidth = Math.Max(10, orderedRecords.Max(r => FormatSummaryDuration(r.Duration, totalTimeline).Length));
-        var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => GetIndentedDisplayName(r).Length));
+        var nameWidth = Math.Max(timelineLabel.Length, orderedRecords.Max(r => GetIndentedDisplayName(r).RemoveMarkup().Length));
         var renderTimeline = ShouldRenderTimeline(durationWidth, nameWidth, totalTimeline);
         var timelinePrefix = $"  {new string(' ', durationWidth)}    {new string(' ', nameWidth)}  ";
         var timelineLabelPrefix = $"  {new string(' ', durationWidth)}    {timelineLabel.PadRight(nameWidth)}  ";
@@ -424,7 +425,10 @@ internal sealed class ConsoleActivityLogger
             };
             var symbol = _enableColor ? $"[{GetStateColor(rec.State)}]{stateSymbol}[/]" : stateSymbol;
             var displayName = GetIndentedDisplayName(rec);
-            var name = (renderTimeline ? displayName.PadRight(nameWidth) : displayName).EscapeMarkup();
+            var plainDisplayName = displayName.RemoveMarkup();
+            // Pad based on visible (plain-text) width, then re-append the markup name so tags render correctly.
+            var padding = renderTimeline ? Math.Max(0, nameWidth - plainDisplayName.Length) : 0;
+            var name = displayName + new string(' ', padding);
 
             // FailureReason is already Spectre-safe (pre-processed through ConvertTextWithMarkdownFlag which escapes or converts markdown).
             var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
@@ -664,7 +668,7 @@ internal sealed class ConsoleActivityLogger
         WriteLine(taskKey, symbol, text, state);
     }
 
-    private void WriteLine(string taskKey, string symbol, string message, ActivityState state)
+    private void WriteLine(string taskKey, string symbol, string message, ActivityState state, bool dim = false)
     {
         lock (_lock)
         {
@@ -677,10 +681,17 @@ internal sealed class ConsoleActivityLogger
             {
                 // Format: dim timestamp, colored step tag, symbol, message with Spectre markup
                 var highlightedLine = HighlightMessage(line);
-                var escapedTask = displayKey.EscapeMarkup();
+
+                // Apply dim formatting per-line so that [dim]...[/] tags don't span across
+                // split lines or conflict with Spectre markup already present in the message.
+                if (dim && _enableColor)
+                {
+                    highlightedLine = $"[dim]{highlightedLine}[/]";
+                }
+
                 var markup = new StringBuilder();
                 markup.Append("[dim]").Append(time).Append("[/] ");
-                markup.Append('[').Append(stepColor).Append(']').Append('(').Append(escapedTask).Append(')').Append("[/] ");
+                markup.Append('[').Append(stepColor).Append(']').Append('(').Append(displayKey).Append(")[/] ");
                 if (_enableColor)
                 {
                     if (state == ActivityState.Failure)
@@ -702,7 +713,16 @@ internal sealed class ConsoleActivityLogger
                 {
                     markup.Append(symbol).Append(' ').Append(highlightedLine);
                 }
-                _console.MarkupLine(markup.ToString());
+                var markupString = markup.ToString();
+                try
+                {
+                    _console.MarkupLine(markupString);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Spectre markup rendering failed for line: \"{markupString}\". Original message: \"{line}\"", ex);
+                }
             }
         }
     }

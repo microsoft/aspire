@@ -33,10 +33,10 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
     public async Task AspireNew_WithAgentInit_InstallsPlaywrightWithoutErrors()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -44,7 +44,7 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create .claude folder so agent init detects a Claude Code environment.
         // This needs to exist in the workspace root before aspire new creates the project
@@ -108,12 +108,6 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
             description: "agent init prompt after aspire new");
         await auto.WaitAsync(500);
         await auto.TypeAsync("y");
-        await auto.EnterAsync();
-
-        // Agent init: workspace path - accept default
-        await auto.WaitUntilTextAsync("workspace:", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitAsync(500);
-        await auto.EnterAsync();
 
         // Agent init: skill location - select Claude Code
         await auto.WaitUntilAsync(

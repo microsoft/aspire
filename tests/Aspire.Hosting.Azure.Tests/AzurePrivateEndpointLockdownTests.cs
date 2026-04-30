@@ -216,4 +216,20 @@ public class AzurePrivateEndpointLockdownTests
 
         await Verify(manifest.BicepText, extension: "bicep");
     }
+
+    [Fact]
+    public async Task AddAzureContainerRegistry_WithPrivateEndpoint_GeneratesCorrectBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
+        var acr = builder.AddAzureContainerRegistry("acr");
+
+        subnet.AddPrivateEndpoint(acr);
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(acr.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
 }

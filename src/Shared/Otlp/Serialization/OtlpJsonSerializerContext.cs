@@ -64,6 +64,8 @@ namespace Aspire.Otlp.Serialization;
 [JsonSerializable(typeof(ResourceJson))]
 // Telemetry API types
 [JsonSerializable(typeof(TelemetryApiResponse))]
+[JsonSerializable(typeof(TelemetryValidateTokenRequest))]
+[JsonSerializable(typeof(TelemetryValidateTokenResponse))]
 [JsonSerializable(typeof(ResourceInfoJson))]
 [JsonSerializable(typeof(ResourceInfoJson[]))]
 #if !CLI

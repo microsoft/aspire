@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Aspire.TestUtilities;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -48,7 +49,7 @@ public sealed class NodeCommand : IDisposable
 
     public async Task<CommandResult> ExecuteScriptAsync(string scriptPath, params string[] args)
     {
-        CancellationTokenSource cts = new();
+        using CancellationTokenSource cts = new();
         if (_timeout is not null)
         {
             cts.CancelAfter((int)_timeout.Value.TotalMilliseconds);

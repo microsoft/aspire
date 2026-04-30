@@ -40,7 +40,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
@@ -65,7 +65,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             // Need to provide a project locator since AddCommand checks for project first
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("add");
@@ -87,7 +87,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // With no SDK, aspire-starter shouldn't be a valid subcommand
@@ -127,7 +127,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("publish");
@@ -165,7 +165,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("deploy");
@@ -188,7 +188,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec");
@@ -210,7 +210,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
             // Make sure project locator doesn't find projects so it fails at the expected point
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");

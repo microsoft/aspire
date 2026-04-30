@@ -8,6 +8,7 @@ using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
@@ -247,18 +248,19 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
-        if (appModel is not null && !appModel.Resources.Any(r => string.Equals(r.Name, request.ResourceName, StringComparisons.ResourceName)))
+        var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
+        var targetResolution = ResolveWaitTarget(notificationService, request.ResourceName);
+        var targetResource = targetResolution.Target;
+
+        if (targetResource is null)
         {
             return new WaitForResourceResponse
             {
                 Success = false,
-                ResourceNotFound = true,
-                ErrorMessage = $"Resource '{request.ResourceName}' was not found."
+                ResourceNotFound = targetResolution.ResourceNotFound,
+                ErrorMessage = targetResolution.ErrorMessage
             };
         }
-
-        var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(request.TimeoutSeconds));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
@@ -267,9 +269,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             return request.Status switch
             {
-                "healthy" => await WaitForHealthyAsync(notificationService, request.ResourceName, linkedCts.Token).ConfigureAwait(false),
-                "up" => await WaitForRunningAsync(notificationService, request.ResourceName, linkedCts.Token).ConfigureAwait(false),
-                "down" => await WaitForTerminalAsync(notificationService, request.ResourceName, linkedCts.Token).ConfigureAwait(false),
+                "healthy" => await WaitForHealthyAsync(notificationService, targetResource, linkedCts.Token).ConfigureAwait(false),
+                "up" => await WaitForRunningAsync(notificationService, targetResource, linkedCts.Token).ConfigureAwait(false),
+                "down" => await WaitForTerminalAsync(notificationService, targetResource, linkedCts.Token).ConfigureAwait(false),
                 _ => new WaitForResourceResponse { Success = false, ErrorMessage = $"Unknown status: {request.Status}" }
             };
         }
@@ -283,9 +285,28 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
     }
 
-    private static async Task<WaitForResourceResponse> WaitForHealthyAsync(ResourceNotificationService notificationService, string resourceName, CancellationToken cancellationToken)
+    private static async Task<WaitForResourceResponse> WaitForHealthyAsync(ResourceNotificationService notificationService, WaitResourceTarget target, CancellationToken cancellationToken)
     {
-        var resourceEvent = await notificationService.WaitForResourceHealthyAsync(resourceName, WaitBehavior.StopOnResourceUnavailable, cancellationToken).ConfigureAwait(false);
+        var resourceEvent = await WaitForResourceEventAsync(
+            notificationService,
+            target,
+            re => ResourceNotificationService.ShouldYieldHealthyWait(WaitBehavior.StopOnResourceUnavailable, re.Snapshot),
+            $"Resource '{target.DisplayName}' failed to become healthy before the operation was cancelled.",
+            cancellationToken).ConfigureAwait(false);
+
+        if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
+        {
+            throw new DistributedApplicationException($"Stopped waiting for resource '{target.DisplayName}' to become healthy because it failed to start.");
+        }
+
+        resourceEvent = await WaitForResourceEventAsync(
+            notificationService,
+            new WaitResourceTarget(target.DisplayName, resourceEvent.ResourceId, null),
+            re => re.Snapshot.ResourceReadyEvent is not null,
+            $"Resource '{target.DisplayName}' failed to execute the resource ready event before the operation was cancelled.",
+            cancellationToken).ConfigureAwait(false);
+
+        await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         return new WaitForResourceResponse
         {
@@ -295,11 +316,13 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
-    private static async Task<WaitForResourceResponse> WaitForRunningAsync(ResourceNotificationService notificationService, string resourceName, CancellationToken cancellationToken)
+    private static async Task<WaitForResourceResponse> WaitForRunningAsync(ResourceNotificationService notificationService, WaitResourceTarget target, CancellationToken cancellationToken)
     {
-        var resourceEvent = await notificationService.WaitForResourceAsync(
-            resourceName,
+        var resourceEvent = await WaitForResourceEventAsync(
+            notificationService,
+            target,
             re => re.Snapshot.State?.Text == KnownResourceStates.Running || KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text) || re.Snapshot.ExitCode is not null,
+            $"Resource '{target.DisplayName}' failed to reach the target state before the operation was cancelled.",
             cancellationToken).ConfigureAwait(false);
 
         var state = resourceEvent.Snapshot.State?.Text;
@@ -310,15 +333,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Success = isRunning,
             State = state,
             HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString(),
-            ErrorMessage = isRunning ? null : $"Resource '{resourceName}' failed to reach 'Running' state. Current state: {state ?? "Unknown"}."
+            ErrorMessage = isRunning ? null : $"Resource '{target.DisplayName}' failed to reach 'Running' state. Current state: {state ?? "Unknown"}."
         };
     }
 
-    private static async Task<WaitForResourceResponse> WaitForTerminalAsync(ResourceNotificationService notificationService, string resourceName, CancellationToken cancellationToken)
+    private static async Task<WaitForResourceResponse> WaitForTerminalAsync(ResourceNotificationService notificationService, WaitResourceTarget target, CancellationToken cancellationToken)
     {
-        var resourceEvent = await notificationService.WaitForResourceAsync(
-            resourceName,
+        var resourceEvent = await WaitForResourceEventAsync(
+            notificationService,
+            target,
             re => KnownResourceStates.TerminalStates.Contains(re.Snapshot.State?.Text) || re.Snapshot.ExitCode is not null,
+            $"Resource '{target.DisplayName}' failed to reach the target state before the operation was cancelled.",
             cancellationToken).ConfigureAwait(false);
 
         return new WaitForResourceResponse
@@ -327,6 +352,108 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             State = resourceEvent.Snapshot.State?.Text,
             HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString()
         };
+    }
+
+    private static async Task<ResourceEvent> WaitForResourceEventAsync(
+        ResourceNotificationService notificationService,
+        WaitResourceTarget target,
+        Func<ResourceEvent, bool> predicate,
+        string cancellationMessage,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var resourceEvent in notificationService.WatchAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (target.Matches(resourceEvent) && predicate(resourceEvent))
+                {
+                    return resourceEvent;
+                }
+            }
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new OperationCanceledException(cancellationMessage, ex, ex.CancellationToken);
+        }
+
+        throw new OperationCanceledException(cancellationMessage);
+    }
+
+    private WaitTargetResolutionResult ResolveWaitTarget(ResourceNotificationService notificationService, string requestedResourceName)
+    {
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        if (notificationService.TryGetCurrentState(requestedResourceName, out var resourceEvent))
+        {
+            return WaitTargetResolutionResult.Success(new WaitResourceTarget(
+                ResolveDisplayName(appModel, requestedResourceName, resourceEvent.ResourceId),
+                resourceEvent.ResourceId,
+                null));
+        }
+
+        // During startup the resource may not have published its first snapshot yet, so fall back to
+        // the app model to resolve the requested logical name or resolved resource id.
+        var matchingResource = appModel.Resources.SingleOrDefault(resource => string.Equals(resource.Name, requestedResourceName, StringComparisons.ResourceName));
+        if (matchingResource is not null)
+        {
+            var resolvedResourceNames = matchingResource.GetResolvedResourceNames();
+            return resolvedResourceNames.Length switch
+            {
+                1 => WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, resolvedResourceNames[0], null)),
+                > 1 => WaitTargetResolutionResult.Ambiguous(requestedResourceName),
+                _ => WaitTargetResolutionResult.NotFound(requestedResourceName)
+            };
+        }
+
+        var resolvedMatches = appModel.Resources
+            .Select(resource => new { Resource = resource, ResolvedResourceNames = resource.GetResolvedResourceNames() })
+            .Where(match => match.ResolvedResourceNames.Any(resourceName => string.Equals(resourceName, requestedResourceName, StringComparisons.ResourceName)))
+            .Take(2)
+            .ToArray();
+
+        return resolvedMatches.Length switch
+        {
+            1 => WaitTargetResolutionResult.Success(new WaitResourceTarget(
+                resolvedMatches[0].ResolvedResourceNames.Length == 1 ? resolvedMatches[0].Resource.Name : requestedResourceName,
+                requestedResourceName,
+                null)),
+            > 1 => WaitTargetResolutionResult.Ambiguous(requestedResourceName),
+            _ => WaitTargetResolutionResult.NotFound(requestedResourceName)
+        };
+    }
+
+    private static string ResolveDisplayName(DistributedApplicationModel appModel, string requestedResourceName, string resolvedResourceName)
+    {
+        var matchingResource = appModel.Resources
+            .Select(resource => new { Resource = resource, ResolvedResourceNames = resource.GetResolvedResourceNames() })
+            .SingleOrDefault(match => match.ResolvedResourceNames.Any(resourceName => string.Equals(resourceName, resolvedResourceName, StringComparisons.ResourceName)));
+
+        return matchingResource is { ResolvedResourceNames.Length: 1 }
+            ? matchingResource.Resource.Name
+            : requestedResourceName;
+    }
+
+    private sealed record WaitResourceTarget(string DisplayName, string? ResourceId, string? ResourceName)
+    {
+        public bool Matches(ResourceEvent resourceEvent)
+        {
+            return (ResourceId is not null && string.Equals(resourceEvent.ResourceId, ResourceId, StringComparisons.ResourceName))
+                || (ResourceName is not null && string.Equals(resourceEvent.Resource.Name, ResourceName, StringComparisons.ResourceName));
+        }
+    }
+
+    private sealed record WaitTargetResolutionResult(WaitResourceTarget? Target, bool ResourceNotFound, string ErrorMessage)
+    {
+        public static WaitTargetResolutionResult Success(WaitResourceTarget target) => new(target, ResourceNotFound: false, string.Empty);
+
+        public static WaitTargetResolutionResult NotFound(string requestedResourceName) => new(
+            null,
+            ResourceNotFound: true,
+            $"Resource '{requestedResourceName}' was not found.");
+
+        public static WaitTargetResolutionResult Ambiguous(string requestedResourceName) => new(
+            null,
+            ResourceNotFound: false,
+            $"Resource '{requestedResourceName}' is ambiguous because it has multiple replicas. Specify the exact instance name.");
     }
 
     #endregion
@@ -390,7 +517,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("GetDashboardUrlsAsync called on auxiliary backchannel");
+        logger.LogDebug("GetDashboardUrlsAsync called on auxiliary backchannel");
         return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
     }
 
@@ -413,24 +540,13 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>A list of resource snapshots.</returns>
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
     {
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
         var results = new List<ResourceSnapshot>();
-
-        if (appModel is null)
-        {
-            return results;
-        }
 
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
         {
-            // Skip the dashboard resource
-            if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-            {
-                continue;
-            }
-
             foreach (var instanceName in resource.GetResolvedResourceNames())
             {
                 await AddResult(instanceName).ConfigureAwait(false);
@@ -465,12 +581,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            // Skip the dashboard resource
-            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-            {
-                continue;
-            }
-
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
@@ -605,6 +715,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             ResourceType = snapshot.ResourceType,
             State = snapshot.State?.Text,
             StateStyle = snapshot.State?.Style,
+            IsHidden = snapshot.IsHidden,
             HealthStatus = snapshot.HealthStatus?.ToString(),
             ExitCode = snapshot.ExitCode,
             CreatedAt = snapshot.CreationTimeStamp,
@@ -637,31 +748,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
 
         // Step 1: Calculate the resource names
-        var resourcesToLog = new List<string>();
+        var resourcesToLog = resourceName is not null
+            ? ResolveResourceIds(appModel, resourceName)
+            : ResolveAllResourceIds(appModel);
 
-        if (resourceName is not null)
+        if (resourceName is not null && resourcesToLog.Count == 0)
         {
-            var resource = appModel.Resources.FirstOrDefault(r => string.Equals(r.Name, resourceName, StringComparisons.ResourceName));
-            if (resource is null)
-            {
-                logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
-                yield break;
-            }
-
-            resourcesToLog.AddRange(resource.GetResolvedResourceNames());
-        }
-        else
-        {
-            foreach (var resource in appModel.Resources)
-            {
-                // Skip the dashboard
-                if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-                {
-                    continue;
-                }
-
-                resourcesToLog.AddRange(resource.GetResolvedResourceNames());
-            }
+            logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
+            yield break;
         }
 
         if (resourcesToLog.Count == 0)
@@ -738,11 +832,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
 
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
-        if (appModel is null)
-        {
-            throw new InvalidOperationException("Application model not found.");
-        }
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
 
         var resource = appModel.Resources
             .OfType<IResourceWithEndpoints>()
@@ -812,7 +902,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public Task StopAppHostAsync(CancellationToken cancellationToken = default)
     {
         _ = cancellationToken; // Unused but kept for API consistency
-        logger.LogInformation("Received request to stop AppHost");
+        logger.LogDebug("Received request to stop AppHost");
 
         // Start a background task to delay the stop by 500ms to allow the RPC response to be sent
         _ = Task.Run(async () =>
@@ -828,7 +918,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 var lifetime = serviceProvider.GetService<IHostApplicationLifetime>();
                 if (lifetime is not null)
                 {
-                    logger.LogInformation("Stopping AppHost application");
+                    logger.LogDebug("Stopping AppHost application");
                     lifetime.StopApplication();
                 }
                 else
@@ -934,5 +1024,44 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         // Fall back to double for floating point
         return element.GetDouble();
+    }
+
+    /// <summary>
+    /// Resolves a resource name (logical or resolved instance name) to the list of matching resource IDs.
+    /// Matches by logical name first (returning all instances), then falls back to matching a specific
+    /// resolved instance name like "apiservice-abc123".
+    /// </summary>
+    private static List<string> ResolveResourceIds(DistributedApplicationModel appModel, string resourceName)
+    {
+        foreach (var resource in appModel.Resources)
+        {
+            var resolvedNames = resource.GetResolvedResourceNames();
+
+            if (string.Equals(resource.Name, resourceName, StringComparisons.ResourceName))
+            {
+                return [.. resolvedNames];
+            }
+
+            var matchedInstance = resolvedNames.FirstOrDefault(n => string.Equals(n, resourceName, StringComparisons.ResourceName));
+            if (matchedInstance is not null)
+            {
+                return [matchedInstance];
+            }
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Returns the resolved resource IDs for all resources in the application model.
+    /// </summary>
+    private static List<string> ResolveAllResourceIds(DistributedApplicationModel appModel)
+    {
+        var result = new List<string>();
+        foreach (var resource in appModel.Resources)
+        {
+            result.AddRange(resource.GetResolvedResourceNames());
+        }
+        return result;
     }
 }

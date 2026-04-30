@@ -5,7 +5,7 @@ await builder.addPythonApp('python-script', '.', 'main.py');
 await builder.addPythonModule('python-module', '.', 'uvicorn');
 await builder.addPythonExecutable('python-executable', '.', 'pytest');
 
-const uvicorn = builder.addUvicornApp('python-uvicorn', '.', 'main:app');
+const uvicorn = await builder.addUvicornApp('python-uvicorn', '.', 'main:app');
 
 await uvicorn.withVirtualEnvironment('.venv', { createIfNotExists: false });
 await uvicorn.withDebugging();

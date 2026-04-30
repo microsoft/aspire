@@ -12,8 +12,8 @@ namespace Aspire.Cli.Tests.Scaffolding;
 
 public class PackageJsonMergerTests
 {
-    private static string MergeJson(string existing, string scaffold) =>
-        PackageJsonMerger.Merge(existing, scaffold, NullLogger.Instance);
+    private static string MergeJson(string existing, string scaffold, string toolchainCommand = "npm") =>
+        PackageJsonMerger.Merge(existing, scaffold, NullLogger.Instance, toolchainCommand);
 
     private static JsonObject ParseJson(string json) =>
         JsonNode.Parse(json)!.AsObject();
@@ -171,6 +171,33 @@ public class PackageJsonMergerTests
         // "dev" and "build" are taken — no alias
         Assert.Equal("vite", scripts["dev"]?.GetValue<string>());
         Assert.Equal("vite build", scripts["build"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void ConvenienceAliases_UseConfiguredToolchainCommand()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "packageManager": "yarn@4.9.0",
+              "scripts": {
+                "dev": "vite"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold, toolchainCommand: "yarn");
+        var scripts = GetScripts(result);
+
+        Assert.Equal("yarn run aspire:start", scripts["start"]?.GetValue<string>());
     }
 
     [Fact]

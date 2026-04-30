@@ -145,13 +145,30 @@ public sealed class ApiOptions
 {
     private byte[]? _primaryApiKeyBytes;
     private byte[]? _secondaryApiKeyBytes;
+    private bool? _disabled;
 
     /// <summary>
     /// Gets or sets whether the Telemetry HTTP API is enabled.
     /// When false, the /api/telemetry/* endpoints are not registered.
+    /// Defaults to true.
+    /// </summary>
+    [Obsolete("Use Disabled instead.")]
+    public bool? Enabled
+    {
+        get => _disabled is null ? null : !_disabled;
+        set => _disabled = value is null ? null : !value;
+    }
+
+    /// <summary>
+    /// Gets or sets whether the Telemetry HTTP API is disabled.
+    /// When true, the /api/telemetry/* endpoints are not registered.
     /// Defaults to false.
     /// </summary>
-    public bool? Enabled { get; set; }
+    public bool? Disabled
+    {
+        get => _disabled;
+        set => _disabled = value;
+    }
 
     /// <summary>
     /// Gets or sets the authentication mode for API endpoints.

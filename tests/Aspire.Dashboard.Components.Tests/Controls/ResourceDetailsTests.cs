@@ -4,10 +4,13 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -367,6 +370,29 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_StateDescription_ShowsAsResourceDetailEntry()
+    {
+        // Arrange
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            state: KnownResourceState.Waiting);
+
+        // Act
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        // Assert
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
+        Assert.Contains(Columns.StateColumnResourceWaiting, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
     public void FilteredEnvironmentVariables_SortedByName()
     {
         // Arrange
@@ -472,5 +498,246 @@ public class ResourceDetailsTests : DashboardTestContext
             h => Assert.Equal("delta-check", h.Name),
             h => Assert.Equal("GAMMA-Check", h.Name),
             h => Assert.Equal("zebra-check", h.Name));
+    }
+
+    [Fact]
+    public async Task UnsetParameterResource_RendersValueNotSetButton_AndInvokesSetCommand()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var setCommand = new CommandViewModel(
+            CommandViewModel.SetParameterCommand,
+            CommandViewModelState.Enabled,
+            displayName: "Set value",
+            displayDescription: "Set the parameter value",
+            confirmationMessage: string.Empty,
+            parameter: null,
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("Parameter 'p' not found in configuration."),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = CreateParameterResource(
+            resourceName: "myparameter",
+            state: nameof(KnownResourceState.ValueMissing),
+            stateStyle: "warning",
+            properties: properties,
+            commands: ImmutableArray.Create(setCommand));
+
+        CommandViewModel? capturedCommand = null;
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, c => capturedCommand = c));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        var button = cut.Find("button.value-not-set-link");
+        Assert.Equal("Value not set", button.TextContent.Trim());
+
+        await button.ClickAsync(new MouseEventArgs());
+
+        Assert.NotNull(capturedCommand);
+        Assert.Equal(CommandViewModel.SetParameterCommand, capturedCommand!.Name);
+    }
+
+    [Fact]
+    public async Task UnsetParameterResource_WhenSetCommandIsExecuting_DisablesValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var setCommand = new CommandViewModel(
+            CommandViewModel.SetParameterCommand,
+            CommandViewModelState.Enabled,
+            displayName: "Set value",
+            displayDescription: "Set the parameter value",
+            confirmationMessage: string.Empty,
+            parameter: null,
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("Parameter 'p' not found in configuration."),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = CreateParameterResource(
+            resourceName: "myparameter",
+            state: nameof(KnownResourceState.ValueMissing),
+            stateStyle: "warning",
+            properties: properties,
+            commands: ImmutableArray.Create(setCommand));
+
+        CommandViewModel? capturedCommand = null;
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, c => capturedCommand = c));
+            builder.Add(p => p.IsCommandExecuting, (currentResource, command) =>
+                currentResource.Name == resource.Name && command.Name == CommandViewModel.SetParameterCommand);
+        });
+
+        var button = cut.Find("button.value-not-set-link");
+        Assert.True(button.HasAttribute("disabled"));
+
+        await button.ClickAsync(new MouseEventArgs());
+
+        Assert.Null(capturedCommand);
+    }
+
+    [Fact]
+    public void UnsetSecretParameterResource_RendersValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var setCommand = new CommandViewModel(
+            CommandViewModel.SetParameterCommand,
+            CommandViewModelState.Enabled,
+            displayName: "Set value",
+            displayDescription: "Set the parameter value",
+            confirmationMessage: string.Empty,
+            parameter: null,
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("Parameter 'p' not found in configuration."),
+                isValueSensitive: true,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = CreateParameterResource(
+            resourceName: "mysecretparameter",
+            state: nameof(KnownResourceState.ValueMissing),
+            stateStyle: "warning",
+            properties: properties,
+            commands: ImmutableArray.Create(setCommand));
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, _ => Task.CompletedTask));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        Assert.NotNull(cut.Find("button.value-not-set-link"));
+        Assert.Empty(cut.FindAll(".grid-value-mask-button"));
+    }
+
+    [Fact]
+    public void ErrorParameterResource_DisplaysErrorMessage_InsteadOfValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        const string errorMessage = "Failed to initialize parameter from external provider.";
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString(errorMessage),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "myparameter",
+            resourceType: KnownResourceTypes.Parameter,
+            stateStyle: "error",
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        Assert.Empty(cut.FindAll("button.value-not-set-link"));
+        Assert.Contains(errorMessage, cut.FindAll(".grid-value").Select(e => e.TextContent.Trim()));
+    }
+
+    [Fact]
+    public void RunningParameterResource_DoesNotRenderValueNotSetButton()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Parameter.Value] = new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                Value.ForString("resolved-value"),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Parameter.Value, _ => "Value"),
+                priority: 0)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "myparameter",
+            resourceType: KnownResourceTypes.Parameter,
+            state: KnownResourceState.Running,
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+            builder.Add(p => p.IsCommandExecuting, (_, _) => false);
+        });
+
+        Assert.Empty(cut.FindAll("button.value-not-set-link"));
+    }
+
+    private static ResourceViewModel CreateParameterResource(
+        string resourceName,
+        string? state,
+        string? stateStyle,
+        Dictionary<string, ResourcePropertyViewModel> properties,
+        ImmutableArray<CommandViewModel>? commands = null)
+    {
+        return new ResourceViewModel
+        {
+            Name = resourceName,
+            ResourceType = KnownResourceTypes.Parameter,
+            DisplayName = resourceName,
+            Uid = resourceName,
+            ReplicaIndex = 0,
+            State = state,
+            KnownState = state is not null && System.Enum.TryParse<KnownResourceState>(state, out var knownState) ? knownState : null,
+            StateStyle = stateStyle,
+            CreationTimeStamp = DateTime.UtcNow,
+            StartTimeStamp = DateTime.UtcNow,
+            StopTimeStamp = DateTime.UtcNow,
+            Environment = [],
+            Urls = [],
+            Volumes = [],
+            Relationships = [],
+            Properties = properties.ToImmutableDictionary(),
+            Commands = commands ?? [],
+            HealthReports = [],
+        };
     }
 }

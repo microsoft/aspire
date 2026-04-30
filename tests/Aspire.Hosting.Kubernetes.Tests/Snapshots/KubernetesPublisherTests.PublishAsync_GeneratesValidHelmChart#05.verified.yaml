@@ -1,36 +1,16 @@
 ﻿---
-apiVersion: "apps/v1"
-kind: "Deployment"
+apiVersion: "v1"
+kind: "ConfigMap"
 metadata:
-  name: "project1-deployment"
+  name: "project1-config"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
     app.kubernetes.io/component: "project1"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-spec:
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: "aspire-hosting-tests"
-        app.kubernetes.io/component: "project1"
-        app.kubernetes.io/instance: "{{ .Release.Name }}"
-    spec:
-      containers:
-        - image: "{{ .Values.parameters.project1.project1_image }}"
-          name: "project1"
-          envFrom:
-            - configMapRef:
-                name: "project1-config"
-          imagePullPolicy: "IfNotPresent"
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: "aspire-hosting-tests"
-      app.kubernetes.io/component: "project1"
-      app.kubernetes.io/instance: "{{ .Release.Name }}"
-  replicas: 1
-  revisionHistoryLimit: 3
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
-    type: "RollingUpdate"
+data:
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.project1.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
+  MYAPP_HTTP: "{{ .Values.config.project1.MYAPP_HTTP }}"
+  services__myapp__http__0: "{{ .Values.config.project1.services__myapp__http__0 }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.project1.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.project1.OTEL_EXPORTER_OTLP_PROTOCOL }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.project1.OTEL_SERVICE_NAME }}"

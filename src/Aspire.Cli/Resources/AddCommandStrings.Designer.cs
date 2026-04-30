@@ -101,6 +101,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string SearchingForSpecifiedPackageVersion
+        {
+            get
+            {
+                return ResourceManager.GetString("SearchingForSpecifiedPackageVersion", resourceCulture);
+            }
+        }
+
         public static string NoIntegrationPackagesFound
         {
             get
@@ -178,6 +186,22 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("NoPackagesMatchedSearchTerm", resourceCulture);
+            }
+        }
+
+        public static string SpecifiedVersionNotFoundForPackage
+        {
+            get
+            {
+                return ResourceManager.GetString("SpecifiedVersionNotFoundForPackage", resourceCulture);
+            }
+        }
+
+        public static string SpecifiedVersionRequiresExactPackageMatch
+        {
+            get
+            {
+                return ResourceManager.GetString("SpecifiedVersionRequiresExactPackageMatch", resourceCulture);
             }
         }
 

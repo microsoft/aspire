@@ -33,19 +33,19 @@ internal enum AspireTemplate
     Starter,
 
     /// <summary>
-    /// Starter App (ASP.NET Core/React).
+    /// Starter App (ASP.NET Core/React, C# AppHost).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     JsReact,
 
     /// <summary>
-    /// Starter App (Express/React).
+    /// Starter App (Express/React, TypeScript AppHost).
     /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     ExpressReact,
 
     /// <summary>
-    /// Starter App (FastAPI/React).
+    /// Starter App (FastAPI/React, TypeScript AppHost).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     PythonReact,
@@ -79,7 +79,7 @@ internal static class Hex1bTestHelpers
     /// Uses default dimensions of 160x48 unless overridden.
     /// </summary>
     /// <param name="testName">The test name used for the recording file path. Defaults to the calling method name.</param>
-    /// <param name="localSubDir">The subdirectory name under the temp folder for local (non-CI) recordings.</param>
+    /// <param name="localSubDir">The subdirectory name under the local <c>TestResults/recordings</c> directory.</param>
     /// <param name="width">The terminal width in columns. Defaults to 160.</param>
     /// <param name="height">The terminal height in rows. Defaults to 48.</param>
     /// <returns>A configured <see cref="Hex1bTerminal"/> instance. Caller is responsible for disposal.</returns>
@@ -103,10 +103,10 @@ internal static class Hex1bTestHelpers
     /// <summary>
     /// Gets the path for storing asciinema recordings that will be uploaded as CI artifacts.
     /// In CI, this returns a path under $GITHUB_WORKSPACE/testresults/recordings/.
-    /// Locally, this returns a path under the system temp directory.
+    /// Locally, this returns a path under the test output <c>TestResults/recordings/</c> directory.
     /// </summary>
     /// <param name="testName">The name of the test (used as the recording filename).</param>
-    /// <param name="localSubDir">The subdirectory name under the temp folder for local (non-CI) recordings.</param>
+    /// <param name="localSubDir">The subdirectory name under the local <c>TestResults/recordings</c> directory.</param>
     /// <returns>The full path to the .cast recording file.</returns>
     internal static string GetTestResultsRecordingPath(string testName, string localSubDir)
     {
@@ -120,8 +120,8 @@ internal static class Hex1bTestHelpers
         }
         else
         {
-            // Local development - use temp directory
-            recordingsDir = Path.Combine(Path.GetTempPath(), localSubDir, "recordings");
+            // Local development - keep recordings with the rest of the test output.
+            recordingsDir = Path.Combine(AppContext.BaseDirectory, "TestResults", "recordings", localSubDir);
         }
 
         Directory.CreateDirectory(recordingsDir);
@@ -307,8 +307,7 @@ internal static class Hex1bTestHelpers
         return builder
             .WaitUntil(s => agentInitPrompt.Search(s).Count > 0, timeout ?? TimeSpan.FromSeconds(120))
             .Wait(500)
-            .Type("n")
-            .Enter();
+            .Type("n");
     }
 
     /// <summary>
@@ -332,8 +331,6 @@ internal static class Hex1bTestHelpers
         var agentInitPrompt = new CellPatternSearcher()
             .Find("configure AI agent environments");
 
-        var agentInitFound = false;
-
         return builder
             // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
             // Uses the full timeout since aspire new project creation can take minutes.
@@ -341,7 +338,6 @@ internal static class Hex1bTestHelpers
             {
                 if (agentInitPrompt.Search(s).Count > 0)
                 {
-                    agentInitFound = true;
                     return true;
                 }
                 var successSearcher = new CellPatternSearcher()
@@ -350,11 +346,10 @@ internal static class Hex1bTestHelpers
                 return successSearcher.Search(s).Count > 0;
             }, effectiveTimeout)
             .Wait(500)
-            // Type 'n' + Enter unconditionally:
+            // Type 'n' unconditionally:
             // - Agent init: declines the prompt, CLI exits, success prompt appears
-            // - No agent init: 'n' runs at bash (command not found), produces error prompt
+            // - No agent init: 'n' is typed at bash but not submitted; the existing success prompt remains and Ctrl+U clears the pending input
             .Type("n")
-            .Enter()
             // Wait for the aspire command's success prompt (already on screen or appears after decline)
             .WaitUntil(s =>
             {
@@ -363,15 +358,12 @@ internal static class Hex1bTestHelpers
                     .RightText(" OK] $ ");
                 return successSearcher.Search(s).Count > 0;
             }, effectiveTimeout)
+            .Ctrl().Key(Hex1bKey.U)
             // Increment counter correctly for both cases:
             // - Agent init: one increment for the aspire command
-            // - No agent init: two increments (aspire command + the 'n' error command)
+            // - No agent init: one increment for the aspire command
             .WaitUntil(_ =>
             {
-                if (!agentInitFound)
-                {
-                    counter.Increment();
-                }
                 counter.Increment();
                 return true;
             }, TimeSpan.FromSeconds(1));
@@ -431,7 +423,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.JsReact:
                 var jsReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (ASP.NET Core/React)");
+                    .Find("> Starter App (ASP.NET Core/React, C# AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .WaitUntil(s => jsReactSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
@@ -439,7 +431,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.ExpressReact:
                 var expressReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (Express/React)");
+                    .Find("> Starter App (Express/React, TypeScript AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
                     .WaitUntil(s => expressReactSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
@@ -448,7 +440,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.PythonReact:
                 var pythonReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (FastAPI/React)");
+                    .Find("> Starter App (FastAPI/React, TypeScript AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
@@ -466,7 +458,7 @@ internal static class Hex1bTestHelpers
             case AspireTemplate.TypeScriptEmptyAppHost:
                 var typeScriptEmptyAppHostSelected = new CellPatternSearcher()
                     .Find("> Empty (TypeScript AppHost)");
-                builder.Type("TypeScript")
+                builder.Type("Empty (TypeScript")
                     .WaitUntil(s => typeScriptEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
                 break;
@@ -502,11 +494,12 @@ internal static class Hex1bTestHelpers
 
             if (!useRedisCache)
             {
-                // Default is "Yes", navigate to "No"
-                builder.Key(Hex1bKey.DownArrow);
+                builder.Type("n");
             }
-
-            builder.Enter();
+            else
+            {
+                builder.Enter();
+            }
         }
 
         // Step 7: Test project prompt (only Starter)

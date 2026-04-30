@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Xunit;
 
@@ -35,8 +34,8 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Download KinD if not already installed — GitHub CDN can transiently return HTML instead of binary
-        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-amd64\" && file ~/.local/bin/kind | grep -q ELF && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; sleep 5; done && chmod +x ~/.local/bin/kind; }}");
+        // Download KinD if not already installed — GitHub CDN can transiently return HTML instead of a binary.
+        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-amd64\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
@@ -46,7 +45,7 @@ internal static class KubernetesDeployTestHelpers
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download kubectl if not already installed
-        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/amd64/kubectl\" && file ~/.local/bin/kubectl | grep -q ELF && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; sleep 5; done && chmod +x ~/.local/bin/kubectl; }}");
+        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/amd64/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
@@ -89,6 +88,13 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        // The cluster is created by the host Docker daemon, so the default kubeconfig points kubectl at a
+        // localhost-published API server port that is not reachable from inside the helper container. Join the
+        // helper container to the kind network and switch kubectl to the cluster's internal control-plane endpoint.
+        await auto.TypeAsync($"docker network connect \"kind\" \"$(hostname)\" 2>/dev/null || true && kind export kubeconfig --name={clusterName} --internal >/dev/null");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
         // Configure containerd on each node to resolve localhost:5001 via the registry container.
         // This uses the config_path approach required by containerd v2+ (shipped in KinD v0.31.0+).
         await auto.TypeAsync($"for node in $(kind get nodes --name={clusterName}); do " +
@@ -130,40 +136,6 @@ internal static class KubernetesDeployTestHelpers
         await auto.TypeAsync($"kubectl cluster-info --context kind-{clusterName}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-    }
-
-    /// <summary>
-    /// Runs <c>aspire --version</c> and asserts the CLI version contains a prerelease suffix (e.g. <c>-dev</c>, <c>-pr.NNNNN</c>).
-    /// This ensures the test is running against a development build, not a GA release.
-    /// Fails the test if the version does not contain a hyphen (indicating a prerelease suffix).
-    /// </summary>
-    internal static async Task AssertAspireVersionAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        ITestOutputHelper output)
-    {
-        // Run aspire --version and assert it contains a prerelease suffix (hyphen) via shell
-        await auto.TypeAsync("VER=$(aspire --version 2>/dev/null) && echo \"$VER\" | grep -q '-' && echo \"CLI_VERSION_OK:$VER\" || { echo \"CLI_VERSION_FAIL:$VER\"; false; }");
-        await auto.EnterAsync();
-
-        var foundOk = false;
-        await auto.WaitUntilAsync(
-            snapshot =>
-            {
-                if (new CellPatternSearcher().Find("CLI_VERSION_OK:").Search(snapshot).Count > 0)
-                {
-                    foundOk = true;
-                    return true;
-                }
-                return new CellPatternSearcher().Find("CLI_VERSION_FAIL:").Search(snapshot).Count > 0;
-            },
-            timeout: TimeSpan.FromSeconds(30),
-            description: "CLI version prerelease assertion");
-
-        await auto.WaitForAnyPromptAsync(counter);
-
-        Assert.True(foundOk, "Aspire CLI version does not contain a prerelease suffix. Expected a development build (e.g. 13.3.0-dev or 13.3.0-pr.NNNNN).");
-        output.WriteLine("✅ CLI version contains prerelease suffix");
     }
 
     /// <summary>
@@ -215,8 +187,7 @@ internal static class KubernetesDeployTestHelpers
             s => new CellPatternSearcher().Find("Use Redis Cache").Search(s).Count > 0,
             timeout: TimeSpan.FromSeconds(10),
             description: "Redis cache prompt");
-        await auto.DownAsync(); // Navigate to "No"
-        await auto.EnterAsync();
+        await auto.TypeAsync("n");
 
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Do you want to create a test project?").Search(s).Count > 0,
@@ -259,7 +230,6 @@ internal static class KubernetesDeployTestHelpers
         // Dismiss agent init prompt (same as DeclineAgentInitPromptAsync)
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter);
 
         // Step 2: cd into the project
@@ -272,10 +242,7 @@ internal static class KubernetesDeployTestHelpers
         {
             await auto.TypeAsync($"aspire add {package}");
             await auto.EnterAsync();
-            // aspire add shows a version selection prompt — accept the first (latest) version
-            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
         }
 
         // Step 4: Add client NuGet packages to ApiService (--prerelease needed for PR builds)
@@ -329,7 +296,7 @@ internal static class KubernetesDeployTestHelpers
         }
 
         // Wait for pipeline completion
-        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(10));
+        await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(10));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
 
@@ -451,4 +418,3 @@ internal static class KubernetesDeployTestHelpers
         }
     }
 }
-

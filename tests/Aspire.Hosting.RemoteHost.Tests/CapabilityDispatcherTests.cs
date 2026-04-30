@@ -388,9 +388,9 @@ public class CapabilityDispatcherTests
         Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.executionContext"),
             "EnvironmentCallbackContext.executionContext capability should be registered");
 
-        // Other EnvironmentCallbackContext properties should also be registered
-        Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environmentVariables"),
-            "EnvironmentCallbackContext.environmentVariables should be registered");
+        // Other EnvironmentCallbackContext ATS-facing properties should also be registered
+        Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment"),
+            "EnvironmentCallbackContext.environment should be registered");
 
         // DistributedApplicationExecutionContext properties should also be registered
         Assert.True(dispatcher.HasCapability("Aspire.Hosting/DistributedApplicationExecutionContext.operation"),
@@ -897,6 +897,83 @@ public class CapabilityDispatcherTests
 
         Assert.NotNull(result);
         Assert.Equal("42", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_AcceptsUnionWithDtoObject()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject
+            {
+                ["label"] = "dto-value"
+            }
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptDtoUnion", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("dto-value", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_AcceptsUnionWithBuilderBackedHandle()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly]);
+
+        var resource = new TestResourceWithProperties("union-resource");
+        var builder = new TestResourceBuilder<TestResourceWithProperties>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestResourceWithProperties");
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject { ["$handle"] = handleId }
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptHandleUnion", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("union-resource", result.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invoke_UnionWithUnsupportedArray_ThrowsTypeMismatch()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonArray { 1, 2, 3 }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptUnion", args));
+
+        Assert.Equal(AtsErrorCodes.TypeMismatch, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Equal("String | Int32", ex.Error.Details?.Expected);
+        Assert.Equal("array", ex.Error.Details?.Actual);
+    }
+
+    [Fact]
+    public void Invoke_UnionWithUnsupportedObject_ThrowsTypeMismatch()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject
+            {
+                ["label"] = "unexpected"
+            }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptUnion", args));
+
+        Assert.Equal(AtsErrorCodes.TypeMismatch, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Equal("String | Int32", ex.Error.Details?.Expected);
+        Assert.Equal("object", ex.Error.Details?.Actual);
     }
 
     // List operations tests
@@ -1801,6 +1878,28 @@ public class CapabilityDispatcherTests
         Assert.DoesNotContain("on resource", capabilityException.Message);
     }
 
+    [Fact]
+    public void Invoke_StaticMethodTakingRawResource_UnwrapsBuilderHandle()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestRawResourceCapabilities).Assembly]);
+
+        var resource = new TestConnectionStringResource("mydb");
+        var builder = new TestResourceBuilder<TestConnectionStringResource>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestConnectionStringResource");
+
+        var args = new JsonObject
+        {
+            ["resource"] = new JsonObject { ["$handle"] = handleId },
+            ["key"] = "Host"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/findConnectionPropertyKey", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("Host", result.GetValue<string>());
+    }
+
     private static CapabilityDispatcher CreateDispatcher(params System.Reflection.Assembly[] assemblies)
     {
         var handles = new HandleRegistry();
@@ -1907,7 +2006,7 @@ internal static class TestGenericPolyglotErrorCapabilities
     public static void WithHttpEndpoint<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
         throw new DistributedApplicationException(
-            $"Endpoint with name 'http' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking");
+            $"Endpoint with name 'http' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/aspire/networking");
     }
 }
 
@@ -2119,6 +2218,28 @@ internal static class TestTypeCategoryCapabilities
         return value.ToString()!;
     }
 
+    [AspireExport("acceptDtoUnion", Description = "Accepts a union of DTO or string array")]
+    public static string AcceptDtoUnion([AspireUnion(typeof(TestUnionDto), typeof(string[]))] object value)
+    {
+        return value switch
+        {
+            TestUnionDto dto => dto.Label ?? string.Empty,
+            string[] values => string.Join(",", values),
+            _ => throw new InvalidOperationException($"Unexpected union value type: {value.GetType().Name}")
+        };
+    }
+
+    [AspireExport("acceptHandleUnion", Description = "Accepts a union of resource handle or string")]
+    public static string AcceptHandleUnion([AspireUnion(typeof(TestResourceWithProperties), typeof(string))] object value)
+    {
+        return value switch
+        {
+            TestResourceWithProperties resource => resource.Name,
+            string text => text,
+            _ => throw new InvalidOperationException($"Unexpected union value type: {value.GetType().Name}")
+        };
+    }
+
     [AspireExport(Description = "Returns a mutable List<string>")]
     public static List<object> ReturnMutableList()
     {
@@ -2205,6 +2326,12 @@ internal sealed class TestDtoWithEnum
     public TestDispatchEnum Status { get; set; }
 }
 
+[AspireDto]
+internal sealed class TestUnionDto
+{
+    public string? Label { get; set; }
+}
+
 /// <summary>
 /// A minimal IResourceBuilder implementation for testing builder-to-resource unwrapping.
 /// </summary>
@@ -2251,5 +2378,43 @@ internal sealed class TestResourceWithMethods : Resource
     public string Greet(string prefix)
     {
         return $"{prefix}, {Name}!";
+    }
+}
+
+/// <summary>
+/// Test resource implementing IResourceWithConnectionString for testing
+/// extension methods that take a raw resource type (not wrapped in IResourceBuilder).
+/// </summary>
+internal sealed class TestConnectionStringResource : Resource, IResourceWithConnectionString
+{
+    public TestConnectionStringResource(string name) : base(name) { }
+
+    public ReferenceExpression ConnectionStringExpression =>
+        ReferenceExpression.Create($"Host=localhost;Database={Name}");
+
+    public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+    {
+        yield return new("Host", ReferenceExpression.Create($"localhost"));
+        yield return new("Database", ReferenceExpression.Create($"{Name}"));
+    }
+}
+
+/// <summary>
+/// Test capabilities for static methods that take raw resource types (not builder-wrapped).
+/// Exercises the builder-to-resource unwrapping path in RegisterFromCapability.
+/// </summary>
+internal static class TestRawResourceCapabilities
+{
+    [AspireExport(Description = "Finds a matching connection property key")]
+    public static string FindConnectionPropertyKey(this IResourceWithConnectionString resource, string key)
+    {
+        foreach (var prop in resource.GetConnectionProperties())
+        {
+            if (string.Equals(prop.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return prop.Key;
+            }
+        }
+        return string.Empty;
     }
 }

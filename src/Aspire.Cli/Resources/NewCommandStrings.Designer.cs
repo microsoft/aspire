@@ -144,5 +144,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ResolvingTemplateVersion", resourceCulture);
             }
         }
+
+        public static string NonInteractiveTemplateRequired {
+            get {
+                return ResourceManager.GetString("NonInteractiveTemplateRequired", resourceCulture);
+            }
+        }
     }
 }

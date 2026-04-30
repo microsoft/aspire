@@ -115,6 +115,27 @@ internal sealed class UserSecretsManagerFactory
             }
         }
 
+        public bool TryDeleteSecret(string name)
+        {
+            try
+            {
+                _semaphore.Wait();
+                try
+                {
+                    DeleteSecretCore(name);
+                    return true;
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         public void GetOrSetSecret(IConfigurationManager configuration, string name, Func<string> valueGenerator)
         {
             var existingValue = configuration[name];
@@ -163,6 +184,16 @@ internal sealed class UserSecretsManagerFactory
             var secrets = Load();
             secrets[name] = value;
             Save(secrets);
+        }
+
+        private void DeleteSecretCore(string name)
+        {
+            var secrets = Load();
+            if (secrets.Remove(name))
+            {
+                EnsureUserSecretsDirectory();
+                Save(secrets);
+            }
         }
 
         private Dictionary<string, string?> Load()

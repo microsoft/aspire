@@ -42,6 +42,24 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("var TestConfigs = struct {", aspireGo);
+        Assert.Contains("Default *TestConfigDto", aspireGo);
+        Assert.Contains("Profiles struct {", aspireGo);
+        Assert.Contains("Development *TestConfigDto", aspireGo);
+        Assert.Matches(@"Profiles struct \{\r?\n\t\tDevelopment \*TestConfigDto\r?\n\t\}\r?\n\tSecure \*TestConfigDto", aspireGo);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithTestTypes_IncludesCapabilities()
     {
         // Arrange

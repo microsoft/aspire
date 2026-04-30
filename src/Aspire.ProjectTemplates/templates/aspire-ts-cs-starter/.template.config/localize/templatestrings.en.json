@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Aspire Starter App (ASP.NET Core/React)",
+  "name": "Aspire Starter App (ASP.NET Core/React, C# AppHost)",
   "description": "A project template for creating an Aspire app with a React frontend and a C# Minimal API backend service, with optional Redis caching.",
   "symbols/Framework/description": "The target framework for the project.",
   "symbols/Framework/choices/net8.0/description": "Target net8.0",

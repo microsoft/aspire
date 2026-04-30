@@ -141,7 +141,7 @@ public class FrontendBrowserTokenAuthTests
         using var client = new HttpClient { BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}") };
 
         // Act
-        var response = await client.PostAsync("/api/validatetoken?token=" + requestToken, content: null).DefaultTimeout();
+        var response = await client.PostAsJsonAsync("/api/validatetoken", new { Token = requestToken }).DefaultTimeout();
 
         // Assert
         Assert.Equal(statusCode, response.StatusCode);

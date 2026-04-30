@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Aspire スターター アプリ (ASP.NET Core/React)",
+  "name": "Aspire スターター アプリ (ASP.NET Core/React, C# AppHost)",
   "description": "React フロントエンドと C# MInimal API バックエンド サービスを使用して Aspire アプリを作成するためのプロジェクト テンプレート。必要に応じて、Redis キャッシュを使用します。",
   "symbols/Framework/description": "プロジェクトのターゲット フレームワーク。",
   "symbols/Framework/choices/net8.0/description": "ターゲット net8.0",

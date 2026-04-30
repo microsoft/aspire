@@ -76,6 +76,7 @@ public interface IDistributedApplicationBuilder
     public IHostEnvironment Environment { get; }
 
     /// <inheritdoc cref="HostApplicationBuilder.Services" />
+    [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS. Use IDistributedApplicationBuilder.addEventingSubscriber or tryAddEventingSubscriber for ATS event subscriber registration.")]
     public IServiceCollection Services { get; }
 
     /// <summary>

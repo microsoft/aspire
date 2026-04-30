@@ -18,9 +18,6 @@ spec:
       containers:
         - image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
           name: "env-dashboard"
-          envFrom:
-            - configMapRef:
-                name: "env-dashboard-config"
           ports:
             - name: "http"
               protocol: "TCP"

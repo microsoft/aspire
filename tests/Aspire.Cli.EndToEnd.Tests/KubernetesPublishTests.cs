@@ -31,33 +31,27 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15870")]
     public async Task CreateAndPublishToKubernetes()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
         var clusterName = GenerateUniqueClusterName();
 
         output.WriteLine($"Using KinD version: {KindVersion}");
         output.WriteLine($"Using Helm version: {HelmVersion}");
         output.WriteLine($"Using cluster name: {clusterName}");
 
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // Prepare environment
-        await auto.PrepareEnvironmentAsync(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (isCI)
-        {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         try
         {
@@ -133,12 +127,9 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
 
             // Step 3: Add Aspire.Hosting.Kubernetes package using aspire add
             // Pass the package name directly as an argument to avoid interactive selection
-            // The version selection prompt always appears for 'aspire add'
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync(); // select first version
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 4: Modify AppHost's main file to add Kubernetes environment
             // Note: Aspire templates use AppHost.cs as the main entry point, not Program.cs

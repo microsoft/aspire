@@ -25,7 +25,7 @@ public class ExecCommandTests
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, _outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var invokeConfiguration = new InvocationConfiguration();
@@ -46,7 +46,7 @@ public class ExecCommandTests
             options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec --resource api cmd");
@@ -64,7 +64,7 @@ public class ExecCommandTests
             options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.ProjectLocatorFactory = _ => new MultipleProjectFilesProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec --resource api cmd");
@@ -82,7 +82,7 @@ public class ExecCommandTests
             options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.ProjectLocatorFactory = _ => new ProjectFileDoesNotExistLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec --resource api cmd");
@@ -99,7 +99,7 @@ public class ExecCommandTests
         {
             options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var invokeConfiguration = new InvocationConfiguration();
@@ -122,7 +122,7 @@ public class ExecCommandTests
         {
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var invokeConfiguration = new InvocationConfiguration();
@@ -157,7 +157,7 @@ public class ExecCommandTests
                 }
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("exec --apphost test.csproj --resource myresource --command echo");

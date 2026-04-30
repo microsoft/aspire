@@ -38,6 +38,15 @@ internal sealed class UpdateCommand : BaseCommand
     {
         Description = UpdateCommandStrings.SelfOptionDescription
     };
+    private static readonly Option<bool> s_yesOption = new("--yes")
+    {
+        Description = UpdateCommandStrings.YesOptionDescription,
+        Aliases = { "-y" }
+    };
+    private static readonly Option<string?> s_nugetConfigDirOption = new("--nuget-config-dir")
+    {
+        Description = UpdateCommandStrings.NuGetConfigDirOptionDescription
+    };
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _qualityOption;
 
@@ -68,6 +77,8 @@ internal sealed class UpdateCommand : BaseCommand
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
+        Options.Add(s_yesOption);
+        Options.Add(s_nugetConfigDirOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
@@ -93,18 +104,9 @@ internal sealed class UpdateCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    private static bool IsRunningAsDotNetTool()
+    private static string? GetDotNetToolUpdateCommand()
     {
-        // When running as a dotnet tool, the process path points to "dotnet" or "dotnet.exe"
-        // When running as a native binary, it points to "aspire" or "aspire.exe"
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return false;
-        }
-
-        var fileName = Path.GetFileNameWithoutExtension(processPath);
-        return string.Equals(fileName, "dotnet", StringComparison.OrdinalIgnoreCase);
+        return DotNetToolDetection.GetDotNetToolUpdateCommand();
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -115,10 +117,11 @@ internal sealed class UpdateCommand : BaseCommand
         if (isSelfUpdate)
         {
             // When running as a dotnet tool, print the update command instead of executing
-            if (IsRunningAsDotNetTool())
+            var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+            if (dotNetToolUpdateCommand is not null)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
+                InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
                 return 0;
             }
 
@@ -180,11 +183,13 @@ internal sealed class UpdateCommand : BaseCommand
                 if (hasHives)
                 {
                     // Prompt for channel selection
+                    var channelBinding = PromptBinding.Create(parseResult, _channelOption);
                     channel = await InteractionService.PromptForSelectionAsync(
                         UpdateCommandStrings.SelectChannelPrompt,
                         allChannels,
                         (c) => $"{c.Name.EscapeMarkup()} ({c.SourceDetails.EscapeMarkup()})",
-                        cancellationToken);
+                        binding: channelBinding,
+                        cancellationToken: cancellationToken);
                 }
                 else
                 {
@@ -195,26 +200,38 @@ internal sealed class UpdateCommand : BaseCommand
             }
 
             // Update packages using the appropriate project handler
+            var confirmBinding = PromptBinding.CreateWithInteractiveDefault(parseResult, s_yesOption, true);
+            var nugetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption);
             var updateContext = new UpdatePackagesContext
             {
                 AppHostFile = projectFile,
-                Channel = channel
+                Channel = channel,
+                ConfirmBinding = confirmBinding,
+                NuGetConfigDirBinding = nugetConfigDirBinding
             };
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
-            if (_cliDownloader is not null && 
-                _updateNotifier.IsUpdateAvailable() && 
+            if (_cliDownloader is not null &&
+                _updateNotifier.IsUpdateAvailable() &&
                 !string.IsNullOrEmpty(channel.CliDownloadBaseUrl))
             {
-                var shouldUpdateCli = await InteractionService.ConfirmAsync(
+                var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                     UpdateCommandStrings.UpdateCliAfterProjectUpdatePrompt,
-                    defaultValue: true,
-                    cancellationToken);
-                
+                    binding: confirmBinding,
+                    cancellationToken: cancellationToken);
+
                 if (shouldUpdateCli)
                 {
+                    var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+                    if (dotNetToolUpdateCommand is not null)
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+                        InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+                        return ExitCodeConstants.Success;
+                    }
+
                     // Use the same channel that was selected for the project update
                     return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
                 }
@@ -240,20 +257,20 @@ internal sealed class UpdateCommand : BaseCommand
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
                 // Only prompt for self-update if not running as dotnet tool and downloader is available
-                if (_cliDownloader is not null)
+                if (GetDotNetToolUpdateCommand() is null && _cliDownloader is not null)
                 {
-                    var shouldUpdateCli = await InteractionService.ConfirmAsync(
+                    var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,
-                        defaultValue: true,
-                        cancellationToken);
-                    
+                        binding: PromptBinding.Create(parseResult, s_yesOption, false),
+                        cancellationToken: cancellationToken);
+
                     if (shouldUpdateCli)
                     {
                         return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
                     }
                 }
             }
-            
+
             return HandleProjectLocatorException(ex, InteractionService, Telemetry);
         }
         catch (OperationCanceledException)
@@ -278,11 +295,13 @@ internal sealed class UpdateCommand : BaseCommand
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
+            var channelBinding = PromptBinding.Create(parseResult, _channelOption);
             channel = await InteractionService.PromptForSelectionAsync(
                 "Select the channel to update to:",
                 channels,
                 q => q,
-                cancellationToken);
+                binding: channelBinding,
+                cancellationToken: cancellationToken);
         }
 
         try
@@ -461,11 +480,11 @@ internal sealed class UpdateCommand : BaseCommand
 
         var pathSeparator = Path.PathSeparator;
         var paths = pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries);
-        
-        return paths.Any(p => 
-            string.Equals(Path.GetFullPath(p.Trim()), Path.GetFullPath(directory), 
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-                    ? StringComparison.OrdinalIgnoreCase 
+
+        return paths.Any(p =>
+            string.Equals(Path.GetFullPath(p.Trim()), Path.GetFullPath(directory),
+                RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? StringComparison.OrdinalIgnoreCase
                     : StringComparison.Ordinal));
     }
 
@@ -507,14 +526,14 @@ internal sealed class UpdateCommand : BaseCommand
 
             var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
             await process.WaitForExitAsync(cancellationToken);
-            
+
             if (process.ExitCode == 0)
             {
                 var version = output.Trim();
                 InteractionService.DisplaySuccess($"Updated to version: {version}");
                 return version;
             }
-            
+
             return null;
         }
         catch

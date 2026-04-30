@@ -86,7 +86,7 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
             {
                 selectedAppHostPath = connection.AppHostInfo?.AppHostPath;
 
-                var allResources = await connection.GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+                var allResources = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
                 var resourcesWithTools = allResources.Where(r => r.McpServer is not null).ToList();
 
                 _logger.LogDebug("Resources with MCP tools received: {Count}", resourcesWithTools.Count);

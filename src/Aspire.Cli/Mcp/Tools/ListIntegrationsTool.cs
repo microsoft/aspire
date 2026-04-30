@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Packaging;
 using ModelContextProtocol.Protocol;
+using Semver;
 
 namespace Aspire.Cli.Mcp.Tools;
 

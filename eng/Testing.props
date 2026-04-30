@@ -23,23 +23,31 @@
     <RunOnAzdoHelixLinux>true</RunOnAzdoHelixLinux>
 
     <_QuarantinedTestRunAdditionalArgs>--filter-trait "quarantined=true"</_QuarantinedTestRunAdditionalArgs>
-    <_NonQuarantinedTestRunAdditionalArgs>--filter-not-trait "quarantined=true"</_NonQuarantinedTestRunAdditionalArgs>
+    <_NonQuarantinedTestRunAdditionalArgs Condition="'$(SkipDefaultTestFilters)' != 'true'">--filter-not-trait "quarantined=true"</_NonQuarantinedTestRunAdditionalArgs>
     <_OuterloopTestRunAdditionalArgs>--filter-trait "outerloop=true"</_OuterloopTestRunAdditionalArgs>
-    <_NonOuterloopTestRunAdditionalArgs>--filter-not-trait "outerloop=true"</_NonOuterloopTestRunAdditionalArgs>
+    <_NonOuterloopTestRunAdditionalArgs Condition="'$(SkipDefaultTestFilters)' != 'true'">--filter-not-trait "outerloop=true"</_NonOuterloopTestRunAdditionalArgs>
 
     <_ShortName Condition="'$(TestShortName)' != ''">$(TestShortName)</_ShortName>
     <_ShortName Condition="'$(_ShortName)' == ''">$([System.IO.Path]::GetFileNameWithoutExtension('$(MSBuildProjectName)').Replace('Aspire.', '').Replace('.Tests', ''))</_ShortName>
   </PropertyGroup>
 
   <PropertyGroup>
-    <BlameHangTimeout Condition="'$(BlameHangTimeout)' == '' and '$(MSBuildProjectName)' == 'Aspire.Hosting.SqlServer.Tests'">20m</BlameHangTimeout>
-    <BlameHangTimeout Condition="'$(BlameHangTimeout)' == ''">10m</BlameHangTimeout>
-    <_BlameArgs>--hangdump --hangdump-timeout $(BlameHangTimeout) --crashdump</_BlameArgs>
+    <!--
+      MtpBaseArgs: The single source of truth for MTP diagnostic arguments, including
+      per-project timeouts. Shared by the Arcade/Helix path (TestRunnerAdditionalArguments)
+      and the GitHub Actions path (run-tests.yml via runsheet pipeline).
+      See docs/ci/mtp-args-pipeline.md for details.
+    -->
+    <_MtpDiagnosticFlags>--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none</_MtpDiagnosticFlags>
+    <MtpBaseArgs Condition="'$(MtpBaseArgs)' == ''">$(_MtpDiagnosticFlags) --hangdump-timeout $(TestHangTimeout) --timeout $(TestSessionTimeout)</MtpBaseArgs>
+
+    <!-- Variant with uncollected-bucket timeouts, used for split-test entries that don't match a named collection -->
+    <_UncollectedMtpBaseArgs>$(_MtpDiagnosticFlags) --hangdump-timeout $(UncollectedTestsHangTimeout) --timeout $(UncollectedTestsSessionTimeout)</_UncollectedMtpBaseArgs>
+
+    <_BlameArgs>$(MtpBaseArgs)</_BlameArgs>
 
     <TestRunnerAdditionalArguments>$(TestRunnerAdditionalArguments) --filter-not-trait &quot;category=failing&quot;</TestRunnerAdditionalArguments>
-    <!-- ignore exit code 8 (zero tests ran)
-         https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-exit-codes -->
-    <TestRunnerAdditionalArguments>$(TestRunnerAdditionalArguments) --ignore-exit-code 8</TestRunnerAdditionalArguments>
+    <!-- ignore exit code 8 (zero tests ran) is already in MtpBaseArgs / _BlameArgs -->
 
     <TestRunnerAdditionalArguments Condition="'$(RunQuarantinedTests)' != 'true' and '$(RunOuterloopTests)' != 'true'">$(TestRunnerAdditionalArguments) $(_NonQuarantinedTestRunAdditionalArgs) $(_NonOuterloopTestRunAdditionalArgs) $(_BlameArgs)</TestRunnerAdditionalArguments>
     <TestRunnerAdditionalArguments Condition="'$(RunQuarantinedTests)' == 'true'">$(TestRunnerAdditionalArguments) $(_QuarantinedTestRunAdditionalArgs) $(_BlameArgs)</TestRunnerAdditionalArguments>

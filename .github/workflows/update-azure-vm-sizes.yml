@@ -1,0 +1,48 @@
+name: Update Azure VM Sizes
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 1 * *' # Monthly on the 1st at 06:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-and-pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Azure Login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Generate updated Azure VM size descriptors
+        working-directory: src/Aspire.Hosting.Azure.Kubernetes/tools
+        run: |
+          set -e
+          "$GITHUB_WORKSPACE/dotnet.sh" run GenVmSizes.cs
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Create or update pull request
+        uses: ./.github/actions/create-pull-request
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: update-azure-vm-sizes
+          base: main
+          commit-message: "[Automated] Update Azure VM Sizes"
+          labels: |
+            area-integrations
+            area-engineering-systems
+          title: "[Automated] Update Azure VM Sizes"
+          body: "Auto-generated update of Azure VM size descriptors (AksNodeVmSizes.Generated.cs)."

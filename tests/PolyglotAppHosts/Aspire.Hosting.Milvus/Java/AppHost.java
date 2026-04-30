@@ -7,7 +7,7 @@ void main() throws Exception {
         // ── 1. addMilvus: basic Milvus server resource ─────────────────────────────
         var milvus = builder.addMilvus("milvus");
         // ── 2. addMilvus: with custom apiKey parameter ─────────────────────────────
-        var customKey = builder.addParameter("milvus-key", true);
+        var customKey = builder.addParameter("milvus-key", new AddParameterOptions().secret(true));
         var milvus2 = builder.addMilvus("milvus2", new AddMilvusOptions().apiKey(customKey));
         // ── 3. addMilvus: with explicit gRPC port ──────────────────────────────────
         builder.addMilvus("milvus3", new AddMilvusOptions().grpcPort(19531.0));
@@ -44,9 +44,9 @@ void main() throws Exception {
         milvusChained.withAttu();
         // ── 15. withReference: use Milvus database from a container resource ───────
         var api = builder.addContainer("api", "myregistry/myapp");
-        api.withReference(db);
+        api.withReference(db, new WithReferenceOptions());
         // ── 16. withReference: use Milvus server directly ──────────────────────────
-        api.withReference(milvus);
+        api.withReference(milvus, new WithReferenceOptions());
         // ---- Property access on MilvusServerResource ----
         var _endpoint = milvus.primaryEndpoint();
         var _host = milvus.host();

@@ -605,7 +605,7 @@ public partial class ResourcesTests : DashboardTestContext
 
         var initialResources = new List<ResourceViewModel>
         {
-            CreateResource("myparameter", KnownResourceTypes.Parameter, "Value missing", null, stateStyle: "warning", properties: parameterProperties),
+            CreateResource("myparameter", KnownResourceTypes.Parameter, nameof(KnownResourceState.ValueMissing), null, stateStyle: "warning", properties: parameterProperties),
         };
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
@@ -627,7 +627,7 @@ public partial class ResourcesTests : DashboardTestContext
         // Verify the resource has warning stateStyle (triggers "Value not set" display)
         var resource = filteredResources[0];
         Assert.Equal("warning", resource.StateStyle);
-        Assert.Equal("Value missing", resource.State);
+        Assert.Equal(nameof(KnownResourceState.ValueMissing), resource.State);
     }
 
     [Fact]

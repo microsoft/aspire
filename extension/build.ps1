@@ -41,6 +41,10 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "All prerequisites satisfied."
+
+# Ensure we run from the extension directory
+Set-Location $PSScriptRoot
+
 Write-Host ""
 Write-Host "Running yarn install..."
 yarn install

@@ -9,12 +9,13 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
@@ -69,6 +70,11 @@ internal static class CliTestHelper
 
         options.ConfigurationCallback(configurationValues);
 
+        if (options.DisableAnsi)
+        {
+            configurationValues.TryAdd("NO_COLOR", "1");
+        }
+
         configBuilder.AddInMemoryCollection(configurationValues);
 
         var globalSettingsFilePath = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "settings.global.json");
@@ -80,10 +86,12 @@ internal static class CliTestHelper
 
         services.AddLogging(b => b.SetMinimumLevel(LogLevel.Trace)).AddXunitLogging(outputHelper);
 
-        // Register logging options for test
+        // Register logging options for test. The FileLoggerProvider is created inside the
+        // factory callback so the DI container owns the instance and disposes it (closing
+        // the log file handle) when the ServiceProvider is disposed.
         var testLogsDirectory = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "logs");
         var testLogFilePath = FileLoggerProvider.GenerateLogFilePath(testLogsDirectory, TimeProvider.System);
-        services.AddSingleton(new FileLoggerProvider(testLogFilePath, new TestStartupErrorWriter()));
+        services.AddSingleton(sp => new FileLoggerProvider(testLogFilePath, new TestStartupErrorWriter()));
         services.AddSingleton(new Program.CliLoggingOptions(ConsoleLogLevel: null, DebugMode: false, LogsDirectory: testLogsDirectory, LogFilePath: testLogFilePath));
 
         services.AddMemoryCache();
@@ -131,7 +139,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.NpmProvenanceCheckerFactory);
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();
-        services.AddSingleton<IScaffoldingService, ScaffoldingService>();
+        services.AddSingleton(options.ScaffoldingServiceFactory);
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         services.AddSingleton(options.AppHostServerSessionFactory);
         services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
@@ -141,6 +149,7 @@ internal static class CliTestHelper
         // This ensures backward compatibility: no layout found = use legacy SDK mode
         services.AddSingleton(options.LayoutDiscoveryFactory);
         services.AddTransient<LayoutProcessRunner>();
+        services.AddSingleton(options.BundlePayloadProviderFactory);
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
 
@@ -154,6 +163,7 @@ internal static class CliTestHelper
 
         services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
+        services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
@@ -163,12 +173,15 @@ internal static class CliTestHelper
         // MCP server transport
         services.AddSingleton(options.McpServerTransportFactory);
 
-        // MCP docs services - use test doubles
+        // Documentation services - use test doubles
         services.AddSingleton<IDocsCache, DocsCache>();
         services.AddSingleton<IHttpClientFactory, TestHttpClientFactory>();
         services.AddSingleton<IDocsFetcher, TestDocsFetcher>();
         services.AddSingleton(options.DocsIndexServiceFactory);
         services.AddSingleton(options.DocsSearchServiceFactory);
+        services.AddSingleton<IApiDocsCache, ApiDocsCache>();
+        services.AddSingleton<IApiDocsFetcher, TestApiDocsFetcher>();
+        services.AddSingleton(options.ApiDocsIndexServiceFactory);
 
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
@@ -217,6 +230,10 @@ internal static class CliTestHelper
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();
+        services.AddTransient<ApiCommand>();
+        services.AddTransient<ApiListCommand>();
+        services.AddTransient<ApiSearchCommand>();
+        services.AddTransient<ApiGetCommand>();
         services.AddTransient<DocsCommand>();
         services.AddTransient<DocsListCommand>();
         services.AddTransient<DocsSearchCommand>();
@@ -422,6 +439,15 @@ internal sealed class CliServiceCollectionTestOptions
         return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment);
     };
 
+    public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    {
+        var appHostServerProjectFactory = serviceProvider.GetRequiredService<IAppHostServerProjectFactory>();
+        var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
+        var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
+        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger);
+    };
+
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         return new TestProcessExecutionFactory();
@@ -513,7 +539,7 @@ internal sealed class CliServiceCollectionTestOptions
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        return new PackagingService(executionContext, nuGetPackageCache, features, configuration);
+        return new PackagingService(executionContext, nuGetPackageCache, features, configuration, NullLogger<PackagingService>.Instance);
     };
 
     public Func<IServiceProvider, IDiskCache> DiskCacheFactory { get; set; } = (IServiceProvider serviceProvider) => new NullDiskCache();
@@ -567,6 +593,9 @@ internal sealed class CliServiceCollectionTestOptions
     // Bundle service - returns no-op implementation by default (no embedded bundle)
     public Func<IServiceProvider, IBundleService> BundleServiceFactory { get; set; } = _ => new NullBundleService();
 
+    // Bundle payload provider - returns no-payload provider by default
+    public Func<IServiceProvider, IBundlePayloadProvider> BundlePayloadProviderFactory { get; set; } = _ => new NullBundlePayloadProvider();
+
     public Func<IServiceProvider, IMcpTransportFactory> McpServerTransportFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
@@ -577,8 +606,9 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var fetcher = serviceProvider.GetRequiredService<IDocsFetcher>();
         var cache = serviceProvider.GetRequiredService<IDocsCache>();
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var logger = serviceProvider.GetRequiredService<ILogger<DocsIndexService>>();
-        return new DocsIndexService(fetcher, cache, logger);
+        return new DocsIndexService(fetcher, cache, configuration, logger);
     };
 
     public Func<IServiceProvider, IDocsSearchService> DocsSearchServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -586,6 +616,15 @@ internal sealed class CliServiceCollectionTestOptions
         var indexService = serviceProvider.GetRequiredService<IDocsIndexService>();
         var logger = serviceProvider.GetRequiredService<ILogger<DocsSearchService>>();
         return new DocsSearchService(indexService, logger);
+    };
+
+    public Func<IServiceProvider, IApiDocsIndexService> ApiDocsIndexServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    {
+        var fetcher = serviceProvider.GetRequiredService<IApiDocsFetcher>();
+        var cache = serviceProvider.GetRequiredService<IApiDocsCache>();
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ApiDocsIndexService>>();
+        return new ApiDocsIndexService(fetcher, cache, configuration, logger);
     };
 }
 
@@ -617,6 +656,16 @@ internal sealed class NullBundleService : IBundleService
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<Layout.LayoutConfiguration?>(null);
+}
+
+/// <summary>
+/// A no-op payload provider that reports no payload available.
+/// </summary>
+internal sealed class NullBundlePayloadProvider : IBundlePayloadProvider
+{
+    public bool HasPayload => false;
+
+    public Stream? OpenPayload() => null;
 }
 
 /// <summary>

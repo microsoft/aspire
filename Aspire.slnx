@@ -91,8 +91,10 @@
     <Project Path="src/Aspire.Hosting.Azure.ContainerRegistry/Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.Azure.CosmosDB.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.EventHubs.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.FrontDoor/Aspire.Hosting.Azure.FrontDoor.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Functions/Aspire.Hosting.Azure.Functions.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.KeyVault/Aspire.Hosting.Azure.KeyVault.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.Kusto.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.Network.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.OperationalInsights/Aspire.Hosting.Azure.OperationalInsights.csproj" />
@@ -227,6 +229,11 @@
   </Folder>
   <Folder Name="/playground/FoundryAgentEnterprise/">
     <Project Path="playground/FoundryAgentEnterprise/FoundryAgentEnterprise.AppHost/FoundryAgentEnterprise.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/playground/FoundryAgents/">
+    <Project Path="playground/FoundryAgents/DotNetHostedAgent/DotNetHostedAgent.csproj" />
+    <Project Path="playground/FoundryAgents/FoundryAgents.AppHost/FoundryAgents.AppHost.csproj" />
+    <Project Path="playground/FoundryAgents/PromptAgentChat/PromptAgentChat.csproj" />
   </Folder>
   <Folder Name="/playground/GitHubModelsEndToEnd/">
     <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.AppHost/GitHubModelsEndToEnd.AppHost.csproj" />
@@ -408,7 +415,6 @@
     <Project Path="tests/Aspire.Hosting.Sdk.Tests/Aspire.Hosting.Sdk.Tests.csproj" />
     <Project Path="tests/Aspire.Managed.Tests/Aspire.Managed.Tests.csproj" />
     <Project Path="tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj" />
-    <Project Path="tests/Aspire.SmolSemVer.Tests/Aspire.SmolSemVer.Tests.csproj" />
     <Project Path="tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj" />
     <Project Path="tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj" />
     <Project Path="tests/ConfigurationSchemaGenerator.Tests/ConfigurationSchemaGenerator.Tests.csproj" />
@@ -416,6 +422,7 @@
   </Folder>
   <Folder Name="/tests/Cli/">
     <Project Path="tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj" />
+    <Project Path="tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj" />
     <Project Path="tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Components/">
@@ -468,6 +475,7 @@
     <Project Path="tests/Aspire.Hosting.Analyzers.Tests/Aspire.Hosting.Analyzers.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Kusto.Tests/Aspire.Hosting.Azure.Kusto.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Azure.Kubernetes.Tests/Aspire.Hosting.Azure.Kubernetes.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Tests/Aspire.Hosting.Azure.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Containers.Tests/Aspire.Hosting.Containers.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.DevTunnels.Tests/Aspire.Hosting.DevTunnels.Tests.csproj" />

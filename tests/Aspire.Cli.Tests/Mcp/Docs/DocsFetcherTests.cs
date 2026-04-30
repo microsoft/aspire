@@ -2,14 +2,24 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Aspire.Cli.Tests.Mcp.Docs;
+namespace Aspire.Cli.Tests.Documentation.Docs;
 
 public class DocsFetcherTests
 {
+    private const string DefaultLlmsTxtUrl = "https://aspire.dev/llms-small.txt";
+    private static readonly string s_defaultCacheKey = DocsSourceConfiguration.GetContentCacheKey(DefaultLlmsTxtUrl);
+
+    private static DocsFetcher CreateFetcher(HttpClient httpClient, IDocsCache cache, IConfiguration? configuration = null)
+    {
+        configuration ??= new ConfigurationBuilder().Build();
+        return new DocsFetcher(httpClient, cache, configuration, NullLogger<DocsFetcher>.Instance);
+    }
+
     [Fact]
     public async Task FetchDocsAsync_SuccessfulRequest_ReturnsContent()
     {
@@ -29,7 +39,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -49,11 +59,11 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         await fetcher.FetchDocsAsync();
 
-        var storedETag = await cache.GetETagAsync("https://aspire.dev/llms-small.txt");
+        var storedETag = await cache.GetETagAsync(s_defaultCacheKey);
         Assert.Equal("\"abc123\"", storedETag);
     }
 
@@ -70,11 +80,11 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         await fetcher.FetchDocsAsync();
 
-        var cached = await cache.GetAsync("https://aspire.dev/llms-small.txt");
+        var cached = await cache.GetAsync(s_defaultCacheKey);
         Assert.Equal(content, cached);
     }
 
@@ -82,8 +92,8 @@ public class DocsFetcherTests
     public async Task FetchDocsAsync_WithCachedETag_SendsIfNoneMatchHeader()
     {
         var cache = new MockDocsCache();
-        await cache.SetETagAsync("https://aspire.dev/llms-small.txt", "\"cached-etag\"");
-        await cache.SetAsync("https://aspire.dev/llms-small.txt", "# Cached");
+        await cache.SetETagAsync(s_defaultCacheKey, "\"cached-etag\"");
+        await cache.SetAsync(s_defaultCacheKey, "# Cached");
 
         using var response = new HttpResponseMessage
         {
@@ -96,7 +106,7 @@ public class DocsFetcherTests
         });
 
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         await fetcher.FetchDocsAsync();
 
@@ -108,8 +118,8 @@ public class DocsFetcherTests
     {
         var cachedContent = "# Cached Content";
         var cache = new MockDocsCache();
-        await cache.SetETagAsync("https://aspire.dev/llms-small.txt", "\"etag\"");
-        await cache.SetAsync("https://aspire.dev/llms-small.txt", cachedContent);
+        await cache.SetETagAsync(s_defaultCacheKey, "\"etag\"");
+        await cache.SetAsync(s_defaultCacheKey, cachedContent);
 
         using var response = new HttpResponseMessage
         {
@@ -118,7 +128,7 @@ public class DocsFetcherTests
 
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -130,7 +140,7 @@ public class DocsFetcherTests
     {
         var freshContent = "# Fresh Content";
         var cache = new MockDocsCache();
-        await cache.SetETagAsync("https://aspire.dev/llms-small.txt", "\"etag\"");
+        await cache.SetETagAsync(s_defaultCacheKey, "\"etag\"");
         // Cache content is empty - simulating cache cleared but ETag remains
 
         var callCount = 0;
@@ -153,7 +163,7 @@ public class DocsFetcherTests
         });
 
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -172,7 +182,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -185,7 +195,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(new HttpRequestException("Network error"));
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -193,20 +203,18 @@ public class DocsFetcherTests
     }
 
     [Fact]
-    public async Task FetchDocsAsync_Cancellation_ReturnsNull()
+    public async Task FetchDocsAsync_Cancellation_ThrowsOperationCanceledException()
     {
-        // Use a handler that properly checks the cancellation token
         using var handler = new CancellationCheckingHandler();
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        await cache.SetAsync(s_defaultCacheKey, "# Cached Content");
+        var fetcher = CreateFetcher(httpClient, cache);
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        // The FetchDocsAsync swallows exceptions and returns null when there's no cached content
-        var result = await fetcher.FetchDocsAsync(cts.Token);
-        Assert.Null(result);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetcher.FetchDocsAsync(cts.Token));
     }
 
     [Fact]
@@ -221,7 +229,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -241,7 +249,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -260,7 +268,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -283,7 +291,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(response);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -304,7 +312,7 @@ public class DocsFetcherTests
         using var handler = new MockHttpMessageHandler(exception);
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -325,7 +333,7 @@ public class DocsFetcherTests
         using var httpClient = new HttpClient(handler);
         var cache = new MockDocsCache();
         // Cache is empty, no ETag
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
@@ -337,7 +345,7 @@ public class DocsFetcherTests
     {
         var serverContent = "# Fresh Content";
         var cache = new MockDocsCache();
-        await cache.SetETagAsync("https://aspire.dev/llms-small.txt", "\"old-etag\"");
+        await cache.SetETagAsync(s_defaultCacheKey, "\"old-etag\"");
         // Note: no cached content set
 
         var callCount = 0;
@@ -356,12 +364,33 @@ public class DocsFetcherTests
         });
 
         using var httpClient = new HttpClient(handler);
-        var fetcher = new DocsFetcher(httpClient, cache, NullLogger<DocsFetcher>.Instance);
+        var fetcher = CreateFetcher(httpClient, cache);
 
         var content = await fetcher.FetchDocsAsync();
 
         Assert.Equal(serverContent, content);
         Assert.Equal(2, callCount);
+    }
+
+    [Fact]
+    public async Task FetchDocsAsync_MigratesLegacyUrlCacheEntries()
+    {
+        var legacyContent = "# Cached Content";
+        var cache = new MockDocsCache();
+        await cache.SetAsync(DefaultLlmsTxtUrl, legacyContent);
+        await cache.SetETagAsync(DefaultLlmsTxtUrl, "\"legacy-etag\"");
+
+        using var handler = new MockHttpMessageHandler(new HttpRequestException("Network error"));
+        using var httpClient = new HttpClient(handler);
+        var fetcher = CreateFetcher(httpClient, cache);
+
+        var content = await fetcher.FetchDocsAsync();
+
+        Assert.Equal(legacyContent, content);
+        Assert.Equal(legacyContent, await cache.GetAsync(s_defaultCacheKey));
+        Assert.Equal("\"legacy-etag\"", await cache.GetETagAsync(s_defaultCacheKey));
+        Assert.Null(await cache.GetAsync(DefaultLlmsTxtUrl));
+        Assert.Null(await cache.GetETagAsync(DefaultLlmsTxtUrl));
     }
 
     private sealed class CancellationCheckingHandler : HttpMessageHandler
@@ -383,6 +412,7 @@ public class DocsFetcherTests
         private readonly Dictionary<string, string> _content = [];
         private readonly Dictionary<string, string> _etags = [];
         private LlmsDocument[]? _index;
+        private string? _indexSourceFingerprint;
 
         public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
         {
@@ -423,6 +453,17 @@ public class DocsFetcherTests
         public Task SetIndexAsync(LlmsDocument[] documents, CancellationToken cancellationToken = default)
         {
             _index = documents;
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetIndexSourceFingerprintAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_indexSourceFingerprint);
+        }
+
+        public Task SetIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
+        {
+            _indexSourceFingerprint = fingerprint;
             return Task.CompletedTask;
         }
 

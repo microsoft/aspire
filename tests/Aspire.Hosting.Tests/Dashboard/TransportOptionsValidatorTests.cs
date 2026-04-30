@@ -24,7 +24,7 @@ public class TransportOptionsValidatorTests
         var result = validator.Validate(null, options);
         Assert.True(result.Failed);
         Assert.Equal(
-            $"The 'applicationUrl' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/dotnet/aspire/allowunsecuredtransport for more details.",
+            $"The 'applicationUrl' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/aspire/allowunsecuredtransport for more details.",
             result.FailureMessage
             );
     }
@@ -260,7 +260,7 @@ public class TransportOptionsValidatorTests
         var result = validator.Validate(null, options);
         Assert.True(result.Failed);
         Assert.Equal(
-            $"The '{otlpEndpointConfigName}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/dotnet/aspire/allowunsecuredtransport for more details.",
+            $"The '{otlpEndpointConfigName}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/aspire/allowunsecuredtransport for more details.",
             result.FailureMessage
             );
     }
@@ -284,7 +284,7 @@ public class TransportOptionsValidatorTests
         var result = validator.Validate(null, options);
         Assert.True(result.Failed);
         Assert.Equal(
-            $"The '{KnownConfigNames.ResourceServiceEndpointUrl}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/dotnet/aspire/allowunsecuredtransport for more details.",
+            $"The '{KnownConfigNames.ResourceServiceEndpointUrl}' setting must be an https address unless the '{KnownConfigNames.AllowUnsecuredTransport}' environment variable is set to true. This configuration is commonly set in the launch profile. See https://aka.ms/aspire/allowunsecuredtransport for more details.",
             result.FailureMessage
             );
     }

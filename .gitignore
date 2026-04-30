@@ -2,6 +2,7 @@ syntax: glob
 
 ### GitHub Agentic Workflows ###
 .github/aw/logs/
+.worktrees/
 
 ### VisualStudio ###
 

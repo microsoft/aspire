@@ -418,6 +418,11 @@ public static class KnownResourceStates
     public static readonly string Building = nameof(Building);
 
     /// <summary>
+    /// The value missing state. Useful for showing a parameter resource is waiting for a value.
+    /// </summary>
+    public static readonly string ValueMissing = nameof(ValueMissing);
+
+    /// <summary>
     /// The not active state. Useful for resources without a lifetime.
     /// </summary>
     public static readonly string Active = nameof(Active);

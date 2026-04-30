@@ -8,6 +8,9 @@
 
   <PropertyGroup>
     <_UploadPathRoot>aspire</_UploadPathRoot>
+    <!-- Already-signed native archives (macOS/Linux) are downloaded to a separate directory
+         so that MicroBuild's -sign step on Windows doesn't repack them. -->
+    <_SignedArchivesDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'signed-archives', '$(Configuration)'))</_SignedArchivesDir>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -33,6 +36,9 @@
     <ItemGroup>
       <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.zip" />
       <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.tar.gz" />
+      <!-- Include already-signed native archives downloaded from build_sign_native -->
+      <_ArchiveFiles Include="$(_SignedArchivesDir)\**\aspire-cli-*.zip" />
+      <_ArchiveFiles Include="$(_SignedArchivesDir)\**\aspire-cli-*.tar.gz" />
       <!-- VS Code extension artifacts: VSIX, manifest, and signature file -->
       <_ExtensionFilesToPublish Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.vsix" />
       <_ExtensionManifestFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.manifest" />
@@ -76,6 +82,16 @@
 
     <Error Condition="@(_InvalidWindowsArchiveFiles->Count()) > 0" Text="Windows aspire-cli archives must have .zip extension. Invalid files: @(_InvalidWindowsArchiveFiles, ', ')" />
     <Error Condition="@(_InvalidNonWindowsArchiveFiles->Count()) > 0" Text="Non-Windows aspire-cli archives must have .tar.gz extension. Invalid files: @(_InvalidNonWindowsArchiveFiles, ', ')" />
+
+    <!-- On Windows, only win-* archives should be in the packages directory (the signing scope).
+         Non-Windows archives must be in signed-archives/ to avoid MicroBuild repacking them. -->
+    <ItemGroup Condition="$([System.OperatingSystem]::IsWindows())">
+      <_PackagesDirArchives Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.zip" />
+      <_PackagesDirArchives Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.tar.gz" />
+      <_PackagesDirNonWinArchives Include="@(_PackagesDirArchives)" Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', '^aspire-cli-win-'))" />
+    </ItemGroup>
+    <Error Condition="$([System.OperatingSystem]::IsWindows()) And @(_PackagesDirNonWinArchives->Count()) > 0"
+           Text="Non-Windows CLI archives found in packages directory (signing scope). These should be in signed-archives/ to prevent MicroBuild from repacking them: @(_PackagesDirNonWinArchives, ', ')" />
 
     <!--
       For blob items for the Dashboard, we want to make sure that the version we get back is not stable, even when the repo is producing stable versions.

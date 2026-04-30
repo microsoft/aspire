@@ -18,7 +18,7 @@ internal sealed partial class CliTemplateFactory
         if (string.IsNullOrWhiteSpace(projectName))
         {
             var defaultName = _executionContext.WorkingDirectory.Name;
-            projectName = await _prompter.PromptForProjectNameAsync(defaultName, cancellationToken);
+            projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
         if (string.IsNullOrWhiteSpace(inputs.Version))
@@ -32,7 +32,7 @@ internal sealed partial class CliTemplateFactory
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var defaultOutputPath = $"./{projectName}";
-            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, cancellationToken);
+            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, cancellationToken);
         }
         outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 
@@ -121,34 +121,19 @@ internal sealed partial class CliTemplateFactory
 
     private async Task<bool> ResolveUseRedisCacheAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var redisCacheOptionSpecified = parseResult.Tokens.Any(token =>
-            string.Equals(token.Value, "--use-redis-cache", StringComparisons.CliInputOrOutput));
-        var useRedisCache = parseResult.GetValue(_useRedisCacheOption);
-        if (!redisCacheOptionSpecified)
-        {
-            if (!_hostEnvironment.SupportsInteractiveInput)
-            {
-                return false;
-            }
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, _useRedisCacheOption, interactiveDefault: true, nonInteractiveDefault: false);
 
-            useRedisCache = await _interactionService.PromptForSelectionAsync(
-                TemplatingStrings.UseRedisCache_Prompt,
-                [TemplatingStrings.Yes, TemplatingStrings.No],
-                choice => choice,
-                cancellationToken) switch
-            {
-                var choice when string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput) => true,
-                var choice when string.Equals(choice, TemplatingStrings.No, StringComparisons.CliInputOrOutput) => false,
-                _ => throw new InvalidOperationException(TemplatingStrings.UseRedisCache_UnexpectedChoice)
-            };
+        var useRedisCache = await _interactionService.PromptConfirmAsync(
+            TemplatingStrings.UseRedisCache_Prompt,
+            binding: binding,
+            cancellationToken: cancellationToken);
+
+        if (useRedisCache)
+        {
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseRedisCache_UsingRedisCache);
         }
 
-        if (useRedisCache ?? false)
-        {
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, TemplatingStrings.UseRedisCache_UsingRedisCache);
-        }
-
-        return useRedisCache ?? false;
+        return useRedisCache;
     }
 
     private static void AddRedisPackageToConfig(string outputPath, string aspireVersion)

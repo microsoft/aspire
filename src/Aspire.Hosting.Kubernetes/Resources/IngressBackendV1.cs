@@ -25,12 +25,12 @@ public sealed class IngressBackendV1
     /// allowing specification of the resource's kind, name, and associated API group.
     /// </remarks>
     [YamlMember(Alias = "resource")]
-    public TypedLocalObjectReferenceV1 Resource { get; set; } = new();
+    public TypedLocalObjectReferenceV1 Resource { get; set; } = null!;
 
     /// <summary>
     /// Gets or sets the backend service information associated with the ingress resource.
     /// This includes the name of the service and its corresponding port configuration.
     /// </summary>
     [YamlMember(Alias = "service")]
-    public IngressServiceBackendV1 Service { get; set; } = new();
+    public IngressServiceBackendV1 Service { get; set; } = null!;
 }

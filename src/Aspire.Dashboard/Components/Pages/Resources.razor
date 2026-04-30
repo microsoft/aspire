@@ -23,6 +23,7 @@
             <FluentSearch Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
+                          Name="resources-search"
                           @bind-Value="_filter"
                           slot="end"
                           Label="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value)"
@@ -187,7 +188,11 @@
                                                 }
                                                 else if (paramValue.IsUnresolved)
                                                 {
-                                                    <span class="cellText">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</span>
+                                                    <span class="cellText" @onclick:stopPropagation="true">
+                                                        <ParameterValueDisplay Resource="context.Resource"
+                                                                               OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                                                                               IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
+                                                    </span>
                                                 }
                                                 else
                                                 {

@@ -34,8 +34,22 @@ internal interface ILanguageService
     /// Gets the configured project or prompts, validating explicit language ID.
     /// </summary>
     /// <param name="explicitLanguageId">An explicitly specified language ID (e.g., from command line).</param>
-    /// <param name="saveSelection">Whether to save the selection to config if prompted.</param>
+    /// <param name="saveLanguageSelection">Whether to save the language selection to config if prompted.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The project handler to use.</returns>
-    Task<IAppHostProject> GetOrPromptForProjectAsync(string? explicitLanguageId = null, bool saveSelection = true, CancellationToken cancellationToken = default);
+    Task<IAppHostProject> GetOrPromptForProjectAsync(string? explicitLanguageId = null, bool saveLanguageSelection = true, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the configured project or prompts, validating explicit language ID, and returns whether the prompted selection still needs to be persisted.
+    /// </summary>
+    /// <param name="explicitLanguageId">An explicitly specified language ID (e.g., from command line).</param>
+    /// <param name="saveLanguageSelection">Whether to save the language selection to config if prompted.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The project handler to use and whether the selection should be saved after the caller completes its work.</returns>
+    Task<AppHostProjectSelection> GetOrPromptForProjectSelectionAsync(string? explicitLanguageId = null, bool saveLanguageSelection = true, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Represents the selected AppHost project and whether that selection still needs to be persisted.
+/// </summary>
+internal sealed record AppHostProjectSelection(IAppHostProject Project, bool ShouldPersistSelection);

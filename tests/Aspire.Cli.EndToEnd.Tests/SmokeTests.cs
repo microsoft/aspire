@@ -15,11 +15,12 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class SmokeTests(ITestOutputHelper output)
 {
+    [CaptureWorkspaceOnFailure]
     [Fact]
     public async Task CreateAndRunAspireStarterProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

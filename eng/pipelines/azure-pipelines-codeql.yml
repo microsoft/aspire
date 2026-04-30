@@ -33,9 +33,7 @@ schedules:
     branches:
       include:
       - main
-      - release/*
-      exclude:
-      - "*preview*"
+      - release/13.2
     always: true
 
 jobs:
@@ -52,14 +50,41 @@ jobs:
     inputs:
       useGlobalJson: true
 
+  # Install Node.js, yarn, and vsce so the VS Code extension can be built
+  - task: NodeTool@0
+    displayName: Install node.js
+    inputs:
+      versionSpec: '20.x'
+
+  - task: PowerShell@2
+    displayName: Install yarn
+    inputs:
+      targetType: 'inline'
+      script: |
+        npm install -g yarn@1.22.22
+        yarn --version
+      workingDirectory: '$(Build.SourcesDirectory)'
+
+  - task: PowerShell@2
+    displayName: Install vsce
+    inputs:
+      targetType: 'inline'
+      script: |
+        npm install -g @vscode/vsce@3.7.1
+        vsce --version
+      workingDirectory: '$(Build.SourcesDirectory)'
+
   - task: CodeQL3000Init@0
     displayName: CodeQL Initialize
 
-  - script: eng\common\cibuild.cmd
+  - script: build.cmd
+      -restore -build
       -configuration $(_BuildConfig)
       -prepareMachine
-      /p:Test=false
-    displayName: Windows Build
+      -ci
+      /p:BuildExtension=true
+      /p:SkipNativeBuild=true
+    displayName: Build
 
   - task: CodeQL3000Finalize@0
     displayName: CodeQL Finalize

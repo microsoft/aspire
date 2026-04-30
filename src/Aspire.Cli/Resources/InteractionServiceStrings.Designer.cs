@@ -187,6 +187,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The connection to the application was lost..
+        /// </summary>
+        public static string AppHostConnectionLostGeneric {
+            get {
+                return ResourceManager.GetString("AppHostConnectionLostGeneric", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The application shut down..
+        /// </summary>
+        public static string AppHostShutDown {
+            get {
+                return ResourceManager.GetString("AppHostShutDown", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Finding apphosts....
         /// </summary>
         public static string FindingAppHosts {
@@ -196,7 +214,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal..
+        ///   Looks up a localized string similar to This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution..
         /// </summary>
         public static string InteractiveInputNotSupported {
             get {
@@ -210,6 +228,42 @@ namespace Aspire.Cli.Resources {
         public static string MoreInfoNewCliVersion {
             get {
                 return ResourceManager.GetString("MoreInfoNewCliVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Available values: {0}.
+        /// </summary>
+        public static string NonInteractiveAvailableValues {
+            get {
+                return ResourceManager.GetString("NonInteractiveAvailableValues", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No supported app hosts were found..
+        /// </summary>
+        public static string NoSupportedAppHostsFound {
+            get {
+                return ResourceManager.GetString("NoSupportedAppHostsFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The value &apos;{0}&apos; is not valid for {1}..
+        /// </summary>
+        public static string NonInteractiveInvalidValue {
+            get {
+                return ResourceManager.GetString("NonInteractiveInvalidValue", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} option must be specified when running in non-interactive mode..
+        /// </summary>
+        public static string NonInteractiveOptionRequired {
+            get {
+                return ResourceManager.GetString("NonInteractiveOptionRequired", resourceCulture);
             }
         }
 
@@ -264,6 +318,24 @@ namespace Aspire.Cli.Resources {
         public static string ProjectOptionDoesntExist {
             get {
                 return ResourceManager.GetString("ProjectOptionDoesntExist", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that contains multiple apphost project files..
+        /// </summary>
+        public static string ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that does not contain any apphost project files..
+        /// </summary>
+        public static string ProjectOptionSpecifiedDirectoryContainsNoAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsNoAppHosts", resourceCulture);
             }
         }
 

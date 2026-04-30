@@ -180,9 +180,9 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard API is not available. Ensure the apphost is running with Dashboard enabled..
         /// </summary>
-        internal static string DashboardApiNotAvailable {
+        internal static string DashboardNotAvailable {
             get {
-                return ResourceManager.GetString("DashboardApiNotAvailable", resourceCulture);
+                return ResourceManager.GetString("DashboardNotAvailable", resourceCulture);
             }
         }
         
@@ -291,9 +291,69 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string DashboardConnectionFailedHint {
+            get {
+                return ResourceManager.GetString("DashboardConnectionFailedHint", resourceCulture);
+            }
+        }
+
         internal static string DashboardUrlInvalid {
             get {
                 return ResourceManager.GetString("DashboardUrlInvalid", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlInvalidHint {
+            get {
+                return ResourceManager.GetString("DashboardUrlInvalidHint", resourceCulture);
+            }
+        }
+
+        internal static string DashboardLoginTokenFailed {
+            get {
+                return ResourceManager.GetString("DashboardLoginTokenFailed", resourceCulture);
+            }
+        }
+
+        internal static string DashboardLoginTokenFailedHint {
+            get {
+                return ResourceManager.GetString("DashboardLoginTokenFailedHint", resourceCulture);
+            }
+        }
+
+        internal static string DashboardLoginTokenFailedAnonymousHint {
+            get {
+                return ResourceManager.GetString("DashboardLoginTokenFailedAnonymousHint", resourceCulture);
+            }
+        }
+
+        internal static string DashboardNotAvailableHint {
+            get {
+                return ResourceManager.GetString("DashboardNotAvailableHint", resourceCulture);
+            }
+        }
+
+        internal static string DashboardAuthFailedHint {
+            get {
+                return ResourceManager.GetString("DashboardAuthFailedHint", resourceCulture);
+            }
+        }
+
+        internal static string DashboardAuthFailedAnonymousHint {
+            get {
+                return ResourceManager.GetString("DashboardAuthFailedAnonymousHint", resourceCulture);
+            }
+        }
+
+        internal static string DashboardUrlNotReachableHint {
+            get {
+                return ResourceManager.GetString("DashboardUrlNotReachableHint", resourceCulture);
+            }
+        }
+
+        internal static string DashboardApiNotEnabledHint {
+            get {
+                return ResourceManager.GetString("DashboardApiNotEnabledHint", resourceCulture);
             }
         }
     }

@@ -70,6 +70,15 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     public bool TlsEnabled => Exists && EndpointAnnotation.TlsEnabled;
 
     /// <summary>
+    /// Gets a value indicating whether the endpoint name is "http" or "https", ignoring case. This is a convention used to identify
+    /// endpoints that will be resolved based on the scheme of the endpoint in service discovery rather than by the specific endpoint name.
+    /// This is done to allow http endpoints that are dynamically updated to https to be mapped correctly despite the endpoint name no longer
+    /// matching the scheme.
+    /// </summary>
+    public bool IsHttpSchemeNamedEndpoint => string.Equals(EndpointName, "http", StringComparisons.EndpointAnnotationUriScheme) ||
+        string.Equals(EndpointName, "https", StringComparisons.EndpointAnnotationUriScheme);
+
+    /// <summary>
     /// Gets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints.
     /// </summary>
     /// <remarks>
@@ -85,7 +94,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The URL of the endpoint.</returns>
-    [AspireExport("getValueAsync", Description = "Gets the URL of the endpoint asynchronously")]
+    [AspireExport(Description = "Gets the URL of the endpoint asynchronously")]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => Property(EndpointProperty.Url).GetValueAsync(cancellationToken);
 
     /// <summary>
@@ -105,7 +114,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     public NetworkIdentifier? ContextNetworkID => _contextNetworkID;
 
     /// <summary>
-    /// Gets the specified property expression of the endpoint. Defaults to the URL if no property is specified.
+    /// Gets the specified property expression of the endpoint.
     /// </summary>
     internal string GetExpression(EndpointProperty property = EndpointProperty.Url)
     {
@@ -125,11 +134,11 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     }
 
     /// <summary>
-    /// Gets the specified property expression of the endpoint. Defaults to the URL if no property is specified.
+    /// Gets the specified property expression of the endpoint.
     /// </summary>
     /// <param name="property">The <see cref="EndpointProperty"/> enum value to use in the reference.</param>
     /// <returns>An <see cref="EndpointReferenceExpression"/> representing the specified <see cref="EndpointProperty"/>.</returns>
-    [AspireExportIgnore]
+    [AspireExport(Description = "Gets the specified property expression of the endpoint")]
     public EndpointReferenceExpression Property(EndpointProperty property)
     {
         return new(this, property);

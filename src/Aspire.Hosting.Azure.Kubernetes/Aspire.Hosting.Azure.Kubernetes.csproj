@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <PackageTags>aspire integration hosting azure kubernetes aks</PackageTags>
+    <Description>Azure Kubernetes Service (AKS) resource types for Aspire.</Description>
+    <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="tools\**\*.cs" />
+    <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
+    <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" Link="Process\ProcessResult.cs" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Process\ProcessSpec.cs" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessOutputCapture.cs" Link="Process\ProcessOutputCapture.cs" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" Link="Process\ProcessUtil.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Provisioning.ContainerRegistry" />
+    <PackageReference Include="Azure.Provisioning.ContainerService" />
+    <PackageReference Include="Azure.Provisioning.OperationalInsights" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.OperationalInsights\Aspire.Hosting.Azure.OperationalInsights.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Kubernetes\Aspire.Hosting.Kubernetes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Kubernetes.Tests" />
+  </ItemGroup>
+
+</Project>

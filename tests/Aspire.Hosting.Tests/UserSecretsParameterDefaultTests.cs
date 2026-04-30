@@ -179,6 +179,28 @@ public class UserSecretsParameterDefaultTests
     }
 
     [Fact]
+    public void TryDeleteUserSecret_RemovesOnlyRequestedSecret()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        ClearUsersSecrets(userSecretsId);
+
+        var testAssembly = AssemblyBuilder.DefineDynamicAssembly(
+            new("TestAssembly"), AssemblyBuilderAccess.RunAndCollect, [new CustomAttributeBuilder(s_userSecretsIdAttrCtor, [userSecretsId])]);
+        var factory = CreateFactory();
+        var manager = factory.GetOrCreate(testAssembly);
+
+        Assert.True(manager.TrySetSecret("Parameters:sql-password", "SqlPassword123!"));
+        Assert.True(manager.TrySetSecret("Parameters:rabbit-password", "RabbitPassword456!"));
+        Assert.True(manager.TryDeleteSecret("Parameters:sql-password"));
+
+        var userSecrets = GetUserSecrets(userSecretsId);
+        Assert.False(userSecrets.ContainsKey("Parameters:sql-password"));
+        Assert.Equal("RabbitPassword456!", userSecrets["Parameters:rabbit-password"]);
+
+        DeleteUserSecretsFile(userSecretsId);
+    }
+
+    [Fact]
     public async Task TrySetUserSecret_ConcurrentWritesSameKey_LastWriteWins()
     {
         var userSecretsId = Guid.NewGuid().ToString("N");

@@ -47,6 +47,11 @@ internal static class ResourceViewModelExtensions
         return resource.KnownState is KnownResourceState.Waiting;
     }
 
+    public static bool HasMissingParameterValueState(this ResourceViewModel resource)
+    {
+        return resource.IsParameter && resource.KnownState is KnownResourceState.ValueMissing;
+    }
+
     public static bool IsUnknownState(this ResourceViewModel resource) => resource.KnownState is KnownResourceState.Unknown;
 
     public static bool HasNoState(this ResourceViewModel resource) => string.IsNullOrEmpty(resource.State);

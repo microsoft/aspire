@@ -442,17 +442,19 @@ suite('Launch Profile Tests', () => {
     });
 
     suite('determineWorkingDirectory', () => {
-        const projectPath = path.join('C:', 'project', 'MyApp.csproj');
+        const projectDir = path.resolve(path.sep, 'project');
+        const projectPath = path.join(projectDir, 'MyApp.csproj');
+        const absoluteWorkingDir = path.resolve(path.sep, 'custom', 'working', 'dir');
 
         test('uses absolute working directory from launch profile', () => {
             const baseProfile: LaunchProfile = {
                 commandName: 'Project',
-                workingDirectory: path.join('C:', 'custom', 'working', 'dir')
+                workingDirectory: absoluteWorkingDir
             };
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join('C:', 'custom', 'working', 'dir'));
+            assert.strictEqual(result, absoluteWorkingDir);
         });
 
         test('resolves relative working directory from launch profile', () => {
@@ -463,7 +465,7 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join('C:', 'project', 'custom'));
+            assert.strictEqual(result, path.join(projectDir, 'custom'));
         });
 
         test('uses project directory when no working directory specified', () => {
@@ -473,13 +475,13 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join('C:', 'project'));
+            assert.strictEqual(result, projectDir);
         });
 
         test('uses project directory when base profile is null', () => {
             const result = determineWorkingDirectory(projectPath, null);
 
-            assert.strictEqual(result, path.join('C:', 'project'));
+            assert.strictEqual(result, projectDir);
         });
 
         test('expands environment variables in working directory before resolving', () => {

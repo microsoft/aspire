@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -22,6 +21,21 @@ internal sealed class EnsureCertificatesTrustedResult
     /// to ensure certificates are properly trusted.
     /// </summary>
     public required IDictionary<string, string> EnvironmentVariables { get; init; }
+
+    /// <summary>
+    /// Gets whether the trust operation completed successfully.
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Gets whether the operation was cancelled by the user.
+    /// </summary>
+    public bool WasCancelled { get; init; }
+
+    /// <summary>
+    /// Gets the underlying result code from the certificate manager.
+    /// </summary>
+    public EnsureCertificateResult? ResultCode { get; init; }
 }
 
 internal interface ICertificateService
@@ -33,11 +47,9 @@ internal sealed class CertificateService(
     ICertificateToolRunner certificateToolRunner,
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
-    ICliHostEnvironment hostEnvironment,
-    Func<bool>? isNonInteractiveTrustSupported = null) : ICertificateService
+    ICliHostEnvironment hostEnvironment) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private readonly Func<bool> _isNonInteractiveTrustSupported = isNonInteractiveTrustSupported ?? OperatingSystem.IsLinux;
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
@@ -45,88 +57,69 @@ internal sealed class CertificateService(
 
         var environmentVariables = new Dictionary<string, string>();
 
-        // Use the machine-readable check (available in .NET 10 SDK which is the minimum required)
-        var trustResult = await CheckMachineReadableAsync();
-        await HandleMachineReadableTrustAsync(trustResult, environmentVariables);
+        // In non-interactive environments on macOS and Windows we can't successfully
+        // prompt for trust (macOS Keychain password, Windows trust dialog) and we also
+        // don't want to silently generate a new certificate that won't be trusted.
+        // Skip the trust attempt but still check the current state so we can warn when
+        // the environment does not already have a trusted certificate. Linux trust is
+        // non-interactive so it's safe to run the full flow there.
+        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || OperatingSystem.IsLinux();
 
-        return new EnsureCertificatesTrustedResult
+        if (!canPerformTrust)
         {
-            EnvironmentVariables = environmentVariables
-        };
-    }
+            var preCheck = certificateToolRunner.CheckHttpCertificate();
+            if (preCheck.IsPartiallyTrusted)
+            {
+                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesPartiallyTrustedNonInteractive);
+            }
+            else if (!preCheck.IsFullyTrusted)
+            {
+                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesNotTrustedNonInteractive);
+            }
 
-    private async Task<CertificateTrustResult> CheckMachineReadableAsync()
-    {
-        var result = await interactionService.ShowStatusAsync(
-            InteractionServiceStrings.CheckingCertificates,
-            () => Task.FromResult(certificateToolRunner.CheckHttpCertificate()),
+            if (preCheck.IsPartiallyTrusted && OperatingSystem.IsLinux())
+            {
+                ConfigureSslCertDir(environmentVariables);
+            }
+
+            return new EnsureCertificatesTrustedResult
+            {
+                EnvironmentVariables = environmentVariables,
+                Success = true
+            };
+        }
+
+        // Always run trust so the Aspire cache stays populated even when the certificate
+        // is already trusted. Each platform's TrustCertificateCore short-circuits without
+        // prompting when the certificate is already in the trust store.
+        var trustResultCode = await interactionService.ShowStatusAsync(
+            InteractionServiceStrings.TrustingCertificates,
+            () => Task.FromResult(certificateToolRunner.TrustHttpCertificate()),
             emoji: KnownEmojis.LockedWithKey);
 
-        return result;
-    }
-
-    private async Task HandleMachineReadableTrustAsync(
-        CertificateTrustResult trustResult,
-        Dictionary<string, string> environmentVariables)
-    {
-        // If fully trusted, nothing more to do
-        if (trustResult.IsFullyTrusted)
+        if (trustResultCode == EnsureCertificateResult.UserCancelledTrustStep)
         {
-            return;
+            interactionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustCancelled);
+        }
+        else if (!CertificateHelpers.IsSuccessfulTrustResult(trustResultCode))
+        {
+            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
         }
 
-        // If not trusted at all, run the trust operation
-        if (trustResult.IsNotTrusted)
-        {
-            if (!hostEnvironment.SupportsInteractiveInput && !_isNonInteractiveTrustSupported())
-            {
-                // In non-interactive mode (e.g. CI), skip the trust operation on platforms
-                // where it requires user interaction (macOS Keychain password prompt, Windows
-                // certificate trust dialog). Linux trust is non-interactive, so it can proceed.
-                if (!trustResult.HasCertificates)
-                {
-                    var ensureResultCode = await interactionService.ShowStatusAsync(
-                        InteractionServiceStrings.CheckingCertificates,
-                        () => Task.FromResult(certificateToolRunner.EnsureHttpCertificateExists()),
-                        emoji: KnownEmojis.LockedWithKey);
-
-                    if (!IsSuccessfulEnsureResult(ensureResultCode))
-                    {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, ensureResultCode));
-                    }
-                }
-
-                return;
-            }
-
-            var trustResultCode = await interactionService.ShowStatusAsync(
-                InteractionServiceStrings.TrustingCertificates,
-                () => Task.FromResult(certificateToolRunner.TrustHttpCertificate()),
-                emoji: KnownEmojis.LockedWithKey);
-
-            if (trustResultCode == EnsureCertificateResult.UserCancelledTrustStep)
-            {
-                interactionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustCancelled);
-            }
-            else if (!CertificateHelpers.IsSuccessfulTrustResult(trustResultCode))
-            {
-                interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
-            }
-
-            // Re-check trust status after trust operation
-            trustResult = certificateToolRunner.CheckHttpCertificate();
-        }
-
-        // If partially trusted (either initially or after trust), configure SSL_CERT_DIR on Linux
-        if (trustResult.IsPartiallyTrusted && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        var postTrustCheck = certificateToolRunner.CheckHttpCertificate();
+        if (postTrustCheck.IsPartiallyTrusted && OperatingSystem.IsLinux())
         {
             ConfigureSslCertDir(environmentVariables);
         }
-    }
 
-    private static bool IsSuccessfulEnsureResult(EnsureCertificateResult result) =>
-        result is EnsureCertificateResult.Succeeded
-            or EnsureCertificateResult.ValidCertificatePresent;
+        return new EnsureCertificatesTrustedResult
+        {
+            EnvironmentVariables = environmentVariables,
+            Success = CertificateHelpers.IsSuccessfulTrustResult(trustResultCode),
+            WasCancelled = trustResultCode == EnsureCertificateResult.UserCancelledTrustStep,
+            ResultCode = trustResultCode
+        };
+    }
 
     private static void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
     {
@@ -158,7 +151,6 @@ internal sealed class CertificateService(
             environmentVariables[SslCertDirEnvVar] = string.Join(Path.PathSeparator, systemCertDirs);
         }
     }
-
 }
 
 internal sealed class CertificateServiceException(string message) : Exception(message)

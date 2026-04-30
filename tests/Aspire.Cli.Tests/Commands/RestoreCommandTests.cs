@@ -33,7 +33,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
                 }
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"restore --apphost {appHostFile.FullName}");
@@ -68,7 +68,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
                 }
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"restore --apphost {appHostFile.FullName}");

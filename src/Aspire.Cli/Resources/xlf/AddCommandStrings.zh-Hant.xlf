@@ -48,7 +48,7 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to</source>
+        <source>The Aspire AppHost project file, or a directory to search, to add the integration to</source>
         <target state="needs-review-translation">要新增整合的專案檔路徑。</target>
         <note />
       </trans-unit>
@@ -56,6 +56,11 @@
         <source>Searching for Aspire integrations...</source>
         <target state="translated">正在搜尋 Aspire 整合...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SearchingForSpecifiedPackageVersion">
+        <source>Searching for version '{1}' of {0}...</source>
+        <target state="new">Searching for version '{1}' of {0}...</target>
+        <note>{0} is the package name, {1} is the requested version.</note>
       </trans-unit>
       <trans-unit id="SelectAVersionOfPackage">
         <source>Select a version of {0}:</source>
@@ -71,6 +76,16 @@
         <source>The NuGet source to use for the integration</source>
         <target state="needs-review-translation">用於整合的 NuGet 來源。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SpecifiedVersionNotFoundForPackage">
+        <source>The requested version '{1}' was not found for package '{0}'.</source>
+        <target state="new">The requested version '{1}' was not found for package '{0}'.</target>
+        <note>{0} is the package name, {1} is the requested version.</note>
+      </trans-unit>
+      <trans-unit id="SpecifiedVersionRequiresExactPackageMatch">
+        <source>When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</source>
+        <target state="new">When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</target>
+        <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
           <source>Stopped a running Aspire AppHost instance to allow package modification.</source>

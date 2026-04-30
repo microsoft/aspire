@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 
@@ -9,6 +10,7 @@ namespace Aspire.Cli.Agents;
 /// <summary>
 /// Represents a skill that can be installed into a skill location.
 /// </summary>
+[DebuggerDisplay("Name = {Name}, Description = {Description}, IsDefault = {IsDefault}")]
 internal sealed class SkillDefinition
 {
     /// <summary>
@@ -45,6 +47,18 @@ internal sealed class SkillDefinition
         installExcludedRelativePaths: [],
         isDefault: false,
         applicableLanguages: [KnownLanguageId.CSharp]);
+
+    /// <summary>
+    /// One-time skill for completing Aspire initialization.
+    /// Installed by <c>aspire init</c> to scan the repo, wire up the AppHost, and configure dependencies.
+    /// </summary>
+    public static readonly SkillDefinition Aspireify = new(
+        CommonAgentApplicators.AspireifySkillName,
+        AgentCommandStrings.SkillDescription_Aspireify,
+        skillContent: null,
+        embeddedResourceRoot: CommonAgentApplicators.AspireifySkillResourceRoot,
+        installExcludedRelativePaths: [],
+        isDefault: true);
 
     private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {
@@ -150,5 +164,8 @@ internal sealed class SkillDefinition
     /// <summary>
     /// Gets all available skill definitions.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, PlaywrightCli, DotnetInspect];
+    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, Aspireify, PlaywrightCli, DotnetInspect];
+
+    /// <inheritdoc />
+    public override string ToString() => Name;
 }

@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "ターゲット net9.0",
   "symbols/Framework/choices/net10.0/description": "ターゲット net10.0",
   "symbols/UseRedisCache/displayName": "キャッシュ用に Redis を使用する (サポートされているコンテナー ランタイムが必要) (_U)",
-  "symbols/UseRedisCache/description": "Redis をキャッシュに使用するようにアプリケーションを設定するかどうかを構成します。ローカルで実行するには、サポートされているコンテナー ランタイムが必要です。詳細については、https://aka.ms/dotnet/aspire/containers を参照してください。",
+  "symbols/UseRedisCache/description": "Redis をキャッシュに使用するようにアプリケーションを設定するかどうかを構成します。ローカルで実行するには、サポートされているコンテナー ランタイムが必要です。詳細については、https://aka.ms/aspire/containers を参照してください。",
   "symbols/appHostHttpPort/description": "AppHost プロジェクトの launchSettings.json の HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostOtlpHttpPort/description": "AppHost プロジェクトの launchSettings.json で OTLP HTTP エンドポイントに使用するポート番号。",
   "symbols/appHostResourceHttpPort/description": "AppHost プロジェクトの launchSettings.json のリソース サービス HTTP エンドポイントに使用するポート番号。",

@@ -12,6 +12,11 @@
         <target state="needs-review-translation">在写入日志时实时流式传输这些日志。</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">以 JSON 格式输出日志(NDJSON)。</target>

@@ -3,6 +3,7 @@
 
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
+using Semver;
 
 namespace Aspire.Hosting.Tests.VersionChecking;
 
@@ -147,10 +148,10 @@ public class PackageUpdateHelpersTests
 
         // Act
         var packages = PackageUpdateHelpers.ParsePackageSearchResults(json, "Aspire.Hosting.AppHost");
-        var latestVersion = PackageUpdateHelpers.GetNewerVersion(NullLogger.Instance, new SemVersion(10, prerelease: "dev"), packages);
+        var latestVersion = PackageUpdateHelpers.GetNewerVersion(NullLogger.Instance, new SemVersion(10, prerelease: ["dev"]), packages);
 
         // Assert
-        Assert.Equal(new SemVersion(19, 0, 0, prerelease: "pre1"), latestVersion);
+        Assert.Equal(new SemVersion(19, 0, 0, prerelease: ["pre1"]), latestVersion);
     }
 
     [Fact]

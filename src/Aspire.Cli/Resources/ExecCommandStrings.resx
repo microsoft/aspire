@@ -127,7 +127,7 @@ Examples:
     </value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</value>
+    <value>The path to the Aspire AppHost project file or a directory to search. If not specified, searches for a project file in the current directory.</value>
   </data>
   <data name="StartTargetResourceArgumentDescription" xml:space="preserve">
     <value>The name of the target resource to execute the command against. The command will only be executed after the target resource has successfully started and is running.</value>

@@ -41,7 +41,7 @@ internal sealed class SolutionLocator(ILogger<SolutionLocator> logger, IInteract
                 InitCommandStrings.MultipleSolutionsFound,
                 solutionFiles,
                 solutionFile => $"{solutionFile.Name.EscapeMarkup()} ({Path.GetRelativePath(startDirectory.FullName, solutionFile.FullName).EscapeMarkup()})",
-                cancellationToken);
+                cancellationToken: cancellationToken);
             
             return selectedSolution;
         }

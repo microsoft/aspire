@@ -100,6 +100,7 @@ string GenerateHostedCode(string csNamespace, List<ModelEntity> models)
             var summaryElement = CreateSummaryElement(model.Annotations?.SystemCatalogData?.Summary ?? model.Annotations?.Description ?? $"Descriptor for {modelName} model");
 
             AppendXmlDocComment(sb, indentSpaces: 8, summaryElement);
+            sb.AppendLine("        [AspireValue(\"FoundryModels\")]");
             sb.AppendLine(CultureInfo.InvariantCulture, $"        public static readonly FoundryModel {descriptorName} = new() {{ Name = \"{EscapeStringForCSharp(modelName)}\", Version = \"{EscapeStringForCSharp(version)}\", Format = \"{EscapeStringForCSharp(publisher)}\" }};");
         }
 
@@ -159,6 +160,7 @@ string GenerateLocalCode(string csNamespace, List<ModelEntity> models)
             firstMethod = false;
 
             AppendXmlDocComment(sb, indentSpaces: 8, summaryElement);
+            sb.AppendLine("        [AspireValue(\"FoundryModels\")]");
             sb.AppendLine(CultureInfo.InvariantCulture, $"        public static readonly FoundryModel {descriptorName} = new() {{ Name = \"{EscapeStringForCSharp(modelName)}\", Version = \"{EscapeStringForCSharp(version)}\", Format = \"{EscapeStringForCSharp(publisher)}\" }};");
         }
     }

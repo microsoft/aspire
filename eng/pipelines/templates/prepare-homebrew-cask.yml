@@ -8,12 +8,11 @@ parameters:
   - name: archiveRoot
     type: string
     default: ''
-  - name: validateUrls
+  - name: skipUrlValidation
     type: boolean
-    default: true
-  - name: runInstallTest
-    type: boolean
-    default: true
+    default: false
+  # runInstallTest is derived from skipUrlValidation (they are logical inverses).
+  # Callers should only set skipUrlValidation; install tests run when URLs are valid.
 
 steps:
   - bash: |
@@ -53,9 +52,9 @@ steps:
         args+=(--archive-root "$ARCHIVE_ROOT")
       fi
 
-      validateUrlsNormalized="$(printf '%s' "${VALIDATE_URLS:-false}" | tr '[:upper:]' '[:lower:]')"
-      if [ "$validateUrlsNormalized" = "true" ]; then
-        args+=(--validate-urls)
+      skipUrlValidation="$(printf '%s' "${SKIP_URL_VALIDATION:-false}" | tr '[:upper:]' '[:lower:]')"
+      if [ "$skipUrlValidation" = "true" ]; then
+        args+=(--skip-url-validation)
       fi
 
       "$(Build.SourcesDirectory)/eng/homebrew/generate-cask.sh" "${args[@]}"
@@ -66,7 +65,7 @@ steps:
     displayName: 🟣Generate Homebrew cask
     env:
       ARCHIVE_ROOT: '${{ parameters.archiveRoot }}'
-      VALIDATE_URLS: '${{ parameters.validateUrls }}'
+      SKIP_URL_VALIDATION: '${{ parameters.skipUrlValidation }}'
 
   - bash: |
       set -euo pipefail
@@ -102,21 +101,31 @@ steps:
       echo ""
       echo "Auditing cask via local tap..."
 
-      upstreamStatusCode="$(curl -sS -o /dev/null -w "%{http_code}" "https://api.github.com/repos/Homebrew/homebrew-cask/contents/$targetPath")"
-      auditArgs=(--cask --online "$tapName/$caskName")
-      auditCommand="brew audit --cask --online $tapName/$caskName"
+      skipUrlValidation="$(printf '%s' "${SKIP_URL_VALIDATION:-false}" | tr '[:upper:]' '[:lower:]')"
+
+      auditArgs=(--cask)
       isNewCask=false
-      if [ "$upstreamStatusCode" = "404" ]; then
-        echo "Detected new upstream cask; running new-cask audit."
-        auditArgs=(--cask --new --online "$tapName/$caskName")
-        auditCommand="brew audit --cask --new --online $tapName/$caskName"
-        isNewCask=true
-      elif [ "$upstreamStatusCode" = "200" ]; then
-        echo "Detected existing upstream cask; running standard online audit."
+
+      if [ "$skipUrlValidation" = "true" ]; then
+        echo "Skipping upstream cask check and online audit (URLs are not expected to be valid for this build)."
       else
-        echo "##[error]Could not determine whether $targetPath exists upstream (HTTP $upstreamStatusCode)"
-        exit 1
+        upstreamStatusCode="$(curl -sS -o /dev/null -w "%{http_code}" "https://api.github.com/repos/Homebrew/homebrew-cask/contents/$targetPath")"
+        if [ "$upstreamStatusCode" = "404" ]; then
+          isNewCask=true
+          echo "Detected new upstream cask; running new-cask audit."
+          auditArgs+=(--new)
+        elif [ "$upstreamStatusCode" = "200" ]; then
+          echo "Detected existing upstream cask; running standard audit."
+        else
+          echo "##[error]Could not determine whether $targetPath exists upstream (HTTP $upstreamStatusCode)"
+          exit 1
+        fi
+        echo "Including --online audit (URLs are expected to be valid)."
+        auditArgs+=(--online)
       fi
+
+      auditArgs+=("$tapName/$caskName")
+      auditCommand="brew audit ${auditArgs[*]}"
 
       auditCode=0
       brew audit "${auditArgs[@]}" || auditCode=$?
@@ -131,6 +140,8 @@ steps:
       trap - EXIT
       cleanup
     displayName: 🟣Validate cask syntax and audit
+    env:
+      SKIP_URL_VALIDATION: '${{ parameters.skipUrlValidation }}'
 
   - bash: |
       set -euo pipefail
@@ -203,7 +214,7 @@ steps:
         echo "  Confirmed: aspire is no longer in PATH"
       fi
     displayName: 🟣Test cask install/uninstall
-    condition: and(succeeded(), eq('${{ parameters.runInstallTest }}', 'true'))
+    condition: and(succeeded(), eq(${{ parameters.skipUrlValidation }}, false))
 
   - bash: |
       set -euo pipefail
@@ -242,7 +253,7 @@ steps:
       echo "Wrote Homebrew validation summary to $outputPath"
       cat "$outputPath"
     displayName: 🟣Write Homebrew validation summary
-    condition: and(succeeded(), eq('${{ parameters.runInstallTest }}', 'true'))
+    condition: and(succeeded(), eq(${{ parameters.skipUrlValidation }}, false))
 
   - bash: |
       set -euo pipefail

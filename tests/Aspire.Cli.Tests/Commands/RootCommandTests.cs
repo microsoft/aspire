@@ -17,7 +17,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("--help");
@@ -31,7 +31,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("--nologo --help");
@@ -59,7 +59,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
                 config[CliConfigNames.NoLogo] = value;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var configuration = provider.GetRequiredService<IConfiguration>();
         var isNoLogo = configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false);
@@ -88,7 +88,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -110,7 +110,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -132,7 +132,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.NoLogo]);
 
@@ -158,7 +158,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
                 config[CliConfigNames.NoLogo] = "1";
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var configuration = provider.GetRequiredService<IConfiguration>();
         var noLogo = configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false);
@@ -184,7 +184,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
@@ -204,7 +204,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Invoke multiple times (simulating multiple --banner calls)
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
@@ -238,7 +238,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
@@ -264,7 +264,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -286,7 +286,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -310,7 +310,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [flag]);
 
@@ -335,7 +335,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // First invocation with --version: should not create sentinel
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, ["--version"]);
@@ -360,7 +360,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -381,7 +381,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
@@ -393,7 +393,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var hasSetupCommand = command.Subcommands.Any(cmd => cmd.Name == "setup");
@@ -409,7 +409,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var hasSetupCommand = command.Subcommands.Any(cmd => cmd.Name == "setup");
@@ -425,7 +425,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
 
@@ -449,7 +449,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var helpWriter = new StringWriter();

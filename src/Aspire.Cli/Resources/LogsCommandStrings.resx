@@ -150,6 +150,9 @@
   <data name="TimestampsOptionDescription" xml:space="preserve">
     <value>Show timestamps for each log line</value>
   </data>
+  <data name="IncludeHiddenOptionDescription" xml:space="preserve">
+    <value>Include hidden resources in the output</value>
+  </data>
   <data name="SelectAppHostAction" xml:space="preserve">
     <value>stream logs from</value>
   </data>

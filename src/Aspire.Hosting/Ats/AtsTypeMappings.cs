@@ -27,6 +27,9 @@ using Microsoft.Extensions.Logging;
 // Reference types (from Aspire.Hosting.ApplicationModel namespace)
 [assembly: AspireExport(typeof(EndpointReference))]
 [assembly: AspireExport(typeof(ReferenceExpression))]
+[assembly: AspireExport(typeof(IAspireStore), ExposeProperties = true)]
+[assembly: AspireExport(typeof(IExecutionConfigurationBuilder))]
+[assembly: AspireExport(typeof(IExecutionConfigurationResult))]
 
 // Note: EnvironmentCallbackContext has [AspireExport(ExposeProperties = true)] on the type itself
 

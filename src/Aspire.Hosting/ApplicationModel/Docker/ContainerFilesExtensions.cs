@@ -19,6 +19,7 @@ public static class ContainerFilesExtensions
     /// <param name="resource">The resource containing container files to be added to the Dockerfile. Cannot be null.</param>
     /// <param name="logger">An optional logger used to record warnings if container image names cannot be determined for source resources.</param>
     /// <returns>The same DockerfileBuilder instance with additional instructions for container files, enabling method chaining.</returns>
+    [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static DockerfileBuilder AddContainerFilesStages(this DockerfileBuilder builder, IResource resource, ILogger? logger)
     {
@@ -76,6 +77,7 @@ public static class ContainerFilesExtensions
     /// such as copying static assets from a frontend build container into a backend API container.
     /// </para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static DockerfileStage AddContainerFiles(this DockerfileStage stage, IResource resource, string rootDestinationPath, ILogger? logger)
     {

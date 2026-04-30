@@ -33,12 +33,12 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The output path for the generated artifacts. Defaults to './aspire-output' if not specified.</source>
+        <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
         <target state="needs-review-translation">生成的项目的输出路径。如果未指定，则默认为"./aspire-output"。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file</source>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Aspire AppHost 项目文件的路径。</target>
         <note />
       </trans-unit>

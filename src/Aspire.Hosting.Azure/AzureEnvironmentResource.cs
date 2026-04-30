@@ -23,13 +23,19 @@ namespace Aspire.Hosting.Azure;
 /// Represents the root Azure deployment target for an Aspire application.
 /// Manages deployment parameters and context for Azure resources.
 /// </summary>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureEnvironmentResource : Resource
 {
     /// <summary>
     /// The name of the step that creates the provisioning context.
     /// </summary>
     internal const string CreateProvisioningContextStepName = "create-provisioning-context";
+
+    /// <summary>
+    /// The name of the step that prepares Azure resources (e.g. materializes role-assignment
+    /// resources) so that downstream steps can reference them.
+    /// </summary>
+    public const string PrepareResourcesStepName = "azure-prepare-resources";
 
     /// <summary>
     /// The name of the step that provisions Azure infrastructure resources.
@@ -70,6 +76,38 @@ public sealed class AzureEnvironmentResource : Resource
     {
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
+            var steps = new List<PipelineStep>();
+
+            var prepareResourcesStep = new PipelineStep
+            {
+                Name = PrepareResourcesStepName,
+                Description = "Prepares the Azure resources.",
+                Action = static async context =>
+                {
+                    var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
+                    await preparer.PrepareResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+                },
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+            steps.Add(prepareResourcesStep);
+
+            if (factoryContext.PipelineContext.ExecutionContext.IsRunMode)
+            {
+                var runModeProvisionStep = new PipelineStep
+                {
+                    Name = "run-mode-azure-provision",
+                    Description = $"Provisions the Azure resources for {Name}.",
+                    Action = static async context =>
+                    {
+                        var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
+                        await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+                    },
+                    RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+                    DependsOnSteps = [prepareResourcesStep.Name]
+                };
+                steps.Add(runModeProvisionStep);
+            }
+
             var publishStep = new PipelineStep
             {
                 Name = $"publish-{Name}",
@@ -78,6 +116,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]
             };
+            steps.Add(publishStep);
 
             var validateStep = new PipelineStep
             {
@@ -87,6 +126,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
+            steps.Add(validateStep);
 
             var createContextStep = new PipelineStep
             {
@@ -104,6 +144,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
+            steps.Add(createContextStep);
             createContextStep.DependsOn(validateStep);
 
             var provisionStep = new PipelineStep
@@ -115,7 +156,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
-
+            steps.Add(provisionStep);
             provisionStep.DependsOn(createContextStep);
 
             var destroyStep = new PipelineStep
@@ -126,8 +167,9 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Destroy],
                 DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
             };
+            steps.Add(destroyStep);
 
-            return [publishStep, validateStep, createContextStep, provisionStep, destroyStep];
+            return steps;
         }));
 
         Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
@@ -149,11 +191,10 @@ public sealed class AzureEnvironmentResource : Resource
         var location = provisioningContext.Location.Name;
 
         var tenantId = provisioningContext.Tenant.TenantId;
-        var portalUrl = AzurePortalUrls.GetResourceGroupUrl(subscriptionId, resourceGroupName, tenantId);
-        var resourceGroupValue = $"[{resourceGroupName}]({portalUrl})";
 
         ctx.Summary.Add("☁️ Target", "Azure");
-        ctx.Summary.Add("📦 Resource Group", new MarkdownString(resourceGroupValue));
+        ctx.Summary.Add("📦 Resource Group", AzurePortalUrls.GetResourceGroupLink(subscriptionId, resourceGroupName, tenantId));
+        ctx.Summary.Add("📜 Deployments", AzurePortalUrls.GetResourceGroupDeploymentsLink(subscriptionId, resourceGroupName, tenantId));
         ctx.Summary.Add("🔑 Subscription", subscriptionId);
         ctx.Summary.Add("🌐 Location", location);
     }

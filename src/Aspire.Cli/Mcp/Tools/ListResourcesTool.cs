@@ -67,7 +67,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
         {
             // Get dashboard URL and resource snapshots in parallel
             var dashboardUrlsTask = connection.GetDashboardUrlsAsync(cancellationToken);
-            var snapshotsTask = connection.GetResourceSnapshotsAsync(cancellationToken);
+            var snapshotsTask = connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken);
 
             await Task.WhenAll(dashboardUrlsTask, snapshotsTask).ConfigureAwait(false);
 

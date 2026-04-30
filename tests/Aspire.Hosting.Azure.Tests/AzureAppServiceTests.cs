@@ -694,7 +694,8 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("App Service does not support resources with multiple external endpoints.", ex.Message);
     }
@@ -714,7 +715,8 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("App Service does not support resources with multiple external endpoints.", ex.Message);
     }
@@ -842,6 +844,26 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAppServiceWithApplicationInsightsNormalizesBicepIdentifiers()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureAppServiceEnvironment("env-1").WithAzureApplicationInsights();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var environment = Assert.Single(model.Resources.OfType<AzureAppServiceEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(environment);
+
+        await Verify(bicep, "bicep");
     }
 
     [Fact]

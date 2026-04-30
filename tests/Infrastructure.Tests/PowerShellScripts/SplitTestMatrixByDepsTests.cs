@@ -51,7 +51,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
     {
         var matrixJson = BuildMatrixJson(
             new { name = "Plain", shortname = "p", runs_on = "ubuntu-latest" },
-            new { name = "NugetTest", shortname = "nt", runs_on = "ubuntu-latest", requiresNugets = true });
+            new { name = "NugetTest", shortname = "nt", runs_on = "ubuntu-latest", properties = new { requiresNugets = true } });
 
         var result = await RunScript(allTestsMatrix: matrixJson);
 
@@ -69,9 +69,9 @@ public class SplitTestMatrixByDepsTests : IDisposable
     public async Task SplitsRequiresNugetsByOs()
     {
         var matrixJson = BuildMatrixJson(
-            new { name = "LinuxNuget", shortname = "ln", runs_on = "ubuntu-latest", requiresNugets = true },
-            new { name = "WinNuget", shortname = "wn", runs_on = "windows-latest", requiresNugets = true },
-            new { name = "MacNuget", shortname = "mn", runs_on = "macos-latest", requiresNugets = true });
+            new { name = "LinuxNuget", shortname = "ln", runs_on = "ubuntu-latest", properties = new { requiresNugets = true } },
+            new { name = "WinNuget", shortname = "wn", runs_on = "windows-latest", properties = new { requiresNugets = true } },
+            new { name = "MacNuget", shortname = "mn", runs_on = "macos-latest", properties = new { requiresNugets = true } });
 
         var result = await RunScript(allTestsMatrix: matrixJson);
 
@@ -92,7 +92,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
     {
         var matrixJson = BuildMatrixJson(
             new { name = "Plain", shortname = "p", runs_on = "ubuntu-latest" },
-            new { name = "CliTest", shortname = "ct", runs_on = "ubuntu-latest", requiresCliArchive = true });
+            new { name = "CliTest", shortname = "ct", runs_on = "ubuntu-latest", properties = new { requiresCliArchive = true } });
 
         var result = await RunScript(allTestsMatrix: matrixJson);
 
@@ -109,7 +109,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
     public async Task CliArchiveTakesPriorityOverNugets()
     {
         var matrixJson = BuildMatrixJson(
-            new { name = "Both", shortname = "b", runs_on = "ubuntu-latest", requiresNugets = true, requiresCliArchive = true });
+            new { name = "Both", shortname = "b", runs_on = "ubuntu-latest", properties = new { requiresNugets = true, requiresCliArchive = true } });
 
         var result = await RunScript(allTestsMatrix: matrixJson);
 

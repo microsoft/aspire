@@ -8,6 +8,15 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static class CommandPathResolver
 {
+    private static readonly Dictionary<string, CommandMetadata> s_commandMetadata = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["npm"] = new("Node.js", "https://nodejs.org/en/download"),
+        ["npx"] = new("Node.js", "https://nodejs.org/en/download"),
+        ["bun"] = new("Bun", "https://bun.sh/docs/installation"),
+        ["yarn"] = new("Yarn", "https://yarnpkg.com/getting-started/install"),
+        ["pnpm"] = new("pnpm", "https://pnpm.io/installation")
+    };
+
     /// <summary>
     /// Resolves a command from the system PATH.
     /// </summary>
@@ -52,12 +61,27 @@ internal static class CommandPathResolver
     /// <returns>An actionable error message.</returns>
     internal static string GetMissingCommandMessage(string command)
     {
-        var normalizedCommand = Path.GetFileNameWithoutExtension(command);
+        var normalizedCommand = NormalizeCommand(command);
 
-        return normalizedCommand.ToLowerInvariant() switch
+        if (s_commandMetadata.TryGetValue(normalizedCommand, out var metadata))
         {
-            "npm" or "npx" => $"{normalizedCommand} is not installed or not found in PATH. Please install Node.js and try again.",
-            _ => $"Command '{command}' not found. Please ensure it is installed and in your PATH."
-        };
+            return $"{normalizedCommand} is not installed or not found in PATH. Please install {metadata.InstallDisplayName} and try again.";
+        }
+
+        return $"Command '{command}' not found. Please ensure it is installed and in your PATH.";
     }
+
+    internal static string? GetInstallationLink(string command)
+    {
+        return s_commandMetadata.TryGetValue(NormalizeCommand(command), out var metadata)
+            ? metadata.InstallationLink
+            : null;
+    }
+
+    private static string NormalizeCommand(string command)
+    {
+        return Path.GetFileNameWithoutExtension(command);
+    }
+
+    private sealed record CommandMetadata(string InstallDisplayName, string InstallationLink);
 }

@@ -26,4 +26,5 @@ internal static class ExitCodeConstants
     public const int WaitResourceFailed = 18;
     public const int FailedToLoadConfiguration = 19;
     public const int FailedToStartCli = 20;
+    public const int MissingRequiredArgument = 21;
 }

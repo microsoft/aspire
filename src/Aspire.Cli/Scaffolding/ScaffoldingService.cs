@@ -99,7 +99,18 @@ internal sealed class ScaffoldingService : IScaffoldingService
             context.ProjectName,
             cancellationToken);
 
-        // Step 4: Write scaffold files to disk, merging package.json with existing content
+        var conflictingFiles = GetConflictingScaffoldFiles(directory.FullName, scaffoldFiles.Keys);
+        if (conflictingFiles.Count > 0)
+        {
+            _logger.LogWarning(
+                "Scaffolding in '{Directory}' would overwrite existing files: {Files}",
+                directory.FullName,
+                string.Join(", ", conflictingFiles));
+            _interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
+            return false;
+        }
+
+        // Step 4: Write scaffold files to disk, merging package.json and .gitignore when they already exist.
         foreach (var (fileName, content) in scaffoldFiles)
         {
             var filePath = Path.Combine(directory.FullName, fileName);
@@ -113,7 +124,16 @@ internal sealed class ScaffoldingService : IScaffoldingService
             if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase) && File.Exists(filePath))
             {
                 var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
-                contentToWrite = PackageJsonMerger.Merge(existingContent, content, _logger);
+                contentToWrite = PackageJsonMerger.Merge(
+                    existingContent,
+                    content,
+                    _logger,
+                    toolchainCommand: GetPackageManagerCommand(directory, language));
+            }
+            else if (IsGitIgnoreFile(fileName) && File.Exists(filePath))
+            {
+                var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                contentToWrite = MergeGitIgnoreContent(existingContent, content);
             }
 
             await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
@@ -176,6 +196,12 @@ internal sealed class ScaffoldingService : IScaffoldingService
         CancellationToken cancellationToken)
     {
         var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(language.LanguageId.Value, cancellationToken);
+        if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
+        {
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
+            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+        }
+
         var runtime = new GuestRuntime(runtimeSpec, _logger);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
@@ -197,9 +223,16 @@ internal sealed class ScaffoldingService : IScaffoldingService
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();
-            if (AutomaticNpmInstallWarning.IsMatch(lines))
+            if (MissingJavaScriptToolWarning.IsMatch(lines))
             {
-                _interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.ProjectFilesCreatedButNodeToolsNotFound);
+                if (lines.Length > 0)
+                {
+                    _interactionService.DisplayLines(lines);
+                }
+
+                _interactionService.DisplayMessage(
+                    KnownEmojis.Warning,
+                    MissingJavaScriptToolWarning.GetMessage(directory, language));
                 return 0;
             }
 
@@ -264,4 +297,98 @@ internal sealed class ScaffoldingService : IScaffoldingService
             language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase);
     }
 
+    private string GetPackageManagerCommand(DirectoryInfo directory, LanguageInfo language)
+    {
+        if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
+        {
+            return "npm";
+        }
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
+        return TypeScriptAppHostToolchainResolver.GetCommandName(toolchain);
+    }
+
+    internal static IReadOnlyList<string> GetConflictingScaffoldFiles(string rootDirectory, IEnumerable<string> scaffoldFileNames)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(rootDirectory);
+        ArgumentNullException.ThrowIfNull(scaffoldFileNames);
+
+        var conflicts = new List<string>();
+
+        foreach (var fileName in scaffoldFileNames)
+        {
+            if (IsGitIgnoreFile(fileName) || IsPackageJsonFile(fileName))
+            {
+                continue;
+            }
+
+            var filePath = Path.Combine(rootDirectory, fileName);
+            if (File.Exists(filePath) || Directory.Exists(filePath))
+            {
+                conflicts.Add(fileName);
+            }
+        }
+
+        return conflicts;
+    }
+
+    internal static string MergeGitIgnoreContent(string existingContent, string scaffoldContent)
+    {
+        ArgumentNullException.ThrowIfNull(existingContent);
+        ArgumentNullException.ThrowIfNull(scaffoldContent);
+
+        if (string.IsNullOrEmpty(existingContent))
+        {
+            return scaffoldContent;
+        }
+
+        var existingEntries = ReadGitIgnoreEntries(existingContent).ToHashSet(StringComparer.Ordinal);
+        var existingNormalized = existingEntries
+            .Select(NormalizeGitIgnoreEntry)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var missingEntries = ReadGitIgnoreEntries(scaffoldContent)
+            .Where(entry => !existingEntries.Contains(entry)
+                && !existingNormalized.Contains(NormalizeGitIgnoreEntry(entry)))
+            .ToArray();
+
+        if (missingEntries.Length == 0)
+        {
+            return existingContent;
+        }
+
+        var newline = existingContent.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var mergedContent = existingContent;
+        if (!mergedContent.EndsWith("\n", StringComparison.Ordinal))
+        {
+            mergedContent += newline;
+        }
+
+        return mergedContent + string.Join(newline, missingEntries) + newline;
+    }
+
+    private static bool IsGitIgnoreFile(string fileName)
+        => Path.GetFileName(fileName).Equals(".gitignore", StringComparison.Ordinal);
+
+    private static bool IsPackageJsonFile(string fileName)
+        => Path.GetFileName(fileName).Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> ReadGitIgnoreEntries(string content)
+    {
+        using var reader = new StringReader(content);
+        string? line;
+
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                yield return line.TrimEnd();
+            }
+        }
+    }
+
+    // Normalizes a .gitignore entry so rooted (`/foo/`) and unrooted (`foo/`) forms
+    // are treated as equivalent when deciding whether to append a scaffold entry.
+    private static string NormalizeGitIgnoreEntry(string entry)
+        => entry.StartsWith('/') ? entry[1..] : entry;
 }

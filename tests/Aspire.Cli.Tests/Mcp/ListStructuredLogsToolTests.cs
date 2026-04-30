@@ -33,7 +33,7 @@ public class ListStructuredLogsToolTests
     }
 
     [Fact]
-    public async Task ListStructuredLogsTool_ThrowsException_WhenDashboardApiNotAvailable()
+    public async Task ListStructuredLogsTool_ThrowsException_WhenDashboardNotAvailable()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -47,7 +47,7 @@ public class ListStructuredLogsToolTests
         var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
 
-        Assert.Contains("Dashboard is not available", exception.Message);
+        Assert.Contains(McpErrorMessages.DashboardNotAvailable, exception.Message);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class ListStructuredLogsToolTests
         var textContent = result.Content[0] as TextContentBlock;
         Assert.NotNull(textContent);
 
-        // Parse the JSON array from the response to verify log_id extraction and attribute filtering
+        // Parse the JSON array from the response to verify logId extraction and attribute filtering
         var jsonStartIndex = textContent.Text.IndexOf('[');
         var jsonEndIndex = textContent.Text.LastIndexOf(']') + 1;
         var jsonText = textContent.Text[jsonStartIndex..jsonEndIndex];
@@ -193,46 +193,37 @@ public class ListStructuredLogsToolTests
         Assert.NotNull(logsArray);
         Assert.Equal(3, logsArray.Count);
 
-        // Verify first log entry has correct resource_name, log_id extracted, and aspire.log_id not in attributes
+        // Verify first log entry has correct resourceName, logId extracted, and aspire.log_id not in attributes
         var firstLog = logsArray[0]?.AsObject();
         Assert.NotNull(firstLog);
-        Assert.Equal("api-service-instance-1", firstLog["resource_name"]?.GetValue<string>());
-        Assert.Equal(42, firstLog["log_id"]?.GetValue<long>());
+        Assert.Equal("api-service-instance-1", firstLog["resourceName"]?.GetValue<string>());
+        Assert.Equal(42, firstLog["logId"]?.GetValue<long>());
         var firstLogAttributes = firstLog["attributes"]?.AsObject();
         Assert.NotNull(firstLogAttributes);
         Assert.False(firstLogAttributes.ContainsKey(OtlpHelpers.AspireLogIdAttribute), "aspire.log_id should be filtered from attributes");
         Assert.True(firstLogAttributes.ContainsKey("custom.attr"), "custom.attr should be present in attributes");
 
-        // Verify dashboard_link is included for each log entry with correct URLs
-        var firstDashboardLink = firstLog["dashboard_link"]?.AsObject();
-        Assert.NotNull(firstDashboardLink);
-        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=42", firstDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("log_id: 42", firstDashboardLink["text"]?.GetValue<string>());
+        // Verify dashboardUrl is included for each log entry with correct URLs
+        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=42", firstLog["dashboardUrl"]?.GetValue<string>());
 
-        // Verify second log entry has correct resource_name (different instance), log_id extracted (from intValue)
+        // Verify second log entry has correct resourceName (different instance), logId extracted (from intValue)
         var secondLog = logsArray[1]?.AsObject();
         Assert.NotNull(secondLog);
-        Assert.Equal("api-service-instance-2", secondLog["resource_name"]?.GetValue<string>());
-        Assert.Equal(43, secondLog["log_id"]?.GetValue<long>());
+        Assert.Equal("api-service-instance-2", secondLog["resourceName"]?.GetValue<string>());
+        Assert.Equal(43, secondLog["logId"]?.GetValue<long>());
         var secondLogAttributes = secondLog["attributes"]?.AsObject();
         Assert.NotNull(secondLogAttributes);
         Assert.False(secondLogAttributes.ContainsKey(OtlpHelpers.AspireLogIdAttribute), "aspire.log_id should be filtered from attributes");
 
-        var secondDashboardLink = secondLog["dashboard_link"]?.AsObject();
-        Assert.NotNull(secondDashboardLink);
-        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=43", secondDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("log_id: 43", secondDashboardLink["text"]?.GetValue<string>());
+        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=43", secondLog["dashboardUrl"]?.GetValue<string>());
 
-        // Verify third log entry has correct resource_name (no instance ID)
+        // Verify third log entry has correct resourceName (no instance ID)
         var thirdLog = logsArray[2]?.AsObject();
         Assert.NotNull(thirdLog);
-        Assert.Equal("worker-service", thirdLog["resource_name"]?.GetValue<string>());
-        Assert.Equal(44, thirdLog["log_id"]?.GetValue<long>());
+        Assert.Equal("worker-service", thirdLog["resourceName"]?.GetValue<string>());
+        Assert.Equal(44, thirdLog["logId"]?.GetValue<long>());
 
-        var thirdDashboardLink = thirdLog["dashboard_link"]?.AsObject();
-        Assert.NotNull(thirdDashboardLink);
-        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=44", thirdDashboardLink["url"]?.GetValue<string>());
-        Assert.Equal("log_id: 44", thirdDashboardLink["text"]?.GetValue<string>());
+        Assert.Equal("http://localhost:18888/structuredlogs?logEntryId=44", thirdLog["dashboardUrl"]?.GetValue<string>());
     }
 
     [Fact]

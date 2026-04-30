@@ -642,7 +642,6 @@ public class DockerComposeTests(ITestOutputHelper output)
 
         // Add an Azure Container Registry - should be picked up automatically as IContainerRegistry
         var acr = builder.AddAzureContainerRegistry("myacr");
-        acr.Resource.Outputs["loginServer"] = "myacr.azurecr.io";
 
         var composeEnv = builder.AddDockerComposeEnvironment("docker-compose")
             .WithContainerRegistry(acr);
@@ -652,6 +651,10 @@ public class DockerComposeTests(ITestOutputHelper output)
         using var app = builder.Build();
 
         await ExecuteBeforeStartHooksAsync(app, default);
+
+        acr.Resource.Outputs["loginServer"] = "myacr.azurecr.io";
+        Assert.NotNull(acr.Resource.ProvisioningTaskCompletionSource);
+        acr.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         // With Azure Container Registry, the full image name should use the ACR login server
         var containerImageReference = new ContainerImageReference(project.Resource);

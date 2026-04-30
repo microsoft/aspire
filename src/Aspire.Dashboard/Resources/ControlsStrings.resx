@@ -186,6 +186,9 @@
   <data name="ParameterValueNotSet" xml:space="preserve">
     <value>Value not set</value>
   </data>
+  <data name="ParameterSetValueAction" xml:space="preserve">
+    <value>Click to set parameter value</value>
+  </data>
   <data name="StateColumnHeader" xml:space="preserve">
     <value>State</value>
   </data>
@@ -305,6 +308,9 @@
   </data>
   <data name="ResourceDetailsResourceHeader" xml:space="preserve">
     <value>Resource</value>
+  </data>
+  <data name="ResourceDetailsStateDescriptionHeader" xml:space="preserve">
+    <value>State details</value>
   </data>
   <data name="SpanDetailsEventsHeader" xml:space="preserve">
     <value>Events</value>
@@ -428,13 +434,13 @@
     <value>Mount type</value>
   </data>
   <data name="ClearAllResources" xml:space="preserve">
-    <value>Remove all</value>
+    <value>Remove all telemetry</value>
   </data>
   <data name="ClearSelectedResource" xml:space="preserve">
-    <value>Remove for {0}</value>
+    <value>Remove telemetry for {0}</value>
   </data>
   <data name="ClearPendingSelectedResource" xml:space="preserve">
-    <value>Remove for resource</value>
+    <value>Remove telemetry for resource</value>
   </data>
   <data name="ChartContainerOverflowDescription" xml:space="preserve">
     <value>Some dimensions for the metric have been dropped by the OpenTelemetry SDK.</value>

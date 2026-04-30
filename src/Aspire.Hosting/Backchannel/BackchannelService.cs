@@ -80,7 +80,7 @@ internal sealed class BackchannelService(
                 EventDispatchBehavior.NonBlockingConcurrent,
                 stoppingToken).ConfigureAwait(false);
         }
-        catch (TaskCanceledException ex)
+        catch (OperationCanceledException ex)
         {
             // This exception is expected when the service is shut down whilst waiting for
             // a socket and just means that we don't need to wait anymore.

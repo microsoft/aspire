@@ -305,6 +305,16 @@ internal static class DashboardUrls
     }
 
     /// <summary>
+    /// Builds the URL for the telemetry API key exchange endpoint.
+    /// </summary>
+    /// <param name="baseUrl">The dashboard base URL.</param>
+    /// <returns>The full API URL.</returns>
+    public static string TelemetryApiKeyUrl(string baseUrl)
+    {
+        return CombineUrl(baseUrl, "/api/telemetry/validateToken");
+    }
+
+    /// <summary>
     /// Appends multiple resource query parameters to a URL.
     /// </summary>
     private static string AddResourceParams(string url, List<string>? resources)

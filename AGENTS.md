@@ -95,6 +95,7 @@ When reviewing pull requests:
 - **Skip Native Build**: Add `/p:SkipNativeBuild=true` to avoid slow native AOT compilation (~1-2 minutes saved)
 - **Clean Build**: `./build.sh --rebuild`
 - **Package Generation**: `./build.sh --pack` to create NuGet packages
+- If you need to disable the terminal logger for `dotnet`/build-related commands, prefer setting `MSBUILDTERMINALLOGGER=false` instead of passing `-tl:false`; avoid `-tl:false` on commands that may invoke tests because it can be forwarded to the test host and fail under Microsoft.Testing.Platform native runner mode
 
 #### Build Troubleshooting
 - If temporarily introducing warnings during refactoring, add `/p:TreatWarningsAsErrors=false` to prevent build failure
@@ -147,23 +148,25 @@ kill <pid>
 * Copy existing style in nearby files for test method names and capitalization.
 * Do not leave newly-added tests commented out. All added tests should be building and passing.
 * Do not use Directory.SetCurrentDirectory in tests as it can cause side effects when tests execute concurrently.
+* Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
+* MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
 
 ## Running tests
 
 (1) Build from the root with `./build.sh` (~3-5 minutes).
 (2) If that produces errors, fix those errors and build again. Repeat until the build is successful.
-(3) To run tests for a specific project: `dotnet test tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
+(3) To run tests for a specific project: `dotnet test --project tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
 
 Note that tests for a project can be executed without first building from the root.
 
 (4) To run specific tests, include the filter after `--`:
 ```bash
-dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 (5) To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
 ```bash
-dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
 ```
 You need both options (`--hangdump-timeout` does not work without `--hangdump`). Timeout can be expressed in minutes (e.g. `3m` for 3-minute timeout), or seconds (e.g. `30s` for 30-seconds timeout).
 
@@ -175,11 +178,11 @@ This repo uses **Microsoft.Testing.Platform (MTP)** as the test runner, not VSTe
 
 ```bash
 # WRONG - VSTest-style filter, will hang with MTP
-dotnet test tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
 
 # CORRECT - MTP-native filters go after the -- separator
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-class "*.ClassName"
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-method "*.MethodName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-class "*.ClassName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "*.MethodName"
 ```
 
 All test filtering must use MTP-native switches placed **after `--`**. See the filter switches listed below for the full set of options.
@@ -190,10 +193,10 @@ When running tests in automated environments (including Copilot agent), **always
 
 ```bash
 # Correct - excludes quarantined and outerloop tests (use this in automation)
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
 # For specific test filters, combine with quarantine and outerloop exclusion
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 Never run all tests without the quarantine and outerloop filters in automated environments, as this will include flaky tests that are known to fail intermittently and long-running tests that slow down CI.
@@ -404,7 +407,9 @@ The following specialized skills are available in `.github/skills/`:
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
+- **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
 - **startup-perf**: Measures Aspire application startup performance using dotnet-trace and the TraceAnalyzer tool
+- **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
 
 ## Pattern-Based Instructions
 
@@ -413,7 +418,12 @@ Additional instructions are automatically applied when editing files matching sp
 | Pattern | Instructions File |
 |---------|-------------------|
 | `src/**/*.cs` | `.github/instructions/xmldoc.instructions.md` - XML documentation standards |
+| `src/Aspire.Hosting/**/*.cs` | `.github/instructions/hosting-core.instructions.md` - Hosting core review patterns |
+| `src/Aspire.Hosting.Azure*/**/*.cs` | `.github/instructions/hosting-azure.instructions.md` - Hosting Azure review patterns |
+| `src/Aspire.Dashboard/**/*.{cs,razor,js}` | `.github/instructions/dashboard.instructions.md` - Dashboard review patterns |
+| `src/Components/**/*.cs` | `.github/instructions/components.instructions.md` - Client integration review patterns |
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
 | `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |
+| `eng/scripts/get-aspire-cli*.sh`, `eng/scripts/get-aspire-cli*.ps1` | `.github/instructions/acquisition-tests.instructions.md` - CLI acquisition script tests |

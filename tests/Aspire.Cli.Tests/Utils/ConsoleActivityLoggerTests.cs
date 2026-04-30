@@ -17,7 +17,8 @@ public class ConsoleActivityLoggerTests
         {
             Ansi = color ? AnsiSupport.Yes : AnsiSupport.No,
             ColorSystem = color ? ColorSystemSupport.TrueColor : ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(new StringWriter(output))
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
         });
         console.Profile.Width = width ?? int.MaxValue;
 
@@ -26,6 +27,37 @@ public class ConsoleActivityLoggerTests
             : TestHelpers.CreateNonInteractiveHostEnvironment();
 
         return new ConsoleActivityLogger(console, hostEnvironment, forceColor: color);
+    }
+
+    [Fact]
+    public void Info_WithAlreadyEscapedLiteralBrackets_PreservesContent()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: true, color: true);
+
+        logger.StartTask("step1", "Test Step");
+        logger.Info("step1", "[[DBG]] already escaped");
+
+        var result = output.ToString();
+
+        Assert.Contains("[DBG] already escaped", result);
+    }
+
+    [Fact]
+    public void Info_WithValidSpectreMarkup_PreservesFormattingMarkup()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: true, color: true);
+
+        logger.StartTask("step1", "Test Step");
+        logger.Info("step1", "[bold]important[/] [link=https://example.com]docs[/]");
+
+        var result = output.ToString();
+
+        Assert.Contains("important", result);
+        Assert.Contains("docs", result);
+        Assert.DoesNotContain("[bold]", result);
+        Assert.DoesNotContain("[link=https://example.com]", result);
     }
 
     [Fact]
@@ -394,5 +426,26 @@ public class ConsoleActivityLoggerTests
         Assert.DoesNotContain(lines, line => line.Contains('┬'));
         Assert.DoesNotContain('│', deepPublishLine);
         Assert.Contains(new string(' ', 24) + "Publish", deepPublishLine);
+    }
+
+    [Fact]
+    public void Info_WithDimAndBracketsInMessage_DoesNotThrow()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: true, color: true);
+
+        logger.StartTask("step1", "Test Step");
+
+        // Simulates what PipelineCommandBase does for Debug/Trace log messages from EF tool output:
+        // prefixedMessage = "[[DBG]] dotnet-ef output: Executing command 'ef-tool-start'."
+        // which is then passed with dim: true
+        var exception = Record.Exception(() =>
+            logger.Info("step1", "[[DBG]] dotnet-ef output: Executing command 'ef-tool-start'.", dim: true));
+
+        Assert.Null(exception);
+
+        var result = output.ToString();
+        Assert.Contains("[DBG]", result);
+        Assert.Contains("ef-tool-start", result);
     }
 }

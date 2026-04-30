@@ -145,6 +145,25 @@ public class ResourceExtensionsTests
     }
 
     [Fact]
+    public void GetDeploymentTargetAnnotation_ReturnsNullForDifferentTargetComputeEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var requestedEnvironment = builder.AddResource(new ComputeEnvironmentResource("env1"));
+        var annotationEnvironment = builder.AddResource(new ComputeEnvironmentResource("env2"));
+        var deploymentTarget = builder.AddResource(new ParentResource("target"));
+
+        var resource = builder.AddResource(new ParentResource("resource"))
+            .WithAnnotation(new DeploymentTargetAnnotation(deploymentTarget.Resource)
+            {
+                ComputeEnvironment = annotationEnvironment.Resource
+            });
+
+        var annotation = resource.Resource.GetDeploymentTargetAnnotation(requestedEnvironment.Resource);
+
+        Assert.Null(annotation);
+    }
+
+    [Fact]
     public void TryGetContainerImageNameReturnsCorrectFormatWhenShaSupplied()
     {
         var builder = DistributedApplication.CreateBuilder();

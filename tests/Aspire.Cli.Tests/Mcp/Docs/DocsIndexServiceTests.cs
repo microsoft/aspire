@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Aspire.Cli.Tests.Mcp.Docs;
+namespace Aspire.Cli.Tests.Documentation.Docs;
 
 public class DocsIndexServiceTests
 {
@@ -13,11 +14,12 @@ public class DocsIndexServiceTests
         return new MockDocsFetcher(content);
     }
 
-    private static DocsIndexService CreateService(IDocsFetcher? fetcher = null, IDocsCache? cache = null)
+    private static DocsIndexService CreateService(IDocsFetcher? fetcher = null, IDocsCache? cache = null, IConfiguration? configuration = null)
     {
         return new DocsIndexService(
             fetcher ?? new MockDocsFetcher(null),
             cache ?? new NullDocsCache(),
+            configuration ?? new ConfigurationBuilder().Build(),
             NullLogger<DocsIndexService>.Instance);
     }
 
@@ -402,6 +404,63 @@ public class DocsIndexServiceTests
     }
 
     [Fact]
+    public async Task GetDocumentAsync_NormalizesInlineMarkdownAndRewritesLinks()
+    {
+        var content = """
+            # Certificate configuration
+            > Learn how to configure HTTPS endpoints and certificate trust for resources in Aspire to enable secure communication.
+
+            Aspire provides two complementary sets of certificate APIs: 1. **HTTPS endpoint APIs**: Configure the certificates that resources use for their own HTTPS endpoints. 2. **Certificate trust APIs**: Configure which certificates resources trust when making outbound HTTPS connections. ### Why HTTPS matters [Section titled "Why HTTPS matters"](#why-https-matters) HTTPS is essential for protecting the security and privacy of data transmitted between services. See [Aspire CLI](/get-started/install-cli/) and [Why HTTPS matters](#why-https-matters). Trust the development certificate ```bash aspire certs trust ``` ## Next steps [Section titled "Next steps"](#next-steps) Continue here.
+            """;
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DocsSourceConfiguration.LlmsTxtUrlConfigPath] = "http://localhost:4321/llms-small.txt"
+            })
+            .Build();
+
+        var service = CreateService(CreateMockFetcher(content), configuration: configuration);
+
+        var doc = await service.GetDocumentAsync("certificate-configuration");
+
+        Assert.NotNull(doc);
+        Assert.Contains("\n1. **HTTPS endpoint APIs**", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("\n2. **Certificate trust APIs**", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("### Why HTTPS matters\n\nHTTPS is essential", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("```bash\naspire certs trust\n```", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("[Aspire CLI](http://localhost:4321/get-started/install-cli/)", doc.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Section titled", doc.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("](#why-https-matters)", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("See [Aspire CLI](http://localhost:4321/get-started/install-cli/) and Why HTTPS matters.", doc.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetDocumentAsync_KeepsMinifiedSingleLineCodeBlocksOnSingleLine()
+    {
+        var content = """
+            # Certificate configuration
+
+            Example:
+            ```csharp var builder = DistributedApplication.CreateBuilder(args); // Disable all automatic certificate configuration builder.AddPythonModule("api", "./api", "uvicorn") .WithoutHttpsCertificate() // No server cert config .WithCertificateTrustScope(CertificateTrustScope.None); // No client trust config builder.Build().Run(); ```
+            """;
+
+        var service = CreateService(CreateMockFetcher(content));
+
+        var doc = await service.GetDocumentAsync("certificate-configuration");
+
+        Assert.NotNull(doc);
+        Assert.Contains(
+            """
+            ```csharp
+            var builder = DistributedApplication.CreateBuilder(args); // Disable all automatic certificate configuration builder.AddPythonModule("api", "./api", "uvicorn") .WithoutHttpsCertificate() // No server cert config .WithCertificateTrustScope(CertificateTrustScope.None); // No client trust config builder.Build().Run();
+            ```
+            """.Replace("\r\n", "\n"),
+            doc.Content,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task EnsureIndexedAsync_OnlyFetchesOnce()
     {
         var callCount = 0;
@@ -417,6 +476,120 @@ public class DocsIndexServiceTests
         await service.EnsureIndexedAsync();
 
         Assert.Equal(1, callCount);
+    }
+
+    [Fact]
+    public async Task EnsureIndexedAsync_RevalidatesCachedIndexAcrossInstances()
+    {
+        var cache = new MemoryDocsCache();
+        const string content = """
+            # Redis Integration
+            > Connect to Redis.
+
+            Redis content.
+            """;
+
+        var firstService = CreateService(
+            CreateMockFetcher(content),
+            cache);
+
+        await firstService.EnsureIndexedAsync();
+
+        var fetchCount = 0;
+        var secondService = CreateService(
+            new CountingDocsFetcher(() =>
+            {
+                fetchCount++;
+                return content;
+            }),
+            cache);
+
+        var docs = await secondService.ListDocumentsAsync();
+
+        var doc = Assert.Single(docs);
+        Assert.Equal("Redis Integration", doc.Title);
+        Assert.Equal(1, fetchCount);
+    }
+
+    [Fact]
+    public async Task EnsureIndexedAsync_UsesCachedIndexWhenSourceUnavailableAfterInitialLoad()
+    {
+        var cache = new MemoryDocsCache();
+        var firstService = CreateService(
+            CreateMockFetcher(
+                """
+                # Redis Integration
+                > Connect to Redis.
+
+                Redis content.
+                """),
+            cache);
+
+        await firstService.EnsureIndexedAsync();
+
+        var secondService = CreateService(CreateMockFetcher(null), cache);
+        var docs = await secondService.ListDocumentsAsync();
+
+        var doc = Assert.Single(docs);
+        Assert.Equal("Redis Integration", doc.Title);
+    }
+
+    [Fact]
+    public async Task EnsureIndexedAsync_RefreshesCachedIndexWhenSourceContentChanges()
+    {
+        var cache = new MemoryDocsCache();
+        var firstService = CreateService(
+            CreateMockFetcher(
+                """
+                # Redis Integration
+                > Connect to Redis.
+
+                Redis content.
+                """),
+            cache);
+
+        await firstService.EnsureIndexedAsync();
+
+        var secondService = CreateService(
+            CreateMockFetcher(
+                """
+                # PostgreSQL Integration
+                > Connect to PostgreSQL.
+
+                PostgreSQL content.
+                """),
+            cache);
+
+        var docs = await secondService.ListDocumentsAsync();
+
+        var doc = Assert.Single(docs);
+        Assert.Equal("PostgreSQL Integration", doc.Title);
+
+        var thirdService = CreateService(CreateMockFetcher(null), cache);
+        var cachedDocs = await thirdService.ListDocumentsAsync();
+
+        Assert.Equal("PostgreSQL Integration", Assert.Single(cachedDocs).Title);
+    }
+
+    [Fact]
+    public async Task GetDocumentAsync_NormalizesMinifiedInlineTables()
+    {
+        var content = """
+            # Deploy to Azure
+            > Learn how Azure deployment works in Aspire.
+
+            After authentication succeeds, `aspire deploy` still needs a small set of shared Azure settings. | Setting | Environment variable | Purpose | | ---------------------- | ----------------------- | ---------------------------------------------- | | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription | | `Azure:Location` | `Azure__Location` | Default Azure region for provisioned resources | ### Local settings [Section titled "Local settings"](#local-settings) Continue here.
+            """;
+
+        var service = CreateService(CreateMockFetcher(content));
+
+        var document = await service.GetDocumentAsync("deploy-to-azure");
+        Assert.NotNull(document);
+
+        var normalized = document.Content.Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains("\n| Setting | Environment variable | Purpose |\n", normalized);
+        Assert.Contains("\n| `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |\n", normalized);
+        Assert.Contains("\n### Local settings\n", normalized);
     }
 
     [Fact]
@@ -998,12 +1171,299 @@ public class DocsIndexServiceTests
         }
     }
 
+    private sealed class SequenceDocsFetcher(IEnumerable<string?> contents) : IDocsFetcher
+    {
+        private readonly Queue<string?> _contents = new(contents);
+
+        public Task<string?> FetchDocsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_contents.Count > 0 ? _contents.Dequeue() : null);
+        }
+    }
+
     private sealed class ThrowingDocsFetcher(Exception exception) : IDocsFetcher
     {
         public Task<string?> FetchDocsAsync(CancellationToken cancellationToken = default)
         {
             throw exception;
         }
+    }
+
+    [Fact]
+    public void NormalizeContent_WithEmptyString_ReturnsEmpty()
+    {
+        var result = DocsIndexService.NormalizeContent("");
+        Assert.Equal("", result);
+    }
+
+    [Fact]
+    public void NormalizeContent_WithWhitespaceOnly_ReturnsWhitespace()
+    {
+        var result = DocsIndexService.NormalizeContent("   ");
+        Assert.Equal("   ", result);
+    }
+
+    [Fact]
+    public void NormalizeContent_NormalizesLineEndings()
+    {
+        var result = DocsIndexService.NormalizeContent("line1\r\nline2\rline3\nline4");
+        Assert.Equal("""
+            line1
+            line2
+            line3
+            line4
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineHeadings()
+    {
+        var result = DocsIndexService.NormalizeContent("Some text ## Heading\nMore text");
+        Assert.Equal("""
+            Some text
+
+            ## Heading
+
+            More text
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_RemovesSectionTitledBookmarks()
+    {
+        var result = DocsIndexService.NormalizeContent("Before [Section titled Overview](#overview) After");
+        Assert.Equal("""
+            Before
+
+            After
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineOrderedLists()
+    {
+        var result = DocsIndexService.NormalizeContent("Some text 1. First item");
+        Assert.Equal("""
+            Some text
+            1. First item
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineUnorderedLists()
+    {
+        var result = DocsIndexService.NormalizeContent("Some text * List item");
+        Assert.Equal("""
+            Some text
+            * List item
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_CollapsesExcessBlankLines()
+    {
+        var result = DocsIndexService.NormalizeContent("""
+            Paragraph 1
+
+
+
+
+            Paragraph 2
+            """);
+        Assert.Equal("""
+            Paragraph 1
+
+            Paragraph 2
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_StripsTrailingWhitespaceBeforeNewlines()
+    {
+        var result = DocsIndexService.NormalizeContent("line1   \nline2\t\nline3");
+        Assert.Equal("""
+            line1
+            line2
+            line3
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_StripsLeadingWhitespace()
+    {
+        var result = DocsIndexService.NormalizeContent("""
+              indented line
+                more indented
+            """);
+        Assert.Equal("""
+            indented line
+            more indented
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_PreservesCodeBlockContent()
+    {
+        var input = """
+            Before
+            ```csharp
+              var x = 1;
+              var y = 2;
+            ```
+            After
+            """;
+        var result = DocsIndexService.NormalizeContent(input);
+        Assert.Equal("""
+            Before
+
+            ```csharp
+              var x = 1;
+              var y = 2;
+            ```
+
+            After
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_ExpandsInlineCodeBlocks()
+    {
+        var result = DocsIndexService.NormalizeContent("""Text ```csharp Console.WriteLine("hello");``` more""");
+        Assert.Equal("""
+            Text
+            ```csharp
+            Console.WriteLine("hello");
+            ```
+            more
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_SplitsInlineTables()
+    {
+        var result = DocsIndexService.NormalizeContent("Text |Col1|Col2|Col3| |---|---|---| |A|B|C|");
+        Assert.Equal("""
+            Text
+            |Col1|Col2|Col3|
+            |---|---|---|
+            |A|B|C|
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_TrimsResult()
+    {
+        var result = DocsIndexService.NormalizeContent("\n\n  Hello world  \n\n");
+        Assert.Equal("Hello world", result);
+    }
+
+    [Fact]
+    public void NormalizeContent_HandlesComplexDocument()
+    {
+        var input = """
+            # Title
+            Some intro text ## Configuration
+            Use `aspire run`. 1. Step one 2. Step two
+
+
+
+            ```bash
+            aspire run
+            ```
+            Done.
+            """;
+        var result = DocsIndexService.NormalizeContent(input);
+
+        Assert.Equal("""
+            # Title
+
+            Some intro text
+
+            ## Configuration
+
+            Use `aspire run`.
+            1. Step one
+            2. Step two
+
+            ```bash
+            aspire run
+            ```
+
+            Done.
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterTable()
+    {
+        var result = DocsIndexService.NormalizeContent("Header text |Col1|Col2| |---|---| |A|B| Footer text");
+        Assert.Equal("""
+            Header text
+            |Col1|Col2|
+            |---|---|
+            |A|B|
+
+            Footer text
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro text 1. First 2. Second\nFollowing paragraph");
+        Assert.Equal("""
+            Intro text
+            1. First
+            2. Second
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterUnorderedList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro text * Item one * Item two\nFollowing paragraph");
+        Assert.Equal("""
+            Intro text
+            * Item one
+            * Item two
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineOnlyAfterRootList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro 1. First * Sub A * Sub B 2. Second\nFollowing paragraph");
+        Assert.Equal("""
+            Intro
+            1. First
+            * Sub A
+            * Sub B
+            2. Second
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_NoBlankLineAfterListBeforeCodeBlock()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro * Bash ```bash echo hello``` * PowerShell ```powershell Write-Host hello``` Done.");
+        Assert.Equal("""
+            Intro
+            * Bash
+            ```bash
+            echo hello
+            ```
+            * PowerShell
+            ```powershell
+            Write-Host hello
+            ```
+            Done.
+            """, result, ignoreLineEndingDifferences: true);
     }
 
     private sealed class DelayingDocsFetcher(string? content, TimeSpan delay) : IDocsFetcher
@@ -1023,6 +1483,72 @@ public class DocsIndexServiceTests
         public Task SetETagAsync(string url, string? etag, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<LlmsDocument[]?> GetIndexAsync(CancellationToken cancellationToken = default) => Task.FromResult<LlmsDocument[]?>(null);
         public Task SetIndexAsync(LlmsDocument[] documents, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<string?> GetIndexSourceFingerprintAsync(CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task SetIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task InvalidateAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class MemoryDocsCache : IDocsCache
+    {
+        private readonly Dictionary<string, string> _content = [];
+        private readonly Dictionary<string, string?> _etags = [];
+        private LlmsDocument[]? _index;
+        private string? _indexSourceFingerprint;
+
+        public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
+        {
+            _content.TryGetValue(key, out var value);
+            return Task.FromResult(value);
+        }
+
+        public Task SetAsync(string key, string content, CancellationToken cancellationToken = default)
+        {
+            _content[key] = content;
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetETagAsync(string url, CancellationToken cancellationToken = default)
+        {
+            _etags.TryGetValue(url, out var value);
+            return Task.FromResult(value);
+        }
+
+        public Task SetETagAsync(string url, string? etag, CancellationToken cancellationToken = default)
+        {
+            if (etag is null)
+            {
+                _etags.Remove(url);
+            }
+            else
+            {
+                _etags[url] = etag;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task<LlmsDocument[]?> GetIndexAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(_index);
+
+        public Task SetIndexAsync(LlmsDocument[] documents, CancellationToken cancellationToken = default)
+        {
+            _index = documents;
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetIndexSourceFingerprintAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(_indexSourceFingerprint);
+
+        public Task SetIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
+        {
+            _indexSourceFingerprint = fingerprint;
+            return Task.CompletedTask;
+        }
+
+        public Task InvalidateAsync(string key, CancellationToken cancellationToken = default)
+        {
+            _content.Remove(key);
+            return Task.CompletedTask;
+        }
     }
 }

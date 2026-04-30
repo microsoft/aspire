@@ -3,9 +3,11 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.JSInterop;
+using System.Net;
 
 namespace Aspire.Dashboard.Components.Controls;
 
@@ -109,5 +111,15 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
         // we support light (a11y-light-min) and dark (a11y-dark-min) themes.
         // syntax to force a theme for highlight.js is "theme-{themeName}"
         return $"log-content highlight-line language-{ViewModel.FormatKind} theme-a11y-{ThemeManager.EffectiveTheme.ToLower()}-min";
+    }
+
+    private static MarkupString GetFormattedPlaintext(StringLogLine line)
+    {
+        if (UrlParser.TryParse(line.Content, WebUtility.HtmlEncode, out var formattedText))
+        {
+            return (MarkupString)formattedText;
+        }
+
+        return (MarkupString)WebUtility.HtmlEncode(line.Content);
     }
 }

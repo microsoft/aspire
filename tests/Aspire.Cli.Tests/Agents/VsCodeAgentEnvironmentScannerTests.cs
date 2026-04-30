@@ -10,6 +10,7 @@ using Aspire.Cli.Agents.VsCode;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
+using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 

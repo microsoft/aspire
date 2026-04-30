@@ -8,9 +8,7 @@ const location = await builder.addParameter("location");
 const resourceGroup = await builder.addParameter("resource-group");
 const existingName = await builder.addParameter("existing-name");
 const existingResourceGroup = await builder.addParameter("existing-resource-group");
-const connectionString = await builder.addConnectionString("azure-validation", {
-    environmentVariableName: "AZURE_VALIDATION_CONNECTION_STRING"
-});
+const connectionString = await builder.addConnectionString("azure-validation");
 
 const azureEnvironment = await builder.addAzureEnvironment();
 await azureEnvironment.withLocation(location).withResourceGroup(resourceGroup);
@@ -41,21 +39,21 @@ await inlineBicep.getBicepIdentifier();
 await inlineBicep.isExisting();
 
 const infrastructure = await builder.addAzureInfrastructure("infra", async infrastructureContext => {
-    await infrastructureContext.bicepName.get();
+    await infrastructureContext.bicepName();
     await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
 });
 const infrastructureOutput = await infrastructure.getOutput("serviceUrl");
-await infrastructureOutput.name.get();
-await infrastructureOutput.value.get();
-await infrastructureOutput.valueExpression.get();
+await infrastructureOutput.name();
+await infrastructureOutput.value();
+await infrastructureOutput.valueExpression();
 await infrastructure.withParameter("empty");
-await infrastructure.withParameterStringValue("plain", "value");
-await infrastructure.withParameterStringValues("list", ["one", "two"]);
-await infrastructure.withParameterFromParameter("fromParam", existingName);
-await infrastructure.withParameterFromConnectionString("fromConnection", connectionString);
-await infrastructure.withParameterFromOutput("fromOutput", infrastructureOutput);
-await infrastructure.withParameterFromReferenceExpression("fromExpression", refExpr`https://${endpoint}`);
-await infrastructure.withParameterFromEndpoint("fromEndpoint", endpoint);
+await infrastructure.withParameter("plain", { value: "value" });
+await infrastructure.withParameter("list", { value: ["one", "two"] });
+await infrastructure.withParameter("fromParam", { value: existingName });
+await infrastructure.withParameter("fromConnection", { value: connectionString });
+await infrastructure.withParameter("fromOutput", { value: infrastructureOutput });
+await infrastructure.withParameter("fromExpression", { value: refExpr`https://${endpoint}` });
+await infrastructure.withParameter("fromEndpoint", { value: endpoint });
 await infrastructure.publishAsConnectionString();
 await infrastructure.clearDefaultRoleAssignments();
 await infrastructure.getBicepIdentifier();
@@ -68,17 +66,17 @@ await infrastructure.asExisting(existingName, { resourceGroup: existingResourceG
 
 const identity = await builder.addAzureUserAssignedIdentity("identity");
 await identity.configureInfrastructure(async infrastructureContext => {
-    await infrastructureContext.bicepName.get();
+    await infrastructureContext.bicepName();
     await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
 });
 await identity.withParameter("identityEmpty");
-await identity.withParameterStringValue("identityPlain", "value");
-await identity.withParameterStringValues("identityList", ["a", "b"]);
-await identity.withParameterFromParameter("identityFromParam", existingName);
-await identity.withParameterFromConnectionString("identityFromConnection", connectionString);
-await identity.withParameterFromOutput("identityFromOutput", infrastructureOutput);
-await identity.withParameterFromReferenceExpression("identityFromExpression", refExpr`${location}`);
-await identity.withParameterFromEndpoint("identityFromEndpoint", endpoint);
+await identity.withParameter("identityPlain", { value: "value" });
+await identity.withParameter("identityList", { value: ["a", "b"] });
+await identity.withParameter("identityFromParam", { value: existingName });
+await identity.withParameter("identityFromConnection", { value: connectionString });
+await identity.withParameter("identityFromOutput", { value: infrastructureOutput });
+await identity.withParameter("identityFromExpression", { value: refExpr`${location}` });
+await identity.withParameter("identityFromEndpoint", { value: endpoint });
 await identity.publishAsConnectionString();
 await identity.clearDefaultRoleAssignments();
 await identity.getBicepIdentifier();

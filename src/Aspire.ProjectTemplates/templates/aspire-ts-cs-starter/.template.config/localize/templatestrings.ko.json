@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Aspire Starter 앱(ASP.NET Core/React)",
+  "name": "Aspire Starter 앱(ASP.NET Core/React, C# AppHost)",
   "description": "선택적 Redis 캐싱을 사용하여 React 프런트 엔드와 C# 최소 API 백 엔드 서비스로 Aspire 앱을 만들기 위한 프로젝트 템플릿입니다.",
   "symbols/Framework/description": "프로젝트에 대한 대상 프레임워크입니다.",
   "symbols/Framework/choices/net8.0/description": "Target net8.0",

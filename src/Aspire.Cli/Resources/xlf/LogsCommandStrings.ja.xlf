@@ -12,6 +12,11 @@
         <target state="needs-review-translation">ログが書き込まれると同時にリアルタイムでストリームします。</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">ログを JSON 形式 (NDJSON) で出力します。</target>

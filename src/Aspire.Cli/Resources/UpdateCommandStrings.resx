@@ -16,7 +16,7 @@
     <value>Update integrations in the Aspire project (Preview)</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
   </data>
   <data name="SelectChannelPrompt" xml:space="preserve">
     <value>Select a channel:</value>
@@ -59,6 +59,9 @@
   </data>
   <data name="NoPackageFoundFormat" xml:space="preserve">
     <value>No package found with ID '{0}' in channel '{1}'.</value>
+  </data>
+  <data name="PackageNotFoundInChannelWarningFormat" xml:space="preserve">
+    <value>No package found with ID '{0}' in channel '{1}'. Skipping.</value>
   </data>
   <data name="CouldNotFindRootProjectElementFormat" xml:space="preserve">
     <value>Could not find root &lt;Project&gt; element in {0}</value>
@@ -164,5 +167,11 @@
   </data>
   <data name="SelfOptionDescription" xml:space="preserve">
     <value>Update the Aspire CLI itself to the latest version</value>
+  </data>
+  <data name="YesOptionDescription" xml:space="preserve">
+    <value>Automatically confirm all update prompts without asking</value>
+  </data>
+  <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
+    <value>Directory to create or update the NuGet.config file in</value>
   </data>
 </root>

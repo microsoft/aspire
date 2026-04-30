@@ -42,6 +42,16 @@
         <target state="translated">Es posible que los certificados de desarrollador no sean de plena confianza (el código de salida de confianza era: {0}).</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificatesNotTrustedNonInteractive">
+        <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
+        <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">Este comando aún no es compatible con AppHosts de un solo archivo.</target>
@@ -107,6 +117,16 @@
         <target state="translated">No se pudieron buscar paquetes. Código de salida: {0}.</target>
         <note>{0} is a number</note>
       </trans-unit>
+      <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
+        <source>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GlobalAppHostPathIgnored">
+        <source>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</source>
+        <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
+        <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
@@ -120,6 +140,11 @@
       <trans-unit id="InvalidSocketPath">
         <source>The provided extension socket path needs two valid parts.</source>
         <target state="translated">La ruta de acceso del socket de extensión proporcionada necesita dos partes válidas.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
+        <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</target>
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
@@ -168,9 +193,9 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
-        <source>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</source>
-        <target state="new">Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</target>
-        <note>Do not translate 'npm install', 'Node.js', or 'PATH'.</note>
+        <source>Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</source>
+        <target state="new">Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</target>
+        <note>{0} is the install command, such as 'npm install', 'bun install', 'yarn install', or 'pnpm install'. {1} is the toolchain display name, such as 'Node.js', 'Bun', 'Yarn', or 'pnpm'. Do not translate 'PATH'.</note>
       </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
         <source>The project does not contain an Aspire AppHost.</source>

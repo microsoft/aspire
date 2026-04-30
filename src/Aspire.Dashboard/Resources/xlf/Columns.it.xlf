@@ -19,8 +19,8 @@
       </trans-unit>
       <trans-unit id="StateColumnResourceContainerRuntimeUnhealthy">
         <source>Container runtime was found but appears to be unhealthy. Ensure that it is running.
-For more information, see https://aka.ms/dotnet/aspire/container-runtime-unhealthy</source>
-        <target state="translated">È stato trovato il runtime del contenitore, ma non è integro. Verificare che sia in esecuzione.
+For more information, see https://aka.ms/aspire/container-runtime-unhealthy</source>
+        <target state="needs-review-translation">È stato trovato il runtime del contenitore, ma non è integro. Verificare che sia in esecuzione.
 Per altre informazioni, vedere https://aka.ms/dotnet/aspire/container-runtime-unhealthy</target>
         <note>Contains a new line</note>
       </trans-unit>

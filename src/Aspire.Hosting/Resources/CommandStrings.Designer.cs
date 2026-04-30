@@ -106,6 +106,303 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Open the app in a tracked browser session and stream browser logs to this resource..
+        /// </summary>
+        internal static string OpenTrackedBrowserDescription {
+            get {
+                return ResourceManager.GetString("OpenTrackedBrowserDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open tracked browser.
+        /// </summary>
+        internal static string OpenTrackedBrowserName {
+            get {
+                return ResourceManager.GetString("OpenTrackedBrowserName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Choose the browser, profile, and scope used by tracked browser sessions..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserDescription {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Configure tracked browser.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserName {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserPromptMessage {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserPromptMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Apply.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserSaveButton {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserSaveButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Scope.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserScopeLabel {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserScopeLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This resource only ({0}).
+        /// </summary>
+        internal static string ConfigureTrackedBrowserResourceScopeOption {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserResourceScopeOption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to All BrowserLogs resources.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserGlobalScopeOption {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserGlobalScopeOption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to all BrowserLogs resources.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserGlobalScopeResult {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserGlobalScopeResult", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Browser.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserBrowserLabel {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserBrowserLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Choose an installed Chromium-based browser or enter an executable path..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserBrowserDescription {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserBrowserDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Microsoft Edge (msedge).
+        /// </summary>
+        internal static string ConfigureTrackedBrowserEdgeOption {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserEdgeOption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Google Chrome (chrome).
+        /// </summary>
+        internal static string ConfigureTrackedBrowserChromeOption {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserChromeOption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Chromium (chromium).
+        /// </summary>
+        internal static string ConfigureTrackedBrowserChromiumOption {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserChromiumOption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to User data mode.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserUserDataModeLabel {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserUserDataModeLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Profile.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserProfileLabel {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserProfileLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Choose a Chromium profile from the Aspire-managed browser hive, or enter a profile directory/name..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserProfileDescription {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserProfileDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Browser default profile.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserDefaultProfileOption {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserDefaultProfileOption", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} ({1}).
+        /// </summary>
+        internal static string ConfigureTrackedBrowserProfileOptionWithDisplayName {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserProfileOptionWithDisplayName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Browser is required..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserBrowserRequired {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserBrowserRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to User data mode must be Shared or Isolated..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserUserDataModeRequired {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserUserDataModeRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Profiles can only be selected when user data mode is Shared..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserProfileRequiresShared {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserProfileRequiresShared", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Save to AppHost user secrets.
+        /// </summary>
+        internal static string ConfigureTrackedBrowserSaveToUserSecretsLabel {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserSaveToUserSecretsLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to User secrets are not configured for this AppHost, so settings can only apply to this running AppHost..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser settings cannot be configured because dashboard interactions are not available..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserInteractionUnavailable {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserInteractionUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser settings cannot be saved because the AppHost does not have user secrets configured..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserUserSecretsUnavailable {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserUserSecretsUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Applied tracked browser settings for {0}..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserApplied {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserApplied", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Saved tracked browser settings for {0}..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserSaved {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserSaved", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser settings could not be saved to user secrets for key '{0}'..
+        /// </summary>
+        internal static string ConfigureTrackedBrowserSaveFailed {
+            get {
+                return ResourceManager.GetString("ConfigureTrackedBrowserSaveFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Capture a screenshot from the active tracked browser session and save it as a PNG artifact..
+        /// </summary>
+        internal static string CaptureScreenshotDescription {
+            get {
+                return ResourceManager.GetString("CaptureScreenshotDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Capture screenshot.
+        /// </summary>
+        internal static string CaptureScreenshotName {
+            get {
+                return ResourceManager.GetString("CaptureScreenshotName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes..
         /// </summary>
         internal static string RebuildDescription {

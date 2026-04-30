@@ -566,7 +566,7 @@ public class ParameterProcessorTests
         Assert.Equal(InteractionStrings.ParametersInputsRememberLabel, saveCheckbox.Label);
         Assert.Equal(InputType.Boolean, saveCheckbox.InputType);
         Assert.False(saveCheckbox.Disabled); // Should be enabled when user secrets are available
-        Assert.Null(saveCheckbox.Description); // No description when enabled
+        Assert.Equal(InteractionStrings.ParametersInputsRememberDescriptionConfigured, saveCheckbox.Description);
         Assert.True(saveCheckbox.EnableDescriptionMarkdown);
     }
 

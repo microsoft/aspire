@@ -237,4 +237,13 @@ internal static class AsyncTestHelpers
 
         throw new InvalidOperationException($"Assert failed after {retries} retries: {message}");
     }
+
+    public static Task WaitForCancellationAsync(CancellationToken token)
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        token.Register(() => tcs.SetCanceled(token));
+
+        return tcs.Task;
+    }
 }

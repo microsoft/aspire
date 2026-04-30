@@ -11,7 +11,8 @@ internal sealed class TestCertificateService : ICertificateService
     {
         return Task.FromResult(new EnsureCertificatesTrustedResult
         {
-            EnvironmentVariables = new Dictionary<string, string>()
+            EnvironmentVariables = new Dictionary<string, string>(),
+            Success = true
         });
     }
 }

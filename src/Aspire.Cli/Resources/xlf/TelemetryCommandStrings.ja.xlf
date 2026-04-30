@@ -7,24 +7,64 @@
         <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardApiNotAvailable">
-        <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
-        <target state="needs-review-translation">ダッシュボード API は利用できません。ダッシュボードが有効になっている状態で AppHost が実行されていることを確認します。</target>
+      <trans-unit id="DashboardApiNotEnabled">
+        <source>Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardApiNotEnabled">
-        <source>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</source>
-        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</target>
+      <trans-unit id="DashboardApiNotEnabledHint">
+        <source>Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</source>
+        <target state="new">Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailed">
-        <source>Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</source>
-        <target state="new">Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</target>
+        <source>Could not fetch telemetry data from the dashboard. Authentication failed.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. Authentication failed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardAuthFailedAnonymousHint">
+        <source>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</source>
+        <target state="new">Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardAuthFailedHint">
+        <source>Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</source>
+        <target state="new">Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionFailed">
-        <source>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</source>
-        <target state="new">Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</target>
+        <source>Could not fetch telemetry data from the dashboard. Unable to connect to '{0}'.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. Unable to connect to '{0}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardConnectionFailedHint">
+        <source>Verify the dashboard is running and the URL is correct.</source>
+        <target state="new">Verify the dashboard is running and the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLoginTokenFailed">
+        <source>Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLoginTokenFailedAnonymousHint">
+        <source>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</source>
+        <target state="new">Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardLoginTokenFailedHint">
+        <source>Ensure you are using the login URL from the currently running dashboard instance.</source>
+        <target state="new">Ensure you are using the login URL from the currently running dashboard instance.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardNotAvailable">
+        <source>Could not fetch telemetry data from the dashboard. The dashboard is not available.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. The dashboard is not available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardNotAvailableHint">
+        <source>Ensure the AppHost is running with the dashboard enabled.</source>
+        <target state="new">Ensure the AppHost is running with the dashboard enabled.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlAndAppHostExclusive">
@@ -33,18 +73,28 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlInvalid">
-        <source>The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</source>
-        <target state="new">The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</target>
+        <source>Could not fetch telemetry data from the dashboard. The value '{0}' is not a valid URL.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. The value '{0}' is not a valid URL.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlInvalidHint">
+        <source>Specify an absolute URL like 'http://localhost:18888'.</source>
+        <target state="new">Specify an absolute URL like 'http://localhost:18888'.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlNotReachable">
-        <source>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</source>
-        <target state="new">The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</target>
+        <source>Could not fetch telemetry data from the dashboard. The specified URL '{0}' does not appear to be a valid dashboard address.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. The specified URL '{0}' does not appear to be a valid dashboard address.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlNotReachableHint">
+        <source>Verify the URL is correct.</source>
+        <target state="new">Verify the URL is correct.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlOptionDescription">
-        <source>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</source>
-        <target state="new">URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</target>
+        <source>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</source>
+        <target state="new">Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">

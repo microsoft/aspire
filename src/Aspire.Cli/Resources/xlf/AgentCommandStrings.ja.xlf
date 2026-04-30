@@ -62,6 +62,21 @@
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_SkillLocationsOptionDescription">
+        <source>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillsOptionDescription">
+        <source>Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
+        <source>Path to the workspace root directory</source>
+        <target state="new">Path to the workspace root directory</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
         <source>Failed to download {0}.</source>
         <target state="new">Failed to download {0}.</target>
@@ -105,6 +120,11 @@
       <trans-unit id="SkillDescription_Aspire">
         <source>Aspire CLI commands and workflows for distributed apps</source>
         <target state="new">Aspire CLI commands and workflows for distributed apps</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillDescription_Aspireify">
+        <source>One-time setup: wire up AppHost with discovered projects</source>
+        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">

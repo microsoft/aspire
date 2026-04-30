@@ -37,6 +37,7 @@ internal sealed class StopCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         ICliHostEnvironment hostEnvironment,
         ILogger<StopCommand> logger,
         AspireCliTelemetry telemetry,
@@ -44,7 +45,7 @@ internal sealed class StopCommand : BaseCommand
         : base("stop", StopCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
         _hostEnvironment = hostEnvironment;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -133,8 +134,7 @@ internal sealed class StopCommand : BaseCommand
 
         if (!result.Success)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Information, result.ErrorMessage);
-            return ExitCodeConstants.Success;
+            return AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService);
         }
 
         return await StopAppHostAsync(result.Connection!, cancellationToken);

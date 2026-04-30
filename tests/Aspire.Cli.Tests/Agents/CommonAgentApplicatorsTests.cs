@@ -46,16 +46,18 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void SkillDefinition_All_ContainsExpectedSkills()
     {
-        Assert.Equal(3, SkillDefinition.All.Count);
+        Assert.Equal(4, SkillDefinition.All.Count);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspire);
+        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspireify);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.PlaywrightCli);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.DotnetInspect);
     }
 
     [Fact]
-    public void SkillDefinition_OnlyAspireIsDefault()
+    public void SkillDefinition_DefaultSkills()
     {
         Assert.True(SkillDefinition.Aspire.IsDefault);
+        Assert.True(SkillDefinition.Aspireify.IsDefault);
         Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
         Assert.False(SkillDefinition.DotnetInspect.IsDefault);
     }
@@ -65,6 +67,7 @@ public class CommonAgentApplicatorsTests
     {
         Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
         Assert.Empty(SkillDefinition.Aspire.ApplicableLanguages);
+        Assert.Empty(SkillDefinition.Aspireify.ApplicableLanguages);
         Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
     }
 

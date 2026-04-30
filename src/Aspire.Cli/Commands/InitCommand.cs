@@ -3,977 +3,438 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
-using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
-using Microsoft.Extensions.Configuration;
-using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
+/// <summary>
+/// Drops a skeleton AppHost and, when applicable, an <c>aspire.config.json</c>, then
+/// installs the appropriate init skill for an agent to complete the wiring. This is a
+/// thin launcher — the heavy lifting (project discovery, dependency configuration,
+/// validation) is delegated to the <c>aspireify</c> skill.
+/// </summary>
+internal sealed class InitCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    private readonly CliExecutionContext _executionContext;
+    private readonly ILanguageService _languageService;
+    private readonly ISolutionLocator _solutionLocator;
+    private readonly AgentInitCommand _agentInitCommand;
     private readonly IDotNetCliRunner _runner;
     private readonly ICertificateService _certificateService;
-    private readonly ITemplateVersionPrompter _templateVersionPrompter;
-    private readonly ITemplateProvider _templateProvider;
-    private readonly IPackagingService _packagingService;
-    private readonly ISolutionLocator _solutionLocator;
-    private readonly IDotNetSdkInstaller _sdkInstaller;
-    private readonly ICliUpdateNotifier _updateNotifier;
-    private readonly CliExecutionContext _executionContext;
-    private readonly IConfigurationService _configurationService;
-    private readonly ILanguageService _languageService;
-    private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IScaffoldingService _scaffoldingService;
-    private readonly AgentInitCommand _agentInitCommand;
-    private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ILanguageDiscovery _languageDiscovery;
 
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
-        Description = NewCommandStrings.SourceArgumentDescription,
-        Recursive = true
+        Description = "Deprecated. Accepted for compatibility but no longer affects `aspire init`; this option will be removed in a future version.",
+        Recursive = true,
+        Hidden = true
     };
+
     private static readonly Option<string?> s_versionOption = new("--version")
     {
-        Description = NewCommandStrings.VersionArgumentDescription,
-        Recursive = true
+        Description = "Deprecated. Accepted for compatibility but no longer affects `aspire init`; this option will be removed in a future version.",
+        Recursive = true,
+        Hidden = true
     };
 
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _languageOption;
 
-    /// <summary>
-    /// InitCommand prefetches template package metadata.
-    /// </summary>
-    public bool PrefetchesTemplatePackageMetadata => true;
-
-    /// <summary>
-    /// InitCommand prefetches CLI package metadata for update notifications.
-    /// </summary>
-    public bool PrefetchesCliPackageMetadata => true;
-
     public InitCommand(
-        IDotNetCliRunner runner,
-        ICertificateService certificateService,
-        ITemplateVersionPrompter templateVersionPrompter,
-        ITemplateProvider templateProvider,
-        IPackagingService packagingService,
+        ILanguageService languageService,
         ISolutionLocator solutionLocator,
         AspireCliTelemetry telemetry,
-        IDotNetSdkInstaller sdkInstaller,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IInteractionService interactionService,
-        IConfigurationService configurationService,
-        ILanguageService languageService,
-        ILanguageDiscovery languageDiscovery,
-        IScaffoldingService scaffoldingService,
         AgentInitCommand agentInitCommand,
-        ICliHostEnvironment hostEnvironment,
-        IConfiguration configuration)
+        IDotNetCliRunner runner,
+        ICertificateService certificateService,
+        IScaffoldingService scaffoldingService,
+        ILanguageDiscovery languageDiscovery)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
+        _executionContext = executionContext;
+        _languageService = languageService;
+        _solutionLocator = solutionLocator;
+        _agentInitCommand = agentInitCommand;
         _runner = runner;
         _certificateService = certificateService;
-        _templateVersionPrompter = templateVersionPrompter;
-        _templateProvider = templateProvider;
-        _packagingService = packagingService;
-        _solutionLocator = solutionLocator;
-        _sdkInstaller = sdkInstaller;
-        _updateNotifier = updateNotifier;
-        _executionContext = executionContext;
-        _configurationService = configurationService;
-        _languageService = languageService;
-        _languageDiscovery = languageDiscovery;
         _scaffoldingService = scaffoldingService;
-        _agentInitCommand = agentInitCommand;
-        _hostEnvironment = hostEnvironment;
+        _languageDiscovery = languageDiscovery;
 
-        Options.Add(s_sourceOption);
-        Options.Add(s_versionOption);
-
-        // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(features, configuration);
         _channelOption = new Option<string?>("--channel")
         {
-            Description = isStagingEnabled
-                ? NewCommandStrings.ChannelOptionDescriptionWithStaging
-                : NewCommandStrings.ChannelOptionDescription,
-            Recursive = true
+            Description = "Deprecated. Accepted for compatibility but no longer affects `aspire init`; this option will be removed in a future version.",
+            Recursive = true,
+            Hidden = true
         };
-        Options.Add(_channelOption);
 
         _languageOption = new Option<string?>("--language")
         {
             Description = InitCommandStrings.LanguageOptionDescription
         };
+        Options.Add(s_sourceOption);
+        Options.Add(s_versionOption);
+        Options.Add(_channelOption);
         Options.Add(_languageOption);
+        Options.Add(NewCommand.s_suppressAgentInitOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
-        // Get the language selection (from command line, config, or prompt).
+        // Step 1: Get the language selection.
         var explicitLanguage = parseResult.GetValue(_languageOption);
-        var selectedProject = await _languageService.GetOrPromptForProjectAsync(explicitLanguage, saveSelection: true, cancellationToken);
+        DisplayDeprecatedOptionWarnings(parseResult);
 
-        // For non-C# languages, skip solution detection and create polyglot apphost.
-        if (selectedProject.LanguageId != KnownLanguageId.CSharp)
+        var projectSelection = await _languageService.GetOrPromptForProjectSelectionAsync(explicitLanguage, saveLanguageSelection: false, cancellationToken);
+        var selectedProject = projectSelection.Project;
+
+        var isCSharp = selectedProject.LanguageId == KnownLanguageId.CSharp;
+        var workingDirectory = _executionContext.WorkingDirectory;
+
+        // Step 2: Detect solution (C# only — determines single-file vs full project).
+        FileInfo? solutionFile = null;
+        if (isCSharp)
         {
-            // Get the language info for scaffolding
-            var languageInfo = _languageDiscovery.GetLanguageById(selectedProject.LanguageId);
-            if (languageInfo is null)
-            {
-                InteractionService.DisplayError($"Unknown language: {selectedProject.LanguageId}");
-                return ExitCodeConstants.FailedToCreateNewProject;
-            }
-
-            InteractionService.DisplayEmptyLine();
-            InteractionService.DisplayMessage(KnownEmojis.Information, $"Creating {languageInfo.DisplayName} AppHost...");
-            InteractionService.DisplayEmptyLine();
-            var polyglotResult = await CreatePolyglotAppHostAsync(languageInfo, cancellationToken);
-            if (polyglotResult != 0)
-            {
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
-                return polyglotResult;
-            }
-
-            return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, polyglotResult, _executionContext.WorkingDirectory, cancellationToken);
+            solutionFile = await _solutionLocator.FindSolutionFileAsync(workingDirectory, cancellationToken);
         }
 
-        // For C#, we need the .NET SDK
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, InteractionService, Telemetry, cancellationToken))
-        {
-            return ExitCodeConstants.SdkNotInstalled;
-        }
+        // Step 3: Drop the skeleton AppHost and any related config files needed for that mode.
+        var dropResult = isCSharp
+            ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
+            : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
 
-        // Create the init context to build up a model of the operation
-        var initContext = new InitContext();
-
-        // Use SolutionLocator to find solution files, walking up the directory tree
-        initContext.SelectedSolutionFile = await _solutionLocator.FindSolutionFileAsync(_executionContext.WorkingDirectory, cancellationToken);
-
-        int initResult;
-        DirectoryInfo workspaceRoot;
-        if (initContext.SelectedSolutionFile is not null)
-        {
-            InteractionService.DisplayEmptyLine();
-            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.SolutionDetected, initContext.SelectedSolutionFile.Name));
-            InteractionService.DisplayEmptyLine();
-            initResult = await InitializeExistingSolutionAsync(initContext, parseResult, cancellationToken);
-            workspaceRoot = initContext.SolutionDirectory ?? _executionContext.WorkingDirectory;
-        }
-        else
-        {
-            InteractionService.DisplayEmptyLine();
-            InteractionService.DisplayMessage(KnownEmojis.Information, InitCommandStrings.NoSolutionFoundCreatingSingleFileAppHost);
-            InteractionService.DisplayEmptyLine();
-            initResult = await CreateEmptyAppHostAsync(parseResult, cancellationToken);
-            workspaceRoot = _executionContext.WorkingDirectory;
-        }
-
-        if (initResult != 0)
+        if (dropResult != ExitCodeConstants.Success)
         {
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
-            return initResult;
+            return dropResult;
         }
 
-        return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, initResult, workspaceRoot, cancellationToken);
+        // Persist the prompted language selection now that the skeleton drop succeeded.
+        if (projectSelection.ShouldPersistSelection)
+        {
+            await _languageService.SetLanguageAsync(selectedProject, cancellationToken: cancellationToken);
+        }
+
+        // Trust the dev certificate so the first `aspire start` doesn't hit cert errors.
+        // The skeleton AppHost / aspire.config.json profiles default to HTTPS, and the
+        // aspireify skill guidance prefers HTTPS for service endpoints. Best-effort —
+        // ignore failures since `aspire doctor` / `aspire certs trust` provide a fallback.
+        if (isCSharp)
+        {
+            try
+            {
+                _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+            }
+            catch (CertificateServiceException)
+            {
+                // Non-fatal: surface via aspire doctor / aspire certs trust.
+            }
+        }
+
+        // Step 4: Chain to aspire agent init for MCP server + skill configuration.
+        // This prompt lets users choose which skills to install — including aspireify.
+        var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
+        var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, ExitCodeConstants.Success, workspaceRoot, agentInitBinding, cancellationToken);
+
+        // Step 5: Print follow-up commands only when the user selected the one-time init skill.
+        if (agentInitResult.ExitCode == ExitCodeConstants.Success &&
+            agentInitResult.SelectedSkills.Contains(SkillDefinition.Aspireify))
+        {
+            var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
+            if (commands.Count > 0)
+            {
+                InteractionService.DisplayEmptyLine();
+                InteractionService.DisplayMessage(
+                    KnownEmojis.Dizzy,
+                    commands.Count == 1
+                        ? "Aspire AppHost created! To complete setup, run:"
+                        : "Aspire AppHost created! To complete setup, run one of:");
+                InteractionService.DisplayEmptyLine();
+
+                foreach (var command in commands)
+                {
+                    InteractionService.DisplaySubtleMessage($"  {command}");
+                }
+            }
+        }
+
+        return agentInitResult.ExitCode;
     }
 
-    private async Task<int> InitializeExistingSolutionAsync(InitContext initContext, ParseResult parseResult, CancellationToken cancellationToken)
+    private void DisplayDeprecatedOptionWarnings(ParseResult parseResult)
     {
-        var solutionFile = initContext.SelectedSolutionFile!;
+        DisplayDeprecatedOptionWarningIfProvided(parseResult.GetValue(s_sourceOption), "--source");
+        DisplayDeprecatedOptionWarningIfProvided(parseResult.GetValue(s_versionOption), "--version");
+        DisplayDeprecatedOptionWarningIfProvided(parseResult.GetValue(_channelOption), "--channel");
+    }
 
-        // Verify that the solution directory does not contain project files.
-        // If the solution and a project file are in the same directory, the AppHost
-        // and ServiceDefaults directories would be created inside that project which
-        // is not supported.
-        var solutionDirectory = solutionFile.Directory!;
-        var projectFileInSolutionDir = solutionDirectory.EnumerateFiles()
-            .FirstOrDefault(f => DotNetAppHostProject.ProjectExtensions.Contains(f.Extension, StringComparer.OrdinalIgnoreCase));
-
-        if (projectFileInSolutionDir is not null)
+    private void DisplayDeprecatedOptionWarningIfProvided(string? value, string optionName)
+    {
+        if (value is not null)
         {
-            InteractionService.DisplayError(
-                string.Format(
-                    CultureInfo.CurrentCulture,
-                    InitCommandStrings.SolutionAndProjectInSameDirectory,
-                    solutionFile.Name,
-                    projectFileInSolutionDir.Name));
+            InteractionService.DisplayMessage(
+                KnownEmojis.Warning,
+                $"`aspire init {optionName}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.");
+        }
+    }
+
+    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
+    {
+        var commands = new List<string>();
+
+        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
+        {
+            commands.Add("claude \"run the aspireify skill\"");
+        }
+
+        if (selectedLocations.Contains(SkillLocation.OpenCode))
+        {
+            commands.Add("opencode --prompt \"run the aspireify skill\"");
+        }
+
+        return commands;
+    }
+
+    private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)
+    {
+        if (solutionFile is not null)
+        {
+            return await DropCSharpProjectSkeletonAsync(solutionFile, cancellationToken);
+        }
+
+        return await DropCSharpSingleFileSkeletonAsync(workingDirectory, cancellationToken);
+    }
+
+    private Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+
+        var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
+        if (File.Exists(appHostPath))
+        {
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
+            return Task.FromResult(ExitCodeConstants.Success);
+        }
+
+        // Drop bare single-file apphost. Pin the SDK version so later operations
+        // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
+        // can locate and update the directive — they expect the @<version> form.
+        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        var appHostContent = $$"""
+            #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            // The aspireify skill will wire up your projects here.
+
+            builder.Build().Run();
+            """;
+        File.WriteAllText(appHostPath, appHostContent);
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
+
+        // Drop aspire.config.json
+        var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null);
+
+        return Task.FromResult(configResult);
+    }
+
+    private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
+    {
+        var solutionDir = solutionFile.Directory!;
+        var solutionName = Path.GetFileNameWithoutExtension(solutionFile.Name);
+        var appHostDirName = $"{solutionName}.AppHost";
+        var appHostDirPath = Path.Combine(solutionDir.FullName, appHostDirName);
+
+        if (Directory.Exists(appHostDirPath))
+        {
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostDirName}/ already exists — skipping.");
+            return ExitCodeConstants.Success;
+        }
+
+        // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
+        // `dotnet new` does not install templates implicitly, so on a fresh machine
+        // (or after a CLI update) the template will be missing. Install first.
+        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        var installResult = await InteractionService.ShowStatusAsync(
+            "Installing Aspire project templates...",
+            () => _runner.InstallTemplateAsync(
+                packageName: "Aspire.ProjectTemplates",
+                version: aspireVersion,
+                nugetConfigFile: null,
+                nugetSource: null,
+                force: true,
+                options: new ProcessInvocationOptions(),
+                cancellationToken: cancellationToken));
+
+        if (installResult.ExitCode != 0)
+        {
+            InteractionService.DisplayError($"Failed to install Aspire.ProjectTemplates (exit code {installResult.ExitCode}).");
+            return ExitCodeConstants.FailedToInstallTemplates;
+        }
+
+        // Use the aspire-apphost template to generate a correct AppHost project
+        // with proper launchSettings.json, .csproj, and Program.cs.
+        var result = await InteractionService.ShowStatusAsync(
+            "Creating AppHost from template...",
+            async () =>
+            {
+                return await _runner.NewProjectAsync(
+                    "aspire-apphost",
+                    appHostDirName,
+                    appHostDirPath,
+                    extraArgs: [],
+                    options: new ProcessInvocationOptions(),
+                    cancellationToken: cancellationToken);
+            });
+
+        if (result != 0)
+        {
+            InteractionService.DisplayError($"Failed to create AppHost from template (exit code {result}).");
             return ExitCodeConstants.FailedToCreateNewProject;
         }
 
-        initContext.GetSolutionProjectsOutputCollector = new OutputCollector();
-        var (getSolutionExitCode, solutionProjects) = await InteractionService.ShowStatusAsync("Reading solution...", async () =>
-        {
-            var options = new ProcessInvocationOptions
-            {
-                StandardOutputCallback = initContext.GetSolutionProjectsOutputCollector.AppendOutput,
-                StandardErrorCallback = initContext.GetSolutionProjectsOutputCollector.AppendError
-            };
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostDirName}/");
 
-            return await _runner.GetSolutionProjectsAsync(
-                solutionFile,
-                options,
-                cancellationToken);
-        });
-
-        if (getSolutionExitCode != 0)
-        {
-            InteractionService.DisplayLines(initContext.GetSolutionProjectsOutputCollector.GetLines());
-            InteractionService.DisplayError("Failed to get projects from solution.");
-            return getSolutionExitCode;
-        }
-
-        initContext.SolutionProjects = solutionProjects;
-
-        _ = await InteractionService.ShowStatusAsync("Evaluating existing projects...", async () =>
-        {
-            await EvaluateSolutionProjectsAsync(initContext, cancellationToken);
-
-            // HACK: Need to fix up InteractionService to support Task return from status operations.
-            return 0;
-        });
-
-        if (initContext.AlreadyHasAppHost)
-        {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMark, InitCommandStrings.SolutionAlreadyInitialized);
-            return ExitCodeConstants.Success;
-        }
-
-        // If there are executable projects, prompt user to select which ones to add to appHost
-        if (initContext.ExecutableProjects.Count > 0)
-        {
-            var addExecutableProjectsMessage = """
-                                               # Add existing projects to AppHost?
-
-                                               The following projects were found in the solution that can be
-                                               hosted in Aspire. Select the ones that you would like to be
-                                               added to the AppHost project. You can add or remove them
-                                               later as needed.
-                                               """;
-
-            InteractionService.DisplayEmptyLine();
-            InteractionService.DisplayMarkdown(addExecutableProjectsMessage);
-            InteractionService.DisplayEmptyLine();
-
-            var selectedProjects = await InteractionService.PromptForSelectionsAsync(
-                "Select projects to add to the AppHost:",
-                initContext.ExecutableProjects,
-                project => Path.GetFileNameWithoutExtension(project.ProjectFile.Name).EscapeMarkup(),
-                optional: true,
-                cancellationToken: cancellationToken);
-            initContext.ExecutableProjectsToAddToAppHost = selectedProjects;
-
-            // If projects were selected, prompt for which should have ServiceDefaults added
-            if (initContext.ExecutableProjectsToAddToAppHost.Count > 0)
-            {
-                InteractionService.DisplayEmptyLine();
-                InteractionService.DisplayMessage(KnownEmojis.Information, "The following projects will be added to the AppHost:");
-                InteractionService.DisplayEmptyLine();
-
-                foreach (var project in initContext.ExecutableProjectsToAddToAppHost)
-                {
-                    InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, project.ProjectFile.Name);
-                }
-
-                var addServiceDefaultsMessage = """
-                                # Add ServiceDefaults reference to selected projects?
-
-                                Do you want to add a reference to the ServiceDefaults project to
-                                the executable projects that will be added to the AppHost? The 
-                                ServiceDefaults project contains helper code to make it easier
-                                for you to configure telemetry and service discovery in Aspire.
-                                """;
-
-                InteractionService.DisplayEmptyLine();
-                InteractionService.DisplayMarkdown(addServiceDefaultsMessage);
-                InteractionService.DisplayEmptyLine();
-
-                var serviceDefaultsActions = new Dictionary<string, string>
-                {
-                    { "all", "Add to all previously added projects" },
-                    { "choose", "Let me choose" },
-                    { "none", "Do not add to any projects" }
-                };
-
-                var selection = await InteractionService.PromptForSelectionAsync(
-                    "Add ServiceDefaults reference?",
-                    serviceDefaultsActions,
-                    (action) => action.Value,
-                    cancellationToken
-                );
-
-                switch (selection.Key)
-                {
-                    case "all":
-                        initContext.ProjectsToAddServiceDefaultsTo = initContext.ExecutableProjectsToAddToAppHost;
-                        break;
-                    case "choose":
-                        initContext.ProjectsToAddServiceDefaultsTo = await InteractionService.PromptForSelectionsAsync(
-                            "Select projects to add ServiceDefaults reference to:",
-                            initContext.ExecutableProjectsToAddToAppHost,
-                            project => Path.GetFileNameWithoutExtension(project.ProjectFile.Name).EscapeMarkup(),
-                            optional: true,
-                            cancellationToken: cancellationToken);
-                        break;
-                    case "none":
-                        initContext.ProjectsToAddServiceDefaultsTo = Array.Empty<ExecutableProjectInfo>();
-                        break;
-                }
-            }
-        }
-
-        // Get template version/channel selection using the same logic as NewCommand
-        var selectedTemplateDetails = await GetProjectTemplatesVersionAsync(parseResult, cancellationToken);
-
-        // Create or update NuGet.config for explicit channels in the solution directory
-        // This matches the behavior of 'aspire new' when creating in-place
-        var nugetConfigPrompter = new NuGetConfigPrompter(InteractionService);
-        await nugetConfigPrompter.PromptToCreateOrUpdateAsync(
-            ExecutionContext.WorkingDirectory,
-            selectedTemplateDetails.Channel,
-            cancellationToken);
-
-        // Create a temporary directory for the template output
-        var tempProjectDir = Path.Combine(Path.GetTempPath(), $"aspire-init-{Guid.NewGuid()}");
-        Directory.CreateDirectory(tempProjectDir);
-
-        try
-        {
-            // Create temporary NuGet config if using explicit channel
-            using var temporaryConfig = selectedTemplateDetails.Channel.Type == PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(selectedTemplateDetails.Channel.Mappings!) : null;
-
-            // Install templates first if needed
-            initContext.InstallTemplateOutputCollector = new OutputCollector();
-            var templateInstallResult = await InteractionService.ShowStatusAsync(
-                "Getting templates...",
-                async () =>
-                {
-                    var options = new ProcessInvocationOptions
-                    {
-                        StandardOutputCallback = initContext.InstallTemplateOutputCollector.AppendOutput,
-                        StandardErrorCallback = initContext.InstallTemplateOutputCollector.AppendError
-                    };
-
-                    return await _runner.InstallTemplateAsync(
-                        packageName: "Aspire.ProjectTemplates",
-                        version: selectedTemplateDetails.Package.Version,
-                        nugetConfigFile: temporaryConfig?.ConfigFile,
-                        nugetSource: selectedTemplateDetails.Package.Source,
-                        force: true,
-                        options: options,
-                        cancellationToken: cancellationToken);
-                });
-
-            if (templateInstallResult.ExitCode != 0)
-            {
-                InteractionService.DisplayLines(initContext.InstallTemplateOutputCollector.GetLines());
-                InteractionService.DisplayError("Failed to install Aspire templates.");
-                return ExitCodeConstants.FailedToInstallTemplates;
-            }
-
-            initContext.NewProjectOutputCollector = new OutputCollector();
-            var createResult = await InteractionService.ShowStatusAsync(
-                "Creating Aspire projects from template...",
-                async () =>
-                {
-                    var options = new ProcessInvocationOptions
-                    {
-                        StandardOutputCallback = initContext.NewProjectOutputCollector.AppendOutput,
-                        StandardErrorCallback = initContext.NewProjectOutputCollector.AppendError
-                    };
-
-                    return await _runner.NewProjectAsync(
-                        "aspire",
-                        initContext.SolutionName,
-                        tempProjectDir,
-                        ["--framework", initContext.RequiredAppHostFramework],
-                        options,
-                        cancellationToken);
-                });
-
-            if (createResult != 0)
-            {
-                InteractionService.DisplayLines(initContext.NewProjectOutputCollector.GetLines());
-                InteractionService.DisplayError($"Failed to create Aspire projects. Exit code: {createResult}");
-                return createResult;
-            }
-
-            // Find the created projects in the temporary directory
-            var tempDir = new DirectoryInfo(tempProjectDir);
-            var appHostProjects = tempDir.GetDirectories("*.AppHost", SearchOption.TopDirectoryOnly);
-            var serviceDefaultsProjects = tempDir.GetDirectories("*.ServiceDefaults", SearchOption.TopDirectoryOnly);
-
-            if (appHostProjects.Length == 0 || serviceDefaultsProjects.Length == 0)
-            {
-                InteractionService.DisplayError("Failed to find created AppHost or ServiceDefaults projects in template output.");
-                return ExitCodeConstants.FailedToCreateNewProject;
-            }
-
-            var appHostProjectDir = appHostProjects[0];
-            var serviceDefaultsProjectDir = serviceDefaultsProjects[0];
-
-            // Copy the projects to the solution directory
-            // Using copy instead of move to support cross-drive operations on Windows
-            var finalAppHostDir = Path.Combine(initContext.SolutionDirectory.FullName, appHostProjectDir.Name);
-            var finalServiceDefaultsDir = Path.Combine(initContext.SolutionDirectory.FullName, serviceDefaultsProjectDir.Name);
-
-            FileSystemHelper.CopyDirectory(appHostProjectDir.FullName, finalAppHostDir, overwrite: true);
-            FileSystemHelper.CopyDirectory(serviceDefaultsProjectDir.FullName, finalServiceDefaultsDir, overwrite: true);
-
-            // Delete the temporary directory
-            Directory.Delete(tempProjectDir, recursive: true);
-
-            // Add AppHost project to solution
-            var appHostProjectFile = new FileInfo(Path.Combine(finalAppHostDir, $"{appHostProjectDir.Name}.csproj"));
-            var serviceDefaultsProjectFile = new FileInfo(Path.Combine(finalServiceDefaultsDir, $"{serviceDefaultsProjectDir.Name}.csproj"));
-            initContext.AddAppHostToSolutionOutputCollector = new OutputCollector();
-            var addAppHostResult = await InteractionService.ShowStatusAsync(
-                InitCommandStrings.AddingAppHostProjectToSolution,
-                async () =>
-                {
-                    var options = new ProcessInvocationOptions
-                    {
-                        StandardOutputCallback = initContext.AddAppHostToSolutionOutputCollector.AppendOutput,
-                        StandardErrorCallback = initContext.AddAppHostToSolutionOutputCollector.AppendError
-                    };
-
-                    return await _runner.AddProjectToSolutionAsync(
-                        solutionFile,
-                        appHostProjectFile,
-                        options,
-                        cancellationToken);
-                });
-
-            if (addAppHostResult != 0)
-            {
-                InteractionService.DisplayLines(initContext.AddAppHostToSolutionOutputCollector.GetLines());
-                InteractionService.DisplayError($"Failed to add AppHost project to solution. Exit code: {addAppHostResult}");
-                return addAppHostResult;
-            }
-
-            // Add ServiceDefaults project to solution
-            initContext.AddServiceDefaultsToSolutionOutputCollector = new OutputCollector();
-            var addServiceDefaultsResult = await InteractionService.ShowStatusAsync(
-                InitCommandStrings.AddingServiceDefaultsProjectToSolution,
-                async () =>
-                {
-                    var options = new ProcessInvocationOptions
-                    {
-                        StandardOutputCallback = initContext.AddServiceDefaultsToSolutionOutputCollector.AppendOutput,
-                        StandardErrorCallback = initContext.AddServiceDefaultsToSolutionOutputCollector.AppendError
-                    };
-
-                    return await _runner.AddProjectToSolutionAsync(
-                        solutionFile,
-                        serviceDefaultsProjectFile,
-                        options,
-                        cancellationToken);
-                });
-
-            if (addServiceDefaultsResult != 0)
-            {
-                InteractionService.DisplayLines(initContext.AddServiceDefaultsToSolutionOutputCollector.GetLines());
-                InteractionService.DisplayError($"Failed to add ServiceDefaults project to solution. Exit code: {addServiceDefaultsResult}");
-                return addServiceDefaultsResult;
-            }
-
-            // Add selected projects to appHost
-            if (initContext.ExecutableProjectsToAddToAppHost.Count > 0)
-            {
-                initContext.AddProjectReferenceOutputCollectors = new List<OutputCollector>();
-                foreach(var project in initContext.ExecutableProjectsToAddToAppHost)
-                {
-                    var outputCollector = new OutputCollector();
-                    initContext.AddProjectReferenceOutputCollectors.Add(outputCollector);
-
-                    var addRefResult = await InteractionService.ShowStatusAsync(
-                        $"Adding {project.ProjectFile.Name} to AppHost...", async () =>
-                        {
-                            var options = new ProcessInvocationOptions
-                            {
-                                StandardOutputCallback = outputCollector.AppendOutput,
-                                StandardErrorCallback = outputCollector.AppendError
-                            };
-
-                            return await _runner.AddProjectReferenceAsync(
-                                appHostProjectFile,
-                                project.ProjectFile,
-                                options,
-                                cancellationToken);
-                        });
-
-                    if (addRefResult != 0)
-                    {
-                        InteractionService.DisplayLines(outputCollector.GetLines());
-                        InteractionService.DisplayError($"Failed to add reference to {Path.GetFileNameWithoutExtension(project.ProjectFile.Name)}.");
-                        return addRefResult;
-                    }
-                }
-            }
-
-            // Add ServiceDefaults references to selected projects
-            if (initContext.ProjectsToAddServiceDefaultsTo.Count > 0)
-            {
-                initContext.AddServiceDefaultsReferenceOutputCollectors = new List<OutputCollector>();
-                foreach (var project in initContext.ProjectsToAddServiceDefaultsTo)
-                {
-                    var outputCollector = new OutputCollector();
-                    initContext.AddServiceDefaultsReferenceOutputCollectors.Add(outputCollector);
-
-                    var addRefResult = await InteractionService.ShowStatusAsync(
-                        $"Adding ServiceDefaults reference to {project.ProjectFile.Name}...", async () =>
-                        {
-                            var options = new ProcessInvocationOptions
-                            {
-                                StandardOutputCallback = outputCollector.AppendOutput,
-                                StandardErrorCallback = outputCollector.AppendError
-                            };
-
-                            return await _runner.AddProjectReferenceAsync(
-                                project.ProjectFile,
-                                serviceDefaultsProjectFile,
-                                options,
-                                cancellationToken);
-                        });
-
-                    if (addRefResult != 0)
-                    {
-                        InteractionService.DisplayLines(outputCollector.GetLines());
-                        InteractionService.DisplayError($"Failed to add ServiceDefaults reference to {Path.GetFileNameWithoutExtension(project.ProjectFile.Name)}.");
-                        return addRefResult;
-                    }
-                }
-            }
-
-            // Trust certificates (result not used since we're not launching an AppHost)
-            _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
-
-            InteractionService.DisplaySuccess(InitCommandStrings.AspireInitializationComplete);
-            return ExitCodeConstants.Success;
-        }
-        finally
-        {
-            // Clean up temporary directory
-            if (Directory.Exists(tempProjectDir))
-            {
-                Directory.Delete(tempProjectDir, recursive: true);
-            }
-        }
+        return ExitCodeConstants.Success;
     }
 
-    private async Task<int> CreatePolyglotAppHostAsync(LanguageInfo language, CancellationToken cancellationToken)
+    private async Task<int> DropPolyglotSkeletonAsync(string languageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        var workingDirectory = _executionContext.WorkingDirectory;
-        var appHostFileName = language.AppHostFileName;
+        var language = _languageDiscovery.GetLanguageById(languageId)
+            ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {languageId}");
 
-        // Check if apphost already exists (only if the project type has a known filename)
-        if (appHostFileName is not null)
+        var appHostFileName = language.AppHostFileName
+            ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {language.LanguageId}");
+
+        var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
+        if (File.Exists(appHostPath))
         {
-            var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
-            if (File.Exists(appHostPath))
-            {
-                InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"{appHostFileName} already exists in this directory.");
-                return ExitCodeConstants.Success;
-            }
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
+            return ExitCodeConstants.Success;
         }
 
-        // Create the apphost project using the scaffolding service
-        var context = new ScaffoldContext(language, workingDirectory, ProjectName: null);
+        var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name);
         var scaffolded = await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
         if (!scaffolded)
         {
             return ExitCodeConstants.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplaySuccess($"Created {appHostFileName}");
-        InteractionService.DisplayMessage(KnownEmojis.Information, $"Run 'aspire run' to start your AppHost.");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
         return ExitCodeConstants.Success;
     }
 
-    private async Task<int> CreateEmptyAppHostAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    private int DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language)
     {
-        // Use single-file AppHost template
-        var initTemplates = await _templateProvider.GetInitTemplatesAsync(cancellationToken);
-        var singleFileTemplate = initTemplates.FirstOrDefault(t => t.Name == "aspire-apphost-singlefile");
-        if (singleFileTemplate is null)
+        var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
+
+        JsonObject settings;
+
+        if (File.Exists(configPath))
         {
-            InteractionService.DisplayError("Single-file AppHost template not found.");
-            return ExitCodeConstants.FailedToCreateNewProject;
-        }
-        var template = singleFileTemplate;
-
-        // For init command, use working directory without prompting for name/output
-        var inputs = new TemplateInputs
-        {
-            Source = parseResult.GetValue(s_sourceOption),
-            Version = parseResult.GetValue(s_versionOption),
-            Channel = parseResult.GetValue(_channelOption),
-            UseWorkingDirectory = true
-        };
-        var result = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
-
-        if (result.ExitCode == 0)
-        {
-            // Trust certificates (result not used since we're not launching an AppHost)
-            _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
-            InteractionService.DisplaySuccess(InitCommandStrings.AspireInitializationComplete);
-        }
-
-        return result.ExitCode;
-    }
-
-    private async Task EvaluateSolutionProjectsAsync(InitContext initContext, CancellationToken cancellationToken)
-    {
-        var executableProjects = new List<ExecutableProjectInfo>();
-
-        initContext.EvaluateSolutionProjectsOutputCollector = new OutputCollector();
-
-        foreach (var project in initContext.SolutionProjects)
-        {
-            var options = new ProcessInvocationOptions
+            // Merge into existing file (e.g. language selection already wrote it)
+            var existingContent = File.ReadAllText(configPath);
+            if (string.IsNullOrWhiteSpace(existingContent))
             {
-                StandardOutputCallback = initContext.EvaluateSolutionProjectsOutputCollector.AppendOutput,
-                StandardErrorCallback = initContext.EvaluateSolutionProjectsOutputCollector.AppendError
-            };
-
-            // Get IsAspireHost, OutputType, and TargetFramework properties in a single call
-            var (exitCode, jsonDoc) = await _runner.GetProjectItemsAndPropertiesAsync(
-                project,
-                [],
-                ["IsAspireHost", "OutputType", "TargetFramework"],
-                options,
-                cancellationToken);
-
-            if (exitCode == 0 && jsonDoc != null)
+                settings = new JsonObject();
+            }
+            else
             {
-                var rootElement = jsonDoc.RootElement;
-                if (rootElement.TryGetProperty("Properties", out var properties))
+                try
                 {
-                    // Check if this project is an AppHost
-                    if (properties.TryGetProperty("IsAspireHost", out var isAspireHostElement))
-                    {
-                        var isAspireHost = isAspireHostElement.GetString();
-                        if (isAspireHost?.Equals("true", StringComparison.OrdinalIgnoreCase) == true)
-                        {
-                            initContext.AlreadyHasAppHost = true;
-                            return;
-                        }
-                    }
-
-                    // Check if this project is executable
-                    if (properties.TryGetProperty("OutputType", out var outputTypeElement))
-                    {
-                        var outputType = outputTypeElement.GetString();
-                        if (outputType == "Exe" || outputType == "WinExe")
-                        {
-                            // Get the target framework
-                            var targetFramework = "net9.0"; // Default if not found
-                            if (properties.TryGetProperty("TargetFramework", out var targetFrameworkElement))
-                            {
-                                targetFramework = targetFrameworkElement.GetString() ?? "net9.0";
-                            }
-
-                            // Only add projects with supported TFMs
-                            if (IsSupportedTfm(targetFramework))
-                            {
-                                executableProjects.Add(new ExecutableProjectInfo
-                                {
-                                    ProjectFile = project,
-                                    TargetFramework = targetFramework
-                                });
-                            }
-                        }
-                    }
+                    settings = JsonNode.Parse(existingContent)?.AsObject() ?? new JsonObject();
+                }
+                catch (JsonException ex)
+                {
+                    InteractionService.DisplayError($"Failed to parse existing {AspireConfigFile.FileName} at '{configPath}': {ex.Message}");
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, $"Fix or remove {AspireConfigFile.FileName} and re-run `aspire init`.");
+                    return ExitCodeConstants.FailedToCreateNewProject;
                 }
             }
-        }
-
-        initContext.ExecutableProjects = executableProjects;
-    }
-
-    /// <summary>
-    /// Determines if the specified target framework moniker is supported.
-    /// </summary>
-    /// <param name="tfm">The target framework moniker to check.</param>
-    /// <returns>True if the TFM is supported; otherwise, false.</returns>
-    private static bool IsSupportedTfm(string tfm)
-    {
-        return tfm switch
-        {
-            "net8.0" => true,
-            "net9.0" => true,
-            "net10.0" => true,
-            _ => false
-        };
-    }
-
-    private async Task<(NuGetPackage Package, PackageChannel Channel)> GetProjectTemplatesVersionAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        var allChannels = await InteractionService.ShowStatusAsync(
-            InitCommandStrings.ResolvingTemplateVersion,
-            async () => await _packagingService.GetChannelsAsync(cancellationToken));
-
-        // Check if --channel option was provided (highest priority)
-        var channelName = parseResult.GetValue(_channelOption);
-
-        // If no --channel option, check for global channel setting
-        if (string.IsNullOrEmpty(channelName))
-        {
-            channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
-
-        IEnumerable<PackageChannel> channels;
-        bool hasChannelSetting = !string.IsNullOrEmpty(channelName);
-
-        if (hasChannelSetting)
-        {
-            // If --channel option is provided or global channel setting exists, find the matching channel
-            // (--channel option takes precedence over global setting)
-            var matchingChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
-            if (matchingChannel is null)
-            {
-                throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
-            }
-            channels = new[] { matchingChannel };
         }
         else
         {
-            // No channel specified, use all channels for prompting
-            channels = allChannels;
+            settings = new JsonObject();
         }
 
-        var packagesFromChannels = await InteractionService.ShowStatusAsync("Searching for available template versions...", async () =>
+        // Ensure appHost section exists
+        if (settings["appHost"] is not JsonObject appHost)
         {
-            var results = new List<(NuGetPackage Package, PackageChannel Channel)>();
-            var packagesFromChannelsLock = new object();
+            appHost = new JsonObject();
+            settings["appHost"] = appHost;
+        }
 
-            await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
+        // Set path (always — this is the primary purpose of DropAspireConfig)
+        appHost["path"] = appHostPath;
+
+        // Set language if provided and not already present
+        if (language is not null && appHost["language"] is null)
+        {
+            appHost["language"] = language;
+        }
+
+        // Write default profiles with random ports for dashboard/OTLP/resource service.
+        // Matches the profile structure used by `aspire new` templates (see Templates/*/aspire.config.json).
+        // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
+        if (settings["profiles"] is null)
+        {
+            // Port ranges match CliTemplateFactory.GenerateRandomPorts()
+            var httpPort = Random.Shared.Next(15000, 15300);
+            var httpsPort = Random.Shared.Next(17000, 17300);
+            var otlpHttpPort = Random.Shared.Next(19000, 19300);
+            var otlpHttpsPort = Random.Shared.Next(21000, 21300);
+            var resourceHttpPort = Random.Shared.Next(20000, 20300);
+            var resourceHttpsPort = Random.Shared.Next(22000, 22300);
+
+            settings["profiles"] = new JsonObject
             {
-                var templatePackages = await channel.GetTemplatePackagesAsync(_executionContext.WorkingDirectory, ct);
-                lock (packagesFromChannelsLock)
+                ["https"] = new JsonObject
                 {
-                    results.AddRange(templatePackages.Select(p => (p, channel)));
-                }
-            });
-
-            return results;
-        });
-
-        if (!packagesFromChannels.Any())
-        {
-            throw new InvalidOperationException("No template versions found");
-        }
-
-        var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
-
-        // Check for explicit version specified via command line
-        if (parseResult.GetValue(s_versionOption) is { } version)
-        {
-            var explicitPackageFromChannel = orderedPackagesFromChannels.FirstOrDefault(p => p.Package.Version == version);
-            if (explicitPackageFromChannel.Package is not null)
-            {
-                return explicitPackageFromChannel;
-            }
-        }
-
-        // If channel was specified via --channel option or global setting (but no --version), 
-        // automatically select the highest version from that channel without prompting
-        if (hasChannelSetting)
-        {
-            return orderedPackagesFromChannels.First();
-        }
-
-        var latestStable = orderedPackagesFromChannels.FirstOrDefault(p => !SemVersion.Parse(p.Package.Version).IsPrerelease);
-
-        var templateSelectionMessage = $$"""
-                                       # Which version of Aspire do you want to use?
-
-                                       Multiple versions of Aspire are available. If you want to use
-                                       the latest stable version choose ***{{latestStable.Package.Version}}***.
-                                       """;
-
-        InteractionService.DisplayEmptyLine();
-        InteractionService.DisplayMarkdown(templateSelectionMessage);
-        InteractionService.DisplayEmptyLine();
-
-        // Prompt user to select from available versions/channels
-        var selectedPackageFromChannel = await _templateVersionPrompter.PromptForTemplatesVersionAsync(orderedPackagesFromChannels, cancellationToken);
-        return selectedPackageFromChannel;
-    }
-}
-
-/// <summary>
-/// Represents information about an executable project including its file and target framework.
-/// </summary>
-internal sealed class ExecutableProjectInfo
-{
-    /// <summary>
-    /// Gets the project file.
-    /// </summary>
-    public required FileInfo ProjectFile { get; init; }
-
-    /// <summary>
-    /// Gets the target framework moniker (e.g., "net9.0", "net10.0").
-    /// </summary>
-    public required string TargetFramework { get; init; }
-}
-
-/// <summary>
-/// Context class for building up a model of the init operation before executing changes.
-/// </summary>
-internal sealed class InitContext
-{
-    /// <summary>
-    /// The solution file selected for initialization, or null if no solution was found.
-    /// </summary>
-    public FileInfo? SelectedSolutionFile { get; set; }
-
-    /// <summary>
-    /// Gets the solution name (without extension) derived from the selected solution file.
-    /// </summary>
-    public string SolutionName => Path.GetFileNameWithoutExtension(SelectedSolutionFile!.Name);
-
-    /// <summary>
-    /// Gets the directory containing the solution file.
-    /// </summary>
-    public DirectoryInfo SolutionDirectory => SelectedSolutionFile!.Directory!;
-
-    /// <summary>
-    /// Gets the expected directory path for the AppHost project.
-    /// </summary>
-    public string ExpectedAppHostDirectory => Path.Combine(SolutionDirectory.FullName, $"{SolutionName}.AppHost");
-
-    /// <summary>
-    /// Gets the expected directory path for the ServiceDefaults project.
-    /// </summary>
-    public string ExpectedServiceDefaultsDirectory => Path.Combine(SolutionDirectory.FullName, $"{SolutionName}.ServiceDefaults");
-
-    /// <summary>
-    /// All projects in the solution.
-    /// </summary>
-    public IReadOnlyList<FileInfo> SolutionProjects { get; set; } = Array.Empty<FileInfo>();
-
-    /// <summary>
-    /// Indicates whether the solution already has an AppHost project.
-    /// </summary>
-    public bool AlreadyHasAppHost { get; set; }
-
-    /// <summary>
-    /// List of executable projects found in the solution (excluding the AppHost).
-    /// </summary>
-    public IReadOnlyList<ExecutableProjectInfo> ExecutableProjects { get; set; } = Array.Empty<ExecutableProjectInfo>();
-
-    /// <summary>
-    /// Executable projects selected by the user to add to the AppHost.
-    /// </summary>
-    public IReadOnlyList<ExecutableProjectInfo> ExecutableProjectsToAddToAppHost { get; set; } = Array.Empty<ExecutableProjectInfo>();
-
-    /// <summary>
-    /// Projects selected by the user to add ServiceDefaults reference to.
-    /// </summary>
-    public IReadOnlyList<ExecutableProjectInfo> ProjectsToAddServiceDefaultsTo { get; set; } = Array.Empty<ExecutableProjectInfo>();
-
-    /// <summary>
-    /// Gets the required AppHost framework based on the highest TFM of all selected executable projects.
-    /// </summary>
-    public string RequiredAppHostFramework
-    {
-        get
-        {
-            if (ExecutableProjectsToAddToAppHost.Count == 0)
-            {
-                return "net9.0"; // Default framework if no projects selected
-            }
-
-            // Parse and compare TFMs to find the highest one using SemVersion
-            SemVersion? highestVersion = null;
-            var highestTfm = "net9.0";
-
-            foreach (var project in ExecutableProjectsToAddToAppHost)
-            {
-                var tfm = project.TargetFramework;
-                if (tfm.StartsWith("net", StringComparison.OrdinalIgnoreCase))
-                {
-                    var versionString = tfm[3..];
-                    // Add patch version if not present for SemVersion parsing
-                    // TFMs are in format "8.0", "9.0", "10.0", need to make them "8.0.0", "9.0.0", "10.0.0"
-                    var dotCount = versionString.Count(c => c == '.');
-                    if (dotCount == 1)
+                    ["applicationUrl"] = $"https://localhost:{httpsPort};http://localhost:{httpPort}",
+                    ["environmentVariables"] = new JsonObject
                     {
-                        versionString += ".0";
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{otlpHttpsPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{resourceHttpsPort}"
                     }
-
-                    if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var version))
+                },
+                ["http"] = new JsonObject
+                {
+                    ["applicationUrl"] = $"http://localhost:{httpPort}",
+                    ["environmentVariables"] = new JsonObject
                     {
-                        if (highestVersion is null || version.IsNewerThan(highestVersion))
-                        {
-                            highestVersion = version;
-                            highestTfm = tfm;
-                        }
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{otlpHttpPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{resourceHttpPort}",
+                        ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
                     }
                 }
-            }
-
-            return highestTfm;
+            };
         }
+
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(configPath, settings.ToJsonString(jsonOptions));
+
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
+        return ExitCodeConstants.Success;
     }
 
-    /// <summary>
-    /// OutputCollector for GetSolutionProjects operation.
-    /// </summary>
-    public OutputCollector? GetSolutionProjectsOutputCollector { get; set; }
-
-    /// <summary>
-    /// OutputCollector for EvaluateSolutionProjects operation.
-    /// </summary>
-    public OutputCollector? EvaluateSolutionProjectsOutputCollector { get; set; }
-
-    /// <summary>
-    /// OutputCollector for InstallTemplate operation.
-    /// </summary>
-    public OutputCollector? InstallTemplateOutputCollector { get; set; }
-
-    /// <summary>
-    /// OutputCollector for NewProject operation.
-    /// </summary>
-    public OutputCollector? NewProjectOutputCollector { get; set; }
-
-    /// <summary>
-    /// OutputCollector for AddAppHostToSolution operation.
-    /// </summary>
-    public OutputCollector? AddAppHostToSolutionOutputCollector { get; set; }
-
-    /// <summary>
-    /// OutputCollector for AddServiceDefaultsToSolution operation.
-    /// </summary>
-    public OutputCollector? AddServiceDefaultsToSolutionOutputCollector { get; set; }
-
-    /// <summary>
-    /// OutputCollectors for AddProjectReference operations (one per project reference added).
-    /// </summary>
-    public List<OutputCollector>? AddProjectReferenceOutputCollectors { get; set; }
-
-    /// <summary>
-    /// OutputCollectors for AddServiceDefaultsReference operations (one per ServiceDefaults reference added).
-    /// </summary>
-    public List<OutputCollector>? AddServiceDefaultsReferenceOutputCollectors { get; set; }
 }

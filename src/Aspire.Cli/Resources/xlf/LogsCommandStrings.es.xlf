@@ -12,6 +12,11 @@
         <target state="needs-review-translation">Transmita los registros en tiempo real a medida que se escriben.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Registros de salida en formato JSON (NDJSON).</target>

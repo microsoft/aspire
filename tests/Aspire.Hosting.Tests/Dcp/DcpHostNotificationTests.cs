@@ -449,11 +449,11 @@ public sealed class DcpHostNotificationTests
         // Assert
         Assert.Equal(InteractionStrings.ContainerRuntimeNotInstalledTitle, interaction.Title);
         Assert.Contains(InteractionStrings.ContainerRuntimeNotInstalledMessage, interaction.Message);
-        Assert.Contains("https://aka.ms/dotnet/aspire/containers", interaction.Message);
+        Assert.Contains("https://aka.ms/aspire/containers", interaction.Message);
         var notificationOptions = Assert.IsType<NotificationInteractionOptions>(interaction.Options);
         Assert.Equal(MessageIntent.Error, notificationOptions.Intent);
         Assert.Equal(InteractionStrings.ContainerRuntimeLinkText, notificationOptions.LinkText);
-        Assert.Equal("https://aka.ms/dotnet/aspire/containers", notificationOptions.LinkUrl);
+        Assert.Equal("https://aka.ms/aspire/containers", notificationOptions.LinkUrl);
 
         // Verify that no polling is started by ensuring the cancellation token is not cancelled after a delay
         // This tests that the function returns immediately and doesn't start the polling task

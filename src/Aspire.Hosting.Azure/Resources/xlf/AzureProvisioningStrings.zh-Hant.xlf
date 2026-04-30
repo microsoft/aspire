@@ -5,10 +5,10 @@
       <trans-unit id="InputsMessage">
         <source>The model contains Azure resources that require an Azure Subscription.
 
-To learn more, see the [Azure provisioning docs](https://aka.ms/dotnet/aspire/azure/provisioning).</source>
+To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning).</source>
         <target state="translated">該模型包含需要 Azure 訂用帳戶的 Azure 資源。
 
-若要深入了解，請參閱 [Azure 訂用帳戶文件](https://aka.ms/dotnet/aspire/azure/provisioning)。</target>
+若要深入了解，請參閱 [Azure 訂用帳戶文件](https://aka.ms/aspire/azure/provisioning)。</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="InputsTitle">

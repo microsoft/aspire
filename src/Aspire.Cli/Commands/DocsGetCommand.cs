@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -17,7 +17,7 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Command to get the full content of a documentation page by its slug.
 /// </summary>
-internal sealed partial class DocsGetCommand : BaseCommand
+internal sealed class DocsGetCommand : BaseCommand
 {
     private readonly IDocsIndexService _docsIndexService;
     private readonly ILogger<DocsGetCommand> _logger;
@@ -86,44 +86,9 @@ internal sealed partial class DocsGetCommand : BaseCommand
         }
         else
         {
-            // Format the markdown for better terminal readability
-            var formatted = FormatMarkdownForTerminal(doc.Content);
-            // Structured output always goes to stdout.
-            InteractionService.DisplayRawText(formatted, ConsoleOutput.Standard);
+            InteractionService.DisplayMarkdown(doc.Content, maxWidth: 100);
         }
 
         return ExitCodeConstants.Success;
     }
-
-    /// <summary>
-    /// Formats minified markdown content for better terminal readability by inserting line breaks.
-    /// </summary>
-    private static string FormatMarkdownForTerminal(string content)
-    {
-        // The llms.txt format has markdown on single lines - insert breaks for readability
-        // Add newline before headings (##, ###)
-        content = HeadingRegex().Replace(content, "\n\n$0");
-
-        // Add newlines around code blocks
-        content = CodeBlockStartRegex().Replace(content, "\n$0\n");
-        content = CodeBlockEndRegex().Replace(content, "\n$0\n");
-
-        // Clean up excessive newlines
-        content = ExcessiveNewlinesRegex().Replace(content, "\n\n");
-
-        return content.Trim();
-    }
-
-    // Match markdown headings: ## or ### at start or after space (not C#)
-    [System.Text.RegularExpressions.GeneratedRegex(@"(?<=\s)(#{2,6}\s)")]
-    private static partial System.Text.RegularExpressions.Regex HeadingRegex();
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"(?<!\n)```\w*")]
-    private static partial System.Text.RegularExpressions.Regex CodeBlockStartRegex();
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"```(?!\w)(?!\n)")]
-    private static partial System.Text.RegularExpressions.Regex CodeBlockEndRegex();
-
-    [System.Text.RegularExpressions.GeneratedRegex(@"\n{3,}")]
-    private static partial System.Text.RegularExpressions.Regex ExcessiveNewlinesRegex();
 }
