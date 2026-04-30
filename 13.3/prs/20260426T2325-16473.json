@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Fixed noisy OperationCanceledException in AppHost backchannel RPC methods on shutdown",
+  "mergedAt": "2026-04-26T23:25:39Z",
+  "number": 16473,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Fix noisy OperationCanceledException on publish/run shutdown"
+}

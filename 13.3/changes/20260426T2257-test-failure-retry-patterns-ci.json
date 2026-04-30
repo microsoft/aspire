@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The auto-rerun CI workflow now supports configurable test failure retry patterns. A new 'eng/test-retry-patterns.json' file defines which test and job failures are safe to automatically retry (e.g., network errors, registry rate limiting), reducing noise from transient CI failures.",
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-04-26T22:57:06Z",
+  "lastMergedAt": "2026-04-26T22:57:06Z",
+  "name": "Configurable test failure retry patterns in CI",
+  "prs": [
+    16446
+  ]
+}

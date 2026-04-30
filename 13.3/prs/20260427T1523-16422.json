@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixed long command names overflowing Commands submenu in dashboard resource action menu",
+  "mergedAt": "2026-04-27T15:23:48Z",
+  "number": 16422,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Fix long command names overflowing Commands submenu"
+}

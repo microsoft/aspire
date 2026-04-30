@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixed aspire init overwriting aspire.config.json when C# default language selected",
+  "mergedAt": "2026-04-27T15:59:47Z",
+  "number": 16447,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Fix interactive C# aspire init config collision"
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now warns when global config contains an AppHost path and rejects attempts to set AppHost path or the legacy 'appHostPath' key in global settings via 'aspire config set'. Local 'aspire.config.json' files continue to support 'appHost.path' as before.",
+  "docsRequired": false,
+  "emoji": "🛡️",
+  "firstMergedAt": "2026-04-27T15:41:43Z",
+  "lastMergedAt": "2026-04-27T15:41:43Z",
+  "name": "AppHost path guardrails in global config",
+  "prs": [
+    16467
+  ]
+}

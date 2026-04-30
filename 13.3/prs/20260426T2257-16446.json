@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Configurable test failure retry patterns in CI auto-rerun workflow",
+  "mergedAt": "2026-04-26T22:57:06Z",
+  "number": 16446,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "feat(ci): add test failure retry support to auto-rerun workflow"
+}

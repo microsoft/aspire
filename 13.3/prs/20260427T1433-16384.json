@@ -1,0 +1,9 @@
+{
+  "author": "T-Gro",
+  "comment": "Added reviewing-aspire-architecture Copilot agent trained from repo review history",
+  "mergedAt": "2026-04-27T14:33:02Z",
+  "number": 16384,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Add reviewing-aspire-architecture agent trained from full repo review  history"
+}

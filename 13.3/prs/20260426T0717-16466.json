@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "CLI download messages now show friendly channel names instead of raw URLs",
+  "mergedAt": "2026-04-26T07:17:09Z",
+  "number": 16466,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Use friendly channel names in CLI download logs"
+}

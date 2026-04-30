@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Added a specialized 'reviewing-aspire-architecture' Copilot agent trained from the Aspire repository's review history. It checks PRs across 15 architectural dimensions including API design, resource lifecycle, Azure provisioning, dashboard UX, and CLI contracts.",
+  "docsRequired": false,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-04-27T14:33:02Z",
+  "lastMergedAt": "2026-04-27T14:33:02Z",
+  "name": "Aspire architectural review Copilot agent",
+  "prs": [
+    16384
+  ]
+}

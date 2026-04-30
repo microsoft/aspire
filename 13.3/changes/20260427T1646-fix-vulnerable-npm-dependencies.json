@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Patched 27 Dependabot-flagged npm vulnerabilities across templates, playgrounds, tests, and the VS Code extension. Fixes include a critical protobufjs vulnerability and medium-severity issues in postcss, uuid, and fast-xml-parser.",
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-04-27T16:46:53Z",
+  "lastMergedAt": "2026-04-27T16:46:53Z",
+  "name": "Fix 27 vulnerable npm dependencies",
+  "prs": [
+    16489
+  ]
+}

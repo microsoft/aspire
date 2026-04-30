@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The resource rebuild command now returns the build log output as structured text data, making it available to CLI consumers and tools. Build output is captured and attached to the command result, so callers can display or process it without parsing resource logs.",
+  "docsRequired": false,
+  "emoji": "🔨",
+  "firstMergedAt": "2026-04-26T03:16:26Z",
+  "lastMergedAt": "2026-04-26T03:16:26Z",
+  "name": "Resource rebuild command returns build output",
+  "prs": [
+    16469
+  ]
+}

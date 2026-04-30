@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed 'aspire run' and 'aspire start' behavior when multiple AppHost projects are found. In non-interactive mode (--non-interactive, CI, piped stdin), the CLI now gives a clear 'multiple AppHost projects detected' error instead of crashing. Interactive mode still prompts for selection.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-27T19:12:22Z",
+  "lastMergedAt": "2026-04-27T19:12:22Z",
+  "name": "Fix multiple AppHost project handling in run/start",
+  "prs": [
+    16177
+  ]
+}

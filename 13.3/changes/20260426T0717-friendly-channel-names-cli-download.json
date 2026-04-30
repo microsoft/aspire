@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI download status messages now show friendly Aspire channel names (e.g., 'from the stable channel', 'from the daily channel') instead of exposing raw implementation URLs. This applies to 'aspire update --self' and the install scripts.",
+  "docsRequired": false,
+  "emoji": "📢",
+  "firstMergedAt": "2026-04-26T07:17:09Z",
+  "lastMergedAt": "2026-04-26T07:17:09Z",
+  "name": "Friendly channel names in CLI download messages",
+  "prs": [
+    16466
+  ]
+}

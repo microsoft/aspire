@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Added BrowserUserDataMode for browser log persistence; extends WithBrowserLogs() feature",
+  "mergedAt": "2026-04-27T05:35:14Z",
+  "number": 16457,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Add BrowserUserDataMode to separate user data dir from profile"
+}

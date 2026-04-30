@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "New LocalArchive and DotnetTool E2E test install modes with stronger version verification",
+  "mergedAt": "2026-04-26T07:57:51Z",
+  "number": 16454,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Add LocalArchive + DotnetTool CLI install modes for E2E tests"
+}

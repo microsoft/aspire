@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CLI now warns/rejects global AppHost path config and hides legacy appHostPath key",
+  "mergedAt": "2026-04-27T15:41:43Z",
+  "number": 16467,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Handle AppHost path config guardrails"
+}

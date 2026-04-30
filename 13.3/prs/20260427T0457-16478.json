@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Fixed CI test summary failure when artifact upload produces no URL",
+  "mergedAt": "2026-04-27T04:57:49Z",
+  "number": 16478,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Avoid empty test summary artifact URL"
+}

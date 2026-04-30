@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a CI workflow failure where an empty artifact URL from a failed upload step was passed as an argument to GenerateTestSummary, causing the tool to fail with a missing argument error.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-27T04:57:49Z",
+  "lastMergedAt": "2026-04-27T04:57:49Z",
+  "name": "Fix CI test summary failure on empty artifact URL",
+  "prs": [
+    16478
+  ]
+}

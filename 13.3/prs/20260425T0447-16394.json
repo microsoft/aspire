@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only: adds E2E deployment tests for AKS/Azure.Kubernetes features",
+  "mergedAt": "2026-04-25T04:47:43Z",
+  "number": 16394,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "excluded",
+  "title": "Add expanded AKS E2E deployment tests for Azure.Kubernetes features"
+}

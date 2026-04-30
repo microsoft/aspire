@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI E2E tests now support two new install modes: LocalArchive (tests against locally built CLI archives) and DotnetTool (exercises the 'dotnet tool install' distribution channel). Version verification was strengthened to catch mismatched CLI binaries.",
+  "docsRequired": false,
+  "emoji": "🧪",
+  "firstMergedAt": "2026-04-26T07:57:51Z",
+  "lastMergedAt": "2026-04-26T07:57:51Z",
+  "name": "New CLI E2E test install modes (LocalArchive and DotnetTool)",
+  "prs": [
+    16454
+  ]
+}

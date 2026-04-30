@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Tightened WithOrigin<T> generic constraint to require IComputeResource for Azure Front Door",
+  "mergedAt": "2026-04-27T01:43:55Z",
+  "number": 16409,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Tighten WithOrigin generic constraint for Front Door"
+}

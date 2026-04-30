@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed noisy OperationCanceledException exceptions that appeared in Visual Studio output when 'aspire publish' or 'aspire run' was shut down. The streaming RPC methods in the AppHost backchannel now properly suppress cancellation exceptions on shutdown.",
+  "docsRequired": false,
+  "emoji": "🔇",
+  "firstMergedAt": "2026-04-26T23:25:39Z",
+  "lastMergedAt": "2026-04-26T23:25:39Z",
+  "name": "Suppress noisy exceptions on publish/run shutdown",
+  "prs": [
+    16473
+  ]
+}

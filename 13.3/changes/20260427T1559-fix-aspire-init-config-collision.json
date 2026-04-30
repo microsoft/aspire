@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where running 'aspire init' in an empty folder and accepting the default C# AppHost language would overwrite the newly created 'aspire.config.json'. The language selection is now deferred until after the template runs.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-27T15:59:47Z",
+  "lastMergedAt": "2026-04-27T15:59:47Z",
+  "name": "Fix aspire init config file collision",
+  "prs": [
+    16447
+  ]
+}

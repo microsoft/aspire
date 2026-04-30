@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixed aspire run/start to give clean error in non-interactive mode with multiple AppHost projects",
+  "mergedAt": "2026-04-27T19:12:22Z",
+  "number": 16177,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Fix aspire run/start to fail or prompt for multiple apphosts based on interactivity"
+}

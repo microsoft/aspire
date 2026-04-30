@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Resource rebuild command now returns build output as structured text data",
+  "mergedAt": "2026-04-26T03:16:26Z",
+  "number": 16469,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Return build output from rebuild command"
+}

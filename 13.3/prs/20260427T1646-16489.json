@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Patched 27 Dependabot npm vulnerabilities including critical protobufjs issue",
+  "mergedAt": "2026-04-27T16:46:53Z",
+  "number": 16489,
+  "runDate": "2026-04-30T15:45:32Z",
+  "status": "included",
+  "title": "Bump vulnerable npm dependencies flagged by Dependabot (27 alerts)"
+}

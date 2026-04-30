@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed long resource command names overflowing the Commands submenu in the dashboard resource action menu. CSS selectors were broadened to apply text truncation and width constraints to nested submenu items.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-27T15:23:48Z",
+  "lastMergedAt": "2026-04-27T15:23:48Z",
+  "name": "Fix command name overflow in dashboard Commands submenu",
+  "prs": [
+    16422
+  ]
+}

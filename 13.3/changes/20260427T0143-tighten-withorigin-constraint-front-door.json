@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The Azure Front Door 'WithOrigin<T>()' method now correctly requires T to implement both IComputeResource and IResourceWithEndpoints, preventing accidental use with resource types that cannot serve as compute backends.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-27T01:43:55Z",
+  "lastMergedAt": "2026-04-27T01:43:55Z",
+  "name": "Tighter type constraint for Azure Front Door WithOrigin()",
+  "prs": [
+    16409
+  ]
+}
