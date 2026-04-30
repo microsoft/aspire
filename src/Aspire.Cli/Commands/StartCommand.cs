@@ -54,7 +54,7 @@ internal sealed class StartCommand : BaseCommand
         var isExtensionHost = false;
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.ToList();
+        var appHostArguments = AppHostLauncher.GetAppHostArguments(parseResult);
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
             ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
@@ -101,11 +101,7 @@ internal sealed class StartCommand : BaseCommand
                 }
             }
 
-            if (additionalArgs.Count > 0)
-            {
-                debugSessionArgs.Add("--");
-                debugSessionArgs.AddRange(additionalArgs);
-            }
+            AppHostLauncher.AddAppHostArguments(debugSessionArgs, appHostArguments);
 
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "start"));
             await extensionInteractionService.StartDebugSessionAsync(
@@ -121,6 +117,8 @@ internal sealed class StartCommand : BaseCommand
             return CommandResult.Success();
         }
 
+        var additionalArgs = new List<string>();
+
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
@@ -130,6 +128,8 @@ internal sealed class StartCommand : BaseCommand
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
+
+        AppHostLauncher.AddAppHostArguments(additionalArgs, appHostArguments);
 
         return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,

@@ -143,6 +143,7 @@ internal sealed class GuestRuntime
     /// <param name="watchMode">Whether to run in watch mode for hot reload.</param>
     /// <param name="launcher">Strategy for launching the process.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="runArgs">Additional arguments to forward to the AppHost process.</param>
     /// <param name="noBuild">Whether to skip pre-execution build/check commands.</param>
     /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
     /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
@@ -153,6 +154,7 @@ internal sealed class GuestRuntime
         bool watchMode,
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken,
+        string[]? runArgs = null,
         bool noBuild = false,
         Func<Task>? afterAppHostLaunchedAsync = null)
     {
@@ -174,7 +176,7 @@ internal sealed class GuestRuntime
         var phase = useWatchCommand
             ? ProfilingTelemetry.Values.GuestCommandPhaseWatchExecute
             : ProfilingTelemetry.Values.GuestCommandPhaseExecute;
-        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, phase, launcher, cancellationToken, afterLaunchAsync: afterAppHostLaunchedAsync);
+        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, runArgs, phase, launcher, cancellationToken, afterLaunchAsync: afterAppHostLaunchedAsync);
     }
 
     /// <summary>
