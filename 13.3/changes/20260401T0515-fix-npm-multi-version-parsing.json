@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where npm version resolution failed when a package had multiple matching versions published. The npm view command returns multi-line output when multiple versions match a range, which was not handled correctly, breaking Playwright CLI installation.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-01T05:15:40Z",
+  "lastMergedAt": "2026-04-01T05:15:40Z",
+  "name": "Fix npm version resolution for packages with multiple matching versions",
+  "prs": [
+    15739
+  ]
+}

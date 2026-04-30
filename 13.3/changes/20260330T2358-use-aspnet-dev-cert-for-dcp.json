@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When the ASP.NET Core developer certificate is available and trusted, Aspire now uses it to secure the DCP server connection instead of an ephemeral certificate. This avoids trust issues with ephemeral certificates across sessions. The behavior can be controlled via the ASPIRE_DCP_DEVELOPER_CERTIFICATE environment variable.",
+  "docsRequired": true,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-03-30T23:58:17Z",
+  "lastMergedAt": "2026-03-30T23:58:17Z",
+  "name": "Use ASP.NET Core dev cert for DCP to improve certificate trust",
+  "prs": [
+    15718
+  ]
+}

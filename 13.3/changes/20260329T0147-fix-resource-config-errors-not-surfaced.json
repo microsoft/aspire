@@ -1,0 +1,18 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "Resource configuration errors (such as referencing a non-existent endpoint) are no longer silently swallowed. Resources that fail to start due to an ExecutionConfigurationBuilder exception now surface the error in logs instead of showing FailedToStart with no explanation.",
+  "docsRequired": false,
+  "emoji": "🔊",
+  "firstMergedAt": "2026-03-29T01:47:26Z",
+  "lastMergedAt": "2026-03-29T01:47:26Z",
+  "name": "Resource configuration errors now surfaced instead of silently failing",
+  "prs": [
+    15475
+  ]
+}

@@ -2247,144 +2247,144 @@
     "status": "unprocessed"
   },
   {
-    "comment": null,
+    "comment": "Internal skill improvement - no user-facing product change",
     "mergedAt": "2026-04-01T07:04:51Z",
     "number": 15748,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fix npm version resolution for multi-version output",
     "mergedAt": "2026-04-01T05:15:40Z",
     "number": 15739,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Use secure temp directories in CLI and tests",
     "mergedAt": "2026-04-01T02:22:23Z",
     "number": 15733,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix crash when resource name near 64-char limit",
     "mergedAt": "2026-03-31T06:18:19Z",
     "number": 15724,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Bot PR - automated unquarantine",
     "mergedAt": "2026-03-31T03:34:12Z",
     "number": 15717,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Logger property added to ExecuteCommandContext",
     "mergedAt": "2026-03-31T01:35:49Z",
     "number": 15678,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Use ASP.NET Core dev cert for DCP",
     "mergedAt": "2026-03-30T23:58:17Z",
     "number": 15718,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Playground YARP TypeScript update",
     "mergedAt": "2026-03-30T23:44:26Z",
     "number": 15719,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Durable Task Scheduler ATS fix - grouped with 13711",
     "mergedAt": "2026-03-30T20:33:41Z",
     "number": 15684,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Routine DCP version update",
     "mergedAt": "2026-03-30T19:30:15Z",
     "number": 15712,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Playground rename - trivial internal change",
     "mergedAt": "2026-03-29T14:00:47Z",
     "number": 15672,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Resource configuration errors now surfaced instead of silently failing",
     "mergedAt": "2026-03-29T01:47:26Z",
     "number": 15475,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Aspire.Hosting.NodeJs deprecated in CLI integration listings",
     "mergedAt": "2026-03-29T00:31:36Z",
     "number": 15677,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix VS Code workspace/global mode toggle",
     "mergedAt": "2026-03-28T21:31:42Z",
     "number": 15682,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Revert of DTS PR 13711 - internal revert, feature re-added in 15684",
     "mergedAt": "2026-03-28T20:21:52Z",
     "number": 15683,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Durable Task Scheduler support for Azure Functions (grouped with 15684)",
     "mergedAt": "2026-03-28T19:09:59Z",
     "number": 13711,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Open AppHost source file from VS Code Running AppHosts view",
     "mergedAt": "2026-03-28T15:21:48Z",
     "number": 15668,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Extension methods for subscribing to app host lifecycle events",
     "mergedAt": "2026-03-28T15:17:50Z",
     "number": 14119,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix event order and callback execution during resource startup",
     "mergedAt": "2026-03-28T00:57:18Z",
     "number": 15503,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Resource commands can return structured results (text/JSON)",
     "mergedAt": "2026-03-28T00:40:50Z",
     "number": 15622,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:23:24Z",
+    "status": "included"
   },
   {
     "comment": "Dependency: remove ModelContextProtocol.AspNetCore package version",
