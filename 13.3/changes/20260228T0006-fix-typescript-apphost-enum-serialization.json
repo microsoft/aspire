@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a JSON serialization error that occurred when TypeScript AppHost apps invoked capabilities returning nullable enum values such as `IconVariant`. Adds `JsonStringEnumConverter` to capability serialization options in `AtsMarshaller` and `CapabilityDispatcher`.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-02-28T00:06:07Z",
+  "lastMergedAt": "2026-02-28T00:06:07Z",
+  "name": "Fix enum serialization in TypeScript AppHost capabilities",
+  "prs": [
+    14784
+  ]
+}

@@ -2947,144 +2947,144 @@
     "status": "unprocessed"
   },
   {
-    "comment": null,
+    "comment": "CI-only: fix AzDO playground and Helix retry failures",
     "mergedAt": "2026-03-10T03:12:58Z",
     "number": 15080,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only: AKS E2E test timeout increase",
     "mergedAt": "2026-03-09T23:04:41Z",
     "number": 14409,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "CI-only: update internal pipeline Linux image",
     "mergedAt": "2026-03-09T21:01:52Z",
     "number": 15055,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Release branch merge PR",
     "mergedAt": "2026-03-07T02:15:48Z",
     "number": 14979,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Localization bot check-in",
     "mergedAt": "2026-03-06T07:26:54Z",
     "number": 14999,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only: fix E2E test timeout",
     "mergedAt": "2026-03-06T06:02:56Z",
     "number": 14944,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only: fix flaky HTTP test",
     "mergedAt": "2026-03-03T23:03:23Z",
     "number": 14920,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Release branch backmerge PR",
     "mergedAt": "2026-03-03T18:43:39Z",
     "number": 14863,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Test-only: automated unquarantine stable tests",
     "mergedAt": "2026-03-03T01:02:26Z",
     "number": 14862,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated dependency bump from microsoft/dcp (bot)",
     "mergedAt": "2026-03-02T22:15:00Z",
     "number": 14766,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated dependency bump from dotnet/arcade (bot)",
     "mergedAt": "2026-03-02T05:36:30Z",
     "number": 14836,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Automated release branch backmerge (bot)",
     "mergedAt": "2026-03-02T01:58:03Z",
     "number": 14816,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "CLI animated banner now suppressed in CI/non-interactive environments",
     "mergedAt": "2026-02-28T04:24:56Z",
     "number": 14792,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Release branch merge PR",
     "mergedAt": "2026-02-28T01:45:25Z",
     "number": 14783,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fixed JSON serialization bug for nullable enums in TypeScript AppHost capabilities",
     "mergedAt": "2026-02-28T00:06:07Z",
     "number": 14784,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Documentation-only: AzDO public pipeline docs",
     "mergedAt": "2026-02-27T21:33:43Z",
     "number": 14780,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Internal refactoring: centralize OTEL_* env var names",
     "mergedAt": "2026-02-27T19:45:16Z",
     "number": 14773,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Internal fix-flaky-test skill and CI workflow improvement",
     "mergedAt": "2026-02-27T00:38:51Z",
     "number": 14710,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Localization bot check-in",
     "mergedAt": "2026-02-26T21:22:34Z",
     "number": 14727,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Updated CLI messages to use 'aspire secret set' instead of 'dotnet user-secrets'",
     "mergedAt": "2026-02-26T17:24:22Z",
     "number": 14736,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T04:10:45Z",
+    "status": "included"
   },
   {
     "comment": "Test-only: fix NotSupportedException in AsyncTestHelpers",
