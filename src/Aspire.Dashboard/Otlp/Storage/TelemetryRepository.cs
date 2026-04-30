@@ -814,6 +814,11 @@ public sealed partial class TelemetryRepository : IDisposable
                 _traceScopes.Clear();
                 _tracePropertyKeys.Clear();
                 _spanLinks.Clear();
+
+                foreach (var resource in _resources.Values)
+                {
+                    SetResourceHasTraces(resource, false);
+                }
             }
             else
             {
@@ -871,6 +876,13 @@ public sealed partial class TelemetryRepository : IDisposable
                 _logs.Clear();
                 _logScopes.Clear();
                 _logPropertyKeys.Clear();
+
+                foreach (var resource in _resources.Values)
+                {
+                    SetResourceHasLogs(resource, false);
+                }
+
+                _resourceUnviewedErrorLogs.Clear();
             }
             else
             {
