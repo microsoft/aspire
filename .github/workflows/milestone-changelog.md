@@ -47,6 +47,7 @@ tools:
     description: "Changelog state and content between runs"
     file-glob: ["**/*.md", "**/*.json", "**/*.txt"]
     max-file-size: 1048576  # 1MB
+    max-file-count: 1000
     max-patch-size: 102400  # 100KB
 
 safe-outputs:
