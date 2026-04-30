@@ -8,6 +8,10 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// <summary>
 /// Represents one source within a Kubernetes projected volume.
 /// </summary>
+/// <remarks>
+/// Kubernetes requires exactly one of <see cref="ConfigMap"/>, <see cref="DownwardApi"/>,
+/// <see cref="Secret"/>, or <see cref="ServiceAccountToken"/> to be set for each projection.
+/// </remarks>
 [YamlSerializable]
 public sealed class VolumeProjectionV1
 {
