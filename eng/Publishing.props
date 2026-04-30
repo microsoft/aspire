@@ -34,11 +34,6 @@
     <!-- Validate list of aspire-cli packages on disk vs expected ones.
          And do this first to fail early -->
     <ItemGroup>
-      <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.zip" />
-      <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.tar.gz" />
-      <!-- Include already-signed native archives downloaded from build_sign_native -->
-      <_ArchiveFiles Include="$(_SignedArchivesDir)\**\aspire-cli-*.zip" />
-      <_ArchiveFiles Include="$(_SignedArchivesDir)\**\aspire-cli-*.tar.gz" />
       <!-- VS Code extension artifacts: VSIX, manifest, and signature file -->
       <_ExtensionFilesToPublish Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.vsix" />
       <_ExtensionManifestFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.manifest" />
@@ -54,22 +49,49 @@
     <Error Condition="!Exists('$(RepoRoot)eng\scripts\get-aspire-cli.sh')" Text="Expected CLI install script at $(RepoRoot)eng\scripts\get-aspire-cli.sh." />
     <Error Condition="!Exists('$(RepoRoot)eng\scripts\get-aspire-cli.ps1')" Text="Expected CLI install script at $(RepoRoot)eng\scripts\get-aspire-cli.ps1." />
 
-    <ItemGroup>
+    <ItemGroup Label="Expected rids">
+      <!-- The native archive and RID-specific dotnet tool package must exist for every clipack RID. -->
+      <_CliPackProjects Include="$(RepoRoot)eng\clipack\Aspire.Cli.*.csproj" />
+      <_ExpectedCliRids Include="@(_CliPackProjects->'%(Filename)'->Replace('Aspire.Cli.', ''))" />
+    </ItemGroup>
+
+    <ItemGroup Label="Validation of aspire-cli archive files">
+      <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.zip" />
+      <_ArchiveFiles Include="$(ArtifactsPackagesDir)\**\aspire-cli-*.tar.gz" />
+      <!-- Include already-signed native archives downloaded from build_sign_native -->
+      <_ArchiveFiles Include="$(_SignedArchivesDir)\**\aspire-cli-*.zip" />
+      <_ArchiveFiles Include="$(_SignedArchivesDir)\**\aspire-cli-*.tar.gz" />
+
       <!-- Extract RID from each archive file -->
       <_ArchiveFilesWithRid Include="@(_ArchiveFiles)">
         <!-- Extract the rid from filenames like aspire-cli-linux-x64-9.0-dev.tar.gz and aspire-cli-linux-arm64-9.4.0-preview.1.25358.11.zip -->
         <ExtractedRid>$([System.Text.RegularExpressions.Regex]::Match(%(_ArchiveFiles.FileName), 'aspire-cli-(.*)-\d+.*').Groups[1].Value)</ExtractedRid>
       </_ArchiveFilesWithRid>
 
-      <_CliPackProjects Include="$(RepoRoot)eng\clipack\Aspire.Cli.*.csproj" />
-      <_ExpectedRids Include="@(_CliPackProjects->'%(Filename)'->Replace('Aspire.Cli.', ''))" />
-
-      <_MissingRids Include="@(_ExpectedRids)" Exclude="@(_ArchiveFilesWithRid -> '%(ExtractedRid)')" />
-      <_UnexpectedRids Include="@(_ArchiveFilesWithRid -> '%(ExtractedRid)')" Exclude="@(_ExpectedRids)" />
+      <_MissingArchiveRids Include="@(_ExpectedCliRids)" Exclude="@(_ArchiveFilesWithRid -> '%(ExtractedRid)')" />
+      <_UnexpectedArchiveRids Include="@(_ArchiveFilesWithRid -> '%(ExtractedRid)')" Exclude="@(_ExpectedCliRids)" />
     </ItemGroup>
 
-    <Warning Condition="@(_UnexpectedRids->Count()) > 0" Text="Found unexpected CLI archives for @(_UnexpectedRids, ',') . These are all the cli archives found - @(_ArchiveFiles, ', ')" />
-    <Error Condition="@(_MissingRids->Count()) > 0" Text="Missing CLI archive(s) for runtime identifiers: @(_MissingRids, ', '). These are all the cli archives found - @(_ArchiveFiles, ', ')" />
+    <ItemGroup Label="Validation of CLI tool packages">
+      <_CliRidSpecificToolPackageFiles Include="@(_CliToolPackagesToPublish)"
+                                       Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(_CliToolPackagesToPublish.FileName)', '^Aspire\.Cli\.\d'))" />
+
+      <!-- Extract RID from each RID-specific CLI tool package file -->
+      <_CliRidSpecificToolPackageFilesWithRid Include="@(_CliRidSpecificToolPackageFiles)">
+        <!-- Extract the rid from filenames like Aspire.Cli.linux-x64.9.0-dev and Aspire.Cli.linux-arm64.9.4.0-preview.1.25358.11 -->
+        <ExtractedRid>$([System.Text.RegularExpressions.Regex]::Match('%(_CliRidSpecificToolPackageFiles.FileName)', '^Aspire\.Cli\.(.*?)\.\d+.*').Groups[1].Value)</ExtractedRid>
+      </_CliRidSpecificToolPackageFilesWithRid>
+
+      <_MissingCliPackageRids Include="@(_ExpectedCliRids)" Exclude="@(_CliRidSpecificToolPackageFilesWithRid -> '%(ExtractedRid)')" />
+      <_UnexpectedCliPackageRids Include="@(_CliRidSpecificToolPackageFilesWithRid -> '%(ExtractedRid)')" Exclude="@(_ExpectedCliRids)" />
+      <_CliPointerToolPackages Include="@(_CliToolPackagesToPublish)" Exclude="@(_CliRidSpecificToolPackageFilesWithRid)" />
+    </ItemGroup>
+
+    <Warning Condition="@(_UnexpectedArchiveRids->Count()) > 0" Text="Found unexpected CLI archives for @(_UnexpectedArchiveRids, ',') . These are all the cli archives found - @(_ArchiveFiles, ', ')" />
+    <Warning Condition="@(_UnexpectedCliPackageRids->Count()) > 0" Text="Found unexpected Aspire.Cli RID-specific packages for @(_UnexpectedCliPackageRids, ',') . These are all the CLI tool packages found - @(_CliToolPackagesToPublish, ', ')" />
+    <Error Condition="@(_MissingArchiveRids->Count()) > 0" Text="Missing CLI archive(s) for runtime identifiers: @(_MissingArchiveRids, ', '). These are all the cli archives found - @(_ArchiveFiles, ', ')" />
+    <Error Condition="@(_MissingCliPackageRids->Count()) > 0" Text="Missing Aspire.Cli RID-specific package(s) for runtime identifiers: @(_MissingCliPackageRids, ', '). These are all the CLI tool packages found - @(_CliToolPackagesToPublish, ', ')" />
+    <Error Condition="@(_CliPointerToolPackages->Count()) != 1" Text="Expected exactly one Aspire.Cli pointer package but found @(_CliPointerToolPackages->Count()). Files: @(_CliPointerToolPackages, ', ')" />
 
     <!-- Validate aspire-cli archive file extensions match expected format for each RID -->
     <ItemGroup>
@@ -110,7 +132,7 @@
     <!-- Zip each VSIX file for publishing to blob feed, as certain file types, such as .tar.gz or .zip are allowed to be published, and .vsix is not included -->
     <Exec Command="powershell -NoProfile -Command &quot;'@(_ExtensionFilesToPublish)' -split ';' | Where-Object { $_ } | ForEach-Object { Compress-Archive -Path $_ -DestinationPath ($_ + '.zip') -Force }&quot;"
           Condition="'@(_ExtensionFilesToPublish)' != ''" />
-    
+
     <!-- Replace VSIX files with their zipped versions -->
     <ItemGroup>
       <_ExtensionFilesToPublish Remove="@(_ExtensionFilesToPublish)" />
@@ -174,5 +196,23 @@
         <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
       </ItemsToPushToBlobFeed>
     </ItemGroup>
+
+  </Target>
+
+  <Target Name="_LogPublishItemsToPush" AfterTargets="_PublishBlobItems">
+    <ItemGroup>
+      <_PackageItemsToPush Include="@(ItemsToPushToBlobFeed)" Condition="'%(ItemsToPushToBlobFeed.Kind)' == 'Package'" />
+      <_ShippingPackageItemsToPush Include="@(_PackageItemsToPush)" Condition="'%(_PackageItemsToPush.IsShipping)' == 'true'" />
+      <_FlatBlobItemsToPush Include="@(ItemsToPushToBlobFeed)" Condition="'%(ItemsToPushToBlobFeed.Kind)' != 'Package' And '%(ItemsToPushToBlobFeed.PublishFlatContainer)' == 'true'" />
+      <_ShippingFlatBlobItemsToPush Include="@(_FlatBlobItemsToPush)" Condition="'%(_FlatBlobItemsToPush.IsShipping)' == 'true'" />
+      <_NonShippingFlatBlobItemsToPush Include="@(_FlatBlobItemsToPush)" Condition="'%(_FlatBlobItemsToPush.IsShipping)' != 'true'" />
+    </ItemGroup>
+
+    <Message Importance="High" Text="Aspire publish items to push: @(ItemsToPushToBlobFeed->Count()) total; @(_PackageItemsToPush->Count()) NuGet package(s); @(_FlatBlobItemsToPush->Count()) flat blob artifact(s)." />
+    <Message Importance="High" Text="Aspire NuGet packages: @(_PackageItemsToPush->Count()) total; @(_ShippingPackageItemsToPush->Count()) shipping." Condition="@(_PackageItemsToPush->Count()) > 0" />
+    <Message Importance="High" Text="Aspire CLI packages: @(_CliPointerToolPackages->Count()) pointer; @(_CliRidSpecificToolPackageFilesWithRid->Count())/@(_ExpectedCliRids->Count()) RID-specific; RIDs=@(_CliRidSpecificToolPackageFilesWithRid -> '%(ExtractedRid)', ', ')." Condition="@(_CliToolPackagesToPublish->Count()) > 0" />
+    <Message Importance="High" Text="Aspire flat blob artifacts: @(_FlatBlobItemsToPush->Count()) total; @(_ShippingFlatBlobItemsToPush->Count()) shipping; @(_NonShippingFlatBlobItemsToPush->Count()) non-shipping." Condition="@(_FlatBlobItemsToPush->Count()) > 0" />
+    <Message Importance="High"
+             Text="Aspire flat blob item: %(_FlatBlobItemsToPush.Filename)%(_FlatBlobItemsToPush.Extension) | IsShipping=%(_FlatBlobItemsToPush.IsShipping) | RelativeBlobPath=%(_FlatBlobItemsToPush.RelativeBlobPath)" />
   </Target>
 </Project>
