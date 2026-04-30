@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Browsers.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -19,7 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
-namespace Aspire.Hosting.Tests;
+namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
 public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelper)

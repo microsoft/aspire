@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Aspire.Hosting.Tests;
+namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
 public class BrowserLogsRunningSessionTests

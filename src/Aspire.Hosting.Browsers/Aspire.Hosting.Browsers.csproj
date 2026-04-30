@@ -5,7 +5,8 @@
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting browser browsers logs diagnostics</PackageTags>
     <Description>Browser support for Aspire hosting.</Description>
-    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <!-- In preview until the public API is validated. -->
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
@@ -38,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Browsers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.TypeScript.Tests" />
   </ItemGroup>
 

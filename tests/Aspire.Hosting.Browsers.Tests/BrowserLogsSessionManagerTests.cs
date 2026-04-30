@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
-namespace Aspire.Hosting.Tests;
+namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
 public class BrowserLogsSessionManagerTests
