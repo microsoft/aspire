@@ -597,7 +597,7 @@ internal sealed class RunCommand : BaseCommand
         }
 
         // Logs row
-        grid.AddRow(LabelMarkup(logsLabel), new Text(logFilePath));
+        grid.AddRow(LabelMarkup(logsLabel), new Markup(ConsoleHelpers.FormatPathAsFileLink(logFilePath)));
 
         // PID row (if provided)
         if (pid.HasValue)
