@@ -42,7 +42,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     private readonly Option<string?> _outputPathOption;
     private readonly Option<bool>? _startDebugSessionOption;
 
-    protected static readonly Option<string?> s_logLevelOption = new("--log-level")
+    protected static readonly Option<string?> s_logLevelOption = new("--pipeline-log-level")
     {
         Description = SharedCommandStrings.PipelineLogLevelOptionDescription
     };
