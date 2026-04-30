@@ -433,7 +433,7 @@ Then determine whether either of these optional flags applies:
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
 | **Docs required** | 📝 | Change needs documentation on aspire.dev (new feature, changed behavior, new config options) |
-| **Community contribution** | 🌍 | PR author's `author_association` (from `pull_request_read`) is not `MEMBER` or `OWNER` — i.e., the author is an external community contributor |
+| **Community contribution** | 🌍 | PR author's `author_association` (from `pull_request_read`) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor |
 
 A change can have zero or more flags. When present, show each flag on its own
 indented line below the Changes line:
