@@ -6,11 +6,12 @@
 using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Hosting.Kubernetes;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Provides extension methods for adding and configuring external Helm charts
