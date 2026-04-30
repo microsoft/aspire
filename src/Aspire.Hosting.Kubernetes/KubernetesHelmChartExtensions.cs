@@ -105,6 +105,7 @@ public static class KubernetesHelmChartExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(value);
 
         builder.Resource.Values[key] = value;
         return builder;
@@ -162,7 +163,7 @@ public static class KubernetesHelmChartExtensions
         var releaseName = chart.ReleaseName ?? chart.Name;
         var @namespace = chart.Namespace ?? chart.Name;
         var chartRef = chart.ChartReference ?? throw new InvalidOperationException($"Helm chart '{chart.Name}' has no chart reference configured.");
-        var chartVersion = chart.ChartVersion;
+        var chartVersion = chart.ChartVersion ?? throw new InvalidOperationException($"Helm chart '{chart.Name}' has no chart version configured.");
 
         logger.LogInformation(
             "Installing Helm chart '{ChartName}' ({ChartRef}:{ChartVersion}) into namespace '{Namespace}'.",
@@ -174,10 +175,7 @@ public static class KubernetesHelmChartExtensions
         arguments.Append(" --create-namespace");
         arguments.Append(" --wait");
 
-        if (!string.IsNullOrEmpty(chartVersion))
-        {
-            arguments.Append(CultureInfo.InvariantCulture, $" --version {chartVersion}");
-        }
+        arguments.Append(CultureInfo.InvariantCulture, $" --version {chartVersion}");
 
         if (environment.KubeConfigPath is not null)
         {
