@@ -35,9 +35,10 @@
         grid-area: main;
         overflow-x: auto; /* allow horizontal scrolling */
         overflow: auto;
-        border-left: 1px solid var(--aspire-border-subtle);
+        border-left: none;
         display: flex;
         flex: 1;
+        background: var(--aspire-surface-page);
     }
 
     ::deep.layout .layout-sidebar-spacer {
@@ -59,14 +60,8 @@
     ::deep.layout > header {
         background-color: var(--aspire-surface-header);
         margin-bottom: 0;
-        border-bottom: 2px solid transparent;
-        background-image: linear-gradient(var(--aspire-surface-header), var(--aspire-surface-header)),
-                          var(--aspire-accent-gradient);
-        background-origin: border-box;
-        background-clip: padding-box, border-box;
-        background-size: 100% calc(100% - 2px), 100% 100%;
-        background-position: top, bottom;
-        background-repeat: no-repeat;
+        border-bottom: none;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
     ::deep.layout > header > .header-gutters > fluent-anchor {

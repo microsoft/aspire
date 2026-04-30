@@ -63,15 +63,15 @@
     --body-font: 'Poppins', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
     /* Brand-themed surfaces (light defaults, overridden in dark) */
-    --aspire-surface-nav: #F7F5FC;
+    --aspire-surface-nav: #FAFAFF;
     --aspire-surface-header: var(--aspire-color-white);
-    --aspire-surface-page: var(--aspire-color-white);
+    --aspire-surface-page: #F8F7FC;
     --aspire-surface-card: var(--aspire-color-white);
-    --aspire-border-subtle: #EDEAF7;
-    --aspire-border-muted: var(--aspire-color-grey);
+    --aspire-border-subtle: rgba(116, 85, 221, 0.08);
+    --aspire-border-muted: rgba(116, 85, 221, 0.15);
     --aspire-accent-gradient: var(--aspire-gradient-purple-magenta);
     --aspire-nav-active-border: var(--aspire-gradient-purple-magenta);
-    --aspire-hover-fill: rgba(116, 85, 221, 0.06);
+    --aspire-hover-fill: rgba(116, 85, 221, 0.05);
     --aspire-focus-ring-color: var(--aspire-color-primary);
 }
 
@@ -320,73 +320,9 @@ fluent-toolbar::part(end) {
     color-scheme: light;
 }
 
-/* ============================================================
-   Aspire Brand - Navigation Active States
-   ============================================================ */
-.fluent-appbar-item[appearance="active"],
-.fluent-appbar-item.active {
-    border-left: 3px solid var(--aspire-color-primary);
-}
+/* (Nav and focus styling moved to Modern UI Overhaul section below) */
 
-.fluent-appbar-item:hover {
-    background-color: var(--aspire-hover-fill);
-}
-
-/* ============================================================
-   Aspire Brand - Focus & Interactive States
-   ============================================================ */
-fluent-button:focus-visible::part(control),
-fluent-anchor:focus-visible::part(control),
-fluent-text-field:focus-within,
-fluent-search:focus-within,
-fluent-select:focus-within {
-    outline: 2px solid var(--aspire-color-primary);
-    outline-offset: 1px;
-}
-
-/* DataGrid header styling */
-.fluent-data-grid-row[row-type='header'] td,
-.fluent-data-grid-row[row-type='sticky-header'] td {
-    font-family: 'Poppins', var(--body-font);
-    font-weight: 600;
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--foreground-subtext-rest);
-    border-bottom: 1px solid var(--aspire-border-subtle) !important;
-    padding-top: 10px !important;
-    padding-bottom: 10px !important;
-}
-
-[data-theme="light"] .fluent-data-grid-row[row-type='header'] td,
-[data-theme="light"] .fluent-data-grid-row[row-type='sticky-header'] td {
-    background-color: transparent;
-}
-
-[data-theme="dark"] .fluent-data-grid-row[row-type='header'] td,
-[data-theme="dark"] .fluent-data-grid-row[row-type='sticky-header'] td {
-    background-color: transparent;
-}
-
-/* Data rows - more spacious and modern */
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) {
-    border-bottom: 1px solid var(--aspire-border-subtle) !important;
-    transition: background-color 0.15s ease;
-}
-
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
-    padding-top: 12px !important;
-    padding-bottom: 12px !important;
-}
-
-/* Hover effect - subtle purple glow */
-.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
-    background-color: var(--aspire-hover-fill) !important;
-}
-
-[data-theme="dark"] .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
-    background-color: rgba(116, 85, 221, 0.08) !important;
-}
+/* (Grid styling moved to Modern UI Overhaul section below) */
 
 /* Selected row accent */
 .selected-row {
@@ -408,15 +344,7 @@ fluent-select.resource-list {
     --disabled-opacity: 0.85;
 }
 
-h1 {
-    font-family: 'Poppins', var(--body-font);
-    font-size: var(--type-ramp-plus-4-font-size);
-    line-height: var(--type-ramp-plus-4-line-height);
-    font-weight: 600;
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
-    letter-spacing: -0.01em;
-}
+/* (h1 styling moved to Modern UI Overhaul section below) */
 
 #components-reconnect-modal {
     background-color: var(--neutral-layer-floating) !important;
@@ -1141,56 +1069,196 @@ fluent-dialog#chat-modal-dialog fluent-button[appearance=stealth]:not(:hover)::p
 }
 
 /* ============================================================
-   Aspire Brand - Modern Grid & UI Refinements
+   Aspire Brand - Modern UI Overhaul
+   Fresh, lightweight, rounded, aesthetic
    ============================================================ */
 
-/* Tab bar modernization */
+/* --- Global shape & motion --- */
+* {
+    scrollbar-width: thin;
+}
+
+fluent-button::part(control),
+fluent-anchor::part(control) {
+    border-radius: 10px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+fluent-button[appearance=accent]::part(control) {
+    border-radius: 20px;
+    padding: 6px 20px;
+    font-weight: 600;
+    font-family: 'Poppins', var(--body-font);
+    letter-spacing: 0.01em;
+}
+
+/* --- Content area card treatment --- */
+.content-layout {
+    border-radius: 16px;
+    background: var(--aspire-surface-card);
+    margin: 16px 20px;
+    box-shadow: 0 1px 3px rgba(116, 85, 221, 0.04), 0 4px 16px rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--aspire-border-subtle);
+    overflow: hidden;
+}
+
+[data-theme="dark"] .content-layout {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 1px rgba(185, 170, 238, 0.1);
+}
+
+/* --- Page header (h1) - distinctive and airy --- */
+h1 {
+    font-family: 'Poppins', var(--body-font);
+    font-size: var(--type-ramp-plus-4-font-size);
+    line-height: var(--type-ramp-plus-4-line-height);
+    font-weight: 700;
+    margin-top: 0.5rem;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.02em;
+    color: var(--aspire-color-black);
+}
+
+[data-theme="dark"] h1 {
+    color: var(--aspire-color-white);
+}
+
+/* --- Tab bar - floating pills style --- */
 fluent-tabs::part(tablist) {
-    border-bottom: 1px solid var(--aspire-border-subtle);
-    gap: 4px;
+    border-bottom: none;
+    gap: 6px;
+    padding: 6px 8px;
+    background: transparent;
 }
 
 fluent-tab {
     font-family: 'Poppins', var(--body-font);
     font-weight: 500;
     font-size: 13px;
-    border-radius: 6px 6px 0 0;
-    padding: 8px 16px;
+    border-radius: 20px;
+    padding: 6px 16px;
+    transition: all 0.2s ease;
+}
+
+fluent-tab::part(content) {
+    padding: 4px 10px;
+}
+
+fluent-tab[aria-selected="true"] {
+    background: var(--aspire-hover-fill);
 }
 
 fluent-tab[aria-selected="true"]::part(content) {
     font-weight: 600;
+    color: var(--aspire-color-primary);
 }
 
-fluent-tab::part(content) {
-    padding: 4px 8px;
+[data-theme="dark"] fluent-tab[aria-selected="true"]::part(content) {
+    color: var(--aspire-color-secondary);
 }
 
-/* Toolbar section refinements */
+fluent-tab:hover:not([aria-selected="true"]) {
+    background: var(--aspire-hover-fill);
+}
+
+/* --- Toolbar - clean, borderless --- */
 fluent-toolbar[orientation=horizontal] {
-    border-bottom: 1px solid var(--aspire-border-subtle);
-    padding-top: 6px;
-    padding-bottom: 6px;
+    border-bottom: none;
+    padding: 8px 12px;
+    gap: 8px;
+    background: transparent;
 }
 
-/* Search box modernization */
+/* --- Search box - pill shape --- */
 fluent-search::part(root) {
-    border-radius: 8px;
+    border-radius: 20px;
     border-color: var(--aspire-border-muted);
+    padding: 2px 8px;
+    transition: all 0.2s ease;
 }
 
 fluent-search:hover::part(root) {
     border-color: var(--aspire-color-secondary);
+    box-shadow: 0 0 0 3px rgba(116, 85, 221, 0.06);
 }
 
 fluent-search:focus-within::part(root) {
     border-color: var(--aspire-color-primary);
+    box-shadow: 0 0 0 3px rgba(116, 85, 221, 0.12);
 }
 
-/* Resource name links - make them more brand-prominent */
+/* --- Select dropdowns - rounded --- */
+fluent-select::part(control) {
+    border-radius: 10px;
+    transition: border-color 0.2s ease;
+}
+
+fluent-select:hover::part(control) {
+    border-color: var(--aspire-color-secondary);
+}
+
+fluent-select::part(listbox) {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border: 1px solid var(--aspire-border-subtle);
+}
+
+/* --- Text fields - rounded --- */
+fluent-text-field::part(root) {
+    border-radius: 10px;
+}
+
+/* --- Data Grid - the showpiece --- */
+.fluent-data-grid {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* Grid header row - clean and minimal */
+.fluent-data-grid-row[row-type='header'] td,
+.fluent-data-grid-row[row-type='sticky-header'] td {
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--foreground-subtext-rest);
+    border-bottom: 1px solid var(--aspire-border-subtle) !important;
+    padding: 14px 16px !important;
+    background: transparent;
+}
+
+/* Data rows - airy, no harsh lines */
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) {
+    border-bottom: none !important;
+    transition: all 0.15s ease;
+}
+
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
+    padding: 14px 16px !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--aspire-border-subtle) 50%, transparent) !important;
+}
+
+/* Hover - soft rounded highlight */
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
+    background-color: var(--aspire-hover-fill) !important;
+    border-radius: 8px;
+}
+
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover td {
+    border-bottom-color: transparent !important;
+}
+
+[data-theme="dark"] .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover {
+    background-color: rgba(116, 85, 221, 0.08) !important;
+}
+
+/* --- Links - brand-colored with smooth hover --- */
 fluent-anchor[appearance=lightweight]::part(control),
 fluent-button[appearance=lightweight]::part(control) {
     color: var(--aspire-color-primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
 }
 
 [data-theme="dark"] fluent-anchor[appearance=lightweight]::part(control),
@@ -1201,6 +1269,8 @@ fluent-button[appearance=lightweight]::part(control) {
 fluent-anchor[appearance=lightweight]:hover::part(control),
 fluent-button[appearance=lightweight]:hover::part(control) {
     color: var(--aspire-color-purple);
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 [data-theme="dark"] fluent-anchor[appearance=lightweight]:hover::part(control),
@@ -1208,28 +1278,236 @@ fluent-button[appearance=lightweight]:hover::part(control) {
     color: var(--aspire-color-muted);
 }
 
-/* Badge/pill modernization */
+/* --- Badge/pill - fully rounded --- */
 fluent-badge::part(control) {
-    border-radius: 12px;
+    border-radius: 20px;
     font-size: 11px;
-    font-weight: 500;
-    padding: 2px 8px;
+    font-weight: 600;
+    padding: 3px 10px;
+    letter-spacing: 0.02em;
 }
 
-/* Accordion in property grid - softer corners */
+/* --- Accordion - card-like sections --- */
 .property-grid-container fluent-accordion-item {
-    border-radius: 8px !important;
+    border-radius: 12px !important;
     overflow: hidden;
+    margin-bottom: 4px;
 }
 
-/* Modern scrollbar - thinner, brand-colored */
-* {
-    scrollbar-width: thin;
+/* --- Dialog/Panel - rounded with depth --- */
+fluent-dialog::part(control) {
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
 }
 
-/* Footer items count - subtle style */
+[data-theme="dark"] fluent-dialog::part(control) {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 1px rgba(185, 170, 238, 0.15);
+}
+
+/* --- Tooltip - rounded --- */
+fluent-tooltip::part(tooltip) {
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Message bar - modern rounded --- */
+.fluent-messagebar {
+    border-radius: 12px !important;
+    margin: 8px 0;
+}
+
+/* --- Nav items - pill hover states --- */
+.fluent-appbar-item {
+    border-radius: 10px;
+    margin: 2px 6px;
+    transition: all 0.2s ease;
+}
+
+.fluent-appbar-item:hover {
+    background-color: var(--aspire-hover-fill);
+}
+
+.fluent-appbar-item[appearance="active"],
+.fluent-appbar-item.active {
+    background: var(--aspire-hover-fill);
+    border-left: 3px solid var(--aspire-color-primary);
+}
+
+/* --- Counter badge on nav - floating pill --- */
+.fluentui-counterbadge-container .fluentui-counterbadge {
+    border-radius: 20px;
+}
+
+/* --- Footer - subtle --- */
 .items-footer .result-count {
     font-size: 12px;
     color: var(--foreground-subtext-rest);
     font-weight: 500;
+    font-family: 'Poppins', var(--body-font);
+}
+
+/* --- Empty state - centered, branded --- */
+.empty-content-row td {
+    text-align: center;
+    padding: 48px 24px !important;
+    color: var(--foreground-subtext-rest);
+    font-style: italic;
+}
+
+/* --- Checkbox & switch - rounded --- */
+fluent-checkbox::part(control) {
+    border-radius: 6px;
+}
+
+fluent-switch::part(switch) {
+    border-radius: 20px;
+}
+
+/* --- Stealth buttons (icon buttons in grid/toolbar) - circle on hover --- */
+.content-layout fluent-button[appearance=stealth]::part(control),
+fluent-toolbar fluent-button[appearance=stealth]::part(control) {
+    border-radius: 50%;
+}
+
+/* --- Dividers - subtle --- */
+fluent-divider {
+    opacity: 0.5;
+}
+
+/* --- Resource filter chips area --- */
+.filter-group {
+    background: var(--aspire-hover-fill);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin: 8px 0;
+}
+
+.filter-group > legend {
+    font-size: var(--type-ramp-plus-2-font-size);
+    font-weight: 600;
+    font-family: 'Poppins', var(--body-font);
+}
+
+/* --- Smooth page transitions --- */
+.page-content-container {
+    animation: fadeSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Header "Aspire" brand title --- */
+.layout > header fluent-anchor[appearance=stealth]::part(content) {
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+}
+
+/* --- Message bar - pill with subtle border --- */
+.messagebar-container {
+    padding: 8px 20px;
+    border-top: none !important;
+    border-left: none !important;
+}
+
+.messagebar-container .fluent-messagebar {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* --- Page heading area --- */
+.content-header {
+    padding: 20px 24px 8px;
+}
+
+.content-header h1 {
+    margin-bottom: 0;
+}
+
+/* --- Focus rings - rounded and brand-colored --- */
+fluent-button:focus-visible::part(control),
+fluent-anchor:focus-visible::part(control) {
+    outline: 2px solid var(--aspire-color-primary);
+    outline-offset: 2px;
+    border-radius: 10px;
+}
+
+fluent-search:focus-within::part(root),
+fluent-text-field:focus-within::part(root) {
+    outline: 2px solid var(--aspire-color-primary);
+    outline-offset: 1px;
+}
+
+/* --- Dark mode glassmorphism on nav --- */
+[data-theme="dark"] .layout > .fluent-appbar {
+    background: rgba(26, 25, 48, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .layout > header {
+    background: rgba(26, 25, 48, 0.9);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+/* --- Subtle accent line below header in dark mode --- */
+[data-theme="dark"] .layout > header {
+    border-bottom: 1px solid rgba(116, 85, 221, 0.2);
+}
+
+/* --- Body content container - proper background --- */
+.body-content {
+    background: var(--aspire-surface-page);
+}
+
+/* --- Info/metric cards - rounded --- */
+.metric-card,
+.resource-card {
+    border-radius: 14px;
+    border: 1px solid var(--aspire-border-subtle);
+    overflow: hidden;
+}
+
+/* --- Smoother transitions on interactive elements --- */
+fluent-select::part(control),
+fluent-text-field::part(root),
+fluent-search::part(root),
+fluent-button::part(control) {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Column resize handles - subtle --- */
+.col-resize-handle {
+    opacity: 0.3;
+    transition: opacity 0.2s ease;
+}
+
+.col-resize-handle:hover {
+    opacity: 0.8;
+}
+
+/* --- Property panel / detail view - softer --- */
+.property-grid-container {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* --- Log level indicators - pill badges --- */
+.severity-cell .fluent-badge,
+.severity-cell fluent-badge {
+    border-radius: 20px;
+    font-size: 10px;
+    padding: 2px 8px;
 }
