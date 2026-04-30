@@ -23,6 +23,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 const cacheKey = "weatherforecast"
@@ -43,9 +46,20 @@ func main() {
 		defer func() { _ = cache.Close() }()
 	}
 
+	meter := otel.Meter("aspired-api")
+	cacheRequests, err := meter.Int64Counter(
+		"aspired.api.cache.requests",
+		metric.WithDescription("Weather forecast cache lookups by result"),
+		metric.WithUnit("{request}"),
+	)
+	if err != nil {
+		log.Fatalf("counter: %v", err)
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/weatherforecast", weatherHandler(cache))
+	mux.HandleFunc("/api/weatherforecast", weatherHandler(cache, cacheRequests))
 	mux.HandleFunc("/health", healthHandler(cache))
+	mux.HandleFunc("/", healthHandler(cache))
 
 	addr := listenAddress()
 	srv := &http.Server{
@@ -136,16 +150,24 @@ var summaries = []string{
 	"Warm", "Balmy", "Hot", "Sweltering", "Scorching",
 }
 
-func weatherHandler(cache *redis.Client) http.HandlerFunc {
+func weatherHandler(cache *redis.Client, cacheRequests metric.Int64Counter) http.HandlerFunc {
+	hit := metric.WithAttributes(attribute.String("result", "hit"))
+	miss := metric.WithAttributes(attribute.String("result", "miss"))
+	skip := metric.WithAttributes(attribute.String("result", "skip"))
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		if cache != nil {
 			if cached, err := cache.Get(ctx, cacheKey).Result(); err == nil {
+				cacheRequests.Add(ctx, 1, hit)
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write([]byte(cached))
 				return
 			}
+			cacheRequests.Add(ctx, 1, miss)
+		} else {
+			cacheRequests.Add(ctx, 1, skip)
 		}
 
 		forecasts := make([]forecast, 5)
