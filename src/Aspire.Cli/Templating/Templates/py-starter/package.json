@@ -3,12 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "eslint apphost.ts",
-    "predev": "npm run lint",
-    "dev": "aspire run",
-    "prebuild": "npm run lint",
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "aspire:lint": "eslint apphost.ts",
+    "aspire:start": "aspire run",
+    "aspire:build": "tsc -p tsconfig.json",
+    "aspire:dev": "tsc --watch -p tsconfig.json",
+    "lint": "npm run aspire:lint",
+    "predev": "npm run aspire:lint",
+    "dev": "npm run aspire:start",
+    "prebuild": "npm run aspire:lint",
+    "build": "npm run aspire:build",
+    "watch": "npm run aspire:dev"
   },
   "dependencies": {
     "vscode-jsonrpc": "^8.2.0"
