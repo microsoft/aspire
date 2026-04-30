@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New feature: Podman support for Docker Compose deploy with breaking change to IContainerRuntime",
+  "mergedAt": "2026-04-12T15:03:31Z",
+  "number": 16074,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add Podman support for Docker Compose deploy and unify container runtime abstraction"
+}

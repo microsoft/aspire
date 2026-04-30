@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the language dropdown in Dashboard settings so arrow-key navigation no longer immediately changes the language. Also removed a duplicate Chinese (zh-CN) entry and ensured regional language variants resolve correctly via their parent culture.",
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-04-13T02:13:57Z",
+  "lastMergedAt": "2026-04-13T02:13:57Z",
+  "name": "Fix language dropdown arrow-key behavior in Dashboard settings",
+  "prs": [
+    16094
+  ]
+}

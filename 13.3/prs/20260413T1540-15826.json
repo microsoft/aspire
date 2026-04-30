@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "AppHost improvement: ATS pipeline parity for polyglot app hosts",
+  "mergedAt": "2026-04-13T15:40:13Z",
+  "number": 15826,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add ATS pipeline parity for polyglot AppHosts"
+}

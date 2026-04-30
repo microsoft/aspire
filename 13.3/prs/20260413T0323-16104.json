@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Engineering improvement: unified CLI install strategy for E2E tests and daily smoke workflow",
+  "mergedAt": "2026-04-13T03:23:23Z",
+  "number": 16104,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add CliInstallStrategy for local E2E testing and daily smoke tests"
+}

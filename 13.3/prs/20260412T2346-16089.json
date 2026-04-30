@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: ANSI color for emoji on monochrome terminals, grouped with #16084",
+  "mergedAt": "2026-04-12T23:46:31Z",
+  "number": 16089,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add ANSI text colors to CLI emoji for monochrome terminal rendering"
+}

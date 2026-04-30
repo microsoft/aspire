@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed credential detection so system-assigned managed identities (identified by IDENTITY_ENDPOINT environment variable) are now correctly used in Azure App Service and Azure Functions deployments, not just user-assigned managed identities.",
+  "docsRequired": false,
+  "emoji": "🔑",
+  "firstMergedAt": "2026-04-13T19:06:35Z",
+  "lastMergedAt": "2026-04-13T19:06:35Z",
+  "name": "Fix system-assigned managed identity detection",
+  "prs": [
+    15885
+  ]
+}

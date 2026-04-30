@@ -1,0 +1,16 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The RabbitMQ integration now properly enables and tests OpenTelemetry activity sources for RabbitMQ.Client v7, including RabbitMQ.Client.Publisher and RabbitMQ.Client.Subscriber activity sources for message publishing and consumption tracing.",
+  "docsRequired": false,
+  "emoji": "🐇",
+  "firstMergedAt": "2026-04-13T19:16:03Z",
+  "lastMergedAt": "2026-04-13T19:16:03Z",
+  "name": "RabbitMQ v7 publisher and subscriber tracing",
+  "prs": [
+    15659
+  ]
+}

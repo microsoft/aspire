@@ -1,0 +1,9 @@
+{
+  "author": "app/github-actions",
+  "comment": "Automated bot PR for Foundry model updates",
+  "mergedAt": "2026-04-13T14:50:39Z",
+  "number": 15059,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "excluded",
+  "title": "[Automated] Update Microsoft Foundry Models"
+}

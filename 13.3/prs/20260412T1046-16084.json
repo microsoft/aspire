@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: emoji + localization in activity logger",
+  "mergedAt": "2026-04-12T10:46:50Z",
+  "number": 16084,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Use emoji in ConsoleActivityLogger summary and localize strings"
+}

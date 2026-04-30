@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New CLI command: aspire destroy for tearing down deployed environments",
+  "mergedAt": "2026-04-13T16:19:26Z",
+  "number": 16097,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add aspire destroy command for tearing down deployed environments"
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When using CLI telemetry commands (traces, spans, resources), IDs and resource names are now rendered as clickable terminal hyperlinks that open the corresponding dashboard page directly in the browser.",
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-04-12T10:47:49Z",
+  "lastMergedAt": "2026-04-12T10:47:49Z",
+  "name": "Clickable dashboard hyperlinks in CLI telemetry commands",
+  "prs": [
+    16079
+  ]
+}

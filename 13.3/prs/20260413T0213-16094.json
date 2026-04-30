@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Dashboard bug fix: language dropdown arrow-key behavior and duplicate zh-CN",
+  "mergedAt": "2026-04-13T02:13:57Z",
+  "number": 16094,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Fix language dropdown arrow-key behavior and duplicate zh-CN entry in dashboard settings"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: clickable hyperlinks in telemetry commands",
+  "mergedAt": "2026-04-12T10:47:49Z",
+  "number": 16079,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add clickable dashboard hyperlinks to CLI telemetry commands"
+}

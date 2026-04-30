@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "CLI improvement: NuGet signature verification enabled on Linux for aspire-managed",
+  "mergedAt": "2026-04-14T01:21:17Z",
+  "number": 16049,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Enable NuGet signature verification for aspire-managed on Linux"
+}

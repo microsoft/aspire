@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Test-only change: improved polling behavior in CLI test helpers",
+  "mergedAt": "2026-04-14T00:17:53Z",
+  "number": 16120,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "excluded",
+  "title": "Less frantic polling for results during CLI tests"
+}

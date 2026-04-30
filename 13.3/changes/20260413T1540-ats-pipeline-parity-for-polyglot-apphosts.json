@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Polyglot AppHosts (TypeScript, Python, Java) now have full parity with C# for accessing and configuring the distributed application pipeline, including addStep and configure methods via standard ATS exports.",
+  "docsRequired": false,
+  "emoji": "🔀",
+  "firstMergedAt": "2026-04-13T15:40:13Z",
+  "lastMergedAt": "2026-04-13T15:40:13Z",
+  "name": "Builder pipeline parity for polyglot AppHosts",
+  "prs": [
+    15826
+  ]
+}

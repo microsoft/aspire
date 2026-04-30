@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript, Python, and Java AppHosts now support withImagePushOptions for customizing container image push settings during deployment, matching the existing C# API surface.",
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-04-13T18:06:14Z",
+  "lastMergedAt": "2026-04-13T18:06:14Z",
+  "name": "Image push options for polyglot AppHosts",
+  "prs": [
+    15809
+  ]
+}

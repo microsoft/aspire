@@ -1,0 +1,16 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "On .NET 10+, the Npgsql integration no longer applies custom histogram bucket configurations for OpenTelemetry metrics since Npgsql 10.0 natively aligns with the OTel specification. Custom views are retained for older target frameworks.",
+  "docsRequired": false,
+  "emoji": "📊",
+  "firstMergedAt": "2026-04-13T18:36:46Z",
+  "lastMergedAt": "2026-04-13T18:36:46Z",
+  "name": "Npgsql OTel metrics align with .NET 10 specification",
+  "prs": [
+    16044
+  ]
+}

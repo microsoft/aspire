@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed aspire new failing with a provenance verification error for Playwright CLI after the Playwright team changed their git tag naming convention to drop the 'v' prefix starting with version 0.1.7.",
+  "docsRequired": false,
+  "emoji": "🎭",
+  "firstMergedAt": "2026-04-13T01:24:51Z",
+  "lastMergedAt": "2026-04-13T01:24:51Z",
+  "name": "Fix Playwright CLI provenance verification failure",
+  "prs": [
+    16087
+  ]
+}

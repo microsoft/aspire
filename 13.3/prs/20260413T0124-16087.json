@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CLI bug fix: Playwright provenance verification broken by tag format change",
+  "mergedAt": "2026-04-13T01:24:51Z",
+  "number": 16087,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Fix Playwright CLI provenance verification for tag format change"
+}

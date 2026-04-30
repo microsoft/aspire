@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI deployment summary output now uses color-coded emoji glyphs that look great on both full-color and monochrome terminals. All user-facing strings in the activity logger are now localized across 13 supported languages.",
+  "docsRequired": false,
+  "emoji": "🌈",
+  "firstMergedAt": "2026-04-12T10:46:50Z",
+  "lastMergedAt": "2026-04-12T23:46:31Z",
+  "name": "Emoji colors and localization in CLI output",
+  "prs": [
+    16084,
+    16089
+  ]
+}

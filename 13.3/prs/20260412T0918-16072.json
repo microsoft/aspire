@@ -1,0 +1,9 @@
+{
+  "author": "ideepakchauhan7",
+  "comment": "Test-only fix aligning deployment E2E tests with current CLI behavior",
+  "mergedAt": "2026-04-12T09:18:55Z",
+  "number": 16072,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "excluded",
+  "title": "Fix deployment E2E nightly failures"
+}

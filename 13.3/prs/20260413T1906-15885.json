@@ -1,0 +1,9 @@
+{
+  "author": "DavidZidar",
+  "comment": "AppHost bug fix: system-assigned managed identity detection in AzureCredentialHelper",
+  "mergedAt": "2026-04-13T19:06:35Z",
+  "number": 15885,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Detect system-assigned managed identities in AzureCredentialHelper"
+}

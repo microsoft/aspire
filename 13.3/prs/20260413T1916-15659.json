@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Integration improvement: RabbitMQ v7 publisher/subscriber tracing support",
+  "mergedAt": "2026-04-13T19:16:03Z",
+  "number": 15659,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Enable tracing for RabbitMQ Component (v7)"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "AppHost improvement: multiple DNS zones for Foundry private endpoint",
+  "mergedAt": "2026-04-13T21:05:46Z",
+  "number": 16051,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add multiple DNS zones for Foundry private endpoint"
+}

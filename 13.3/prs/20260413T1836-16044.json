@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Integration improvement: remove custom Npgsql histogram views on .NET 10+",
+  "mergedAt": "2026-04-13T18:36:46Z",
+  "number": 16044,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Remove custom Npgsql histogram view on .NET 10+"
+}

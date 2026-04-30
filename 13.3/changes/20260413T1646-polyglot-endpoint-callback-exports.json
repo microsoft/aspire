@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript, Python, and Java AppHosts now expose withEndpointCallback and withHttpEndpointCallback methods for mutating existing endpoints by name, enabling scenarios like customizing auto-created Vite http endpoints.",
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-04-13T16:46:35Z",
+  "lastMergedAt": "2026-04-13T16:46:35Z",
+  "name": "Endpoint mutation callbacks for polyglot AppHosts",
+  "prs": [
+    15856
+  ]
+}

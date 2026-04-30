@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript, Python, and Java AppHosts can now customize Docker Compose .env file entries using ConfigureEnvFile callbacks, matching the capability already available in C# AppHosts.",
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-04-13T16:36:54Z",
+  "lastMergedAt": "2026-04-13T16:36:54Z",
+  "name": "ConfigureEnvFile support for polyglot Docker AppHosts",
+  "prs": [
+    15819
+  ]
+}

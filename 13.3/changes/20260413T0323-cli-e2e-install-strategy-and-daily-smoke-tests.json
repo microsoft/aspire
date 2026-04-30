@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "A new CliInstallStrategy abstraction unifies how the Aspire CLI is installed in E2E test containers, supporting local archive, PR artifact, and install-script modes. A daily smoke test workflow now runs automatically against the dev build at 6 AM UTC.",
+  "docsRequired": false,
+  "emoji": "🧰",
+  "firstMergedAt": "2026-04-13T03:23:23Z",
+  "lastMergedAt": "2026-04-13T03:23:23Z",
+  "name": "Unified CLI E2E install strategy and daily smoke tests",
+  "prs": [
+    16104
+  ]
+}

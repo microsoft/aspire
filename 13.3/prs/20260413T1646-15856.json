@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "AppHost improvement: polyglot endpoint mutation callbacks",
+  "mergedAt": "2026-04-13T16:46:35Z",
+  "number": 15856,
+  "runDate": "2026-04-30T13:35:33Z",
+  "status": "included",
+  "title": "Add polyglot endpoint callback exports"
+}

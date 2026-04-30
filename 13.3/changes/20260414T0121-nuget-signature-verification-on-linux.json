@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "NuGet package signature verification is now enabled on Linux when running aspire restore, matching the .NET SDK's behavior. Trusted root certificates are embedded directly in aspire-managed to support signature verification in the single-file host.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-14T01:21:17Z",
+  "lastMergedAt": "2026-04-14T01:21:17Z",
+  "name": "NuGet signature verification on Linux",
+  "prs": [
+    16049
+  ]
+}
