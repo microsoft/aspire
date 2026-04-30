@@ -24,42 +24,41 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             appToBrowser = CreatePosixPipe();
             browserToApp = CreatePosixPipe();
             // Chromium reserves fd 3 for browser input and fd 4 for browser output. pipe() can legally return either
-            // number for one of our source descriptors, so move accidental fd 3/4 allocations out of the way before the
-            // child remaps them with dup2. Without this, closing a "source" descriptor could accidentally close the final
-            // reserved descriptor the browser needs.
+            // number for one of our source descriptors, so move accidental fd 3/4 allocations out of the way before
+            // posix_spawn file actions remap them. Without this, closing a "source" descriptor could accidentally close
+            // the final reserved descriptor the browser needs.
             MoveReservedPipeDescriptors(ref appToBrowser);
             MoveReservedPipeDescriptors(ref browserToApp);
 
             var arguments = CreatePipeArguments(browserArguments);
             using var executablePathString = new NativeUtf8String(executablePath);
             using var argv = NativeStringArray.Create([executablePath, .. arguments]);
+            using var environment = NativeStringArray.CreateEnvironment();
+            using var fileActions = new PosixSpawnFileActions();
 
-            var setParentDeathSignal = OperatingSystem.IsLinux();
-            var processId = fork();
-            if (processId == -1)
-            {
-                throw CreatePosixException("fork");
-            }
+            fileActions.AddDup2(appToBrowser.Read, 3);
+            fileActions.AddDup2(browserToApp.Write, 4);
+            fileActions.AddCloseIfNot(appToBrowser.Read, 3);
+            fileActions.AddCloseIfNot(browserToApp.Write, 4);
+            fileActions.AddClose(appToBrowser.Write);
+            fileActions.AddClose(browserToApp.Read);
 
-            if (processId == 0)
+            var spawnResult = posix_spawn(
+                out var processId,
+                executablePathString.Pointer,
+                fileActions.Pointer,
+                attrp: IntPtr.Zero,
+                argv.Pointer,
+                environment.Pointer);
+            if (spawnResult != 0)
             {
-                // Keep the child path as small as possible after fork: remap descriptors, close extra pipe ends, and exec.
-                // Do not log, allocate, or touch shared runtime state here. If any native call fails, exit immediately so
-                // the parent observes process termination instead of a half-configured child.
-                ExecPosixChild(
-                    executablePathString.Pointer,
-                    argv.Pointer,
-                    appToBrowser.Read,
-                    browserToApp.Write,
-                    appToBrowser.Write,
-                    browserToApp.Read,
-                    setParentDeathSignal);
+                throw CreatePosixSpawnException("posix_spawn", spawnResult);
             }
 
             ClosePosixDescriptor(ref appToBrowser.Read);
             ClosePosixDescriptor(ref browserToApp.Write);
 
-            // After the fork, the parent owns the write side of appToBrowser and the read side of browserToApp. Wrap them
+            // After spawn, the parent owns the write side of appToBrowser and the read side of browserToApp. Wrap them
             // in FileStream so the rest of BrowserLogs can treat pipe CDP like any other async stream transport.
             browserInput = CreateFileStreamFromDescriptor(ref appToBrowser.Write, FileAccess.Write);
             browserOutput = CreateFileStreamFromDescriptor(ref browserToApp.Read, FileAccess.Read);
@@ -80,42 +79,6 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             browserToApp.Dispose();
             throw;
         }
-    }
-
-    private static void ExecPosixChild(
-        IntPtr executablePath,
-        IntPtr argv,
-        int browserReadDescriptor,
-        int browserWriteDescriptor,
-        int parentWriteDescriptor,
-        int parentReadDescriptor,
-        bool setParentDeathSignal)
-    {
-        if (setParentDeathSignal)
-        {
-            // Linux can ask the kernel to signal the browser when the AppHost process dies without running managed
-            // cleanup. This is intentionally best-effort: macOS has no equivalent, and Chromium may still decide how to
-            // cascade the signal to its child process tree.
-            if (prctl(PR_SET_PDEATHSIG, SIGTERM, 0, 0, 0) == -1 ||
-                getppid() == 1)
-            {
-                _exit(127);
-            }
-        }
-
-        if (dup2(browserReadDescriptor, 3) == -1 ||
-            dup2(browserWriteDescriptor, 4) == -1)
-        {
-            _exit(127);
-        }
-
-        ClosePosixDescriptorIfNot(browserReadDescriptor, 3);
-        ClosePosixDescriptorIfNot(browserWriteDescriptor, 4);
-        close(parentWriteDescriptor);
-        close(parentReadDescriptor);
-
-        execv(executablePath, argv);
-        _exit(127);
     }
 
     private static FileStream CreateFileStreamFromDescriptor(ref int descriptor, FileAccess access)
@@ -200,16 +163,72 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         }
     }
 
-    private static void ClosePosixDescriptorIfNot(int descriptor, int reservedDescriptor)
-    {
-        if (descriptor != reservedDescriptor)
-        {
-            close(descriptor);
-        }
-    }
-
     private static Win32Exception CreatePosixException(string operation) =>
         new(Marshal.GetLastPInvokeError(), $"Failed to invoke {operation} while starting tracked browser CDP pipe.");
+
+    private static Win32Exception CreatePosixSpawnException(string operation, int errorCode) =>
+        new(errorCode, $"Failed to invoke {operation} while starting tracked browser CDP pipe.");
+
+    private sealed class PosixSpawnFileActions : IDisposable
+    {
+        // posix_spawn_file_actions_t is intentionally opaque. macOS defines it as a pointer-sized handle, while glibc
+        // and musl currently expose an 80-byte struct on 64-bit platforms. Allocate a conservative native buffer and let
+        // libc initialize/destroy its representation instead of running managed code in the child process.
+        private const int BufferSize = 256;
+
+        public PosixSpawnFileActions()
+        {
+            Pointer = Marshal.AllocHGlobal(BufferSize);
+
+            var result = posix_spawn_file_actions_init(Pointer);
+            if (result != 0)
+            {
+                Marshal.FreeHGlobal(Pointer);
+                Pointer = IntPtr.Zero;
+                throw CreatePosixSpawnException("posix_spawn_file_actions_init", result);
+            }
+        }
+
+        public IntPtr Pointer { get; private set; }
+
+        public void AddDup2(int descriptor, int targetDescriptor)
+        {
+            var result = posix_spawn_file_actions_adddup2(Pointer, descriptor, targetDescriptor);
+            if (result != 0)
+            {
+                throw CreatePosixSpawnException("posix_spawn_file_actions_adddup2", result);
+            }
+        }
+
+        public void AddClose(int descriptor)
+        {
+            var result = posix_spawn_file_actions_addclose(Pointer, descriptor);
+            if (result != 0)
+            {
+                throw CreatePosixSpawnException("posix_spawn_file_actions_addclose", result);
+            }
+        }
+
+        public void AddCloseIfNot(int descriptor, int targetDescriptor)
+        {
+            if (descriptor != targetDescriptor)
+            {
+                AddClose(descriptor);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Pointer == IntPtr.Zero)
+            {
+                return;
+            }
+
+            _ = posix_spawn_file_actions_destroy(Pointer);
+            Marshal.FreeHGlobal(Pointer);
+            Pointer = IntPtr.Zero;
+        }
+    }
 
     private struct PosixPipe(int read, int write) : IDisposable
     {
@@ -289,6 +308,21 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             return new NativeStringArray(strings, pointer);
         }
 
+        public static NativeStringArray CreateEnvironment()
+        {
+            var environmentVariables = Environment.GetEnvironmentVariables();
+            var values = new List<string>(environmentVariables.Count);
+            foreach (System.Collections.DictionaryEntry variable in environmentVariables)
+            {
+                if (variable.Key is string key && variable.Value is string value)
+                {
+                    values.Add($"{key}={value}");
+                }
+            }
+
+            return Create(values);
+        }
+
         public void Dispose()
         {
             Marshal.FreeHGlobal(Pointer);
@@ -301,41 +335,42 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
 
     private const int EINTR = 4;
     private const int F_DUPFD = 0;
-    private const int PR_SET_PDEATHSIG = 1;
     private const int SIGINT = 2;
     private const int SIGKILL = 9;
-    private const int SIGTERM = 15;
 
     [LibraryImport("libc", SetLastError = true)]
     private static partial int close(int fd);
 
     [LibraryImport("libc", SetLastError = true)]
-    private static partial int dup2(int oldfd, int newfd);
-
-    [LibraryImport("libc", SetLastError = true, EntryPoint = "execv")]
-    private static partial int execv(IntPtr path, IntPtr argv);
-
-    [LibraryImport("libc", SetLastError = true)]
     private static partial int fcntl(int fd, int cmd, int arg);
-
-    [LibraryImport("libc", SetLastError = true)]
-    private static partial int fork();
-
-    [LibraryImport("libc", SetLastError = true)]
-    private static partial int getppid();
 
     [LibraryImport("libc", SetLastError = true)]
     private static partial int pipe([Out] int[] pipefd);
 
-    [LibraryImport("libc", SetLastError = true)]
-    private static partial int prctl(int option, int arg2, int arg3, int arg4, int arg5);
+    [LibraryImport("libc")]
+    private static partial int posix_spawn(
+        out int pid,
+        IntPtr path,
+        IntPtr fileActions,
+        IntPtr attrp,
+        IntPtr argv,
+        IntPtr envp);
+
+    [LibraryImport("libc")]
+    private static partial int posix_spawn_file_actions_addclose(IntPtr fileActions, int descriptor);
+
+    [LibraryImport("libc")]
+    private static partial int posix_spawn_file_actions_adddup2(IntPtr fileActions, int descriptor, int targetDescriptor);
+
+    [LibraryImport("libc")]
+    private static partial int posix_spawn_file_actions_destroy(IntPtr fileActions);
+
+    [LibraryImport("libc")]
+    private static partial int posix_spawn_file_actions_init(IntPtr fileActions);
 
     [LibraryImport("libc", SetLastError = true, EntryPoint = "kill")]
     private static partial int sys_kill(int pid, int sig);
 
     [LibraryImport("libc", SetLastError = true)]
     private static partial int waitpid(int pid, out int status, int options);
-
-    [LibraryImport("libc", SetLastError = true, EntryPoint = "_exit")]
-    private static partial void _exit(int status);
 }
