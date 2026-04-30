@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Hide inner K8s env for AKS; part of explicit compute environment binding enforcement",
+  "mergedAt": "2026-04-28T18:05:23Z",
+  "number": 16499,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Hide inner Kubernetes environment for AKS"
+}

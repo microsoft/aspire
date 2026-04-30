@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "CLI bundle install now uses symlinks/junctions for versioned directories enabling atomic upgrades",
+  "mergedAt": "2026-04-28T18:25:42Z",
+  "number": 16408,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Add symlink/junction support for bundle installs with versioned directories"
+}

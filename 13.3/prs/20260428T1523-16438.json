@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Fix Foundry provisioning two ACRs when explicit registry configured via WithContainerRegistry/WithAzureContainerRegistry",
+  "mergedAt": "2026-04-28T15:23:41Z",
+  "number": 16438,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Remove DefaultContainerRegistry from model when Foundry project uses explicit registry"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Reverts test code change; only test fix with no product impact",
+  "mergedAt": "2026-04-28T17:23:23Z",
+  "number": 16528,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "excluded",
+  "title": "Revert AzureResourcePreparer changes from TryGetByName"
+}

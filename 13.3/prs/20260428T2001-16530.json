@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New ASPIREEXPORT013 analyzer detects duplicate polyglot capability IDs at build time",
+  "mergedAt": "2026-04-28T20:01:33Z",
+  "number": 16530,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Detect duplicate polyglot capability IDs"
+}

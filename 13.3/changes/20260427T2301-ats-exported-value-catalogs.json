@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A new [AspireValue] attribute lets C# AppHosts expose predefined immutable values (such as FoundryModels.OpenAI.Gpt41Mini) to polyglot guest SDKs. TypeScript, Java, and Python AppHosts can now reference shared model catalogs and predefined DTOs directly instead of reconstructing them manually.",
+  "docsRequired": false,
+  "emoji": "📚",
+  "firstMergedAt": "2026-04-27T23:01:26Z",
+  "lastMergedAt": "2026-04-27T23:01:26Z",
+  "name": "Predefined value catalogs for polyglot AppHosts",
+  "prs": [
+    16287
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI confirmation prompts (y/n questions) now respond immediately on a single keypress without requiring Enter. Typing y or n answers the prompt instantly while Enter-to-default and the [Y/n]/[y/N] display conventions are preserved.",
+  "docsRequired": false,
+  "emoji": "⌨️",
+  "firstMergedAt": "2026-04-28T19:57:47Z",
+  "lastMergedAt": "2026-04-28T19:57:47Z",
+  "name": "Single-keypress CLI confirmation prompts",
+  "prs": [
+    16527
+  ]
+}

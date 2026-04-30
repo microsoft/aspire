@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed ATS (Aspire TypeScript SDK) method name collisions where overloaded export IDs caused ambiguous names in generated TypeScript, Java, and Python guest SDKs. Methods like withReference, withUrls, and withRoleAssignments now resolve to stable, unambiguous exported names in polyglot AppHosts.",
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-04-27T19:14:24Z",
+  "lastMergedAt": "2026-04-27T19:14:24Z",
+  "name": "Fix polyglot SDK method name collisions",
+  "prs": [
+    16416
+  ]
+}

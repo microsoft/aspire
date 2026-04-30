@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fix dashboard Source column showing raw DCP template expressions instead of resolved runtime args",
+  "mergedAt": "2026-04-28T05:52:58Z",
+  "number": 16492,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Resolve dashboard app args from effective args"
+}

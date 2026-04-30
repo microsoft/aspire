@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard Source column now displays resolved runtime argument values instead of raw DCP template expressions (such as {{- portForServing \"exe\" -}}). App launch arguments are indexed against effective runtime args so the correct resolved values are shown.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-28T05:52:58Z",
+  "lastMergedAt": "2026-04-28T05:52:58Z",
+  "name": "Fix dashboard app args showing resolved runtime values",
+  "prs": [
+    16492
+  ]
+}

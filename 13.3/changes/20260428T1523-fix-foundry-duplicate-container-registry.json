@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where Foundry projects provisioned two Azure Container Registries when an explicit registry was set via WithContainerRegistry or WithAzureContainerRegistry. The default registry is now removed from the model when an explicit one is configured.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-04-28T15:23:41Z",
+  "lastMergedAt": "2026-04-28T15:23:41Z",
+  "name": "Fix Foundry duplicate container registry provisioning",
+  "prs": [
+    16438
+  ]
+}

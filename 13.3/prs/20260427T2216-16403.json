@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "ATS-first API design improving polyglot AppHost exported API shapes",
+  "mergedAt": "2026-04-27T22:16:02Z",
+  "number": 16403,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Adopt an ATS-first API design for Aspire.Hosting exported capabilities"
+}

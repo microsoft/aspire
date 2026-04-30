@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire new template picker now clearly labels whether a starter template uses a C# or TypeScript AppHost. Template options for ASP.NET Core/React, Express/React, and FastAPI/React starters now include the AppHost language so you can choose the right stack before selecting.",
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-04-28T14:10:35Z",
+  "lastMergedAt": "2026-04-28T14:10:35Z",
+  "name": "Clearer AppHost language labels in starter templates",
+  "prs": [
+    16497
+  ]
+}

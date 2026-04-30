@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine CI maintenance to Repo Pulse workflow, no user-facing impact",
+  "mergedAt": "2026-04-27T20:48:42Z",
+  "number": 16421,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "excluded",
+  "title": "Repo Pulse v2: deterministic pre-fetch + disable integrity filter"
+}

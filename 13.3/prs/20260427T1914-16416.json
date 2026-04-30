@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fix for polyglot SDK method name collisions affecting TypeScript/Java/Python AppHosts",
+  "mergedAt": "2026-04-27T19:14:24Z",
+  "number": 16416,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "[AspireExport] Fix overloaded ATS method names"
+}

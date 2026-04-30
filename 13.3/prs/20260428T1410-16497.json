@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "CLI template picker now clearly labels C# vs TypeScript AppHost in starter templates",
+  "mergedAt": "2026-04-28T14:10:35Z",
+  "number": 16497,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Clarify AppHost language in starter templates"
+}

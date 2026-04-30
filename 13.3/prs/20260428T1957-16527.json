@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "CLI confirmation prompts now respond on single keypress without requiring Enter",
+  "mergedAt": "2026-04-28T19:57:47Z",
+  "number": 16527,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Make CLI confirmation prompts single-key"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fixes internal scheduled workflow failure due to K8s/AKS duplicate ATS capability IDs; no user-facing product change",
+  "mergedAt": "2026-04-28T16:32:58Z",
+  "number": 16498,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "excluded",
+  "title": "Fix Kubernetes ATS duplicate capability exports"
+}

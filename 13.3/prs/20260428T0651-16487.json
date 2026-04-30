@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New Kubernetes Ingress and Gateway API routing resources for K8s deployments",
+  "mergedAt": "2026-04-28T06:51:46Z",
+  "number": 16487,
+  "runDate": "2026-04-30T16:04:37Z",
+  "status": "included",
+  "title": "Add first-class Kubernetes Ingress and Gateway API resources"
+}

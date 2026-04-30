@@ -1,0 +1,17 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "When multiple compute environments (e.g., AKS and Docker Compose) are present, compute resources must now be explicitly assigned to an environment. Unbound resources cause a clear error at startup rather than being silently ignored. The inner Kubernetes environment used by AKS is now an implementation detail, keeping the application model clean.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-28T18:05:23Z",
+  "lastMergedAt": "2026-04-28T21:58:17Z",
+  "name": "Explicit compute environment binding enforced for multi-environment deployments",
+  "prs": [
+    16499,
+    16411
+  ]
+}
