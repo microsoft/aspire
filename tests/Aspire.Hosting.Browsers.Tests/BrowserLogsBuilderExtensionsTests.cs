@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Browsers.Resources;
 using Aspire.Hosting.Tests.Utils;
@@ -18,7 +19,6 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.Browsers.Tests;
 
@@ -1011,10 +1011,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                     HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, tempBrowserPath) &&
                     HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
                     HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
-                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                    resourceEvent.Snapshot.HealthReports.Any(report =>
-                        report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
-                        report.Status == HealthStatus.Unhealthy)).DefaultTimeout();
+                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1)).DefaultTimeout();
 
             Assert.Collection(
                 GetBrowserSessions(failedEvent.Snapshot),
@@ -1088,10 +1085,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 !resourceEvent.Snapshot.Properties.Any(property => property.Name == BrowserLogsBuilderExtensions.BrowserExecutablePropertyName) &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
-                    report.Status == HealthStatus.Unhealthy)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1)).DefaultTimeout();
 
         Assert.Collection(
             GetBrowserSessions(failedEvent.Snapshot),
@@ -1148,13 +1142,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "None") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
-                resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
-                    report.Status == HealthStatus.Unhealthy &&
-                    report.Description == errorText)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText)).DefaultTimeout();
 
-        Assert.Single(failedEvent.Snapshot.HealthReports);
+        Assert.Empty(failedEvent.Snapshot.HealthReports);
         Assert.Empty(GetBrowserSessions(failedEvent.Snapshot));
     }
 
@@ -1387,10 +1377,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001)") &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 1) &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastSessionPropertyName, "session-0001") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1") &&
-                resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0001" && report.Status == HealthStatus.Healthy)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1")).DefaultTimeout();
 
-        Assert.Single(firstRunningEvent.Snapshot.HealthReports);
+        Assert.Empty(firstRunningEvent.Snapshot.HealthReports);
         Assert.Collection(
             GetBrowserSessions(firstRunningEvent.Snapshot),
             session =>
@@ -1423,11 +1412,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001), session-0002 (PID 1002)") &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 2) &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastSessionPropertyName, "session-0002") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-2") &&
-                resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0001" && report.Status == HealthStatus.Healthy) &&
-                resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0002" && report.Status == HealthStatus.Healthy)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-2")).DefaultTimeout();
 
-        Assert.Equal(2, secondRunningEvent.Snapshot.HealthReports.Length);
+        Assert.Empty(secondRunningEvent.Snapshot.HealthReports);
         Assert.Collection(
             GetBrowserSessions(secondRunningEvent.Snapshot),
             session =>
@@ -1452,11 +1439,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0002 (PID 1002)") &&
-                resourceEvent.Snapshot.HealthReports.Length == 1 &&
-                resourceEvent.Snapshot.HealthReports[0].Name == "session-0002").DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0002 (PID 1002)")).DefaultTimeout();
 
-        Assert.Equal("session-0002", firstCompletedEvent.Snapshot.HealthReports[0].Name);
+        Assert.Empty(firstCompletedEvent.Snapshot.HealthReports);
         Assert.Collection(
             GetBrowserSessions(firstCompletedEvent.Snapshot),
             session => Assert.Equal("session-0002", session.SessionId));
@@ -1521,14 +1506,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
-                resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == "session-0002" &&
-                    report.Status == HealthStatus.Healthy) &&
-                resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
-                    report.Status == HealthStatus.Unhealthy &&
-                    report.Description == errorText)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText)).DefaultTimeout();
 
         await secondSession.CompleteAsync(exitCode: 0);
 
@@ -1537,11 +1515,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Exited &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
-                resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
-                    report.Status == HealthStatus.Unhealthy &&
-                    report.Description == errorText)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText)).DefaultTimeout();
     }
 
     [Fact]

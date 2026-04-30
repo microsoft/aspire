@@ -9,7 +9,6 @@ using System.Collections.Immutable;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
-using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting;
 
@@ -379,7 +378,6 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         DateTime? fallbackStartTimeStamp = null)
     {
         var startTimeStamp = GetStartTimeStamp(resourceState, pendingSession?.StartedAt ?? fallbackStartTimeStamp);
-        var healthReports = GetHealthReports(resourceState, pendingSession);
         var propertyUpdates = GetPropertyUpdates(resourceState);
 
         return _resourceNotificationService.PublishUpdateAsync(resource, resourceName, snapshot => snapshot with
@@ -388,52 +386,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             StopTimeStamp = resourceState.ActiveSessions.Count > 0 || pendingSession is not null ? null : stopTimeStamp,
             ExitCode = resourceState.ActiveSessions.Count > 0 || pendingSession is not null ? null : exitCode,
             State = new ResourceStateSnapshot(stateText, stateStyle),
-            Properties = UpdateProperties(snapshot.Properties, resourceState, propertyUpdates),
-            HealthReports = healthReports
+            Properties = UpdateProperties(snapshot.Properties, resourceState, propertyUpdates)
         });
-    }
-
-    private ImmutableArray<HealthReportSnapshot> GetHealthReports(ResourceSessionState resourceState, PendingBrowserSession? pendingSession)
-    {
-        var runAt = _timeProvider.GetUtcNow().UtcDateTime;
-        var reports = new List<HealthReportSnapshot>(resourceState.ActiveSessions.Count + (pendingSession is null ? 0 : 1));
-
-        foreach (var session in resourceState.ActiveSessions.Values.OrderBy(static session => session.SessionId, StringComparer.Ordinal))
-        {
-            reports.Add(new HealthReportSnapshot(
-                session.SessionId,
-                HealthStatus.Healthy,
-                $"{FormatProcessId(session.ProcessId)} targeting {session.TargetUrl}",
-                null)
-            {
-                LastRunAt = runAt
-            });
-        }
-
-        if (pendingSession is not null)
-        {
-            reports.Add(new HealthReportSnapshot(
-                pendingSession.SessionId,
-                Status: null,
-                Description: $"Launching tracked browser for {pendingSession.TargetUrl}.",
-                ExceptionText: null)
-            {
-                LastRunAt = runAt
-            });
-        }
-        else if (resourceState.LastError is not null)
-        {
-            reports.Add(new HealthReportSnapshot(
-                BrowserLogsBuilderExtensions.LastErrorPropertyName,
-                HealthStatus.Unhealthy,
-                resourceState.LastError,
-                null)
-            {
-                LastRunAt = runAt
-            });
-        }
-
-        return [.. reports];
     }
 
     private static IEnumerable<ResourcePropertySnapshot> GetPropertyUpdates(ResourceSessionState resourceState)
