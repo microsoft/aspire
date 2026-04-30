@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
+using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.Tests;
 
@@ -134,6 +135,31 @@ public class ResourceNotificationTests
                 Assert.Equal("CustomResource", c.Snapshot.ResourceType);
                 Assert.Equal("value", c.Snapshot.Properties.Single(p => p.Name == "B").Value);
                 Assert.Null(c.Snapshot.HealthStatus);
+            });
+    }
+
+    [Fact]
+    public async Task PublishedHealthReportsUpdateHealthStatus()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, snapshot =>
+            (snapshot with { State = KnownResourceStates.Running }).WithHealthReports(
+            [
+                new HealthReportSnapshot("browser-session", HealthStatus.Unhealthy, "Browser session failed.", "InvalidOperationException: Browser crashed.")
+            ])).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
+        Assert.Equal(HealthStatus.Unhealthy, resourceEvent.Snapshot.HealthStatus);
+        Assert.Collection(
+            resourceEvent.Snapshot.HealthReports,
+            report =>
+            {
+                Assert.Equal("browser-session", report.Name);
+                Assert.Equal(HealthStatus.Unhealthy, report.Status);
+                Assert.Equal("Browser session failed.", report.Description);
+                Assert.Equal("InvalidOperationException: Browser crashed.", report.ExceptionText);
             });
     }
 
