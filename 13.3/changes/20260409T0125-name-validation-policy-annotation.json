@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource name validation can now be customized per-resource using NameValidationPolicyAnnotation, which provides individual controls for max length, starting character, allowed characters, and hyphen rules. The static policies NameValidationPolicyAnnotation.Default and NameValidationPolicyAnnotation.None are provided, with None replacing the deprecated SuppressNameValidationAnnotation.",
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-04-09T01:25:06Z",
+  "lastMergedAt": "2026-04-09T01:25:06Z",
+  "name": "Configurable name validation with NameValidationPolicyAnnotation",
+  "prs": [
+    15728
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "AddAndPublishPromptAgent and AzurePromptAgentResource have been removed from Aspire.Hosting.Foundry because they were not functional. These APIs will be re-added in a future release when a proper implementation is ready.",
+  "docsRequired": false,
+  "emoji": "🗑️",
+  "firstMergedAt": "2026-04-09T21:25:53Z",
+  "lastMergedAt": "2026-04-09T21:25:53Z",
+  "name": "Remove non-working AddAndPublishPromptAgent and AzurePromptAgentResource from Foundry",
+  "prs": [
+    16003
+  ]
+}

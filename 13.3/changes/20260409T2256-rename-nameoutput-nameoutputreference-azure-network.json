@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The NameOutput property has been renamed to NameOutputReference on all Azure Network resource types (AzureNatGatewayResource, AzureNetworkSecurityGroupResource, AzurePrivateDnsZoneResource, AzurePrivateEndpointResource, AzurePublicIPAddressResource, AzureVirtualNetworkResource) to be consistent with naming conventions used by other Azure hosting integrations.",
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-04-09T22:56:44Z",
+  "lastMergedAt": "2026-04-09T22:56:44Z",
+  "name": "Rename NameOutput to NameOutputReference in Azure Network resources",
+  "prs": [
+    16004
+  ]
+}

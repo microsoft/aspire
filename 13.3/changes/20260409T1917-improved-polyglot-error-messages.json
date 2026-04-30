@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Capability failure error messages in polyglot AppHosts now include the resource name and a human-readable description of what went wrong (e.g., \"Could not invoke 'withReference' on resource 'my-app' because parameter 'source' expects a resource with a connection string\"). Type mismatch and internal errors across C# hosting are also enriched with resource names.",
+  "docsRequired": false,
+  "emoji": "💬",
+  "firstMergedAt": "2026-04-09T19:17:13Z",
+  "lastMergedAt": "2026-04-09T19:17:13Z",
+  "name": "Improved error messages for polyglot and resource-scoped failures",
+  "prs": [
+    15230
+  ]
+}

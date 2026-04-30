@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where aspire start would immediately exit with code 0 when run from the VS Code Aspire integrated terminal. The detached child process was inheriting extension environment variables and delegating back to the extension instead of launching the AppHost.",
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-04-09T18:28:38Z",
+  "lastMergedAt": "2026-04-09T18:28:38Z",
+  "name": "Fix aspire start failing in VS Code integrated terminal",
+  "prs": [
+    15980
+  ]
+}

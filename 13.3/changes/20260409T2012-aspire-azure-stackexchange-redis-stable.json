@@ -1,0 +1,16 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire.Microsoft.Azure.StackExchangeRedis package has been promoted from preview to stable, making it production-ready for connecting to Azure Cache for Redis using Microsoft Entra identity-based authentication.",
+  "docsRequired": false,
+  "emoji": "✅",
+  "firstMergedAt": "2026-04-09T20:12:19Z",
+  "lastMergedAt": "2026-04-09T20:12:19Z",
+  "name": "Aspire.Microsoft.Azure.StackExchangeRedis promoted to stable",
+  "prs": [
+    16005
+  ]
+}

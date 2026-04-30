@@ -1,1 +1,17 @@
-{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"The CLI log file now captures Debug-level messages by default, providing richer diagnostics without requiring the --debug flag. The app host also logs at Debug level in the CLI log by default, and internal noise from HTTP client and certificate components is filtered to Trace.","docsRequired":false,"emoji":"🔍","firstMergedAt":"2026-04-03T15:42:19Z","lastMergedAt":"2026-04-03T15:42:19Z","name":"Improved CLI debug logging defaults","prs":[15800]}
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI log file now captures Debug-level messages by default, providing richer diagnostics without requiring the --debug flag. Process log messages now include file name and working directory for better diagnostics, and feature flag states are logged at startup. When logging is suppressed, NullLogger.Instance is used to eliminate redundant conditional checks throughout the codebase.",
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-04-03T15:42:19Z",
+  "lastMergedAt": "2026-04-09T05:07:51Z",
+  "name": "Improved CLI debug logging defaults",
+  "prs": [
+    15800,
+    15956
+  ]
+}

@@ -4,13 +4,14 @@
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "CLI confirmation prompts now follow the standard [Y/n] convention, capitalizing the default choice to clearly indicate which option is accepted when pressing Enter (e.g., \"Perform updates? [Y/n]:\").",
+  "description": "CLI confirmation prompts now follow the standard [Y/n] convention, capitalizing the default choice to clearly indicate which option is accepted when pressing Enter. Prompt choice rendering uses Spectre.Console's built-in Yes/No properties for consistent styling.",
   "docsRequired": false,
   "emoji": "⌨️",
   "firstMergedAt": "2026-04-08T04:59:53Z",
-  "lastMergedAt": "2026-04-08T04:59:53Z",
+  "lastMergedAt": "2026-04-09T08:17:22Z",
   "name": "Standardized CLI confirmation prompts to [Y/n] convention",
   "prs": [
-    15663
+    15663,
+    15998
   ]
 }
