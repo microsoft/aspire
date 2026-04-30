@@ -35,6 +35,7 @@
   </data>
   <data name="ConfigureTrackedBrowserResourceScopeOption" xml:space="preserve">
     <value>This resource only ({0})</value>
+    <comment>{0} is the Aspire resource name</comment>
   </data>
   <data name="ConfigureTrackedBrowserGlobalScopeOption" xml:space="preserve">
     <value>All BrowserLogs resources</value>
@@ -71,6 +72,7 @@
   </data>
   <data name="ConfigureTrackedBrowserProfileOptionWithDisplayName" xml:space="preserve">
     <value>{0} ({1})</value>
+    <comment>{0} is the Chromium profile directory name, {1} is the Chromium profile display name</comment>
   </data>
   <data name="ConfigureTrackedBrowserBrowserRequired" xml:space="preserve">
     <value>Browser is required.</value>
@@ -98,12 +100,15 @@
   </data>
   <data name="ConfigureTrackedBrowserApplied" xml:space="preserve">
     <value>Applied tracked browser settings for {0}.</value>
+    <comment>{0} is the resource name or scope that the settings apply to</comment>
   </data>
   <data name="ConfigureTrackedBrowserSaved" xml:space="preserve">
     <value>Saved tracked browser settings for {0}.</value>
+    <comment>{0} is the resource name or scope that the settings apply to</comment>
   </data>
   <data name="ConfigureTrackedBrowserSaveFailed" xml:space="preserve">
     <value>Tracked browser settings could not be saved to user secrets for key '{0}'.</value>
+    <comment>{0} is the user secrets configuration key</comment>
   </data>
   <data name="CaptureScreenshotDescription" xml:space="preserve">
     <value>Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</value>

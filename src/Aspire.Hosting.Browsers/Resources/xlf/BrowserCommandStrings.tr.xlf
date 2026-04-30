@@ -15,7 +15,7 @@
       <trans-unit id="ConfigureTrackedBrowserApplied">
         <source>Applied tracked browser settings for {0}.</source>
         <target state="new">Applied tracked browser settings for {0}.</target>
-        <note />
+        <note>{0} is the resource name or scope that the settings apply to</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserBrowserDescription">
         <source>Choose an installed Chromium-based browser or enter an executable path.</source>
@@ -90,7 +90,7 @@
       <trans-unit id="ConfigureTrackedBrowserProfileOptionWithDisplayName">
         <source>{0} ({1})</source>
         <target state="new">{0} ({1})</target>
-        <note />
+        <note>{0} is the Chromium profile directory name, {1} is the Chromium profile display name</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileRequiresShared">
         <source>Profiles can only be selected when user data mode is Shared.</source>
@@ -105,7 +105,7 @@
       <trans-unit id="ConfigureTrackedBrowserResourceScopeOption">
         <source>This resource only ({0})</source>
         <target state="new">This resource only ({0})</target>
-        <note />
+        <note>{0} is the Aspire resource name</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveButton">
         <source>Apply</source>
@@ -115,7 +115,7 @@
       <trans-unit id="ConfigureTrackedBrowserSaveFailed">
         <source>Tracked browser settings could not be saved to user secrets for key '{0}'.</source>
         <target state="new">Tracked browser settings could not be saved to user secrets for key '{0}'.</target>
-        <note />
+        <note>{0} is the user secrets configuration key</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured">
         <source>Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them.</source>
@@ -135,7 +135,7 @@
       <trans-unit id="ConfigureTrackedBrowserSaved">
         <source>Saved tracked browser settings for {0}.</source>
         <target state="new">Saved tracked browser settings for {0}.</target>
-        <note />
+        <note>{0} is the resource name or scope that the settings apply to</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserScopeLabel">
         <source>Scope</source>
