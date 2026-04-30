@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix Docker Swarm UpdateConfig property types (breaking: FailOnError renamed, Parallelism typed as int)",
+  "mergedAt": "2026-03-25T03:50:19Z",
+  "number": 15566,
+  "runDate": "2026-04-30T04:57:33Z",
+  "status": "included",
+  "title": null
+}

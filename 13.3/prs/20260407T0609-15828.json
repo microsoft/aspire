@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Internal refactoring: extract shared LaunchSettingsReader, no user-facing changes",
+  "mergedAt": "2026-04-07T06:09:33Z",
+  "number": 15828,
+  "runDate": "2026-04-30T06:47:51Z",
+  "status": "excluded",
+  "title": null
+}

@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Routine CI maintenance - update Node.js 20 to 24 in GitHub Actions",
+  "mergedAt": "2026-04-03T02:41:08Z",
+  "number": 15829,
+  "runDate": "2026-04-30T06:28:21Z",
+  "status": "excluded",
+  "title": null
+}

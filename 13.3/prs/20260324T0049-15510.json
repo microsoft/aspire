@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test changes: disable Kusto functional tests on Linux (bot PR)",
+  "mergedAt": "2026-03-24T00:49:49Z",
+  "number": 15510,
+  "runDate": "2026-04-30T04:36:19Z",
+  "status": "excluded",
+  "title": null
+}

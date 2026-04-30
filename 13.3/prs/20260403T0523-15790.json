@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix CLI crash when aspire-managed.exe is locked on Windows",
+  "mergedAt": "2026-04-03T05:23:47Z",
+  "number": 15790,
+  "runDate": "2026-04-30T06:28:21Z",
+  "status": "included",
+  "title": null
+}

@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Security bug fix: open redirect vulnerability in dashboard authentication",
+  "mergedAt": "2026-04-08T03:27:52Z",
+  "number": 15952,
+  "runDate": "2026-04-30T06:47:51Z",
+  "status": "included",
+  "title": null
+}

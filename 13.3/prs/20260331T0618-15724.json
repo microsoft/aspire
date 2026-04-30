@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix crash when resource name near 64-char limit",
+  "mergedAt": "2026-03-31T06:18:19Z",
+  "number": 15724,
+  "runDate": "2026-04-30T05:23:24Z",
+  "status": "included",
+  "title": null
+}

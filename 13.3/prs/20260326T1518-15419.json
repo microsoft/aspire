@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix install script swallowing file-lock errors and reporting false success",
+  "mergedAt": "2026-03-26T15:18:04Z",
+  "number": 15419,
+  "runDate": "2026-04-30T05:12:02Z",
+  "status": "included",
+  "title": null
+}

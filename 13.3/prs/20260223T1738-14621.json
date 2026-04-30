@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Internal dependency cleanup: remove vendored OTel SqlClient code",
+  "mergedAt": "2026-02-23T17:38:25Z",
+  "number": 14621,
+  "runDate": "2026-04-30T04:01:39Z",
+  "status": "excluded",
+  "title": null
+}

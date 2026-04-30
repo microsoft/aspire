@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test changes: quarantine Docker and Kubernetes E2E tests",
+  "mergedAt": "2026-03-24T02:32:42Z",
+  "number": 15515,
+  "runDate": "2026-04-30T04:36:19Z",
+  "status": "excluded",
+  "title": null
+}

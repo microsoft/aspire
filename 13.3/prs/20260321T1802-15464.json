@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test changes: disable Kusto emulator tests on Linux",
+  "mergedAt": "2026-03-21T18:02:35Z",
+  "number": 15464,
+  "runDate": "2026-04-30T04:36:19Z",
+  "status": "excluded",
+  "title": null
+}

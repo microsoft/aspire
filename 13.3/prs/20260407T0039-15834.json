@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix Windows CI runner crashes due to resource exhaustion",
+  "mergedAt": "2026-04-07T00:39:36Z",
+  "number": 15834,
+  "runDate": "2026-04-30T06:37:13Z",
+  "status": "included",
+  "title": null
+}

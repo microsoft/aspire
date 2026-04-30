@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix config boolean handling: crash on read, wrong types on write",
+  "mergedAt": "2026-03-27T04:04:31Z",
+  "number": 15638,
+  "runDate": "2026-04-30T05:12:02Z",
+  "status": "included",
+  "title": null
+}

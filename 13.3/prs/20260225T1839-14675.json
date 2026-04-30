@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "CLI: fix aspire update --self showing unavailable staging channel",
+  "mergedAt": "2026-02-25T18:39:43Z",
+  "number": 14675,
+  "runDate": "2026-04-30T04:01:39Z",
+  "status": "included",
+  "title": null
+}

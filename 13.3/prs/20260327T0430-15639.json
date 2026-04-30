@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix malformed dashboard URLs in aspire describe command",
+  "mergedAt": "2026-03-27T04:30:24Z",
+  "number": 15639,
+  "runDate": "2026-04-30T05:12:02Z",
+  "status": "included",
+  "title": null
+}

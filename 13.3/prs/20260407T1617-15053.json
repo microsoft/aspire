@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Internal renaming: LifecycleHook to EventingSubscriber in test and internal classes only",
+  "mergedAt": "2026-04-07T16:17:27Z",
+  "number": 15053,
+  "runDate": "2026-04-30T06:47:51Z",
+  "status": "excluded",
+  "title": null
+}

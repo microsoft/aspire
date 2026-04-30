@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Build fix - restore extension .npmrc and .yarnrc for internal build",
+  "mergedAt": "2026-04-03T19:35:11Z",
+  "number": 15849,
+  "runDate": "2026-04-30T06:28:21Z",
+  "status": "excluded",
+  "title": null
+}

@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix playwright-cli install on Windows (agent init)",
+  "mergedAt": "2026-03-27T05:00:36Z",
+  "number": 15640,
+  "runDate": "2026-04-30T05:12:02Z",
+  "status": "included",
+  "title": null
+}

@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test-only fix for Python virtualenv tests on Helix",
+  "mergedAt": "2026-03-10T06:39:43Z",
+  "number": 15089,
+  "runDate": "2026-04-30T04:27:01Z",
+  "status": "excluded",
+  "title": null
+}

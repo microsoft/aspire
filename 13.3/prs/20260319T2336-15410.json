@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Security fix for CVE-2026-26127 in Aspire.Hosting.Foundry",
+  "mergedAt": "2026-03-19T23:36:02Z",
+  "number": 15410,
+  "runDate": "2026-04-30T04:27:01Z",
+  "status": "included",
+  "title": null
+}

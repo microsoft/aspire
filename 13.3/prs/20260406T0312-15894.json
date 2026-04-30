@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix clickable endpoint URLs using deny list in VS Code extension",
+  "mergedAt": "2026-04-06T03:12:43Z",
+  "number": 15894,
+  "runDate": "2026-04-30T06:37:13Z",
+  "status": "included",
+  "title": null
+}

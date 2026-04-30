@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test-only fix for flaky ExternalService tests",
+  "mergedAt": "2026-04-01T07:09:50Z",
+  "number": 15747,
+  "runDate": "2026-04-30T05:37:45Z",
+  "status": "excluded",
+  "title": null
+}

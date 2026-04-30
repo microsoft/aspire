@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fixed default NuGet packages restore folder to use NuGet standard logic instead of ~/.nuget/packages",
+  "mergedAt": "2026-04-01T15:52:02Z",
+  "number": 15416,
+  "runDate": "2026-04-30T05:37:45Z",
+  "status": "included",
+  "title": null
+}

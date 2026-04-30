@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test-only: fix NotSupportedException in AsyncTestHelpers",
+  "mergedAt": "2026-02-26T16:25:20Z",
+  "number": 14716,
+  "runDate": "2026-04-30T04:01:39Z",
+  "status": "excluded",
+  "title": null
+}

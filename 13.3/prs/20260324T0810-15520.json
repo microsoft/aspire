@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Internal refactoring: use InteractionService instead of Console.WriteLine",
+  "mergedAt": "2026-03-24T08:10:31Z",
+  "number": 15520,
+  "runDate": "2026-04-30T04:36:19Z",
+  "status": "excluded",
+  "title": null
+}

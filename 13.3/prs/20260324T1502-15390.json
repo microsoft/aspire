@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Remove OtlpEndpointEnvironmentVariableName - breaking API removal",
+  "mergedAt": "2026-03-24T15:02:30Z",
+  "number": 15390,
+  "runDate": "2026-04-30T04:36:19Z",
+  "status": "included",
+  "title": null
+}

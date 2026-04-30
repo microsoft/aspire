@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Cache PFX dev certs on Windows and Linux to prevent persistent container hash invalidation",
+  "mergedAt": "2026-04-01T23:09:14Z",
+  "number": 15768,
+  "runDate": "2026-04-30T05:37:45Z",
+  "status": "included",
+  "title": null
+}

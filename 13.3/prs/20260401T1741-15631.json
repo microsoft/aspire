@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fixed TypeScript codegen typing regression for reusable packages with separate .modules trees",
+  "mergedAt": "2026-04-01T17:41:48Z",
+  "number": 15631,
+  "runDate": "2026-04-30T05:37:45Z",
+  "status": "included",
+  "title": null
+}

@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test-only: disable CLI E2E tests that fail outside PR context",
+  "mergedAt": "2026-04-07T20:52:00Z",
+  "number": 15931,
+  "runDate": "2026-04-30T06:47:51Z",
+  "status": "excluded",
+  "title": null
+}

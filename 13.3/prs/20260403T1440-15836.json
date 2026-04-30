@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test infrastructure - allow CLI E2E tests in quarantine/outerloop workflows",
+  "mergedAt": "2026-04-03T14:40:30Z",
+  "number": 15836,
+  "runDate": "2026-04-30T06:28:21Z",
+  "status": "excluded",
+  "title": null
+}

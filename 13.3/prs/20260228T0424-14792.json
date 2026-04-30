@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "CLI animated banner now suppressed in CI/non-interactive environments",
+  "mergedAt": "2026-02-28T04:24:56Z",
+  "number": 14792,
+  "runDate": "2026-04-30T04:10:45Z",
+  "status": "included",
+  "title": null
+}

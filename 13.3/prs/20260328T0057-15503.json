@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix event order and callback execution during resource startup",
+  "mergedAt": "2026-03-28T00:57:18Z",
+  "number": 15503,
+  "runDate": "2026-04-30T05:23:24Z",
+  "status": "included",
+  "title": null
+}

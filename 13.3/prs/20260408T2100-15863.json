@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Extensions bug fix: clear terminal input buffer before sending commands",
+  "mergedAt": "2026-04-08T21:00:23Z",
+  "number": 15863,
+  "runDate": "2026-04-30T06:47:51Z",
+  "status": "included",
+  "title": null
+}

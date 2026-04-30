@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fixed 13.2 regressions: IDE execution for Azure Functions and class library projects in VS/VS Code",
+  "mergedAt": "2026-04-01T17:50:00Z",
+  "number": 15714,
+  "runDate": "2026-04-30T05:37:45Z",
+  "status": "included",
+  "title": null
+}

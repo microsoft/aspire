@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix aspire update showing NuGet template packages as AppHost projects",
+  "mergedAt": "2026-03-25T03:34:49Z",
+  "number": 15388,
+  "runDate": "2026-04-30T04:57:33Z",
+  "status": "included",
+  "title": null
+}

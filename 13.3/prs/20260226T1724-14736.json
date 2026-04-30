@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Updated CLI messages to use 'aspire secret set' instead of 'dotnet user-secrets'",
+  "mergedAt": "2026-02-26T17:24:22Z",
+  "number": 14736,
+  "runDate": "2026-04-30T04:10:45Z",
+  "status": "included",
+  "title": null
+}

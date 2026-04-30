@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "New IsDefaultReferenceEndpoint flag to exclude management endpoints from WithReference()",
+  "mergedAt": "2026-03-25T20:25:33Z",
+  "number": 15558,
+  "runDate": "2026-04-30T04:57:33Z",
+  "status": "included",
+  "title": null
+}

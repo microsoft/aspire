@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Internal CI: disable macOS GitHub Actions jobs by default",
+  "mergedAt": "2026-03-26T18:54:02Z",
+  "number": 15616,
+  "runDate": "2026-04-30T05:12:02Z",
+  "status": "excluded",
+  "title": null
+}

@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "VS Code extension improvement: detect Aspire CLI at default install paths when not on PATH",
+  "mergedAt": "2026-02-18T18:19:44Z",
+  "number": 14545,
+  "runDate": "2026-04-30T03:47:56Z",
+  "status": "included",
+  "title": null
+}

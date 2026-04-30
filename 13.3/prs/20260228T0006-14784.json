@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fixed JSON serialization bug for nullable enums in TypeScript AppHost capabilities",
+  "mergedAt": "2026-02-28T00:06:07Z",
+  "number": 14784,
+  "runDate": "2026-04-30T04:10:45Z",
+  "status": "included",
+  "title": null
+}

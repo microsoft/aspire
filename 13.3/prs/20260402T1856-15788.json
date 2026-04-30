@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix aspire agent init skill pre-selection for non-.NET AppHosts",
+  "mergedAt": "2026-04-02T18:56:55Z",
+  "number": 15788,
+  "runDate": "2026-04-30T06:28:21Z",
+  "status": "included",
+  "title": null
+}

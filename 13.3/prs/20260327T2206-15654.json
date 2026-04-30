@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Dependency: remove ModelContextProtocol.AspNetCore package version",
+  "mergedAt": "2026-03-27T22:06:05Z",
+  "number": 15654,
+  "runDate": "2026-04-30T05:12:02Z",
+  "status": "excluded",
+  "title": null
+}

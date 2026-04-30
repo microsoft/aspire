@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Test-only - regression test for RabbitMQ ACA publish",
+  "mergedAt": "2026-03-25T04:36:24Z",
+  "number": 15567,
+  "runDate": "2026-04-30T04:57:33Z",
+  "status": "excluded",
+  "title": null
+}

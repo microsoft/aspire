@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "New --dashboard-url and --api-key options for aspire agent mcp and aspire otel commands",
+  "mergedAt": "2026-04-01T08:13:22Z",
+  "number": 15595,
+  "runDate": "2026-04-30T05:37:45Z",
+  "status": "included",
+  "title": null
+}

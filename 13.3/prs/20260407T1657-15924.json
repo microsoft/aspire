@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Internal CI admin: trigger policy service re-sync after org transfer",
+  "mergedAt": "2026-04-07T16:57:48Z",
+  "number": 15924,
+  "runDate": "2026-04-30T06:47:51Z",
+  "status": "excluded",
+  "title": null
+}

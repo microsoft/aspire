@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix UseBasicParsing in PowerShell 5.1 get-aspire-cli.ps1",
+  "mergedAt": "2026-03-26T08:46:46Z",
+  "number": 15609,
+  "runDate": "2026-04-30T05:12:02Z",
+  "status": "included",
+  "title": null
+}

@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Internal refactoring: centralize OTEL_* env var names",
+  "mergedAt": "2026-02-27T19:45:16Z",
+  "number": 14773,
+  "runDate": "2026-04-30T04:10:45Z",
+  "status": "excluded",
+  "title": null
+}

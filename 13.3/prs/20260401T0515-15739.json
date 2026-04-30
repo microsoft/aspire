@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Fix npm version resolution for multi-version output",
+  "mergedAt": "2026-04-01T05:15:40Z",
+  "number": 15739,
+  "runDate": "2026-04-30T05:23:24Z",
+  "status": "included",
+  "title": null
+}

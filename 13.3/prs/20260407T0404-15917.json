@@ -1,0 +1,9 @@
+{
+  "author": null,
+  "comment": "Detect test runner timeouts in CI via hangdump files",
+  "mergedAt": "2026-04-07T04:04:36Z",
+  "number": 15917,
+  "runDate": "2026-04-30T06:37:13Z",
+  "status": "included",
+  "title": null
+}
