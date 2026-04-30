@@ -183,15 +183,12 @@ public static class BrowserLogsBuilderExtensions
                         }
 
                         var resourceNotifications = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
-                        foreach (var resourceName in parentResource.GetResolvedResourceNames())
+                        if (resourceNotifications.TryGetCurrentState(parentResource.Name, out var resourceEvent))
                         {
-                            if (resourceNotifications.TryGetCurrentState(resourceName, out var resourceEvent))
+                            var parentState = resourceEvent.Snapshot.State?.Text;
+                            if (parentState == KnownResourceStates.Running || parentState == KnownResourceStates.RuntimeUnhealthy)
                             {
-                                var parentState = resourceEvent.Snapshot.State?.Text;
-                                if (parentState == KnownResourceStates.Running || parentState == KnownResourceStates.RuntimeUnhealthy)
-                                {
-                                    return ResourceCommandState.Enabled;
-                                }
+                                return ResourceCommandState.Enabled;
                             }
                         }
 

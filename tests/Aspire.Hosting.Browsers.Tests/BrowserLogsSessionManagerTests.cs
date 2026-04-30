@@ -4,6 +4,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
