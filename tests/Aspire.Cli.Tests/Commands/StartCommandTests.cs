@@ -70,7 +70,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void StartCommand_ForwardsUnmatchedTokensToAppHost()
+    public void StartCommand_ForwardsArgumentsAfterDoubleDashToAppHost()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -80,8 +80,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("start -- --custom-arg value");
 
         Assert.Empty(result.Errors);
-        Assert.Contains("--custom-arg", result.UnmatchedTokens);
-        Assert.Contains("value", result.UnmatchedTokens);
+        Assert.Equal(["--custom-arg", "value"], AppHostLauncher.GetAppHostArguments(result));
     }
 
     [Fact]

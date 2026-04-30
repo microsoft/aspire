@@ -138,6 +138,7 @@ internal sealed class RunCommand : BaseCommand
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
+        var appHostArguments = AppHostLauncher.GetAppHostArguments(parseResult);
         var startDebugSession = false;
         if (isExtensionHost)
         {
@@ -176,8 +177,18 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
+            var debugSessionArgs = new List<string>();
+            AppHostLauncher.AddAppHostArguments(debugSessionArgs, appHostArguments);
             extensionInteractionService.DisplayConsolePlainText(RunCommandStrings.StartingDebugSessionInExtension);
-            await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, startDebugSession, new DebugSessionOptions { Command = "run" });
+            await extensionInteractionService.StartDebugSessionAsync(
+                ExecutionContext.WorkingDirectory.FullName,
+                passedAppHostProjectFile?.FullName,
+                startDebugSession,
+                new DebugSessionOptions
+                {
+                    Command = "run",
+                    Args = debugSessionArgs.Count > 0 ? [.. debugSessionArgs] : null
+                });
             return ExitCodeConstants.Success;
         }
 
@@ -249,7 +260,7 @@ internal sealed class RunCommand : BaseCommand
                 Isolated = isolated,
                 StartDebugSession = startDebugSession,
                 EnvironmentVariables = new Dictionary<string, string>(),
-                UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
+                UnmatchedTokens = appHostArguments,
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
                 BuildCompletionSource = buildCompletionSource,
                 BackchannelCompletionSource = backchannelCompletionSource,
@@ -660,12 +671,15 @@ internal sealed class RunCommand : BaseCommand
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.Where(t => t != "--detach").ToList();
+        var appHostArguments = AppHostLauncher.GetAppHostArguments(parseResult);
+        var additionalArgs = new List<string>();
 
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
         }
+
+        AppHostLauncher.AddAppHostArguments(additionalArgs, appHostArguments);
 
         return _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,

@@ -66,6 +66,26 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
+    /// Gets the arguments that should be passed through to the AppHost process.
+    /// </summary>
+    internal static string[] GetAppHostArguments(ParseResult parseResult)
+    {
+        return [.. parseResult.UnmatchedTokens];
+    }
+
+    /// <summary>
+    /// Adds AppHost arguments to a child CLI command after a command-line separator.
+    /// </summary>
+    internal static void AddAppHostArguments(List<string> commandArguments, IReadOnlyCollection<string> appHostArguments)
+    {
+        if (appHostArguments.Count > 0)
+        {
+            commandArguments.Add("--");
+            commandArguments.AddRange(appHostArguments);
+        }
+    }
+
+    /// <summary>
     /// Launches an AppHost in detached mode, waits for the backchannel, and displays the result.
     /// </summary>
     /// <param name="passedAppHostProjectFile">The project file passed via --project, or null to auto-discover.</param>

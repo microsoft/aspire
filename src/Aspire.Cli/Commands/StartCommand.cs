@@ -52,12 +52,15 @@ internal sealed class StartCommand : BaseCommand
         var isExtensionHost = false;
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.ToList();
+        var appHostArguments = AppHostLauncher.GetAppHostArguments(parseResult);
+        var additionalArgs = new List<string>();
 
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
         }
+
+        AppHostLauncher.AddAppHostArguments(additionalArgs, appHostArguments);
 
         return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,

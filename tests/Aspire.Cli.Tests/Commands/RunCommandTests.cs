@@ -1501,7 +1501,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void RunCommand_ForwardsUnmatchedTokensToAppHost()
+    public void RunCommand_ForwardsArgumentsAfterDoubleDashToAppHost()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
@@ -1511,8 +1511,109 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("run -- --custom-arg value");
 
         Assert.Empty(result.Errors);
-        Assert.Contains("--custom-arg", result.UnmatchedTokens);
-        Assert.Contains("value", result.UnmatchedTokens);
+        Assert.Equal(["--custom-arg", "value"], AppHostLauncher.GetAppHostArguments(result));
+    }
+
+    [Fact]
+    public void RunCommand_PreservesLiteralDoubleDashAppHostArgument()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run -- arg1 -- arg2");
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(["arg1", "--", "arg2"], AppHostLauncher.GetAppHostArguments(result));
+    }
+
+    [Fact]
+    public async Task RunCommand_PassesArgumentsAfterDoubleDashToDotNetRunner()
+    {
+        var capturedArgs = new TaskCompletionSource<string[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var backchannelFactory = (IServiceProvider sp) =>
+        {
+            var backchannel = new TestAppHostBackchannel();
+            backchannel.GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync;
+            return backchannel;
+        };
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                capturedArgs.SetResult(args);
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return 0;
+            };
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = backchannelFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run -- arg1=value1 --custom-arg");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        var args = await capturedArgs.Task.DefaultTimeout();
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(["arg1=value1", "--custom-arg"], args);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenDelegatingToExtension_ForwardsArgumentsAfterDoubleDash()
+    {
+        DebugSessionOptions? capturedOptions = null;
+
+        var extensionInteractionServiceFactory = (IServiceProvider sp) =>
+        {
+            var service = new TestExtensionInteractionService(sp);
+            service.StartDebugSessionCallback = (_, _, _, options) =>
+            {
+                capturedOptions = options;
+            };
+            return service;
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = extensionInteractionServiceFactory;
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run -- arg1=value1 --no-build");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(capturedOptions);
+        Assert.Equal("run", capturedOptions.Command);
+        var debugSessionArgs = capturedOptions.Args;
+        Assert.NotNull(debugSessionArgs);
+        Assert.Equal(["--", "arg1=value1", "--no-build"], debugSessionArgs);
     }
 
     [Fact]
@@ -1603,7 +1704,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var extensionInteractionServiceFactory = (IServiceProvider sp) =>
         {
             var service = new TestExtensionInteractionService(sp);
-            service.StartDebugSessionCallback = (_, _, _) =>
+            service.StartDebugSessionCallback = (_, _, _, _) =>
             {
                 startDebugSessionCalled = true;
             };

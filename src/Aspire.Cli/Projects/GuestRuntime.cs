@@ -136,11 +136,34 @@ internal sealed class GuestRuntime
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken)
     {
+        return await RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, runArgs: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs the AppHost guest process.
+    /// </summary>
+    /// <param name="appHostFile">The AppHost file to execute.</param>
+    /// <param name="directory">The project directory.</param>
+    /// <param name="environmentVariables">Environment variables to set for the process.</param>
+    /// <param name="watchMode">Whether to run in watch mode for hot reload.</param>
+    /// <param name="launcher">Strategy for launching the process.</param>
+    /// <param name="runArgs">Additional arguments for the AppHost process.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
+    public async Task<(int ExitCode, OutputCollector? Output)> RunAsync(
+        FileInfo appHostFile,
+        DirectoryInfo directory,
+        IDictionary<string, string> environmentVariables,
+        bool watchMode,
+        IGuestProcessLauncher launcher,
+        string[]? runArgs,
+        CancellationToken cancellationToken)
+    {
         var commandSpec = watchMode && _spec.WatchExecute is not null
             ? _spec.WatchExecute
             : _spec.Execute;
 
-        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, launcher, cancellationToken);
+        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, runArgs, launcher, cancellationToken);
     }
 
     /// <summary>
