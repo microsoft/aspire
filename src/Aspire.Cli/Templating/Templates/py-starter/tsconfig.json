@@ -1,8 +1,15 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "outDir": "./dist/apphost",
+    "rootDir": ".",
     "strict": true
-  }
+  },
+  "include": ["apphost.ts", ".modules/**/*.ts"],
+  "exclude": ["node_modules"]
 }
