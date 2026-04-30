@@ -1495,8 +1495,6 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 # Enum Types
 # ============================================================================
 
-BrowserUserDataMode = typing.Literal["Shared", "Isolated"]
-
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
 CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
@@ -1578,12 +1576,6 @@ class MergeRouteParameters(typing.TypedDict, total=False):
     handler: typing.Required[str]
     priority: typing.Required[int]
     middleware: str
-
-
-class BrowserLogsParameters(typing.TypedDict, total=False):
-    browser: str
-    profile: str
-    user_data_mode: BrowserUserDataMode
 
 
 class BindMountParameters(typing.TypedDict, total=False):
@@ -5878,10 +5870,6 @@ class AbstractResourceWithEndpoints(AbstractResource):
     """Abstract base class for AbstractResourceWithEndpoints interface."""
 
     @abc.abstractmethod
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-
-    @abc.abstractmethod
     def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
 
@@ -6953,7 +6941,6 @@ class ContainerRegistryResource(_BaseResource, AbstractContainerRegistry):
 class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     """ContainerResource options."""
 
-    browser_logs: BrowserLogsParameters | typing.Literal[True]
     bind_mount: tuple[str, str] | BindMountParameters
     entrypoint: str
     image_tag: str
@@ -7016,22 +7003,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
 
     def __repr__(self) -> str:
         return "ContainerResource(handle={self._handle.handle_id})"
-
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        if browser is not None:
-            rpc_args['browser'] = browser
-        if profile is not None:
-            rpc_args['profile'] = profile
-        if user_data_mode is not None:
-            rpc_args['userDataMode'] = user_data_mode
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withBrowserLogs',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
 
     def with_bind_mount(self, source: str, target: str, *, is_read_only: bool = False) -> typing.Self:
         """Adds a bind mount"""
@@ -7766,18 +7737,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ContainerResourceKwargs]) -> None:
-        if _browser_logs := kwargs.pop("browser_logs", None):
-            if _validate_dict_types(_browser_logs, BrowserLogsParameters):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
-                rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
-                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            elif _browser_logs is True:
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'browser_logs'. Expected: BrowserLogsParameters or Literal[True]")
         if _bind_mount := kwargs.pop("bind_mount", None):
             if _validate_tuple_types(_bind_mount, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8312,7 +8271,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
 class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     """ProjectResource options."""
 
-    browser_logs: BrowserLogsParameters | typing.Literal[True]
     mcp_server: McpServerParameters | typing.Literal[True]
     otlp_exporter: OtlpProtocol | typing.Literal[True]
     replicas: int
@@ -8359,22 +8317,6 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
 
     def __repr__(self) -> str:
         return "ProjectResource(handle={self._handle.handle_id})"
-
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        if browser is not None:
-            rpc_args['browser'] = browser
-        if profile is not None:
-            rpc_args['profile'] = profile
-        if user_data_mode is not None:
-            rpc_args['userDataMode'] = user_data_mode
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withBrowserLogs',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
 
     def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
@@ -8913,18 +8855,6 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ProjectResourceKwargs]) -> None:
-        if _browser_logs := kwargs.pop("browser_logs", None):
-            if _validate_dict_types(_browser_logs, BrowserLogsParameters):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
-                rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
-                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            elif _browser_logs is True:
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'browser_logs'. Expected: BrowserLogsParameters or Literal[True]")
         if _mcp_server := kwargs.pop("mcp_server", None):
             if _validate_dict_types(_mcp_server, McpServerParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9328,7 +9258,6 @@ class CSharpAppResource(ProjectResource):
 class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     """ExecutableResource options."""
 
-    browser_logs: BrowserLogsParameters | typing.Literal[True]
     publish_as_docker_file: typing.Callable[[ContainerResource], None]
     executable_command: str
     working_dir: str
@@ -9374,22 +9303,6 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
 
     def __repr__(self) -> str:
         return "ExecutableResource(handle={self._handle.handle_id})"
-
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        if browser is not None:
-            rpc_args['browser'] = browser
-        if profile is not None:
-            rpc_args['profile'] = profile
-        if user_data_mode is not None:
-            rpc_args['userDataMode'] = user_data_mode
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withBrowserLogs',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
 
     def publish_as_docker_file(self, configure: typing.Callable[[ContainerResource], None]) -> typing.Self:
         """Publishes an executable as a Docker file"""
@@ -9916,18 +9829,6 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ExecutableResourceKwargs]) -> None:
-        if _browser_logs := kwargs.pop("browser_logs", None):
-            if _validate_dict_types(_browser_logs, BrowserLogsParameters):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
-                rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
-                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            elif _browser_logs is True:
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'browser_logs'. Expected: BrowserLogsParameters or Literal[True]")
         if _publish_as_docker_file := kwargs.pop("publish_as_docker_file", None):
             if _validate_type(_publish_as_docker_file, typing.Callable[[ContainerResource], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
