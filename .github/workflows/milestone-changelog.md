@@ -18,7 +18,7 @@ env:
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0,30 * * * *'
   workflow_dispatch:
 
 if: github.repository_owner == 'microsoft'
@@ -45,7 +45,7 @@ tools:
   repo-memory:
     branch-name: memory/milestone-changelog
     description: "Changelog state and content between runs"
-    file-glob: ["**/*.md", "**/*.json"]
+    file-glob: ["**/*.md", "**/*.json", "**/*.txt"]
     max-file-size: 1048576  # 1MB
     max-patch-size: 102400  # 100KB
 
@@ -159,7 +159,7 @@ safe-outputs:
                 core.info(`Created feedback issue: ${feedbackTitle}`);
               }
 
-timeout-minutes: 60
+timeout-minutes: 30
 
 steps:
   - name: Fetch milestone changelog data
@@ -598,7 +598,7 @@ Use this exact format:
 [Changelog feedback](<link to the "[${MILESTONE}] Changelog feedback" issue in this repo>) issue
 (e.g., "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678").*
 
-**PRs processed:** 6 ✅ included · 1 ❌ excluded · 93 unprocessed · 100 total merged in milestone
+**PRs processed:** ✅ 6 included · ❌ 1 excluded · ⏳ 93 unprocessed · 100 total merged in milestone
 ([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/memory/milestone-changelog/all-prs.json))
 ```
 
@@ -606,7 +606,7 @@ At the bottom of the page (after the footer), include a **PRs processed** summar
 line and a link to the full PR tracker JSON file in repo-memory:
 
 ```
-**PRs processed:** <N> ✅ included · <N> ❌ excluded · <N> unprocessed · <N> total merged in milestone
+**PRs processed:** ✅ <N> included · ❌ <N> excluded · ⏳ <N> unprocessed · <N> total merged in milestone
 ([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/memory/milestone-changelog/all-prs.json))
 ```
 
@@ -663,17 +663,24 @@ never published to the wiki, and those PRs will be skipped on the next run.
 
 **Only perform this step after Step 7 succeeds.**
 
-Write per-PR summary files and the derived tracker to the repo-memory directory.
-The gh-aw framework automatically commits and pushes changes after the workflow
-completes. The changelog body is **not** stored here — it is read from the wiki
-page (see Step 1) and published back via Step 7.
+Write per-PR summary files, the derived tracker, and the feedback issue number to
+the repo-memory directory. The gh-aw framework automatically commits and pushes
+changes after the workflow completes. The changelog body is **not** stored here —
+it is read from the wiki page (see Step 1) and published back via Step 7.
+
+**Important:** All three sub-steps (8a, 8b, 8c) must be completed. The per-PR
+summary files (8a) are the **primary** state — the tracker (8b) is derived from
+them. Do not skip 8a or 8c.
 
 ### 8a. Write per-PR summary files
 
-For each PR processed in this run (both included and excluded), write a JSON file to:
+For **every** PR processed in this run (both included and excluded), write a
+JSON file to:
 `/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/<number>.json`
 
-Create the `prs/` directory if it does not exist. Each file contains:
+Create the `prs/` directory (via `mkdir -p`) if it does not exist. Each batch
+of ${BATCH_SIZE} PRs should produce ${BATCH_SIZE} files in this directory.
+Verify that all files were written before proceeding to 8b.
 
 ```json
 {
@@ -710,10 +717,16 @@ jq --sort-keys '.' "/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/<number>.jso
   && mv /tmp/pr-fmt.json "/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/<number>.json"
 ```
 
+After writing all files, verify the count:
+```bash
+ls /tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/*.json | wc -l
+```
+This count should equal the total number of processed PRs (previous runs + current batch).
+
 ### 8b. Rebuild the PR tracker
 
-Rebuild the consolidated tracker JSON from per-PR summary files and the
-all-milestone-prs list. Write it to:
+**Only after 8a is complete.** Rebuild the consolidated tracker JSON from per-PR
+summary files and the all-milestone-prs list. Write it to:
 `/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json`
 
 The tracker is a JSON array of objects, one per merged PR in the milestone.
