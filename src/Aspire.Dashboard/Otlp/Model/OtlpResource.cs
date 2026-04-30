@@ -45,8 +45,9 @@ public class OtlpResource : IOtlpResource
     public ResourceKey ResourceKey => new ResourceKey(ResourceName, InstanceId);
 
     private readonly ReaderWriterLockSlim _metricsLock = new();
-    // Bounded by the number of unique instrumentation scope names. Constrained by TelemetryRepository.MaxInstrumentCount
-    // because each instrument requires a meter/scope.
+    // Stores metrics scopes by unique instrumentation scope name for this resource.
+    // Not strictly bounded by TelemetryRepository.MaxInstrumentCount — new scopes can be added even when
+    // the instrument limit is reached, but growth is naturally limited by the number of distinct scope names.
     private readonly Dictionary<string, OtlpScope> _meters = new();
     private readonly Dictionary<OtlpInstrumentKey, OtlpInstrument> _instruments = new();
     private readonly ConcurrentDictionary<KeyValuePair<string, string>[], OtlpResourceView> _resourceViews = new(ResourceViewKeyComparer.Instance);

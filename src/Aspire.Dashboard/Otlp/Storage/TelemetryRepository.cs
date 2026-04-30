@@ -249,6 +249,8 @@ public sealed partial class TelemetryRepository : IDisposable
         }
 
         // Check resource limit before adding a new resource.
+        // Note: This is a soft cap. Concurrent callers may both pass this check and slightly exceed the limit
+        // because _resources is a ConcurrentDictionary and the count check + GetOrAdd are not atomic.
         if (_resources.Count >= _otlpContext.Options.MaxResourceCount)
         {
             throw new InvalidOperationException($"Resource limit of {_otlpContext.Options.MaxResourceCount} reached. Resource '{key}' will not be added.");
@@ -1350,9 +1352,17 @@ public sealed partial class TelemetryRepository : IDisposable
             return null;
         }
 
-        var resourceKey = ResourceKey.Create(name: peer.DisplayName, instanceId: peer.Name);
-        var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
-        return resource;
+        try
+        {
+            var resourceKey = ResourceKey.Create(name: peer.DisplayName, instanceId: peer.Name);
+            var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
+            return resource;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogInformation(ex, "Error adding peer resource.");
+            return null;
+        }
     }
 
     private void CalculateTraceUninstrumentedPeers(OtlpTrace trace)
@@ -1372,9 +1382,16 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                var resourceKey = ResourceKey.Create(name: uninstrumentedPeer.DisplayName, instanceId: uninstrumentedPeer.Name);
-                var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
-                trace.SetSpanUninstrumentedPeer(span, resource);
+                try
+                {
+                    var resourceKey = ResourceKey.Create(name: uninstrumentedPeer.DisplayName, instanceId: uninstrumentedPeer.Name);
+                    var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
+                    trace.SetSpanUninstrumentedPeer(span, resource);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogInformation(ex, "Error adding uninstrumented peer resource.");
+                }
             }
             else
             {
@@ -1600,7 +1617,14 @@ public sealed partial class TelemetryRepository : IDisposable
             // When peers change then we need to recalculate the uninstrumented peers of spans.
             foreach (var trace in _traces)
             {
-                CalculateTraceUninstrumentedPeers(trace);
+                try
+                {
+                    CalculateTraceUninstrumentedPeers(trace);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogInformation(ex, "Error recalculating uninstrumented peers.");
+                }
             }
         }
         finally
