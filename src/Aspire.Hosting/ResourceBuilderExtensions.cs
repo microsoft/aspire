@@ -141,25 +141,6 @@ public static class ResourceBuilderExtensions
         });
     }
 
-    // Keep these ATS-only aliases for backward compatibility with existing polyglot app hosts.
-    // Remove them once callers have migrated to the unified withEnvironment(...) export.
-    // Tracking issue: https://github.com/microsoft/aspire/issues/15734
-    /// <summary>
-    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, ReferenceExpression)"/>.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="name">The name of the environment variable.</param>
-    /// <param name="value">The reference expression value.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
-    [AspireExport("withEnvironmentExpression", Description = "Sets an environment variable from a reference expression")]
-    internal static IResourceBuilder<T> WithEnvironmentExpressionShim<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value)
-        where T : IResourceWithEnvironment
-    {
-        return builder.WithEnvironment(name, value);
-    }
-
     /// <summary>
     /// Adds an environment variable to the resource.
     /// </summary>
@@ -236,22 +217,6 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, EndpointReference)"/>.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="name">The name of the environment variable.</param>
-    /// <param name="endpointReference">The endpoint reference value.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
-    [AspireExport("withEnvironmentEndpoint", Description = "Sets an environment variable from an endpoint reference")]
-    internal static IResourceBuilder<T> WithEnvironmentEndpointShim<T>(this IResourceBuilder<T> builder, string name, EndpointReference endpointReference)
-        where T : IResourceWithEnvironment
-    {
-        return builder.WithEnvironment(name, endpointReference);
-    }
-
-    /// <summary>
     /// Adds an environment variable to the resource with the URL from the <see cref="ExternalServiceResource"/>.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
@@ -318,22 +283,6 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, IResourceBuilder{ParameterResource})"/>.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="name">The name of the environment variable.</param>
-    /// <param name="parameter">The parameter resource builder.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
-    [AspireExport("withEnvironmentParameter", Description = "Sets an environment variable from a parameter resource")]
-    internal static IResourceBuilder<T> WithEnvironmentParameterShim<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> parameter)
-        where T : IResourceWithEnvironment
-    {
-        return builder.WithEnvironment(name, parameter);
-    }
-
-    /// <summary>
     /// Adds an environment variable to the resource with the connection string from the referenced resource.
     /// </summary>
     /// <typeparam name="T">The destination resource type.</typeparam>
@@ -358,25 +307,6 @@ public static class ResourceBuilderExtensions
         {
             context.EnvironmentVariables[envVarName] = new ConnectionStringReference(resource.Resource, optional: false);
         });
-    }
-
-    /// <summary>
-    /// Obsolete ATS alias for <see cref="WithEnvironment{T}(IResourceBuilder{T}, string, IResourceBuilder{IResourceWithConnectionString})"/>.
-    /// </summary>
-    /// <typeparam name="T">The destination resource type.</typeparam>
-    /// <param name="builder">The destination resource builder.</param>
-    /// <param name="envVarName">The name of the environment variable.</param>
-    /// <param name="resource">The referenced connection string resource builder.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [Obsolete("ATS compatibility shim. Use withEnvironment instead.")]
-    [AspireExport("withEnvironmentConnectionString", Description = "Sets an environment variable from a connection string resource")]
-    internal static IResourceBuilder<T> WithEnvironmentConnectionStringShim<T>(
-        this IResourceBuilder<T> builder,
-        string envVarName,
-        IResourceBuilder<IResourceWithConnectionString> resource)
-        where T : IResourceWithEnvironment
-    {
-        return builder.WithEnvironment(envVarName, resource);
     }
 
     /// <summary>

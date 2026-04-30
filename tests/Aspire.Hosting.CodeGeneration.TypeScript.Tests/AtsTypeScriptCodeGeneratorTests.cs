@@ -880,18 +880,6 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void TwoPassScanning_GeneratesDeprecatedJSDocForObsoleteExports()
-    {
-        var atsContext = CreateContextFromBothAssemblies();
-
-        var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
-
-        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead.", aspireTs);
-        Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
-    }
-
-    [Fact]
     public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
     {
         var atsContext = CreateContextFromBothAssemblies();

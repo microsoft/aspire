@@ -8830,28 +8830,8 @@ export interface ContainerResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ContainerResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): ContainerResourcePromise;
     /** Sets command-line arguments via callback */
@@ -9051,28 +9031,8 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ContainerResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ContainerResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ContainerResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): ContainerResourcePromise;
     /** Sets command-line arguments via callback */
@@ -9636,20 +9596,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new ContainerResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -9666,51 +9612,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<ContainerResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new ContainerResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<ContainerResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new ContainerResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<ContainerResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new ContainerResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -11043,24 +10944,8 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withArgs(args: string[]): ContainerResourcePromise {
@@ -11379,28 +11264,8 @@ export interface CSharpAppResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): CSharpAppResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): CSharpAppResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): CSharpAppResourcePromise;
     /** Sets command-line arguments via callback */
@@ -11568,28 +11433,8 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): CSharpAppResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): CSharpAppResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): CSharpAppResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): CSharpAppResourcePromise;
     /** Sets command-line arguments via callback */
@@ -11913,20 +11758,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<CSharpAppResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new CSharpAppResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -11943,51 +11774,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<CSharpAppResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new CSharpAppResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<CSharpAppResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new CSharpAppResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<CSharpAppResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new CSharpAppResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -13253,24 +13039,8 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withArgs(args: string[]): CSharpAppResourcePromise {
@@ -13601,28 +13371,8 @@ export interface DotnetToolResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): DotnetToolResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): DotnetToolResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): DotnetToolResourcePromise;
     /** Sets command-line arguments via callback */
@@ -13800,28 +13550,8 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): DotnetToolResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): DotnetToolResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): DotnetToolResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): DotnetToolResourcePromise;
     /** Sets command-line arguments via callback */
@@ -14225,20 +13955,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<DotnetToolResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new DotnetToolResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -14255,51 +13971,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<DotnetToolResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new DotnetToolResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<DotnetToolResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new DotnetToolResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<DotnetToolResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new DotnetToolResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -15574,24 +15245,8 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withArgs(args: string[]): DotnetToolResourcePromise {
@@ -15906,28 +15561,8 @@ export interface ExecutableResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExecutableResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ExecutableResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): ExecutableResourcePromise;
     /** Sets command-line arguments via callback */
@@ -16093,28 +15728,8 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExecutableResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ExecutableResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ExecutableResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): ExecutableResourcePromise;
     /** Sets command-line arguments via callback */
@@ -16434,20 +16049,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new ExecutableResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -16464,51 +16065,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<ExecutableResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new ExecutableResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<ExecutableResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new ExecutableResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<ExecutableResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new ExecutableResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -17759,24 +17315,8 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withArgs(args: string[]): ExecutableResourcePromise {
@@ -20379,28 +19919,8 @@ export interface ProjectResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ProjectResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ProjectResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): ProjectResourcePromise;
     /** Sets command-line arguments via callback */
@@ -20568,28 +20088,8 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ProjectResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ProjectResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ProjectResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): ProjectResourcePromise;
     /** Sets command-line arguments via callback */
@@ -20913,20 +20413,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<ProjectResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new ProjectResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ProjectResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -20943,51 +20429,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<ProjectResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new ProjectResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<ProjectResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new ProjectResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<ProjectResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new ProjectResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -22253,24 +21694,8 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withArgs(args: string[]): ProjectResourcePromise {
@@ -22621,28 +22046,8 @@ export interface TestDatabaseResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestDatabaseResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestDatabaseResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): TestDatabaseResourcePromise;
     /** Sets command-line arguments via callback */
@@ -22842,28 +22247,8 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestDatabaseResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestDatabaseResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestDatabaseResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): TestDatabaseResourcePromise;
     /** Sets command-line arguments via callback */
@@ -23427,20 +22812,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<TestDatabaseResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new TestDatabaseResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -23457,51 +22828,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<TestDatabaseResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new TestDatabaseResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<TestDatabaseResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new TestDatabaseResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<TestDatabaseResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new TestDatabaseResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -24834,24 +24160,8 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withArgs(args: string[]): TestDatabaseResourcePromise {
@@ -25202,28 +24512,8 @@ export interface TestRedisResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestRedisResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestRedisResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): TestRedisResourcePromise;
     /** Adds arguments */
@@ -25453,28 +24743,8 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestRedisResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestRedisResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestRedisResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
     /** Adds a connection property with a string or reference expression value */
     withConnectionProperty(name: string, value: string | ReferenceExpression): TestRedisResourcePromise;
     /** Adds arguments */
@@ -26068,20 +25338,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<TestRedisResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new TestRedisResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -26098,51 +25354,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<TestRedisResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new TestRedisResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<TestRedisResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new TestRedisResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<TestRedisResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new TestRedisResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -27673,24 +26884,8 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withConnectionProperty(name: string, value: string | ReferenceExpression): TestRedisResourcePromise {
@@ -28101,28 +27296,8 @@ export interface TestVaultResource {
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestVaultResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestVaultResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): TestVaultResourcePromise;
     /** Sets command-line arguments via callback */
@@ -28324,28 +27499,8 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): TestVaultResourcePromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestVaultResourcePromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestVaultResourcePromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
     /** Adds arguments */
     withArgs(args: string[]): TestVaultResourcePromise;
     /** Sets command-line arguments via callback */
@@ -28911,20 +28066,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<TestVaultResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new TestVaultResourceImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -28941,51 +28082,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<TestVaultResource> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new TestVaultResourceImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<TestVaultResource> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new TestVaultResourceImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<TestVaultResource> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new TestVaultResourceImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -30332,24 +29428,8 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withArgs(args: string[]): TestVaultResourcePromise {
@@ -32737,28 +31817,8 @@ export interface ResourceWithEnvironment {
     withOtlpExporter(options?: WithOtlpExporterOptions): ResourceWithEnvironmentPromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ResourceWithEnvironmentPromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourceWithEnvironmentPromise;
     /** Configures which reference values are injected into environment variables */
     withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ResourceWithEnvironmentPromise;
     /** Adds a reference to another resource */
@@ -32782,28 +31842,8 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
     withOtlpExporter(options?: WithOtlpExporterOptions): ResourceWithEnvironmentPromise;
     /** Sets an environment variable */
     withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from a reference expression
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ResourceWithEnvironmentPromise;
     /** Sets environment variables via callback */
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from an endpoint reference
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from a parameter resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ResourceWithEnvironmentPromise;
-    /**
-     * Sets an environment variable from a connection string resource
-     * @deprecated ATS compatibility shim. Use withEnvironment instead.
-     */
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourceWithEnvironmentPromise;
     /** Configures which reference values are injected into environment variables */
     withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ResourceWithEnvironmentPromise;
     /** Adds a reference to another resource */
@@ -32863,20 +31903,6 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** @internal */
-    private async _withEnvironmentExpressionInternal(name: string, value: ReferenceExpression): Promise<ResourceWithEnvironment> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
-        const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpcArgs
-        );
-        return new ResourceWithEnvironmentImpl(result, this._client);
-    }
-
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentExpressionInternal(name, value), this._client);
-    }
-
-    /** @internal */
     private async _withEnvironmentCallbackInternal(callback: (arg: EnvironmentCallbackContext) => Promise<void>): Promise<ResourceWithEnvironment> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as EnvironmentCallbackContextHandle;
@@ -32893,51 +31919,6 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
 
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentCallbackInternal(callback), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentEndpointInternal(name: string, endpointReference: Awaitable<EndpointReference>): Promise<ResourceWithEnvironment> {
-        endpointReference = isPromiseLike(endpointReference) ? await endpointReference : endpointReference;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, endpointReference };
-        const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpcArgs
-        );
-        return new ResourceWithEnvironmentImpl(result, this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentEndpointInternal(name, endpointReference), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentParameterInternal(name: string, parameter: Awaitable<ParameterResource>): Promise<ResourceWithEnvironment> {
-        parameter = isPromiseLike(parameter) ? await parameter : parameter;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, parameter };
-        const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpcArgs
-        );
-        return new ResourceWithEnvironmentImpl(result, this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentParameterInternal(name, parameter), this._client);
-    }
-
-    /** @internal */
-    private async _withEnvironmentConnectionStringInternal(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): Promise<ResourceWithEnvironment> {
-        resource = isPromiseLike(resource) ? await resource : resource;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, envVarName, resource };
-        const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
-            'Aspire.Hosting/withEnvironmentConnectionString',
-            rpcArgs
-        );
-        return new ResourceWithEnvironmentImpl(result, this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentConnectionStringInternal(envVarName, resource), this._client);
     }
 
     /** @internal */
@@ -33094,24 +32075,8 @@ class ResourceWithEnvironmentPromiseImpl implements ResourceWithEnvironmentPromi
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
-    withEnvironmentExpression(name: string, value: ReferenceExpression): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentExpression(name, value)), this._client);
-    }
-
     withEnvironmentCallback(callback: (arg: EnvironmentCallbackContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentCallback(callback)), this._client);
-    }
-
-    withEnvironmentEndpoint(name: string, endpointReference: Awaitable<EndpointReference>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentEndpoint(name, endpointReference)), this._client);
-    }
-
-    withEnvironmentParameter(name: string, parameter: Awaitable<ParameterResource>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentParameter(name, parameter)), this._client);
-    }
-
-    withEnvironmentConnectionString(envVarName: string, resource: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourceWithEnvironmentPromise {
-        return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentConnectionString(envVarName, resource)), this._client);
     }
 
     withReferenceEnvironment(options: ReferenceEnvironmentInjectionOptions): ResourceWithEnvironmentPromise {

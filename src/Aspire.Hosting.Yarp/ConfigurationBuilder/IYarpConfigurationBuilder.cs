@@ -252,20 +252,6 @@ public static class YarpConfigurationBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a route for an existing cluster.
-    /// </summary>
-    /// <param name="builder">The builder instance.</param>
-    /// <param name="path">The path to match for this route.</param>
-    /// <param name="cluster">The target cluster for this route.</param>
-    /// <returns>The created route.</returns>
-    [Obsolete("Use addRoute(path, target) instead.")]
-    [AspireExport("IYarpConfigurationBuilder.addRoute", MethodName = "addRouteCluster", Description = "Obsolete compatibility shim for the previous cluster-only addRoute export. Use addRoute(path, target) instead.")]
-    internal static YarpRoute AddRouteCluster(this IYarpConfigurationBuilder builder, string path, YarpCluster cluster)
-    {
-        return builder.AddRoute(path, cluster);
-    }
-
-    /// <summary>
     /// Add a new catch all route to YARP that will target the cluster in parameter.
     /// </summary>
     /// <param name="builder">The builder instance.</param>
