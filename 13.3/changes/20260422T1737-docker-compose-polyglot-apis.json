@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript, Python, and Java polyglot AppHosts now have access to the Docker Compose customization APIs previously missing from the exported surface, including ConfigureComposeFile(), GetHostAddressExpression(), and AsEnvironmentPlaceholder() overloads.",
+  "docsRequired": false,
+  "emoji": "🐳",
+  "firstMergedAt": "2026-04-22T17:37:56Z",
+  "lastMergedAt": "2026-04-22T17:37:56Z",
+  "name": "Docker Compose API parity for polyglot AppHosts",
+  "prs": [
+    16364
+  ]
+}

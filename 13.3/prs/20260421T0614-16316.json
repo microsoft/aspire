@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only change, no user-facing impact",
+  "mergedAt": "2026-04-21T06:14:26Z",
+  "number": 16316,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "excluded",
+  "title": "Add AKS Blazor+Redis interactive deploy E2E test"
+}

@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed aspire describe --follow so it gracefully handles disconnects when the AppHost stops or restarts, instead of failing with an unhandled error. Users streaming resource state updates now see a clean exit.",
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-04-22T00:03:48Z",
+  "lastMergedAt": "2026-04-22T00:03:48Z",
+  "name": "Fix aspire describe --follow on AppHost disconnect",
+  "prs": [
+    16271
+  ]
+}

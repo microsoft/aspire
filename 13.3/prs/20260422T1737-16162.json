@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Notable CLI new feature: Bun/Yarn/pnpm support for TypeScript AppHosts",
+  "mergedAt": "2026-04-22T17:37:34Z",
+  "number": 16162,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Support alternative TypeScript AppHost toolchains"
+}

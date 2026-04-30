@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed OTLP endpoint resolution when running in isolated mode (aspire start --isolated). Resources were sending telemetry to the statically configured URL instead of the actual randomly-allocated dashboard endpoint, causing traces and metrics to be silently lost.",
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-04-23T00:26:28Z",
+  "lastMergedAt": "2026-04-23T00:26:28Z",
+  "name": "Fix OTLP endpoint resolution in isolated mode",
+  "prs": [
+    16367
+  ]
+}

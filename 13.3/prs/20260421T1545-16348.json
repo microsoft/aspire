@@ -1,0 +1,9 @@
+{
+  "author": "app/github-actions",
+  "comment": "Automated bot dependency update",
+  "mergedAt": "2026-04-21T15:45:14Z",
+  "number": 16348,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "excluded",
+  "title": "[main] Update dependencies from microsoft/dcp"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Notable AppHost improvement: Docker Compose API parity for polyglot AppHosts",
+  "mergedAt": "2026-04-22T17:37:56Z",
+  "number": 16364,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Expose missing Docker Compose polyglot APIs"
+}

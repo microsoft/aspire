@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Notable Dashboard bug fix: OTLP interop with numeric bucket counts",
+  "mergedAt": "2026-04-22T14:49:11Z",
+  "number": 16376,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Fix OTLP JSON deserialization of numeric histogram bucketCounts"
+}

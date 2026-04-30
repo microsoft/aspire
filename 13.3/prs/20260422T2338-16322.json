@@ -1,0 +1,9 @@
+{
+  "author": "app/dotnet-maestro",
+  "comment": "Automated bot dependency update",
+  "mergedAt": "2026-04-22T23:38:21Z",
+  "number": 16322,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "excluded",
+  "title": "[main] Update dependencies from dotnet/arcade"
+}

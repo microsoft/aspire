@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now uses the green checkmark button emoji (✅) consistently instead of the plain checkmark (✔️), which rendered as purple/blue on Windows terminals. Success indicators in commands like aspire doctor and aspire new now appear green on all platforms.",
+  "docsRequired": false,
+  "emoji": "✅",
+  "firstMergedAt": "2026-04-22T15:27:41Z",
+  "lastMergedAt": "2026-04-22T15:27:41Z",
+  "name": "Consistent green checkmark emoji on all platforms",
+  "prs": [
+    16373
+  ]
+}

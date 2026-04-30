@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Notable CLI improvement: eliminates repeated macOS Keychain prompts for dev certs",
+  "mergedAt": "2026-04-21T18:15:57Z",
+  "number": 16282,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Pre-export dev certificate to Aspire cache to avoid macOS keychain prompts"
+}

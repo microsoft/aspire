@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "On macOS, running an Aspire app host after trusting the developer certificate no longer triggers repeated Keychain access prompts. The CLI now pre-exports certificate key material to the Aspire dev-cert cache during trust operations, reducing keychain accesses to at most one on cache miss.",
+  "docsRequired": false,
+  "emoji": "🔑",
+  "firstMergedAt": "2026-04-21T18:15:57Z",
+  "lastMergedAt": "2026-04-21T18:15:57Z",
+  "name": "Eliminate macOS Keychain prompts for dev certificates",
+  "prs": [
+    16282
+  ]
+}

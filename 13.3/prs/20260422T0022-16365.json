@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Minor internal log level change, not notable",
+  "mergedAt": "2026-04-22T00:22:46Z",
+  "number": 16365,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "excluded",
+  "title": "Downgrade AuxiliaryBackchannelRpcTarget log messages from Info to Debug"
+}

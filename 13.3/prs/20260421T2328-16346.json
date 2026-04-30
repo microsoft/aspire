@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Notable CLI improvement: adds run command telemetry for observability",
+  "mergedAt": "2026-04-21T23:28:09Z",
+  "number": 16346,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Add telemetry activity for running app host in CLI"
+}

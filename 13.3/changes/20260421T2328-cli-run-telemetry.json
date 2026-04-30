@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire run command now reports telemetry tracking app host runs, including language, detached/isolated mode, and error category. This improves observability for CLI usage patterns and failure diagnosis.",
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-04-21T23:28:09Z",
+  "lastMergedAt": "2026-04-21T23:28:09Z",
+  "name": "Telemetry for aspire run app host invocations",
+  "prs": [
+    16346
+  ]
+}

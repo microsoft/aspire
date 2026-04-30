@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Notable AppHost bug fix: correct OTLP endpoint used in isolated mode",
+  "mergedAt": "2026-04-23T00:26:28Z",
+  "number": 16367,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Fix OTLP endpoint resolution in isolated mode"
+}

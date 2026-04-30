@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Notable CLI improvement: consistent green checkmark rendering cross-platform",
+  "mergedAt": "2026-04-22T15:27:41Z",
+  "number": 16373,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Use CheckMarkButton emoji instead of CheckMark for consistent green rendering"
+}

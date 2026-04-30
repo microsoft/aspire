@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "New WithBrowserLogs() API attaches a tracked browser resource to any endpoint-capable resource. When activated, Aspire launches a Chromium-based browser, streams console logs, network requests, and errors back into the resource log stream, and surfaces live CDP session metadata for downstream tools like Playwright.",
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-04-22T15:10:09Z",
+  "lastMergedAt": "2026-04-22T15:10:09Z",
+  "name": "Browser log and network capture with WithBrowserLogs()",
+  "prs": [
+    16310
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Windows CLI NativeAOT compilation now runs in parallel with the managed build in a dedicated build_sign_native stage, matching how macOS and Linux native builds already work. This reduces overall pipeline time by decoupling the two independent build concerns.",
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-04-22T19:31:51Z",
+  "lastMergedAt": "2026-04-22T19:31:51Z",
+  "name": "Parallel Windows CLI NativeAOT build pipeline",
+  "prs": [
+    16366
+  ]
+}

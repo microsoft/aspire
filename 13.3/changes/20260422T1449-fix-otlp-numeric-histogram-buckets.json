@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a deserialization error in the Dashboard when receiving OTLP histogram data with numeric bucket counts (e.g., from VS Code Copilot Chat). The bucketCounts field now accepts both JSON number and string tokens, matching the behavior of other uint64 OTLP fields.",
+  "docsRequired": false,
+  "emoji": "📈",
+  "firstMergedAt": "2026-04-22T14:49:11Z",
+  "lastMergedAt": "2026-04-22T14:49:11Z",
+  "name": "Fix OTLP histogram bucket count deserialization",
+  "prs": [
+    16376
+  ]
+}

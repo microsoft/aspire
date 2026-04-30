@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Notable CLI improvement: centralized non-interactive mode prompt resolution",
+  "mergedAt": "2026-04-22T02:28:49Z",
+  "number": 16235,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Add PromptBinding infrastructure for non-interactive CLI mode"
+}

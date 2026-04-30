@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only change, no user-facing impact",
+  "mergedAt": "2026-04-21T21:42:10Z",
+  "number": 16359,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "excluded",
+  "title": "Add test for fast-exiting container"
+}

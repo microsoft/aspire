@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Notable Engineering improvement: parallel Windows CLI NativeAOT build pipeline",
+  "mergedAt": "2026-04-22T19:31:51Z",
+  "number": 16366,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Move Windows CLI NativeAOT build to build_sign_native stage"
+}

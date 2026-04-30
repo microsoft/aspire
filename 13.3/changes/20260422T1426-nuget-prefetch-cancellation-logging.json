@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The NuGet package prefetcher no longer logs verbose stack traces when the CLI shuts down quickly (e.g., running aspire otel traces with no running AppHost). Expected cancellations are now logged at trace level with a clean message.",
+  "docsRequired": false,
+  "emoji": "🔇",
+  "firstMergedAt": "2026-04-22T14:26:47Z",
+  "lastMergedAt": "2026-04-22T14:26:47Z",
+  "name": "Quieter NuGet prefetch shutdown logging",
+  "prs": [
+    16369
+  ]
+}

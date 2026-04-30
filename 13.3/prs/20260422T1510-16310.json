@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Notable AppHost new feature: WithBrowserLogs() for browser console/network capture",
+  "mergedAt": "2026-04-22T15:10:09Z",
+  "number": 16310,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Add tracked browser logs and network capture"
+}

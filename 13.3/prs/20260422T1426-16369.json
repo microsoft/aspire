@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Notable CLI improvement: cleaner shutdown logging for NuGet prefetcher",
+  "mergedAt": "2026-04-22T14:26:47Z",
+  "number": 16369,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Improve NuGetPackagePrefetcher cancellation logging"
+}

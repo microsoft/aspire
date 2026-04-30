@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Notable CLI bug fix: graceful disconnect handling in aspire describe --follow",
+  "mergedAt": "2026-04-22T00:03:48Z",
+  "number": 16271,
+  "runDate": "2026-04-30T15:11:05Z",
+  "status": "included",
+  "title": "Handle describe --follow disconnects"
+}
