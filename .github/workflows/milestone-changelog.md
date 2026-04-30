@@ -447,12 +447,13 @@ indented line below the Changes line:
   Changes: [#1234](https://github.com/microsoft/aspire/pull/1234)  
   ⚠️ **Breaking change**  
   📝 **Documentation required**  
-  🌍 **Community contribution** by @username
+  🌍 **Community contribution** by [@username](https://github.com/username)
 ```
 
 For the community contribution flag, include the author's GitHub username after
-the label (e.g., `🌍 **Community contribution** by @username`). This gives
-visibility and recognition to external contributors.
+the label as a link to their profile (e.g.,
+`🌍 **Community contribution** by [@username](https://github.com/username)`).
+This gives visibility and recognition to external contributors.
 
 Omit flag lines entirely when a flag does not apply.
 
@@ -603,7 +604,7 @@ Use this exact format:
   Resolved a crash when running aspire init in an empty directory  
   Changes: [#1239](https://github.com/microsoft/aspire/pull/1239)  
   ⚠️ **Breaking change**  
-  🌍 **Community contribution** by @contributor
+  🌍 **Community contribution** by [@contributor](https://github.com/contributor)
 
 ## 📊 Dashboard
 
@@ -700,7 +701,7 @@ For each **new or updated** changelog entry produced in Step 5, write a JSON fil
 
 Where:
 - `{first-pr-merge-date}` is the merge date of the earliest PR in the entry, in
-  `YYYY-MM-DDTHHmm` format (e.g., `2026-04-22T1830`)
+  `YYYYMMDDTHHmm` format (e.g., `20260422T1830`)
 - `{slug}` is a kebab-case slug derived from the entry name (e.g., `new-cli-command`).
   Use only lowercase letters, digits, and hyphens. Truncate to 60 characters.
 
