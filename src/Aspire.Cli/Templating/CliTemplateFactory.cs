@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Templating;
@@ -164,36 +165,25 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         return _languageDiscovery.GetLanguageById(new LanguageId(template.LanguageId)) is not null;
     }
 
-    private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, TemplatePorts ports, string hostName = "localhost")
+    private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, AppHostProfilePorts ports, string hostName = "localhost")
     {
         return content
             .Replace("{{projectName}}", projectName)
             .Replace("{{projectNameLower}}", projectNameLower)
             .Replace("{{aspireVersion}}", aspireVersion)
             .Replace("{{hostName}}", hostName)
-            .Replace("{{httpPort}}", ports.HttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{httpsPort}}", ports.HttpsPort.ToString(CultureInfo.InvariantCulture))
+            .Replace("{{httpPort}}", ports.DashboardHttpPort.ToString(CultureInfo.InvariantCulture))
+            .Replace("{{httpsPort}}", ports.DashboardHttpsPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpPort}}", ports.OtlpHttpPort.ToString(CultureInfo.InvariantCulture))
             .Replace("{{otlpHttpsPort}}", ports.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{resourceHttpPort}}", ports.ResourceHttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{resourceHttpsPort}}", ports.ResourceHttpsPort.ToString(CultureInfo.InvariantCulture));
+            .Replace("{{resourceHttpPort}}", ports.ResourceServiceHttpPort.ToString(CultureInfo.InvariantCulture))
+            .Replace("{{resourceHttpsPort}}", ports.ResourceServiceHttpsPort.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static TemplatePorts GenerateRandomPorts()
+    private static AppHostProfilePorts GenerateRandomPorts()
     {
-        return new TemplatePorts(
-            HttpPort: Random.Shared.Next(15000, 15300),
-            HttpsPort: Random.Shared.Next(17000, 17300),
-            OtlpHttpPort: Random.Shared.Next(19000, 19300),
-            OtlpHttpsPort: Random.Shared.Next(21000, 21300),
-            ResourceHttpPort: Random.Shared.Next(20000, 20300),
-            ResourceHttpsPort: Random.Shared.Next(22000, 22300));
+        return AppHostProfilePortGenerator.Generate(Random.Shared);
     }
-
-    private sealed record TemplatePorts(
-        int HttpPort, int HttpsPort,
-        int OtlpHttpPort, int OtlpHttpsPort,
-        int ResourceHttpPort, int ResourceHttpsPort);
 
     private static void AddOptionIfMissing(System.CommandLine.Command command, System.CommandLine.Option option)
     {

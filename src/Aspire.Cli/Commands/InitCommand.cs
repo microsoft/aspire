@@ -15,6 +15,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Commands;
 
@@ -398,32 +399,26 @@ internal sealed class InitCommand : BaseCommand
         // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
         if (settings["profiles"] is null)
         {
-            // Port ranges match CliTemplateFactory.GenerateRandomPorts()
-            var httpPort = Random.Shared.Next(15000, 15300);
-            var httpsPort = Random.Shared.Next(17000, 17300);
-            var otlpHttpPort = Random.Shared.Next(19000, 19300);
-            var otlpHttpsPort = Random.Shared.Next(21000, 21300);
-            var resourceHttpPort = Random.Shared.Next(20000, 20300);
-            var resourceHttpsPort = Random.Shared.Next(22000, 22300);
+            var ports = AppHostProfilePortGenerator.Generate(Random.Shared);
 
             settings["profiles"] = new JsonObject
             {
                 ["https"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"https://localhost:{httpsPort};http://localhost:{httpPort}",
+                    ["applicationUrl"] = $"https://localhost:{ports.DashboardHttpsPort};http://localhost:{ports.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{otlpHttpsPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{resourceHttpsPort}"
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{ports.OtlpHttpsPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
                     }
                 },
                 ["http"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"http://localhost:{httpPort}",
+                    ["applicationUrl"] = $"http://localhost:{ports.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{otlpHttpPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{resourceHttpPort}",
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{ports.OtlpHttpPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{ports.ResourceServiceHttpPort}",
                         ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
                     }
                 }
