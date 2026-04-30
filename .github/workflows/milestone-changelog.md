@@ -308,7 +308,7 @@ The pre-computation step (in the frontmatter) has already:
 - Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
 
 Each entry in `batch-prs.json` contains: `number`, `title`, `author` (object with
-`login`), `mergedAt`, `labels` (array of objects with `name`), `additions`,
+`login` and `is_bot`), `mergedAt`, `labels` (array of objects with `name`), `additions`,
 `deletions`, `changedFiles`.
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`.
@@ -319,12 +319,13 @@ If the batch is empty, there are no new PRs to process.
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
 unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
-`number`, `title`, `author` (object with `login`), `mergedAt`, `labels` (array
-of objects with `name`), `additions`, `deletions`, `changedFiles`.
+`number`, `title`, `author` (object with `login` and `is_bot`), `mergedAt`, `labels`
+(array of objects with `name`), `additions`, `deletions`, `changedFiles`.
 
-1. **Exclude bot-authored PRs** — remove any PR whose `author.login` ends with
-   `[bot]` (e.g., `dependabot[bot]`, `dotnet-maestro[bot]`, `github-actions[bot]`).
-   Still write a per-PR summary file for each bot PR with `status: "excluded"`
+1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
+   **except** `app/copilot-swe-agent` which makes product changes on behalf of
+   developers and should be processed normally.
+   Still write a per-PR summary file for each excluded bot PR with `status: "excluded"`
    and `changes: ["Bot-authored PR"]` so they are not re-processed on future runs.
 2. If the batch has fewer than ${BATCH_SIZE} PRs, all remaining PRs have been processed
    and the backlog is fully caught up.
