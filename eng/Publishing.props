@@ -43,6 +43,8 @@
       <_ExtensionFilesToPublish Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.vsix" />
       <_ExtensionManifestFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.manifest" />
       <_ExtensionSignatureFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.signature.p7s" />
+      <_CliToolPackagesToPublish Include="$(ArtifactsShippingPackagesDir)**\Aspire.Cli*.nupkg"
+                                  Exclude="$(ArtifactsShippingPackagesDir)**\*.symbols.nupkg" />
     </ItemGroup>
 
     <!-- Validate VS Code extension artifacts: we expect exactly 1 VSIX and 1 manifest file.
@@ -148,6 +150,10 @@
         <IsShipping>false</IsShipping>
         <PublishFlatContainer>true</PublishFlatContainer>
         <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
+      </ItemsToPushToBlobFeed>
+      <ItemsToPushToBlobFeed Include="@(_CliToolPackagesToPublish)" Exclude="@(ItemsToPushToBlobFeed)">
+        <IsShipping>true</IsShipping>
+        <Kind>Package</Kind>
       </ItemsToPushToBlobFeed>
       <ItemsToPushToBlobFeed Include="@(_ExtensionFilesToPublish)">
         <IsShipping>false</IsShipping>
