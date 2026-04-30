@@ -438,7 +438,20 @@ Then determine whether either of these optional flags applies:
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
 | **Docs required** | 📝 | Change needs documentation on aspire.dev (new feature, changed behavior, new config options) |
-| **Community contribution** | 🌍 | PR author's `author_association` (from `pull_request_read`) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor |
+| **Community contribution** | 🌍 | PR author's `author_association` is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor |
+
+> **Important — verifying `author_association`:** The `pull_request_read` MCP tool
+> may omit the `author_association` field from its response. If the field is missing
+> or you cannot confirm its value from the tool response, you **must** fetch it
+> explicitly using the `bash` tool:
+>
+> ```bash
+> gh api "repos/microsoft/aspire/pulls/<NUMBER>" --jq '.author_association'
+> ```
+>
+> **Never infer community-contributor status from fork origin, username, or any
+> other heuristic.** Only the `author_association` field from the GitHub API is
+> authoritative. Team members frequently submit PRs from personal forks.
 
 A change can have zero or more flags. When present, show each flag on its own
 indented line below the Changes line:
