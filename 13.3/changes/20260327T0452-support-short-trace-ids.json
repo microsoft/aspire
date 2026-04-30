@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire Dashboard telemetry API now supports looking up traces by short (abbreviated) trace IDs in addition to full 32-character hex trace IDs, making it easier to reference specific traces.",
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-03-27T04:52:58Z",
+  "lastMergedAt": "2026-03-27T04:52:58Z",
+  "name": "Support short trace IDs in telemetry API",
+  "prs": [
+    15641
+  ]
+}

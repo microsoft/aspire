@@ -1,0 +1,16 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a crash in the Aspire CLI when reading boolean values from `aspire.config.json`, and corrected the write path so booleans are stored as JSON `true`/`false` rather than strings. Config files written by older CLI versions with string booleans are now read without error.",
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-03-27T04:04:31Z",
+  "lastMergedAt": "2026-03-27T04:04:31Z",
+  "name": "Fix config boolean handling: crash on read, wrong types on write",
+  "prs": [
+    15638
+  ]
+}

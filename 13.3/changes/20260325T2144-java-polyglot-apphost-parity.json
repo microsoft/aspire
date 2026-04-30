@@ -4,13 +4,14 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "Java polyglot AppHost support is now much closer to the TypeScript experience, with improved generated SDK ergonomics (unions, optional/nullability, callbacks), a runnable JavaAppHost playground, CI validation, and a new `Empty (Java AppHost)` template. Enable with `aspire config set -g features.experimentalPolyglot:java true`.",
+  "description": "Java polyglot AppHost support is now much closer to the TypeScript experience, with improved generated SDK ergonomics (unions, optional/nullability, callbacks), a runnable JavaAppHost playground, CI validation, and a new `Empty (Java AppHost)` template. Integer values passed from Java are now correctly coerced to the expected CLR integral types. Enable with `aspire config set -g features.experimentalPolyglot:java true`.",
   "docsRequired": false,
   "emoji": "☕",
   "firstMergedAt": "2026-03-25T21:44:20Z",
-  "lastMergedAt": "2026-03-25T21:44:20Z",
+  "lastMergedAt": "2026-03-27T05:34:06Z",
   "name": "Java polyglot AppHost support improvements (experimental)",
   "prs": [
-    15470
+    15470,
+    15636
   ]
 }

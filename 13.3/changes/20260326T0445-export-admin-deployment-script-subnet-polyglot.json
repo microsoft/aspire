@@ -1,0 +1,16 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `WithAdminDeploymentScriptSubnet` method on Azure SQL Server resources is now exported for use in TypeScript polyglot app hosts, allowing TypeScript AppHosts to configure a specific subnet for SQL Server deployment scripts.",
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-03-26T04:45:06Z",
+  "lastMergedAt": "2026-03-26T04:45:06Z",
+  "name": "Export WithAdminDeploymentScriptSubnet for TypeScript polyglot app hosts",
+  "prs": [
+    15564
+  ]
+}

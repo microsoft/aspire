@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed two bugs in the Aspire CLI install scripts: the PowerShell install script no longer reports a successful install when file-lock errors prevent replacing an in-use `aspire.exe`, and Windows PowerShell 5.1 users no longer see an IE security warning prompt when downloading via `Invoke-WebRequest`.",
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-03-26T08:46:46Z",
+  "lastMergedAt": "2026-03-26T15:18:04Z",
+  "name": "Fix CLI install script errors on Windows",
+  "prs": [
+    15609,
+    15419
+  ]
+}

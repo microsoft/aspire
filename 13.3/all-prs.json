@@ -2387,144 +2387,144 @@
     "status": "unprocessed"
   },
   {
-    "comment": null,
+    "comment": "Dependency: remove ModelContextProtocol.AspNetCore package version",
     "mergedAt": "2026-03-27T22:06:05Z",
     "number": 15654,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Internal CI: clean up pr-docs-hook workflow",
     "mergedAt": "2026-03-27T20:57:36Z",
     "number": 15652,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Python starter template migrated to CLI template factory (breaking change)",
     "mergedAt": "2026-03-27T19:11:02Z",
     "number": 15574,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Test-only: add tests for DistributedApplicationBuilder log capture",
     "mergedAt": "2026-03-27T07:01:55Z",
     "number": 15266,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fix Java polyglot ATS integer type coercion",
     "mergedAt": "2026-03-27T05:34:06Z",
     "number": 15636,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix DotnetToolResource validation callback selection",
     "mergedAt": "2026-03-27T05:20:08Z",
     "number": 15267,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Internal CI: add Windows CLI starter validation workflow",
     "mergedAt": "2026-03-27T05:11:59Z",
     "number": 15455,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fix playwright-cli install on Windows (agent init)",
     "mergedAt": "2026-03-27T05:00:36Z",
     "number": 15640,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Support short trace IDs in dashboard telemetry API",
     "mergedAt": "2026-03-27T04:52:58Z",
     "number": 15641,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix malformed dashboard URLs in aspire describe command",
     "mergedAt": "2026-03-27T04:30:24Z",
     "number": 15639,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Fix config boolean handling: crash on read, wrong types on write",
     "mergedAt": "2026-03-27T04:04:31Z",
     "number": 15638,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Updated VS Code activity bar icon",
     "mergedAt": "2026-03-26T20:54:46Z",
     "number": 15451,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Internal: make startup-perf skill work on Mac/Linux",
     "mergedAt": "2026-03-26T19:21:54Z",
     "number": 15591,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Internal CI: disable macOS GitHub Actions jobs by default",
     "mergedAt": "2026-03-26T18:54:02Z",
     "number": 15616,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fix install script swallowing file-lock errors and reporting false success",
     "mergedAt": "2026-03-26T15:18:04Z",
     "number": 15419,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Internal engineering: GitHub workflow change for bug issue creation",
     "mergedAt": "2026-03-26T14:07:17Z",
     "number": 15617,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Fix UseBasicParsing in PowerShell 5.1 get-aspire-cli.ps1",
     "mergedAt": "2026-03-26T08:46:46Z",
     "number": 15609,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Test-only change: re-enable disabled CLI test",
     "mergedAt": "2026-03-26T04:45:24Z",
     "number": 15568,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "excluded"
   },
   {
-    "comment": null,
+    "comment": "Export WithAdminDeploymentScriptSubnet for TypeScript polyglot app hosts",
     "mergedAt": "2026-03-26T04:45:06Z",
     "number": 15564,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
-    "comment": null,
+    "comment": "Clickable terminal hyperlinks for CLI URL output",
     "mergedAt": "2026-03-26T04:34:27Z",
     "number": 15573,
-    "runDate": null,
-    "status": "unprocessed"
+    "runDate": "2026-04-30T05:12:02Z",
+    "status": "included"
   },
   {
     "comment": "Python AppHost code generator for polyglot support",

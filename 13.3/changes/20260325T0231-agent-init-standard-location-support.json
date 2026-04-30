@@ -8,9 +8,10 @@
   "docsRequired": true,
   "emoji": "🤖",
   "firstMergedAt": "2026-03-25T02:31:42Z",
-  "lastMergedAt": "2026-03-25T02:31:42Z",
+  "lastMergedAt": "2026-03-27T05:00:36Z",
   "name": "Improved AI agent init with location selection and standard skill support",
   "prs": [
-    15022
+    15022,
+    15640
   ]
 }
