@@ -46,6 +46,7 @@ public partial class AzureKubernetesEnvironmentResource :
                 Name = $"prepare-aks-{Name}",
                 Description = $"Prepares Azure Kubernetes Service environment {Name}.",
                 Action = ctx => PrepareAksEnvironmentAsync(ctx),
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps =
                 [
                     WellKnownPipelineSteps.BeforeStart,

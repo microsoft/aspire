@@ -307,8 +307,7 @@ internal static class Hex1bTestHelpers
         return builder
             .WaitUntil(s => agentInitPrompt.Search(s).Count > 0, timeout ?? TimeSpan.FromSeconds(120))
             .Wait(500)
-            .Type("n")
-            .Enter();
+            .Type("n");
     }
 
     /// <summary>
@@ -332,8 +331,6 @@ internal static class Hex1bTestHelpers
         var agentInitPrompt = new CellPatternSearcher()
             .Find("configure AI agent environments");
 
-        var agentInitFound = false;
-
         return builder
             // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
             // Uses the full timeout since aspire new project creation can take minutes.
@@ -341,7 +338,6 @@ internal static class Hex1bTestHelpers
             {
                 if (agentInitPrompt.Search(s).Count > 0)
                 {
-                    agentInitFound = true;
                     return true;
                 }
                 var successSearcher = new CellPatternSearcher()
@@ -350,11 +346,10 @@ internal static class Hex1bTestHelpers
                 return successSearcher.Search(s).Count > 0;
             }, effectiveTimeout)
             .Wait(500)
-            // Type 'n' + Enter unconditionally:
+            // Type 'n' unconditionally:
             // - Agent init: declines the prompt, CLI exits, success prompt appears
-            // - No agent init: 'n' runs at bash (command not found), produces error prompt
+            // - No agent init: 'n' is typed at bash but not submitted; the existing success prompt remains and Ctrl+U clears the pending input
             .Type("n")
-            .Enter()
             // Wait for the aspire command's success prompt (already on screen or appears after decline)
             .WaitUntil(s =>
             {
@@ -363,15 +358,12 @@ internal static class Hex1bTestHelpers
                     .RightText(" OK] $ ");
                 return successSearcher.Search(s).Count > 0;
             }, effectiveTimeout)
+            .Ctrl().Key(Hex1bKey.U)
             // Increment counter correctly for both cases:
             // - Agent init: one increment for the aspire command
-            // - No agent init: two increments (aspire command + the 'n' error command)
+            // - No agent init: one increment for the aspire command
             .WaitUntil(_ =>
             {
-                if (!agentInitFound)
-                {
-                    counter.Increment();
-                }
                 counter.Increment();
                 return true;
             }, TimeSpan.FromSeconds(1));

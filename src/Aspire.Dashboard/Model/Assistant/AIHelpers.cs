@@ -69,7 +69,7 @@ internal static class AIHelpers
                 };
                 if (!string.IsNullOrEmpty(u.DisplayProperties.DisplayName))
                 {
-                    urlObj["display_name"] = u.DisplayProperties.DisplayName;
+                    urlObj["displayName"] = u.DisplayProperties.DisplayName;
                 }
                 endpointUrlsArray.Add(urlObj);
             }
@@ -80,15 +80,15 @@ internal static class AIHelpers
                 healthReportsArray.Add(new JsonObject
                 {
                     ["name"] = report.Name,
-                    ["health_status"] = GetReportHealthStatus(resource, report),
+                    ["healthStatus"] = GetReportHealthStatus(resource, report),
                     ["exception"] = report.ExceptionText
                 });
             }
 
             var healthObj = new JsonObject
             {
-                ["resource_health_status"] = GetResourceHealthStatus(resource),
-                ["health_reports"] = healthReportsArray
+                ["resourceHealthStatus"] = GetResourceHealthStatus(resource),
+                ["healthReports"] = healthReportsArray
             };
 
             var commandsArray = new JsonArray();
@@ -103,12 +103,12 @@ internal static class AIHelpers
 
             var resourceObj = new JsonObject
             {
-                ["resource_name"] = resourceName,
+                ["resourceName"] = resourceName,
                 ["type"] = resource.ResourceType,
                 ["state"] = resource.State,
-                ["state_description"] = ResourceStateViewModel.GetResourceStateTooltip(resource, s_columnsLoc),
+                ["stateDescription"] = ResourceStateViewModel.GetResourceStateTooltip(resource, s_columnsLoc),
                 ["relationships"] = GetResourceRelationshipsJson(resources, resource, getResourceName),
-                ["endpoint_urls"] = endpointUrlsArray,
+                ["endpointUrls"] = endpointUrlsArray,
                 ["health"] = healthObj,
                 ["source"] = ResourceSourceViewModel.GetSourceViewModel(resource)?.Value,
                 ["commands"] = commandsArray
@@ -116,7 +116,7 @@ internal static class AIHelpers
 
             if (includeDashboardUrl && dashboardBaseUrl != null)
             {
-                resourceObj["dashboard_link"] = SharedAIHelpers.GetDashboardLinkObject(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: resource.Name), resourceName);
+                resourceObj["dashboardUrl"] = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: resource.Name));
             }
 
             if (includeEnvironmentVariables)
@@ -126,7 +126,7 @@ internal static class AIHelpers
                 {
                     envVarsArray.Add(JsonValue.Create(e.Name));
                 }
-                resourceObj["environment_variables"] = envVarsArray;
+                resourceObj["environmentVariables"] = envVarsArray;
             }
 
             dataArray.Add(resourceObj);
@@ -149,8 +149,8 @@ internal static class AIHelpers
                 {
                     relationships.Add(new JsonObject
                     {
-                        ["resource_name"] = getResourceName?.Invoke(match) ?? match.Name,
-                        ["Types"] = relationship.Type
+                        ["resourceName"] = getResourceName?.Invoke(match) ?? match.Name,
+                        ["type"] = relationship.Type
                     });
                 }
             }

@@ -124,7 +124,7 @@
     <value>The name of the integration to add (e.g. redis, postgres)</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file to add the integration to</value>
+    <value>The Aspire AppHost project file, or a directory to search, to add the integration to</value>
   </data>
   <data name="VersionArgumentDescription" xml:space="preserve">
     <value>The version of the integration to add</value>

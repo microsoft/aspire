@@ -585,6 +585,7 @@ var WellKnownPipelineSteps = struct {
 	PublishPrereq string
 	Push string
 	PushPrereq string
+	ValidateComputeEnvironments string
 }{
 	Build: "build",
 	BuildPrereq: "build-prereq",
@@ -598,6 +599,7 @@ var WellKnownPipelineSteps = struct {
 	PublishPrereq: "publish-prereq",
 	Push: "push",
 	PushPrereq: "push-prereq",
+	ValidateComputeEnvironments: "validate-compute-environments",
 }
 
 var WellKnownPipelineTags = struct {
@@ -8347,6 +8349,7 @@ type DistributedApplicationPipeline interface {
 	handleReference
 	AddStep(stepName string, callback func(arg PipelineStepContext), options ...*AddStepOptions) error
 	Configure(callback func(arg PipelineConfigurationContext)) error
+	DisableBuildOnlyContainerValidation() DistributedApplicationPipeline
 	Err() error
 }
 
@@ -8404,6 +8407,17 @@ func (s *distributedApplicationPipeline) Configure(callback func(arg PipelineCon
 	}
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/configure", reqArgs)
 	return err
+}
+
+// DisableBuildOnlyContainerValidation disables publish and deploy validation for unconsumed build-only containers.
+func (s *distributedApplicationPipeline) DisableBuildOnlyContainerValidation() DistributedApplicationPipeline {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"pipeline": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // DistributedApplicationResourceEventSubscription is the public interface for handle type DistributedApplicationResourceEventSubscription.
@@ -10454,6 +10468,7 @@ type EndpointReference interface {
 	IsHttpSchemeNamedEndpoint() (bool, error)
 	IsHttps() (bool, error)
 	Port() (float64, error)
+	Property(property EndpointProperty) EndpointReferenceExpression
 	Resource() ResourceWithEndpoints
 	Scheme() (string, error)
 	SetErrorMessage(value string) EndpointReference
@@ -10670,6 +10685,26 @@ func (s *endpointReference) Port() (float64, error) {
 		return zero, err
 	}
 	return decodeAs[float64](result)
+}
+
+// Property gets the specified property expression of the endpoint
+func (s *endpointReference) Property(property EndpointProperty) EndpointReferenceExpression {
+	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["property"] = serializeValue(property)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.property", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointReference.property returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // Resource gets the Resource property
@@ -23139,6 +23174,7 @@ type UserSecretsManager interface {
 	GetOrSetSecret(resourceBuilder Resource, name string, value string) error
 	IsAvailable() (bool, error)
 	SaveStateJson(json string, options ...*SaveStateJsonOptions) error
+	TryDeleteSecret(name string) (bool, error)
 	TrySetSecret(name string, value string) (bool, error)
 	Err() error
 }
@@ -23221,6 +23257,22 @@ func (s *userSecretsManager) SaveStateJson(json string, options ...*SaveStateJso
 	}
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/saveStateJson", reqArgs)
 	return err
+}
+
+// TryDeleteSecret attempts to delete a user secret value
+func (s *userSecretsManager) TryDeleteSecret(name string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/IUserSecretsManager.tryDeleteSecret", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // TrySetSecret attempts to set a user secret value

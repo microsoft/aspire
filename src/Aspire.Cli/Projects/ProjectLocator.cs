@@ -353,6 +353,24 @@ internal sealed class ProjectLocator(
                     }
                 }
             }
+            else if (File.Exists(projectFile.FullName))
+            {
+                // A project file was directly specified.
+                //
+                // Resolve to the filesystem-canonical path so the path used for backchannel socket
+                // hash computation matches.
+                var resolvedProjectPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+
+                if (!string.Equals(resolvedProjectPath, projectFile.FullName, StringComparison.Ordinal))
+                {
+                    logger.LogDebug(
+                        "Canonicalized explicit AppHost path from '{OriginalPath}' to '{ResolvedPath}'.",
+                        projectFile.FullName,
+                        resolvedProjectPath);
+
+                    projectFile = new FileInfo(resolvedProjectPath);
+                }
+            }
 
             if (projectFile is not null)
             {
@@ -633,6 +651,35 @@ internal sealed class ProjectLocator(
 internal class ProjectLocatorException(string message, ProjectLocatorFailureReason failureReason) : System.Exception(message)
 {
     public ProjectLocatorFailureReason FailureReason { get; } = failureReason;
+}
+
+internal static class ProjectLocatorErrorHelper
+{
+    public static (int ExitCode, string ErrorMessage) GetExitCodeAndMessage(ProjectLocatorException ex, bool projectOptionSpecifiedAsDirectory = false)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+
+        return ex.FailureReason switch
+        {
+            ProjectLocatorFailureReason.MultipleProjectFilesFound when projectOptionSpecifiedAsDirectory
+                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts),
+            ProjectLocatorFailureReason.ProjectFileDoesntExist or ProjectLocatorFailureReason.NoProjectFileFound when projectOptionSpecifiedAsDirectory
+                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts),
+            ProjectLocatorFailureReason.UnsupportedProjects
+                => (ExitCodeConstants.SdkNotInstalled, InteractionServiceStrings.NoSupportedAppHostsFound),
+            ProjectLocatorFailureReason.ProjectFileNotAppHostProject
+                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
+            ProjectLocatorFailureReason.ProjectFileDoesntExist
+                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
+            ProjectLocatorFailureReason.MultipleProjectFilesFound
+                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedMultipleAppHostsFound),
+            ProjectLocatorFailureReason.NoProjectFileFound
+                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
+            ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
+                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
+            _ => (ExitCodeConstants.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))
+        };
+    }
 }
 
 internal enum ProjectLocatorFailureReason

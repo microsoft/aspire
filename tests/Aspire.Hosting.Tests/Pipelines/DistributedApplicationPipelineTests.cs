@@ -1558,7 +1558,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         await pipeline.ExecuteAsync(context).DefaultTimeout();
 
         Assert.True(callbackExecuted);
-        Assert.Equal(16, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, check-container-runtime, push, push-prereq, publish, publish-prereq, diagnostics, before-start, destroy, destroy-prereq + step1, step2
+        Assert.Equal(18, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, check-container-runtime, push, push-prereq, publish, publish-prereq, validate-build-only-container-references, diagnostics, validate-compute-environments, before-start, destroy, destroy-prereq + step1, step2
         Assert.Contains(capturedSteps, s => s.Name == "deploy");
         Assert.Contains(capturedSteps, s => s.Name == "process-parameters");
         Assert.Contains(capturedSteps, s => s.Name == "deploy-prereq");
@@ -1568,7 +1568,9 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.Contains(capturedSteps, s => s.Name == "push-prereq");
         Assert.Contains(capturedSteps, s => s.Name == "publish");
         Assert.Contains(capturedSteps, s => s.Name == "publish-prereq");
+        Assert.Contains(capturedSteps, s => s.Name == "validate-build-only-container-references");
         Assert.Contains(capturedSteps, s => s.Name == "diagnostics");
+        Assert.Contains(capturedSteps, s => s.Name == "validate-compute-environments");
         Assert.Contains(capturedSteps, s => s.Name == "before-start");
         Assert.Contains(capturedSteps, s => s.Name == "destroy");
         Assert.Contains(capturedSteps, s => s.Name == "destroy-prereq");

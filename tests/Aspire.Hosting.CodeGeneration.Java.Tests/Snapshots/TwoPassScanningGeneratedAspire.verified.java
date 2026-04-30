@@ -1461,7 +1461,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource. */
-public class CSharpAppResource extends ResourceBuilderBase {
+public class CSharpAppResource extends ProjectResource {
     CSharpAppResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -6337,7 +6337,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationResourceEventSubscription. */
-public class DistributedApplicationResourceEventSubscription extends HandleWrapperBase {
+public class DistributedApplicationResourceEventSubscription extends DistributedApplicationEventSubscription {
     DistributedApplicationResourceEventSubscription(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -6651,7 +6651,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource. */
-public class DotnetToolResource extends ResourceBuilderBase {
+public class DotnetToolResource extends ExecutableResource {
     DotnetToolResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -8361,6 +8361,14 @@ public class EndpointReference extends HandleWrapperBase {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
         }
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs);
+    }
+
+    /** Gets the specified property expression of the endpoint */
+    public EndpointReferenceExpression property(EndpointProperty property) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("property", AspireClient.serializeValue(property));
+        return (EndpointReferenceExpression) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.property", reqArgs);
     }
 
     /** Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise. */
@@ -11993,6 +12001,13 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Disables publish and deploy validation for unconsumed build-only containers. */
+    public IDistributedApplicationPipeline disableBuildOnlyContainerValidation() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
+        return (IDistributedApplicationPipeline) getClient().invokeCapability("Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs);
+    }
+
     /** Adds a pipeline step to the application */
     public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -12788,6 +12803,14 @@ public class IUserSecretsManager extends HandleWrapperBase {
         reqArgs.put("name", AspireClient.serializeValue(name));
         reqArgs.put("value", AspireClient.serializeValue(value));
         return (boolean) getClient().invokeCapability("Aspire.Hosting/IUserSecretsManager.trySetSecret", reqArgs);
+    }
+
+    /** Attempts to delete a user secret value */
+    public boolean tryDeleteSecret(String name) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting/IUserSecretsManager.tryDeleteSecret", reqArgs);
     }
 
     public void saveStateJson(String json) {
@@ -16591,7 +16614,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource. */
-public class TestDatabaseResource extends ResourceBuilderBase {
+public class TestDatabaseResource extends ContainerResource {
     TestDatabaseResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -18524,7 +18547,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource. */
-public class TestRedisResource extends ResourceBuilderBase {
+public class TestRedisResource extends ContainerResource {
     TestRedisResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -20550,7 +20573,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource. */
-public class TestVaultResource extends ResourceBuilderBase {
+public class TestVaultResource extends ContainerResource {
     TestVaultResource(Handle handle, AspireClient client) {
         super(handle, client);
     }
@@ -22421,6 +22444,9 @@ public final class WellKnownPipelineSteps {
 
     /** The prerequisite step that runs before any push operations. */
     public static final String PushPrereq = "push-prereq";
+
+    /** The step that validates compute resources are assigned to unambiguous compute environments. */
+    public static final String ValidateComputeEnvironments = "validate-compute-environments";
 
 }
 

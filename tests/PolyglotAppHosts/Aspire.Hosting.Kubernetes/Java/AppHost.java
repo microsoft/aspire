@@ -37,6 +37,12 @@ void main() throws Exception {
         var _resolvedHelmChartName = kubernetes.helmChartName();
         var _resolvedDefaultStorageClassName = kubernetes.defaultStorageClassName();
         var _resolvedDefaultServiceType = kubernetes.defaultServiceType();
+        var gateway = kubernetes.addGateway("public-gateway");
+        gateway.withHostname("gateway.example.com");
+        gateway.withTls("gateway-tls");
+        var ingress = kubernetes.addIngress("public-ingress");
+        ingress.withHostname("ingress.example.com");
+        ingress.withTls("ingress-tls");
         var serviceContainer = builder.addContainer("kube-service", "redis:alpine");
         serviceContainer.publishAsKubernetesService((service) -> {
             var _serviceName = service.name();

@@ -246,6 +246,17 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
+    public void TwoPassScanning_GeneratesDerivedResourceInheritance()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var testRedisJava = files["TestRedisResource.java"];
+
+        Assert.Contains("public class TestRedisResource extends ContainerResource", testRedisJava);
+    }
+
+    [Fact]
     public async Task TwoPassScanning_GeneratesWithEnvironmentOnTestRedisBuilder()
     {
         // End-to-end test: verify that withEnvironment appears on TestRedisResource

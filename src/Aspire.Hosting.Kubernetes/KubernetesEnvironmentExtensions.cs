@@ -28,7 +28,8 @@ public static class KubernetesEnvironmentExtensions
         // The per-environment work (creating Kubernetes service resources and DeploymentTargetAnnotations)
         // is registered as a separate per-environment pipeline step on KubernetesEnvironmentResource.
         // This global step only validates that no resource has a PublishAsKubernetesService annotation
-        // when there are no KubernetesEnvironmentResource instances in the model.
+        // when there are no KubernetesEnvironmentResource instances or Kubernetes-backed
+        // compute environments in the model.
         if (builder.Services.All(d => d.ServiceType != typeof(KubernetesPipelineStepMarker)))
         {
             builder.Services.AddSingleton<KubernetesPipelineStepMarker>();
@@ -37,13 +38,17 @@ public static class KubernetesEnvironmentExtensions
                 name: KubernetesPipelineStepMarker.StepName,
                 action: ctx =>
                 {
-                    if (!ctx.Model.Resources.OfType<KubernetesEnvironmentResource>().Any())
+                    var hasKubernetesEnvironment = ctx.Model.Resources.OfType<KubernetesEnvironmentResource>().Any() ||
+                        ctx.Model.Resources.OfType<IComputeEnvironmentResource>()
+                            .Any(r => r.HasAnnotationOfType<KubernetesEnvironmentAnnotation>());
+
+                    if (!hasKubernetesEnvironment)
                     {
                         foreach (var r in ctx.Model.GetComputeResources())
                         {
                             if (r.HasAnnotationOfType<KubernetesServiceCustomizationAnnotation>())
                             {
-                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Kubernetes service, but there are no '{nameof(KubernetesEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddKubernetesEnvironment)}'.");
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Kubernetes service, but there are no '{nameof(KubernetesEnvironmentResource)}' resources or Kubernetes-backed compute environments. Ensure you have added one by calling '{nameof(AddKubernetesEnvironment)}'.");
                             }
                         }
                     }

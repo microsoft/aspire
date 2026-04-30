@@ -57,25 +57,26 @@ public static class AzureKubernetesEnvironmentExtensions
         builder.Services.Configure<AzureProvisioningOptions>(
             o => o.SupportsTargetedRoleAssignments = true);
 
-        // Create the inner KubernetesEnvironmentResource via the public API.
-        // This registers the Kubernetes infrastructure pipeline step, creates the
-        // resource with Helm chart name/dashboard, adds it to the model, and sets up
-        // the default Helm deployment engine.
-        var k8sEnvBuilder = builder.AddKubernetesEnvironment($"{name}-k8s");
-
-        // Scope the Helm chart name to this AKS environment to avoid
-        // conflicts when multiple environments deploy to the same cluster
-        // or when re-deploying with different environment names.
-        k8sEnvBuilder.Resource.HelmChartName = $"{builder.Environment.ApplicationName}-{name}".ToHelmChartName();
-
         // Create the unified AKS environment resource
         var resource = new AzureKubernetesEnvironmentResource(name, ConfigureAksInfrastructure);
-        resource.KubernetesEnvironment = k8sEnvBuilder.Resource;
 
-        // Set the parent so KubernetesInfrastructure matches resources that use
-        // WithComputeEnvironment(aksEnv) — the inner K8s env checks both itself
-        // and its parent when filtering compute resources.
-        k8sEnvBuilder.Resource.OwningComputeEnvironment = resource;
+        // Create the inner KubernetesEnvironmentResource directly so it can hold
+        // Kubernetes-specific state without surfacing as a second environment in
+        // the application model.
+        builder.AddKubernetesInfrastructureCore();
+        var k8sEnvBuilder = builder.CreateResourceBuilder(new KubernetesEnvironmentResource(name)
+        {
+            // Scope the Helm chart name to this AKS environment to avoid
+            // conflicts when multiple environments deploy to the same cluster
+            // or when re-deploying with different environment names.
+            HelmChartName = $"{builder.Environment.ApplicationName}-{name}".ToHelmChartName(),
+            Dashboard = builder.CreateDashboard($"{name}-dashboard"),
+            OwningComputeEnvironment = resource
+        });
+        KubernetesEnvironmentExtensions.EnsureDefaultHelmEngine(k8sEnvBuilder);
+        resource.KubernetesEnvironment = k8sEnvBuilder.Resource;
+        resource.Annotations.Add(new KubernetesEnvironmentAnnotation());
+        AddKubernetesPipelineAnnotations(resource);
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -88,6 +89,7 @@ public static class AzureKubernetesEnvironmentExtensions
         // registry for compute resources.
         var defaultRegistry = builder.AddAzureContainerRegistry($"{name}-acr");
         resource.DefaultContainerRegistry = defaultRegistry.Resource;
+        resource.Annotations.Add(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
         k8sEnvBuilder.WithAnnotation(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
 
         // Wire ACR name as a parameter on the AKS resource so the Bicep module
@@ -99,7 +101,7 @@ public static class AzureKubernetesEnvironmentExtensions
         // call registry.Endpoint.GetValueAsync() which awaits the BicepOutputReference
         // for loginServer — if the ACR hasn't been provisioned yet, this blocks.
         //
-        // NOTE: The standard push step dependency wiring (pushSteps.DependsOn(buildSteps) 
+        // NOTE: The standard push step dependency wiring (pushSteps.DependsOn(buildSteps)
         // and pushSteps.DependsOn(push-prereq)) from ProjectResource's PipelineConfigurationAnnotation
         // may not resolve correctly when using Kubernetes compute environments, because
         // context.GetSteps(resource, tag) may return empty if the resource reference doesn't
@@ -322,8 +324,10 @@ public static class AzureKubernetesEnvironmentExtensions
         }
 
         // Set the explicit registry via annotation on both the AKS environment
-        // and the inner K8s environment (so KubernetesInfrastructure finds it)
-        builder.WithAnnotation(new ContainerRegistryReferenceAnnotation(registry.Resource));
+        // and the inner K8s environment so deployment target preparation finds it.
+        builder.WithAnnotation(
+            new ContainerRegistryReferenceAnnotation(registry.Resource),
+            ResourceAnnotationMutationBehavior.Replace);
 
         // Remove any stale container registry annotations from the inner K8s environment
         // before adding the new one (the default ACR annotation was added during
@@ -636,5 +640,35 @@ public static class AzureKubernetesEnvironmentExtensions
             };
             infrastructure.Add(fedCred);
         }
+    }
+
+    private static void AddKubernetesPipelineAnnotations(AzureKubernetesEnvironmentResource resource)
+    {
+        resource.Annotations.Add(new PipelineStepAnnotation(async factoryContext =>
+        {
+            var steps = new List<PipelineStep>();
+
+            foreach (var annotation in resource.KubernetesEnvironment.Annotations.OfType<PipelineStepAnnotation>())
+            {
+                var childFactoryContext = new PipelineStepFactoryContext
+                {
+                    PipelineContext = factoryContext.PipelineContext,
+                    Resource = resource.KubernetesEnvironment
+                };
+
+                var annotationSteps = await annotation.CreateStepsAsync(childFactoryContext).ConfigureAwait(false);
+                steps.AddRange(annotationSteps);
+            }
+
+            return steps;
+        }));
+
+        resource.Annotations.Add(new PipelineConfigurationAnnotation(async context =>
+        {
+            foreach (var annotation in resource.KubernetesEnvironment.Annotations.OfType<PipelineConfigurationAnnotation>())
+            {
+                await annotation.Callback(context).ConfigureAwait(false);
+            }
+        }));
     }
 }

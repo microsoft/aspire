@@ -10,10 +10,6 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureKubernetesIngressTests
 {
-    // With AKS, there are two compute environments (AKS + inner K8s),
-    // so the Helm chart output goes to {outputDir}/{k8sEnvName}/...
-    private const string K8sEnvSubdir = "aks-k8s";
-
     [Fact]
     public async Task AksAddIngress_WithRoute_GeneratesIngressInHelmOutput()
     {
@@ -33,7 +29,7 @@ public class AzureKubernetesIngressTests
         app.Run();
 
         // With AKS, the Helm output goes to the inner K8S env subdirectory
-        var ingressPath = Path.Combine(tempDir.Path, K8sEnvSubdir, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);

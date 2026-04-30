@@ -35,7 +35,7 @@ Examples:
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file. If not specified, searches for a project file in the current directory.</source>
+        <source>The path to the Aspire AppHost project file or a directory to search. If not specified, searches for a project file in the current directory.</source>
         <target state="needs-review-translation">Aspire AppHost 프로젝트 파일의 경로입니다. 지정하지 않으면 현재 디렉터리에서 프로젝트 파일을 검색합니다.</target>
         <note />
       </trans-unit>

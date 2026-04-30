@@ -370,7 +370,7 @@ internal class ConsoleInteractionService : IInteractionService
         target.Profile.Out.Writer.WriteLine(text);
     }
 
-    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null)
     {
         var effectiveConsole = consoleOverride ?? Console;
         if (ShouldDisplayMarkdownAsPlainText(effectiveConsole))
@@ -381,9 +381,25 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
-        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
-        target.Write(renderable);
-        target.WriteLine();
+        var originalWidth = target.Profile.Width;
+        if (maxWidth is not null)
+        {
+            target.Profile.Width = Math.Min(originalWidth, maxWidth.Value);
+        }
+
+        try
+        {
+            var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+            target.Write(renderable);
+            target.WriteLine();
+        }
+        finally
+        {
+            if (maxWidth is not null)
+            {
+                target.Profile.Width = originalWidth;
+            }
+        }
     }
 
     private bool ShouldDisplayMarkdownAsPlainText(ConsoleOutput effectiveConsole)
@@ -505,17 +521,43 @@ internal class ConsoleInteractionService : IInteractionService
         var yesChoice = defaultValue ? 'Y' : 'y';
         var noChoice = defaultValue ? 'n' : 'N';
 
-        var prompt = new ConfirmationPrompt(promptText)
-        {
-            Yes = yesChoice,
-            No = noChoice,
-            ShowDefaultValue = false,
-            DefaultValue = defaultValue,
-        };
-
-        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        var result = await PromptConfirmWithSingleKeyAsync(promptText, yesChoice, noChoice, defaultValue, cancellationToken);
         MessageLogger.LogInformation("Confirm result: {Result}", result);
         return result;
+    }
+
+    private async Task<bool> PromptConfirmWithSingleKeyAsync(string promptText, char yesChoice, char noChoice, bool defaultValue, CancellationToken cancellationToken)
+    {
+        MessageConsole.Markup(promptText);
+        MessageConsole.Markup($" [blue][[{yesChoice}/{noChoice}]][/]: ");
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (await MessageConsole.Input.ReadKeyAsync(intercept: true, cancellationToken) is not { } key)
+            {
+                continue;
+            }
+
+            if (key.Key == ConsoleKey.Enter || key.KeyChar is '\r' or '\n')
+            {
+                MessageConsole.WriteLine((defaultValue ? yesChoice : noChoice).ToString()); // Echo the default choice
+                return defaultValue;
+            }
+
+            if (char.ToLowerInvariant(key.KeyChar) == char.ToLowerInvariant(yesChoice))
+            {
+                MessageConsole.WriteLine(key.KeyChar.ToString());
+                return true;
+            }
+
+            if (char.ToLowerInvariant(key.KeyChar) == char.ToLowerInvariant(noChoice))
+            {
+                MessageConsole.WriteLine(key.KeyChar.ToString());
+                return false;
+            }
+        }
     }
 
     public void DisplaySubtleMessage(string message, bool allowMarkup = false)

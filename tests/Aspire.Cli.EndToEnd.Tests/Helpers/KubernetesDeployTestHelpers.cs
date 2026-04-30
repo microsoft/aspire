@@ -231,7 +231,6 @@ internal static class KubernetesDeployTestHelpers
         // Dismiss agent init prompt (same as DeclineAgentInitPromptAsync)
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter);
 
         // Step 2: cd into the project

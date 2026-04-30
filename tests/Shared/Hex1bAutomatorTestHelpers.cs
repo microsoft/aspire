@@ -482,7 +482,6 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        await auto.EnterAsync();
 
         await auto.WaitUntilAsync(s =>
         {

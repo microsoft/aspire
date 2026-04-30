@@ -333,6 +333,38 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileResultUsesOnDiskCasingForExplicitPath()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(), "On-disk path casing normalization is only required on Windows.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.CreateSubdirectory("MyAppHost");
+        var onDiskProjectFile = new FileInfo(Path.Combine(projectDirectory.FullName, "MyAppHost.csproj"));
+        await File.WriteAllTextAsync(onDiskProjectFile.FullName, "Not a real project file.");
+
+        static string ToggleCase(string path)
+            => string.Concat(path.Select(c => char.IsLetter(c)
+                ? (char.IsUpper(c) ? char.ToLowerInvariant(c) : char.ToUpperInvariant(c))
+                : c));
+
+        var mismatchedCasePath = ToggleCase(onDiskProjectFile.FullName);
+        Assert.False(string.Equals(onDiskProjectFile.FullName, mismatchedCasePath, StringComparison.Ordinal));
+        Assert.True(File.Exists(mismatchedCasePath));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            new FileInfo(mismatchedCasePath),
+            MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(onDiskProjectFile.FullName, result.SelectedProjectFile!.FullName);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileReturnsProjectFileInDirectoryIfNotExplicitlyProvided()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

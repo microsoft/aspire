@@ -52,6 +52,14 @@ const _resolvedHelmChartName: string = await kubernetes.helmChartName.get();
 const _resolvedDefaultStorageClassName: string | undefined = await kubernetes.defaultStorageClassName.get();
 const _resolvedDefaultServiceType: string = await kubernetes.defaultServiceType.get();
 
+const gateway = await kubernetes.addGateway('public-gateway');
+await gateway.withHostname('gateway.example.com');
+await gateway.withTls('gateway-tls');
+
+const ingress = await kubernetes.addIngress('public-ingress');
+await ingress.withHostname('ingress.example.com');
+await ingress.withTls('ingress-tls');
+
 const serviceContainer = await builder.addContainer('kube-service', 'redis:alpine');
 await serviceContainer.publishAsKubernetesService(async (service) => {
     const _serviceName: string = await service.name();

@@ -59,7 +59,7 @@ public class HostedAgentConfigurationTests
     }
 
     [Fact]
-    public void ToAgentVersionCreationOptions_ProducesValidOptions()
+    public void ToProjectsAgentVersionCreationOptions_ProducesValidOptions()
     {
         var config = new HostedAgentConfiguration("myimage:latest")
         {
@@ -67,7 +67,7 @@ public class HostedAgentConfigurationTests
             Cpu = 1.0m,
         };
 
-        var options = config.ToAgentVersionCreationOptions();
+        var options = config.ToProjectsAgentVersionCreationOptions();
 
         Assert.NotNull(options);
         Assert.Equal("Test agent", options.Description);
