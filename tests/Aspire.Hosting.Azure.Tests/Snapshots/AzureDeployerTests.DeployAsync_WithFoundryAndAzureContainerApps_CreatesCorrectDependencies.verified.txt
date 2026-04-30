@@ -1,11 +1,11 @@
-﻿[  
+﻿[
 PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 =====================================
 
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 42
+Total steps defined: 43
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -23,39 +23,40 @@ Steps with no dependencies run first, followed by steps that depend on them.
   7. process-parameters
   8. build-prereq
   9. check-container-runtime
- 10. deploy-prereq
- 11. build-agent
- 12. build-api
- 13. build
- 14. validate-azure-login
- 15. create-provisioning-context
- 16. provision-aca-env-acr
- 17. provision-aca-env
- 18. login-to-acr-aca-env-acr
- 19. provision-foundry-project-acr
- 20. login-to-acr-foundry-project-acr
- 21. push-prereq
- 22. push-api
- 23. provision-api-containerapp
- 24. provision-foundry
- 25. provision-foundry-project
- 26. provision-azure-bicep-resources
- 27. compute-endpoints-foundry-project
- 28. push-agent
- 29. deploy-agent-ha
- 30. print-api-summary
- 31. print-dashboard-url-aca-env
- 32. deploy
- 33. deploy-api
- 34. destroy-prereq
- 35. destroy-azure-azure634f9
- 36. destroy
- 37. diagnostics
- 38. publish-prereq
- 39. publish-azure634f9
- 40. publish
- 41. publish-manifest
- 42. push
+ 10. validate-build-only-container-references
+ 11. deploy-prereq
+ 12. build-agent
+ 13. build-api
+ 14. build
+ 15. validate-azure-login
+ 16. create-provisioning-context
+ 17. provision-aca-env-acr
+ 18. provision-aca-env
+ 19. login-to-acr-aca-env-acr
+ 20. provision-foundry-project-acr
+ 21. login-to-acr-foundry-project-acr
+ 22. push-prereq
+ 23. push-api
+ 24. provision-api-containerapp
+ 25. provision-foundry
+ 26. provision-foundry-project
+ 27. provision-azure-bicep-resources
+ 28. compute-endpoints-foundry-project
+ 29. push-agent
+ 30. deploy-agent-ha
+ 31. print-api-summary
+ 32. print-dashboard-url-aca-env
+ 33. deploy
+ 34. deploy-api
+ 35. destroy-prereq
+ 36. destroy-azure-azure634f9
+ 37. destroy
+ 38. diagnostics
+ 39. publish-prereq
+ 40. publish-azure634f9
+ 41. publish
+ 42. publish-manifest
+ 43. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -121,7 +122,7 @@ Step: deploy-api
 
 Step: deploy-prereq
     Description: Prerequisite step that runs before any deploy operations. Initializes deployment environment and manages deployment state.
-    Dependencies: ✓ process-parameters
+    Dependencies: ✓ process-parameters, ✓ validate-build-only-container-references
 
 Step: destroy
     Description: Aggregation step for all destroy operations. All destroy steps should be required by this step.
@@ -233,7 +234,7 @@ Step: publish-manifest
 
 Step: publish-prereq
     Description: Prerequisite step that runs before any publish operations.
-    Dependencies: ✓ process-parameters
+    Dependencies: ✓ process-parameters, ✓ validate-build-only-container-references
 
 Step: push
     Description: Aggregation step for all push operations. All push steps should be required by this step.
@@ -260,6 +261,10 @@ Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
     Dependencies: ✓ deploy-prereq
     Resource: azure634f9 (AzureEnvironmentResource)
+
+Step: validate-build-only-container-references
+    Description: Validates that build-only containers are consumed by another resource before publish or deploy.
+    Dependencies: none
 
 Step: validate-compute-environments
     Description: Validates compute resource bindings before startup.
@@ -292,26 +297,26 @@ If targeting 'before-start':
 
 If targeting 'build':
   Direct dependencies: build-agent, build-api
-  Total steps: 7
+  Total steps: 8
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent | build-api (parallel)
     [3] build
 
 If targeting 'build-agent':
   Direct dependencies: build-prereq, check-container-runtime, deploy-prereq
-  Total steps: 5
+  Total steps: 6
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent
 
 If targeting 'build-api':
   Direct dependencies: build-prereq, check-container-runtime, deploy-prereq
-  Total steps: 5
+  Total steps: 6
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api
 
@@ -330,9 +335,9 @@ If targeting 'check-container-runtime':
 
 If targeting 'compute-endpoints-foundry-project':
   Direct dependencies: provision-azure-bicep-resources
-  Total steps: 19
+  Total steps: 20
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -346,18 +351,18 @@ If targeting 'compute-endpoints-foundry-project':
 
 If targeting 'create-provisioning-context':
   Direct dependencies: deploy-prereq, validate-azure-login
-  Total steps: 4
+  Total steps: 5
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
 
 If targeting 'deploy':
   Direct dependencies: build-agent, build-api, compute-endpoints-foundry-project, create-provisioning-context, deploy-agent-ha, print-api-summary, print-dashboard-url-aca-env, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 25
+  Total steps: 26
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent | build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -372,9 +377,9 @@ If targeting 'deploy':
 
 If targeting 'deploy-agent-ha':
   Direct dependencies: deploy-prereq, provision-azure-bicep-resources, push-agent
-  Total steps: 21
+  Total steps: 22
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent | build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -388,9 +393,9 @@ If targeting 'deploy-agent-ha':
 
 If targeting 'deploy-api':
   Direct dependencies: print-api-summary
-  Total steps: 17
+  Total steps: 18
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -403,10 +408,10 @@ If targeting 'deploy-api':
     [10] deploy-api
 
 If targeting 'deploy-prereq':
-  Direct dependencies: process-parameters
-  Total steps: 2
+  Direct dependencies: process-parameters, validate-build-only-container-references
+  Total steps: 3
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
 
 If targeting 'destroy':
@@ -438,9 +443,9 @@ If targeting 'diagnostics':
 
 If targeting 'login-to-acr-aca-env-acr':
   Direct dependencies: provision-aca-env-acr
-  Total steps: 6
+  Total steps: 7
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -449,9 +454,9 @@ If targeting 'login-to-acr-aca-env-acr':
 
 If targeting 'login-to-acr-foundry-project-acr':
   Direct dependencies: provision-foundry-project-acr
-  Total steps: 6
+  Total steps: 7
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -474,9 +479,9 @@ If targeting 'prepare-foundry-project-foundry-project':
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-containerapp
-  Total steps: 16
+  Total steps: 17
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -489,9 +494,9 @@ If targeting 'print-api-summary':
 
 If targeting 'print-dashboard-url-aca-env':
   Direct dependencies: provision-aca-env, provision-azure-bicep-resources
-  Total steps: 19
+  Total steps: 20
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -511,9 +516,9 @@ If targeting 'process-parameters':
 
 If targeting 'provision-aca-env':
   Direct dependencies: create-provisioning-context, provision-aca-env-acr
-  Total steps: 6
+  Total steps: 7
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -522,9 +527,9 @@ If targeting 'provision-aca-env':
 
 If targeting 'provision-aca-env-acr':
   Direct dependencies: create-provisioning-context
-  Total steps: 5
+  Total steps: 6
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -532,9 +537,9 @@ If targeting 'provision-aca-env-acr':
 
 If targeting 'provision-api-containerapp':
   Direct dependencies: create-provisioning-context, provision-aca-env, push-api
-  Total steps: 15
+  Total steps: 16
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -546,9 +551,9 @@ If targeting 'provision-api-containerapp':
 
 If targeting 'provision-azure-bicep-resources':
   Direct dependencies: create-provisioning-context, deploy-prereq, provision-aca-env, provision-aca-env-acr, provision-api-containerapp, provision-foundry, provision-foundry-project, provision-foundry-project-acr
-  Total steps: 18
+  Total steps: 19
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -561,9 +566,9 @@ If targeting 'provision-azure-bicep-resources':
 
 If targeting 'provision-foundry':
   Direct dependencies: create-provisioning-context
-  Total steps: 5
+  Total steps: 6
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -571,9 +576,9 @@ If targeting 'provision-foundry':
 
 If targeting 'provision-foundry-project':
   Direct dependencies: create-provisioning-context, provision-foundry, provision-foundry-project-acr
-  Total steps: 7
+  Total steps: 8
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -582,9 +587,9 @@ If targeting 'provision-foundry-project':
 
 If targeting 'provision-foundry-project-acr':
   Direct dependencies: create-provisioning-context
-  Total steps: 5
+  Total steps: 6
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -592,18 +597,18 @@ If targeting 'provision-foundry-project-acr':
 
 If targeting 'publish':
   Direct dependencies: publish-azure634f9
-  Total steps: 4
+  Total steps: 5
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
     [2] publish-azure634f9
     [3] publish
 
 If targeting 'publish-azure634f9':
   Direct dependencies: publish-prereq
-  Total steps: 3
+  Total steps: 4
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
     [2] publish-azure634f9
 
@@ -614,17 +619,17 @@ If targeting 'publish-manifest':
     [0] publish-manifest
 
 If targeting 'publish-prereq':
-  Direct dependencies: process-parameters
-  Total steps: 2
+  Direct dependencies: process-parameters, validate-build-only-container-references
+  Total steps: 3
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] publish-prereq
 
 If targeting 'push':
   Direct dependencies: push-agent, push-api, push-prereq
-  Total steps: 16
+  Total steps: 17
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent | build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -636,9 +641,9 @@ If targeting 'push':
 
 If targeting 'push-agent':
   Direct dependencies: build-agent, push-prereq
-  Total steps: 13
+  Total steps: 14
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-agent | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -649,9 +654,9 @@ If targeting 'push-agent':
 
 If targeting 'push-api':
   Direct dependencies: build-api, push-prereq
-  Total steps: 13
+  Total steps: 14
   Execution order:
-    [0] check-container-runtime | process-parameters (parallel)
+    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -662,9 +667,9 @@ If targeting 'push-api':
 
 If targeting 'push-prereq':
   Direct dependencies: login-to-acr-aca-env-acr, login-to-acr-foundry-project-acr
-  Total steps: 9
+  Total steps: 10
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
     [3] create-provisioning-context
@@ -680,11 +685,17 @@ If targeting 'validate-azure-container-apps':
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq
-  Total steps: 3
+  Total steps: 4
   Execution order:
-    [0] process-parameters
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] deploy-prereq
     [2] validate-azure-login
+
+If targeting 'validate-build-only-container-references':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] validate-build-only-container-references
 
 If targeting 'validate-compute-environments':
   Direct dependencies: none
