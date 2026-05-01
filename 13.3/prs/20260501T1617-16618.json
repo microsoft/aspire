@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot PR - automated servicing cherry-pick",
+  "mergedAt": "2026-05-01T16:17:49Z",
+  "number": 16618,
+  "runDate": "2026-05-01T16:27:30Z",
+  "status": "excluded",
+  "title": "[release/13.3] Fallback to junctions if either creating OR evaluating symlinks fails"
+}
