@@ -499,6 +499,7 @@ public class CliInstallStrategyTests
         Assert.Contains("\"$STAGING_NUGET_CONFIG\"", command);
         Assert.Contains("<packageSource key=\\\"aspire-staging\\\">", command);
         Assert.Contains("dotnet tool install --global Aspire.Cli --version \"$STAGING_BASE_VERSION\" --configfile \"$STAGING_NUGET_CONFIG\"", command);
+        Assert.Contains("aspire config set channel staging -g", command);
         Assert.DoesNotContain("--prerelease", command);
     }
 

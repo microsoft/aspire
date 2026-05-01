@@ -195,6 +195,7 @@ sed -i \
 echo "Resolved staging Aspire CLI version: $STAGING_VERSION"
 echo "Resolved staging dotnet tool feed: $STAGING_FEED"
 dotnet tool install --global Aspire.Cli --version "$STAGING_BASE_VERSION" --configfile "$STAGING_NUGET_CONFIG"
+aspire config set channel staging -g
 """;
 
         return $"bash -c {QuoteBashArg(script)}";
