@@ -1494,6 +1494,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
         TestInteractionService? testInteractionService = null;
+        string? availableTemplatesMessage = null;
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -1506,8 +1507,18 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = (sp) =>
             {
-                testInteractionService = new TestInteractionService();
+                testInteractionService = new TestInteractionService
+                {
+                    DisplaySubtleMessageCallback = message => availableTemplatesMessage = message
+                };
                 return testInteractionService;
+            };
+
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                return features;
             };
 
         });
@@ -1522,6 +1533,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(testInteractionService);
         Assert.Contains(testInteractionService.DisplayedErrors,
             e => string.Equals(e, NewCommandStrings.NonInteractiveTemplateRequired, StringComparison.Ordinal));
+        Assert.NotNull(availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.TypeScriptEmptyAppHost, availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.JavaEmptyAppHost, availableTemplatesMessage);
     }
 
     [Fact]

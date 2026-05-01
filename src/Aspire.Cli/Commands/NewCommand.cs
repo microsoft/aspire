@@ -224,22 +224,20 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return (true, selectedLanguageId);
     }
 
-    private ITemplate[] GetTemplatesForPrompt(ITemplate[] availableTemplates, ParseResult parseResult)
+    private ITemplate[] GetTemplatesForTemplateArgument(ITemplate[] availableTemplates, ParseResult parseResult)
     {
         var explicitLanguageId = ParseExplicitLanguageId(parseResult);
-        var templatesForPrompt = availableTemplates
-            .Where(static t => t.ShowInPrompt)
-            .ToList();
+        var templates = availableTemplates.ToList();
 
         if (!string.IsNullOrWhiteSpace(explicitLanguageId))
         {
-            templatesForPrompt = templatesForPrompt
+            templates = templates
                 .Where(t => t.SupportsLanguage(explicitLanguageId))
                 .ToList();
         }
 
         // Sort templates alphabetically by description, keeping empty templates at the end
-        templatesForPrompt.Sort((a, b) =>
+        templates.Sort((a, b) =>
         {
             var aIsEmpty = a.IsEmpty;
             var bIsEmpty = b.IsEmpty;
@@ -252,7 +250,14 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return string.Compare(a.Description, b.Description, StringComparison.OrdinalIgnoreCase);
         });
 
-        return templatesForPrompt.ToArray();
+        return templates.ToArray();
+    }
+
+    private ITemplate[] GetTemplatesForPrompt(ITemplate[] availableTemplates, ParseResult parseResult)
+    {
+        return GetTemplatesForTemplateArgument(availableTemplates, parseResult)
+            .Where(static t => t.ShowInPrompt)
+            .ToArray();
     }
 
     private async Task<ITemplate?> GetProjectTemplateAsync(ITemplate[] availableTemplates, ParseResult parseResult, CancellationToken cancellationToken)
@@ -272,8 +277,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return null;
         }
 
-        var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
-        if (templatesForPrompt.Length == 0)
+        var templatesForTemplateArgument = GetTemplatesForTemplateArgument(availableTemplates, parseResult);
+        if (templatesForTemplateArgument.Length == 0)
         {
             InteractionService.DisplayError("No templates are available for the current environment.");
             return null;
@@ -282,9 +287,16 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
             InteractionService.DisplayError(NewCommandStrings.NonInteractiveTemplateRequired);
-            var templateNames = string.Join(", ", templatesForPrompt.Select(t => t.Name));
+            var templateNames = string.Join(", ", templatesForTemplateArgument.Select(t => t.Name));
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, templateNames));
             throw new NonInteractiveException("template");
+        }
+
+        var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
+        if (templatesForPrompt.Length == 0)
+        {
+            InteractionService.DisplayError("No templates are available for the current environment.");
+            return null;
         }
 
         var result = await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken);
