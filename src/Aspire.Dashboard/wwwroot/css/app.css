@@ -1103,7 +1103,16 @@ fluent-button[appearance=accent]::part(control) {
 }
 
 [data-theme="dark"] .content-layout {
+    background: #272640 !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 1px rgba(185, 170, 238, 0.1);
+}
+
+/* Force dark card bg on all inner grid/table/main elements */
+[data-theme="dark"] .content-layout main,
+[data-theme="dark"] .content-layout .fluent-data-grid,
+[data-theme="dark"] .content-layout table {
+    background: transparent !important;
+    background-color: transparent !important;
 }
 
 /* --- Page header (h1) - distinctive and airy --- */
@@ -1165,7 +1174,9 @@ fluent-toolbar[orientation=horizontal] {
     border-bottom: none;
     padding: 8px 12px;
     gap: 8px;
-    background: transparent;
+    background: transparent !important;
+    background-color: transparent !important;
+    --neutral-fill-layer-rest: transparent;
 }
 
 /* --- Search box - pill shape --- */
@@ -1514,7 +1525,27 @@ fluent-text-field:focus-within::part(root) {
 
 /* --- Body content container - proper background --- */
 .body-content {
-    background: var(--aspire-surface-page);
+    background: var(--aspire-surface-page) !important;
+    background-color: var(--aspire-surface-page) !important;
+}
+
+[data-theme="dark"] .body-content,
+[data-theme="dark"] .custom-body-content {
+    background: #1F1E33 !important;
+    background-color: #1F1E33 !important;
+    --neutral-layer-2: #1F1E33;
+}
+
+[data-theme="dark"] .layout-body-container {
+    background: #1F1E33 !important;
+    background-color: #1F1E33 !important;
+}
+
+[data-theme="light"] .body-content,
+[data-theme="light"] .custom-body-content {
+    background: #F8F7FC !important;
+    background-color: #F8F7FC !important;
+    --neutral-layer-2: #F8F7FC;
 }
 
 /* --- Info/metric cards - rounded --- */

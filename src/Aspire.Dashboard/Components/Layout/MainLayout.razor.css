@@ -41,6 +41,10 @@
         background: var(--aspire-surface-page);
     }
 
+    :global([data-theme="dark"]) ::deep.layout > .layout-body-container {
+        background: #1F1E33 !important;
+    }
+
     ::deep.layout .layout-sidebar-spacer {
         flex: 0 0 auto;
         width: 480px;
