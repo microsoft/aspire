@@ -53,6 +53,10 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.DoesNotContain("\\u003E", files["package.json"]);
 
         Assert.Contains("eslint.config.mjs", files.Keys);
+        Assert.Contains("async function main()", files["apphost.ts"]);
+        Assert.Contains("main().catch((error: unknown) =>", files["apphost.ts"]);
+        Assert.Contains("process.exitCode = 1;", files["apphost.ts"]);
+        Assert.DoesNotContain("ignoreVoid: true", files["eslint.config.mjs"]);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
         Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
@@ -109,6 +113,9 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.False(scripts.ContainsKey("dev"));
         Assert.False(scripts.ContainsKey("build"));
         Assert.False(scripts.ContainsKey("preview"));
+        Assert.Contains("async function main()", files["apphost.ts"]);
+        Assert.Contains("main().catch((error: unknown) =>", files["apphost.ts"]);
+        Assert.Contains("process.exitCode = 1;", files["apphost.ts"]);
 
         // Scaffold should only contain Aspire-desired dependencies (at Aspire's versions)
         Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());

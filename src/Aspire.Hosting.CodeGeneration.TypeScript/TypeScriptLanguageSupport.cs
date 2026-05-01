@@ -73,13 +73,20 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
             import { createBuilder } from './.modules/aspire.js';
 
-            const builder = await createBuilder();
+            async function main() {
+                const builder = await createBuilder();
 
-            // Add your resources here, for example:
-            // const redis = await builder.addContainer("cache", "redis:latest");
-            // const postgres = await builder.addPostgres("db");
+                // Add your resources here, for example:
+                // const redis = await builder.addContainer("cache", "redis:latest");
+                // const postgres = await builder.addPostgres("db");
 
-            await builder.build().run();
+                await builder.build().run();
+            }
+
+            main().catch((error: unknown) => {
+                console.error(error);
+                process.exitCode = 1;
+            });
             """;
 
         files[".gitignore"] = """

@@ -215,6 +215,10 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var packages = packagesNode!.AsObject();
         Assert.NotNull(packages["Aspire.Hosting.JavaScript"]);
 
+        await auto.TypeAsync("npm run aspire:build");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
         // Modify apphost.ts to add the Vite app before running
         var appHostPath = Path.Combine(projectRoot, "apphost.ts");
         var newContent = """
@@ -223,11 +227,18 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
             import { createBuilder } from './.modules/aspire.js';
 
-            const builder = await createBuilder();
+            async function main() {
+                const builder = await createBuilder();
 
-            await builder.addViteApp("brownfield", ".");
+                await builder.addViteApp("brownfield", ".");
 
-            await builder.build().run();
+                await builder.build().run();
+            }
+
+            main().catch((error: unknown) => {
+                console.error(error);
+                process.exitCode = 1;
+            });
             """;
 
         File.WriteAllText(appHostPath, newContent);
@@ -246,6 +257,87 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
             return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
         }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task InitTypeScriptAppHost_AugmentsExistingCommonJsRepoAtRoot()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnablePolyglotSupportAsync(counter);
+
+        await auto.TypeAsync("mkdir commonjs && cd commonjs");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "commonjs", "package.json"), """
+            {
+              "private": true,
+              "scripts": {},
+              "devDependencies": {
+                "typescript": "5.9.3"
+              }
+            }
+            """);
+
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "commonjs");
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(projectRoot, localChannel.SdkVersion);
+        }
+
+        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
+
+        var packageJson = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot, "package.json")))!.AsObject();
+        Assert.Null(packageJson["type"]);
+
+        var appHostContent = File.ReadAllText(Path.Combine(projectRoot, "apphost.ts"));
+        Assert.Contains("async function main()", appHostContent);
+        Assert.Contains("main().catch((error: unknown) =>", appHostContent);
+        Assert.Contains("process.exitCode = 1;", appHostContent);
+
+        await auto.TypeAsync("npm run aspire:build");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("aspire run");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText("Top-level await is currently not supported with the \"cjs\" output format") ||
+                s.ContainsText("TS1309"))
+            {
+                throw new InvalidOperationException("TypeScript AppHost used top-level await in a CommonJS project.");
+            }
+
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+        }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (CommonJS aspire run started)");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
