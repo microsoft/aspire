@@ -526,7 +526,7 @@ indented line below the Changes line:
   Changes: [#1234](https://github.com/microsoft/aspire/pull/1234)  
   ⚠️ **Breaking change**  
   📝 **Documentation required**  
-  🌍 **Community contribution** by [@username](https://github.com/username)
+  🌍 **Community contribution** by [@username](https://github.com/username)  
 ```
 
 For the community contribution flag, include the author's GitHub username after
@@ -743,8 +743,10 @@ change type, ordered alphabetically by area name.
 After the header, add a **Table of Contents** section with a link to each area.
 Use Unicode emoji in both the TOC link text and the area heading. GitHub's slug
 generator strips emoji from headings, leaving the text preceded by a dash. For
-example, `## 🏠 AppHost` produces the anchor `#-apphost`, so the TOC link is
-`- [🏠 AppHost](#-apphost)`.
+example, `## 🏠 AppHost` produces the slug `-apphost`. The TOC link **must**
+include a literal `#` before the slug (this is standard markdown anchor syntax):
+`- [🏠 AppHost](#-apphost)`. Never omit the `#` — writing `(-apphost)` instead
+of `(#-apphost)` produces a broken link.
 
 Under the `## Table of Contents` heading, add a one-line summary that counts
 entries per change type across **all** areas, e.g.
@@ -762,7 +764,8 @@ zeroes on month/day), `<area-emoji>` is the area's Unicode emoji,
 `<Area>` is the area name, `<change-emoji>` is the
 entry's individual emoji, `<Name>` is the changelog entry name, and
 `<area-slug>` is the GitHub-generated slug for that area's `##` heading
-(e.g., `-apphost`, `-cli`, `-dashboard`).
+(e.g., `-apphost`, `-cli`, `-dashboard`). The `#` before the slug is mandatory
+markdown anchor syntax — always write `(#-apphost)`, never `(-apphost)`.
 If there are no entries in the last 5 days, still include the section with
 the text `No notable changes in the last 5 days.` beneath the heading.
 
@@ -770,6 +773,10 @@ Under each area heading, add a one-line **summary** counting the entries per cha
 type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
 for counts of 1 (`1 new feature`, `1 bug fix`, `1 improvement`). Include the same
 summary in the Table of Contents after the area name, separated by ` — `.
+
+**Every line** within a changelog entry (name, description, Changes, and each flag
+line) must end with **two trailing spaces** (`  `) to produce a markdown line break.
+This includes the last line of each entry, even when there are no flags.
 
 Use this exact format:
 
@@ -798,18 +805,18 @@ Use this exact format:
   Brief user-facing description  
   Changes: [#1234](https://github.com/microsoft/aspire/pull/1234), [#1235](https://github.com/microsoft/aspire/pull/1235)  
   ⚠️ **Breaking change**  
-  📝 **Documentation required**
+  📝 **Documentation required**  
 
 - **🚀 Another feature**  
   What this means for users  
   Changes: [#1236](https://github.com/microsoft/aspire/pull/1236)  
-  📝 **Documentation required**
+  📝 **Documentation required**  
 
 #### Improvements
 
 - **⚡ Performance boost**  
   Faster startup for container resources  
-  Changes: [#1238](https://github.com/microsoft/aspire/pull/1238)
+  Changes: [#1238](https://github.com/microsoft/aspire/pull/1238)  
 
 ## 💻 CLI
 
@@ -819,7 +826,7 @@ Use this exact format:
 
 - **🆕 New CLI command**  
   Added a new command for scaffolding resources  
-  Changes: [#1240](https://github.com/microsoft/aspire/pull/1240)
+  Changes: [#1240](https://github.com/microsoft/aspire/pull/1240)  
 
 #### Bug fixes
 
@@ -827,7 +834,7 @@ Use this exact format:
   Resolved a crash when running aspire init in an empty directory  
   Changes: [#1239](https://github.com/microsoft/aspire/pull/1239)  
   ⚠️ **Breaking change**  
-  🌍 **Community contribution** by [@contributor](https://github.com/contributor)
+  🌍 **Community contribution** by [@contributor](https://github.com/contributor)  
 
 ## 📊 Dashboard
 
@@ -837,7 +844,7 @@ Use this exact format:
 
 - **🎨 Dashboard improvement**  
   Description of the change  
-  Changes: [#1237](https://github.com/microsoft/aspire/pull/1237)
+  Changes: [#1237](https://github.com/microsoft/aspire/pull/1237)  
 
 ---
 
