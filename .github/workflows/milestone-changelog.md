@@ -20,8 +20,70 @@ on:
   schedule:
     - cron: '0,30 * * * *'
   workflow_dispatch:
+  permissions:
+    contents: read
+    issues: read
+    pull-requests: read
+  steps:
+    - id: has-work
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        REPO="${{ github.repository }}"
+        MILESTONE="${{ env.MILESTONE }}"
+        BATCH_SIZE="${{ env.BATCH_SIZE }}"
 
-if: github.repository_owner == 'microsoft'
+        # Clone memory branch to get processed PR numbers and feedback state
+        PROCESSED_NUMBERS="[]"
+        FEEDBACK_NUM=""
+        MEMORY_TMP=$(mktemp -d)
+        if git clone --depth 1 --branch "memory/milestone-changelog" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
+            "$MEMORY_TMP/repo" 2>/dev/null; then
+          PRS_DIR="$MEMORY_TMP/repo/${MILESTONE}/prs"
+          if [ -d "$PRS_DIR" ]; then
+            PROCESSED_NUMBERS=$(ls "$PRS_DIR" 2>/dev/null \
+              | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
+              | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
+          fi
+          FEEDBACK_FILE="$MEMORY_TMP/repo/${MILESTONE}/feedback-issue.json"
+          if [ -f "$FEEDBACK_FILE" ]; then
+            FEEDBACK_NUM=$(jq -r '.number' "$FEEDBACK_FILE")
+          fi
+        fi
+        rm -rf "$MEMORY_TMP"
+
+        # Fetch all merged PRs in milestone (lightweight: only number + mergedAt)
+        ALL_PRS=$(gh pr list --repo "$REPO" --state merged --limit 5000 \
+          --search "milestone:$MILESTONE" --json number,mergedAt \
+          | jq 'sort_by(.mergedAt)')
+
+        # Count unprocessed PRs
+        UNPROCESSED=$(echo "$ALL_PRS" | jq --argjson p "$PROCESSED_NUMBERS" \
+          '($p | map({(tostring): true}) | add // {}) as $s | [.[] | select($s[.number | tostring] | not)] | length')
+
+        if [ "$UNPROCESSED" -gt 0 ]; then
+          echo "Has $UNPROCESSED unprocessed PRs"
+          exit 0
+        fi
+
+        # No unprocessed PRs — check if feedback issue has new comments
+        if [ -n "$FEEDBACK_NUM" ]; then
+          LATEST_MERGE=$(echo "$ALL_PRS" | jq -r 'last.mergedAt // empty')
+          FEEDBACK_UPDATED_AT=$(gh api "repos/$REPO/issues/$FEEDBACK_NUM" --jq '.updated_at' 2>/dev/null || true)
+          if [ -n "$LATEST_MERGE" ] && [ -n "$FEEDBACK_UPDATED_AT" ]; then
+            if [[ "$FEEDBACK_UPDATED_AT" > "$LATEST_MERGE" ]]; then
+              echo "Feedback updated after latest PR merge"
+              exit 0
+            fi
+          fi
+        fi
+
+        echo "No changes to process"
+        exit 1
+
+if: github.repository_owner == 'microsoft' && needs.pre_activation.outputs.has_work_result == 'success'
 
 permissions:
   contents: read
@@ -310,28 +372,7 @@ steps:
         echo "No feedback issue found"
       fi
 
-      # 4. Detect whether there are any changes to process
-      #    No changes = empty batch AND (no feedback issue OR feedback not updated
-      #    since the latest PR was merged). When true, write a marker file so the
-      #    agent can exit immediately without burning tokens.
-      if [ "$BATCH_COUNT" -eq 0 ]; then
-        LATEST_MERGE=$(jq -r 'last.mergedAt // empty' "$DATA_DIR/all-milestone-prs.json")
-        SKIP="false"
-        if [ -z "$FEEDBACK_NUM" ]; then
-          SKIP="true"
-        elif [ -n "$LATEST_MERGE" ] && [ -n "$FEEDBACK_UPDATED_AT" ]; then
-          # Compare ISO 8601 timestamps lexicographically
-          if [[ "$FEEDBACK_UPDATED_AT" < "$LATEST_MERGE" ]]; then
-            SKIP="true"
-          fi
-        fi
-        if [ "$SKIP" = "true" ]; then
-          touch "$DATA_DIR/no-changes"
-          echo "No changes to process — wrote no-changes marker"
-        fi
-      fi
-
-      # 5. Fetch existing changelog body from wiki page (avoids storing it in the memory branch)
+      # 4. Fetch existing changelog body from wiki page (avoids storing it in the memory branch)
       PAGE_NAME="${MILESTONE}-Change-log"
       WIKI_TMP=$(mktemp -d)
       if git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git" "$WIKI_TMP/wiki" 2>/dev/null; then
@@ -379,23 +420,19 @@ large JSON files in their entirety — use `jq` to extract only the fields you n
 | Change files directory | `changes/` (under memory directories) |
 | Feedback issue file | `feedback-issue.json` (under memory directories) |
 | Batch file | `/tmp/gh-aw/pr-data/batch-prs.json` (computed from all PRs minus processed) |
-| No-changes marker | `/tmp/gh-aw/pr-data/no-changes` (present when batch is empty and no new feedback) |
 | Existing body file | `/tmp/gh-aw/pr-data/existing-body.md` (fetched from wiki) |
 | PR tracker directory | `prs/` (under memory directories; one JSON file per PR) |
 
 ## Step 1: Check if there are changes to process
 
-Check if the file `/tmp/gh-aw/pr-data/no-changes` exists. If it does, there are
-no new PRs to process and no new editorial feedback — **skip all remaining steps**
-and end the run.
-
-If the file does not exist, check `/tmp/gh-aw/pr-data/batch-prs.json`.
+Read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`.
 If the batch is **not empty**, continue to Step 2.
 
-If the batch is empty (zero unprocessed PRs) but the no-changes marker was not
-written, the feedback issue has new comments to apply. **Skip Steps 4, 6, and 7**
-but continue through Steps 2, 3, 5, 8, and 9 to apply editorial feedback,
-refresh the "What's New" section, and update the footer counts.
+If the batch is empty (zero unprocessed PRs), the feedback issue has new
+comments to apply (the pre-activation step already confirmed there is work).
+**Skip Steps 4, 6, and 7** but continue through Steps 2, 3, 5, 8, and 9 to
+apply editorial feedback, refresh the "What's New" section, and update the
+footer counts.
 
 ## Step 2: Load existing changelog and feedback
 
