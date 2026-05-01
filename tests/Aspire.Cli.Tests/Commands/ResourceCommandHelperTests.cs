@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Nodes;
+using System.CommandLine;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -41,8 +41,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "generate-token",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
+            confirmationBinding: null,
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.NotNull(capturedRawText);
@@ -70,8 +70,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "start",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
+            confirmationBinding: null,
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.False(displayRawTextCalled);
@@ -106,8 +106,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "validate-config",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
+            confirmationBinding: null,
+            CancellationToken.None).DefaultTimeout();
 
         Assert.NotEqual(0, exitCode);
         Assert.NotNull(capturedRawText);
@@ -141,8 +141,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "my-command",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
+            confirmationBinding: null,
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         // Status messages should be routed to stderr
@@ -150,101 +150,97 @@ public class ResourceCommandHelperTests
     }
 
     [Fact]
-    public async Task ExecuteGenericCommandAsync_WithArguments_PassesArgumentsToBackchannel()
+    public async Task ExecuteGenericCommandAsync_WithConfirmation_ExecutesWhenConfirmed()
     {
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
-        };
-
+        var connection = CreateConnectionWithConfirmation("myResource", "reset", "Reset resource?");
         var interactionService = new TestInteractionService();
-
-        // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
-        var arguments = new JsonObject
-        {
-            ["selector"] = "#submit"
-        };
+        interactionService.SetupBooleanResponse(true);
 
         var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
             interactionService,
             NullLogger.Instance,
             "myResource",
-            "click",
-            arguments,
+            "reset",
+            PromptBinding.CreateDefault(false),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
-        Assert.NotNull(connection.ExecuteResourceCommandArguments);
-        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments["selector"]!.GetValue<string>());
-        Assert.True(connection.ExecuteResourceCommandOptions?.NonInteractive == true);
+        Assert.Equal(1, connection.ExecuteResourceCommandCallCount);
+        var prompt = Assert.Single(interactionService.BooleanPromptCalls);
+        Assert.Equal("Reset resource?", prompt.PromptText);
+        Assert.False(prompt.DefaultValue);
     }
 
     [Fact]
-    public async Task ExecuteGenericCommandAsync_WithValidationErrors_DisplaysArgumentErrors()
+    public async Task ExecuteGenericCommandAsync_WithConfirmation_DoesNotExecuteWhenDeclined()
     {
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
-            {
-                Success = false,
-                Message = "Command argument validation failed.",
-                ValidationErrors =
-                [
-                    new ResourceCommandArgumentValidationError
-                    {
-                        ArgumentName = "target",
-                        ErrorMessage = "Target must not be prod."
-                    }
-                ]
-            }
-        };
-
+        var connection = CreateConnectionWithConfirmation("myResource", "reset", "Reset resource?");
         var interactionService = new TestInteractionService();
+        interactionService.SetupBooleanResponse(false);
 
         var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
             interactionService,
             NullLogger.Instance,
             "myResource",
-            "validate",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
+            "reset",
+            PromptBinding.CreateDefault(false),
+            CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
-        var error = Assert.Single(interactionService.DisplayedErrors);
-        Assert.Contains("Failed to validate command arguments for command 'validate' on resource 'myResource'", error);
-        Assert.DoesNotContain("Command argument validation failed.", error);
-        Assert.Contains("--target: Target must not be prod.", error);
+        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(0, connection.ExecuteResourceCommandCallCount);
+        Assert.Single(interactionService.BooleanPromptCalls);
     }
 
     [Fact]
-    public async Task ExecuteGenericCommandAsync_WhenValidationErrorsIsNull_DisplaysCommandError()
+    public async Task ExecuteGenericCommandAsync_WithConfirmationAndNonInteractiveOption_ExecutesWithoutPrompting()
     {
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
-            {
-                Success = false,
-                Message = "Command 'ss' not available for resource 'test-resource'.",
-                ValidationErrors = null!
-            }
-        };
-
+        var connection = CreateConnectionWithConfirmation("myResource", "reset", "Reset resource?");
         var interactionService = new TestInteractionService();
+        var option = new Option<bool>("--non-interactive");
+        var command = new System.CommandLine.Command("resource")
+        {
+            option
+        };
+        var binding = PromptBinding.Create(command.Parse("--non-interactive"), option);
 
         var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
             interactionService,
             NullLogger.Instance,
-            "test-resource",
-            "ss",
-            arguments: null,
-            cancellationToken: CancellationToken.None).DefaultTimeout();
+            "myResource",
+            "reset",
+            binding,
+            CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
-        var error = Assert.Single(interactionService.DisplayedErrors);
-        Assert.Contains("Failed to execute command 'ss' on resource 'test-resource'", error);
-        Assert.Contains("Command 'ss' not available for resource 'test-resource'.", error);
+        Assert.Equal(0, exitCode);
+        Assert.Equal(1, connection.ExecuteResourceCommandCallCount);
+        Assert.Empty(interactionService.BooleanPromptCalls);
+    }
+
+    private static TestAppHostAuxiliaryBackchannel CreateConnectionWithConfirmation(string resourceName, string commandName, string confirmationMessage)
+    {
+        return new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = resourceName,
+                    DisplayName = resourceName,
+                    Commands =
+                    [
+                        new ResourceSnapshotCommand
+                        {
+                            Name = commandName,
+                            State = "Enabled",
+                            ConfirmationMessage = confirmationMessage
+                        }
+                    ]
+                }
+            ],
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
     }
 }
