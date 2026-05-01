@@ -398,6 +398,16 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.codeLensOpenDashboard",
+        "title": "%command.codeLensOpenDashboard%",
+        "category": "Aspire"
+      },
+      {
+        "command": "aspire-vscode.codeLensViewAppHostLogs",
+        "title": "%command.codeLensViewAppHostLogs%",
+        "category": "Aspire"
+      },
+      {
         "command": "aspire-vscode.expandAll",
         "title": "%command.expandAll%",
         "category": "Aspire",
@@ -502,6 +512,14 @@
         },
         {
           "command": "aspire-vscode.codeLensRevealResource",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.codeLensOpenDashboard",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.codeLensViewAppHostLogs",
           "when": "false"
         },
         {

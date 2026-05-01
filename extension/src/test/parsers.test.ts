@@ -1858,3 +1858,75 @@ suite('JsTsAppHostParser', () => {
         assert.strictEqual(resources[2].name, 'pg');
     });
 });
+
+// ============================================================
+// findBuilderStatementLine tests
+// ============================================================
+suite('findBuilderStatementLine', () => {
+    function getCSharpParser() {
+        return getAllParsers().find(p => p.getSupportedExtensions().includes('.cs'))!;
+    }
+
+    function getJsTsParser() {
+        return getAllParsers().find(p => p.getSupportedExtensions().includes('.ts'))!;
+    }
+
+    test('C# parser finds builder line for var declaration', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                '// header comment',
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                'builder.AddRedis("cache");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 1);
+    });
+
+    test('C# parser finds builder line for #:sdk file with leading directives', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                '#:sdk Aspire.AppHost.Sdk',
+                '',
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                'builder.AddRedis("cache");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 2);
+    });
+
+    test('C# parser returns undefined when no CreateBuilder is present', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            'using System;\nclass Foo { }',
+            '/test/Foo.cs'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+    });
+
+    test('JS/TS parser finds builder line for createBuilder call', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'const builder = createBuilder();',
+                'await builder.addRedis("cache");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 2);
+    });
+
+    test('JS/TS parser returns undefined when no createBuilder call is present', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            'import express from "express";\nconst app = express();',
+            '/test/server.ts'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+    });
+});

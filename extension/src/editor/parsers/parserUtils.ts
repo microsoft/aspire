@@ -41,10 +41,17 @@ export function findStatementStartLine(text: string, matchIndex: number, documen
     }
     let line = document.positionAt(start).line;
     const matchLine = document.positionAt(matchIndex).line;
-    // Skip lines that are only closing braces (with optional comment) or comments
+    // Skip lines that are only closing braces (with optional comment), comments,
+    // C# 12 file-scoped top-level directives (e.g. `#:sdk Aspire.AppHost.Sdk`),
+    // or blank lines.
     while (line < matchLine) {
         const lineText = document.lineAt(line).text.trimStart();
-        if (/^\}\s*(\/\/.*)?$/.test(lineText) || lineText.startsWith('//') || lineText.startsWith('/*') || lineText.startsWith('*')) {
+        if (lineText === ''
+            || /^\}\s*(\/\/.*)?$/.test(lineText)
+            || lineText.startsWith('//')
+            || lineText.startsWith('/*')
+            || lineText.startsWith('*')
+            || lineText.startsWith('#:')) {
             line++;
         } else {
             break;

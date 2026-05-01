@@ -50,6 +50,15 @@ class CSharpAppHostParser implements AppHostResourceParser {
         return results;
     }
 
+    findBuilderStatementLine(document: vscode.TextDocument): number | undefined {
+        const text = document.getText();
+        const match = /\bDistributedApplication\.CreateBuilder\b/.exec(text);
+        if (!match) {
+            return undefined;
+        }
+        return findStatementStartLine(text, match.index, document);
+    }
+
 }
 
 // Self-register on import

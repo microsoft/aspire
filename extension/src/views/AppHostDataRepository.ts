@@ -67,6 +67,7 @@ export class AppHostDataRepository {
     // ── Mode / panel state ──
     private _viewMode: ViewMode = 'workspace';
     private _panelVisible = false;
+    private _appHostFileOpen = false;
 
     // ── Workspace mode state (describe --follow) ──
     private _workspaceResources: Map<string, ResourceJson> = new Map();
@@ -159,6 +160,21 @@ export class AppHostDataRepository {
         this._syncPolling();
     }
 
+    /**
+     * Signals whether at least one visible editor currently shows an AppHost file.
+     *
+     * When `true`, the repository will run the same data-source(s) it would when the
+     * tree-view panel is visible.  This lets code-lens decorations on a freshly-created
+     * AppHost file show live resource state without the user first opening the panel.
+     */
+    setAppHostFileOpen(open: boolean): void {
+        if (this._appHostFileOpen === open) {
+            return;
+        }
+        this._appHostFileOpen = open;
+        this._syncPolling();
+    }
+
     refresh(): void {
         this._stopDescribeWatch();
         this._workspaceResources.clear();
@@ -189,12 +205,17 @@ export class AppHostDataRepository {
 
     // ── PS polling lifecycle ──
 
+    /** Either source is active when the panel is visible **or** an AppHost file is open in the editor. */
+    private get _dataActive(): boolean {
+        return this._panelVisible || this._appHostFileOpen;
+    }
+
     private get _shouldPoll(): boolean {
-        return this._panelVisible && this._viewMode === 'global';
+        return this._dataActive && this._viewMode === 'global';
     }
 
     private get _shouldWatchWorkspace(): boolean {
-        return this._panelVisible && this._viewMode === 'workspace';
+        return this._dataActive && this._viewMode === 'workspace';
     }
 
     private _syncPolling(): void {

@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { getParserForDocument } from './parsers/AppHostResourceParser';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
 import {
@@ -26,6 +27,8 @@ import {
     codeLensStart,
     codeLensViewLogs,
     codeLensCommand,
+    codeLensOpenDashboard,
+    codeLensViewAppHostLogs,
 } from '../loc/strings';
 
 export class AspireCodeLensProvider implements vscode.CodeLensProvider {
@@ -34,7 +37,10 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
     private _disposables: vscode.Disposable[] = [];
 
-    constructor(private readonly _treeProvider: AspireAppHostTreeProvider) {
+    constructor(
+        private readonly _treeProvider: AspireAppHostTreeProvider,
+        private readonly _dataRepository: AppHostDataRepository,
+    ) {
         // Re-compute lenses whenever the polling data changes
         this._disposables.push(
             _treeProvider.onDidChangeTreeData(() => this._onDidChangeCodeLenses.fire())
@@ -63,6 +69,11 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         const findWorkspace = findWorkspaceResourceState(workspaceResources, workspaceAppHostPath);
 
         const lenses: vscode.CodeLens[] = [];
+
+        // Builder-statement lenses (Open Dashboard + View Logs) appear when live data is available.
+        if (hasRunningData) {
+            this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath);
+        }
 
         for (const resource of resources) {
             // Use statementStartLine to position the CodeLens at the top of a multi-line chain
@@ -96,6 +107,60 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             tooltip: codeLensDebugPipelineStep,
             arguments: [stepName],
         }));
+    }
+
+    private _addBuilderStatementLenses(
+        lenses: vscode.CodeLens[],
+        document: vscode.TextDocument,
+        parser: { findBuilderStatementLine?(document: vscode.TextDocument): number | undefined },
+        workspaceAppHostPath: string,
+    ): void {
+        const builderLine = parser.findBuilderStatementLine?.(document);
+        if (builderLine === undefined) {
+            return;
+        }
+
+        // Resolve the AppHost path that this file represents so the commands target the right host.
+        const appHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath);
+        const range = new vscode.Range(builderLine, 0, builderLine, 0);
+
+        lenses.push(new vscode.CodeLens(range, {
+            title: codeLensOpenDashboard,
+            command: 'aspire-vscode.codeLensOpenDashboard',
+            tooltip: codeLensOpenDashboard,
+            arguments: [appHostPath],
+        }));
+
+        lenses.push(new vscode.CodeLens(range, {
+            title: codeLensViewAppHostLogs,
+            command: 'aspire-vscode.codeLensViewAppHostLogs',
+            tooltip: codeLensViewAppHostLogs,
+            arguments: [appHostPath],
+        }));
+    }
+
+    /**
+     * Determines which running AppHost the given document represents.
+     * Prefers an exact match against `appHosts` (global mode), falls back to the
+     * workspace AppHost path (workspace mode), and finally the document path itself.
+     */
+    private _resolveAppHostPathForDocument(document: vscode.TextDocument, workspaceAppHostPath: string): string {
+        const docPath = document.uri.fsPath;
+        const docDir = path.dirname(docPath);
+        const match = this._dataRepository.appHosts.find(host => {
+            const hostPath = host.appHostPath;
+            if (!hostPath) {
+                return false;
+            }
+            return hostPath === docPath || path.dirname(hostPath) === docDir;
+        });
+        if (match) {
+            return match.appHostPath;
+        }
+        if (workspaceAppHostPath) {
+            return workspaceAppHostPath;
+        }
+        return docPath;
     }
 
     private _addStateLenses(
