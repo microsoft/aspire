@@ -43,15 +43,3 @@ internal sealed class TestDetachedProcess : IDetachedProcess
         Killed = true;
     }
 }
-
-internal sealed class AdvancingTimeProvider : TimeProvider
-{
-    private DateTimeOffset _utcNow = new(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
-
-    public override DateTimeOffset GetUtcNow()
-    {
-        var current = _utcNow;
-        _utcNow += TimeSpan.FromSeconds(10);
-        return current;
-    }
-}

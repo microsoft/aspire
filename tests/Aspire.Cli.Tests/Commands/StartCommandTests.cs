@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -130,7 +131,10 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         services.RemoveAll<IDetachedProcessLauncher>();
         services.AddSingleton<IDetachedProcessLauncher>(detachedProcessLauncher);
         services.RemoveAll<TimeProvider>();
-        services.AddSingleton<TimeProvider>(new AdvancingTimeProvider());
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider
+        {
+            AutoAdvanceAmount = TimeSpan.FromSeconds(10)
+        });
 
         using var provider = services.BuildServiceProvider();
 
