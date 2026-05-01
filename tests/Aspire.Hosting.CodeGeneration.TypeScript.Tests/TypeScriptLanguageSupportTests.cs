@@ -39,9 +39,12 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
-        Assert.False(scripts.ContainsKey("start"));
-        Assert.False(scripts.ContainsKey("build"));
-        Assert.False(scripts.ContainsKey("dev"));
+        Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint", scripts["predev"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:start", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
         Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
@@ -54,6 +57,7 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.DoesNotContain("\\u003E", files["package.json"]);
 
         Assert.Contains("eslint.config.mjs", files.Keys);
+        Assert.Contains("project: './tsconfig.apphost.json'", files["eslint.config.mjs"]);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
         Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
