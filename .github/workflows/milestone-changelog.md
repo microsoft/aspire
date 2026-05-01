@@ -310,7 +310,28 @@ steps:
         echo "No feedback issue found"
       fi
 
-      # 4. Fetch existing changelog body from wiki page (avoids storing it in the memory branch)
+      # 4. Detect whether there are any changes to process
+      #    No changes = empty batch AND (no feedback issue OR feedback not updated
+      #    since the latest PR was merged). When true, write a marker file so the
+      #    agent can exit immediately without burning tokens.
+      if [ "$BATCH_COUNT" -eq 0 ]; then
+        LATEST_MERGE=$(jq -r 'last.mergedAt // empty' "$DATA_DIR/all-milestone-prs.json")
+        SKIP="false"
+        if [ -z "$FEEDBACK_NUM" ]; then
+          SKIP="true"
+        elif [ -n "$LATEST_MERGE" ] && [ -n "$FEEDBACK_UPDATED_AT" ]; then
+          # Compare ISO 8601 timestamps lexicographically
+          if [[ "$FEEDBACK_UPDATED_AT" < "$LATEST_MERGE" ]]; then
+            SKIP="true"
+          fi
+        fi
+        if [ "$SKIP" = "true" ]; then
+          touch "$DATA_DIR/no-changes"
+          echo "No changes to process — wrote no-changes marker"
+        fi
+      fi
+
+      # 5. Fetch existing changelog body from wiki page (avoids storing it in the memory branch)
       PAGE_NAME="${MILESTONE}-Change-log"
       WIKI_TMP=$(mktemp -d)
       if git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git" "$WIKI_TMP/wiki" 2>/dev/null; then
@@ -358,27 +379,23 @@ large JSON files in their entirety — use `jq` to extract only the fields you n
 | Change files directory | `changes/` (under memory directories) |
 | Feedback issue file | `feedback-issue.json` (under memory directories) |
 | Batch file | `/tmp/gh-aw/pr-data/batch-prs.json` (computed from all PRs minus processed) |
+| No-changes marker | `/tmp/gh-aw/pr-data/no-changes` (present when batch is empty and no new feedback) |
 | Existing body file | `/tmp/gh-aw/pr-data/existing-body.md` (fetched from wiki) |
 | PR tracker directory | `prs/` (under memory directories; one JSON file per PR) |
 
 ## Step 1: Check if there are changes to process
 
-Read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`.
-Do **not** `cat` large JSON files — use `jq` to extract only the fields you need.
+Check if the file `/tmp/gh-aw/pr-data/no-changes` exists. If it does, there are
+no new PRs to process and no new editorial feedback — **skip all remaining steps**
+and end the run.
 
+If the file does not exist, check `/tmp/gh-aw/pr-data/batch-prs.json`.
 If the batch is **not empty**, continue to Step 2.
 
-If the batch is empty (zero unprocessed PRs):
-
-1. Check the feedback issue `updatedAt` from `/tmp/gh-aw/pr-data/feedback-issue.json`
-   against the latest PR merge date (the last entry's `mergedAt` in
-   `/tmp/gh-aw/pr-data/all-milestone-prs.json`). If `updatedAt` is **earlier than**
-   the latest PR merge date (or if there is no feedback issue), there are no new PRs
-   and no new editorial feedback — **skip all remaining steps** and end the run.
-2. Otherwise (the feedback issue was updated after the latest PR merged), **skip
-   Steps 4, 6, and 7** but continue through Steps 5, 8, and 9 to apply new
-   editorial feedback, refresh the "What's New" section, and update the footer
-   counts.
+If the batch is empty (zero unprocessed PRs) but the no-changes marker was not
+written, the feedback issue has new comments to apply. **Skip Steps 4, 6, and 7**
+but continue through Steps 2, 3, 5, 8, and 9 to apply editorial feedback,
+refresh the "What's New" section, and update the footer counts.
 
 ## Step 2: Load existing changelog and feedback
 
