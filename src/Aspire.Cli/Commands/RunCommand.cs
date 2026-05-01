@@ -115,7 +115,7 @@ internal sealed class RunCommand : BaseCommand
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
-        AppHostLauncher.AddLaunchOptions(this);
+        AppHostLauncher.AddLaunchOptions(this, includeTimeout: true);
 
         if (ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
         {
@@ -137,6 +137,7 @@ internal sealed class RunCommand : BaseCommand
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var timeoutSeconds = parseResult.GetValue(AppHostLauncher.s_timeoutOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
         var startDebugSession = false;
         if (isExtensionHost)
@@ -152,6 +153,11 @@ internal sealed class RunCommand : BaseCommand
             return ExitCodeConstants.InvalidCommand;
         }
 
+        if (!WaitCommand.ValidateTimeout(timeoutSeconds, InteractionService))
+        {
+            return ExitCodeConstants.InvalidCommand;
+        }
+
         // Validate that --no-build is not used when watch mode would be enabled
         // Watch mode is enabled when DefaultWatchEnabled feature is true, or when running under extension host (not in debug session)
         var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !startDebugSession);
@@ -164,7 +170,7 @@ internal sealed class RunCommand : BaseCommand
         // Handle detached mode - spawn child process and exit
         if (detach)
         {
-            return await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, cancellationToken);
+            return await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, timeoutSeconds, cancellationToken);
         }
 
         // A user may run `aspire run` in an Aspire terminal in VS Code. In this case, intercept and prompt
@@ -255,11 +261,26 @@ internal sealed class RunCommand : BaseCommand
                 BackchannelCompletionSource = backchannelCompletionSource,
             };
 
+            var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
+            using var runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
             // Start the project run as a pending task - we'll handle UX while it runs
-            var pendingRun = project.RunAsync(context, cancellationToken);
+            var pendingRun = project.RunAsync(context, runCancellationTokenSource.Token);
 
             // Wait for the build to complete first (project handles its own build status spinners)
-            var buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
+            bool buildSuccess;
+            try
+            {
+                buildSuccess = await buildCompletionSource.Task.WaitAsync(startupTimeout, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
+                CancelAppHostStartup(runCancellationTokenSource);
+                DisplayStartupTimeout(timeoutSeconds);
+                return ExitCodeConstants.FailedToDotnetRunAppHost;
+            }
+
             if (!buildSuccess)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
@@ -279,9 +300,20 @@ internal sealed class RunCommand : BaseCommand
             }
 
             // Now wait for the backchannel to be established
-            var backchannel = await InteractionService.ShowStatusAsync(
-                RunCommandStrings.ConnectingToAppHost,
-                async () => await backchannelCompletionSource.Task.WaitAsync(cancellationToken));
+            IAppHostCliBackchannel backchannel;
+            try
+            {
+                backchannel = await InteractionService.ShowStatusAsync(
+                    RunCommandStrings.ConnectingToAppHost,
+                    async () => await backchannelCompletionSource.Task.WaitAsync(startupTimeout, cancellationToken));
+            }
+            catch (TimeoutException)
+            {
+                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
+                CancelAppHostStartup(runCancellationTokenSource);
+                DisplayStartupTimeout(timeoutSeconds);
+                return ExitCodeConstants.FailedToDotnetRunAppHost;
+            }
 
             // Set up log capture - writes to unified CLI log file
             var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, cancellationToken);
@@ -392,7 +424,7 @@ internal sealed class RunCommand : BaseCommand
             await pendingLogCapture;
             return await pendingRun;
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested || ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
             InteractionService.DisplayCancellationMessage();
@@ -648,12 +680,12 @@ internal sealed class RunCommand : BaseCommand
     /// with the poll delay. Shows exit code and log file path.
     /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
     /// <item><b>Timeout waiting for backchannel</b>: The auxiliary backchannel socket doesn't appear
-    /// within 120 seconds. The child process is killed. Shows timeout message and log file path.
+    /// within the configured timeout. The child process is killed. Shows timeout message and log file path.
     /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
     /// </list>
     /// <para>On any failure, the log file path is displayed so the user can investigate.</para>
     /// </remarks>
-    private Task<int> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, CancellationToken cancellationToken)
+    private Task<int> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, int timeoutSeconds, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
@@ -673,9 +705,21 @@ internal sealed class RunCommand : BaseCommand
             isolated,
             isExtensionHost,
             waitForDebugger,
+            timeoutSeconds,
             globalArgs,
             additionalArgs,
             cancellationToken);
+    }
+
+    private static void CancelAppHostStartup(CancellationTokenSource runCancellationTokenSource)
+    {
+        runCancellationTokenSource.Cancel();
+    }
+
+    private void DisplayStartupTimeout(int timeoutSeconds)
+    {
+        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds));
+        InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
     }
 
 }

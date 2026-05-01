@@ -203,8 +203,8 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for AppHost to start.</source>
-        <target state="needs-review-translation">Při čekání na spuštění hostitele aplikací (AppHost) vypršel časový limit.</target>
+        <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, try again with a higher --timeout value.</source>
+        <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, try again with a higher --timeout value.</target>
         <note />
       </trans-unit>
       <trans-unit id="Type">

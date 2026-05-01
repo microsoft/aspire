@@ -1,0 +1,57 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Cli.Processes;
+
+namespace Aspire.Cli.Tests.TestServices;
+
+internal sealed class TestDetachedProcessLauncher : IDetachedProcessLauncher
+{
+    public TestDetachedProcess Process { get; } = new();
+
+    public IReadOnlyList<string> Arguments { get; private set; } = [];
+
+    public IDetachedProcess Start(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        Func<string, bool>? shouldRemoveEnvironmentVariable = null,
+        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+    {
+        Arguments = arguments;
+        return Process;
+    }
+}
+
+internal sealed class TestDetachedProcess : IDetachedProcess
+{
+    public int Id => 1;
+
+    public bool HasExited => false;
+
+    public int ExitCode => 0;
+
+    public bool Killed { get; private set; }
+
+    public async Task WaitForExitAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(1, cancellationToken);
+    }
+
+    public void Kill()
+    {
+        Killed = true;
+    }
+}
+
+internal sealed class AdvancingTimeProvider : TimeProvider
+{
+    private DateTimeOffset _utcNow = new(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+
+    public override DateTimeOffset GetUtcNow()
+    {
+        var current = _utcNow;
+        _utcNow += TimeSpan.FromSeconds(10);
+        return current;
+    }
+}

@@ -34,11 +34,26 @@ internal sealed class WaitCommand : BaseCommand
         DefaultValueFactory = _ => "healthy"
     };
 
-    private static readonly Option<int> s_timeoutOption = new("--timeout")
+    internal const int DefaultTimeoutSeconds = 120;
+
+    private static readonly Option<int> s_timeoutOption = CreateTimeoutOption();
+
+    internal static Option<int> CreateTimeoutOption() => new("--timeout")
     {
         Description = WaitCommandStrings.TimeoutOptionDescription,
-        DefaultValueFactory = _ => 120
+        DefaultValueFactory = _ => DefaultTimeoutSeconds
     };
+
+    internal static bool ValidateTimeout(int timeoutSeconds, IInteractionService interactionService)
+    {
+        if (timeoutSeconds > 0)
+        {
+            return true;
+        }
+
+        interactionService.DisplayError(WaitCommandStrings.TimeoutMustBePositive);
+        return false;
+    }
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
@@ -81,10 +96,8 @@ internal sealed class WaitCommand : BaseCommand
             return ExitCodeConstants.InvalidCommand;
         }
 
-        // Validate timeout
-        if (timeoutSeconds <= 0)
+        if (!ValidateTimeout(timeoutSeconds, _interactionService))
         {
-            _interactionService.DisplayError(WaitCommandStrings.TimeoutMustBePositive);
             return ExitCodeConstants.InvalidCommand;
         }
 

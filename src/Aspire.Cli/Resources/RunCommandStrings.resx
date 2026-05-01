@@ -227,7 +227,7 @@
     <value>AppHost failed to build.</value>
   </data>
   <data name="TimeoutWaitingForAppHost" xml:space="preserve">
-    <value>Timeout waiting for AppHost to start.</value>
+    <value>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, try again with a higher --timeout value.</value>
   </data>
   <data name="CheckLogsForDetails" xml:space="preserve">
     <value>Check logs for details: {0}</value>

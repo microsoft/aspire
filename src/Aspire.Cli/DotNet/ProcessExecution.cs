@@ -83,7 +83,20 @@ internal sealed class ProcessExecution : IProcessExecution
     {
         _logger.LogDebug("{FileName}({ProcessId}) waiting for exit", FileName, _process.Id);
 
-        await _process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await _process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (!_process.HasExited)
+            {
+                _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, killing it", FileName, _process.Id);
+                _process.Kill(entireProcessTree: true);
+            }
+
+            throw;
+        }
 
         if (!_process.HasExited)
         {

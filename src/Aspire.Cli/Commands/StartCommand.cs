@@ -34,7 +34,7 @@ internal sealed class StartCommand : BaseCommand
         _appHostLauncher = appHostLauncher;
 
         Options.Add(s_noBuildOption);
-        AppHostLauncher.AddLaunchOptions(this);
+        AppHostLauncher.AddLaunchOptions(this, includeTimeout: true);
 
         TreatUnmatchedTokensAsErrors = false;
     }
@@ -44,6 +44,7 @@ internal sealed class StartCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var timeoutSeconds = parseResult.GetValue(AppHostLauncher.s_timeoutOption);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // `aspire start` is always user-initiated — the VS Code extension only invokes
@@ -59,12 +60,18 @@ internal sealed class StartCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
+        if (!WaitCommand.ValidateTimeout(timeoutSeconds, InteractionService))
+        {
+            return ExitCodeConstants.InvalidCommand;
+        }
+
         return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
             isolated,
             isExtensionHost,
             waitForDebugger,
+            timeoutSeconds,
             globalArgs,
             additionalArgs,
             cancellationToken);
