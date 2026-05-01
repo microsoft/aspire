@@ -123,7 +123,13 @@ safe-outputs:
               const memoryBranch = 'memory/milestone-changelog';
 
               // ── 1. Publish wiki page ──
-              execSync(`git clone https://x-access-token:${token}@github.com/${repo}.wiki.git wiki-repo`, { stdio: 'inherit' });
+              try {
+                execSync(`git clone --depth 1 https://x-access-token:${token}@github.com/${repo}.wiki.git wiki-repo`, { stdio: 'inherit' });
+              } catch (err) {
+                // Wiki doesn't exist yet — initialize an empty repo
+                execSync('git init wiki-repo', { stdio: 'inherit' });
+                execSync(`git remote add origin https://x-access-token:${token}@github.com/${repo}.wiki.git`, { cwd: 'wiki-repo', stdio: 'inherit' });
+              }
               fs.writeFileSync(`wiki-repo/${pageName}.md`, body);
               execSync('git config user.name "github-actions[bot]"', { cwd: 'wiki-repo', stdio: 'inherit' });
               execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { cwd: 'wiki-repo', stdio: 'inherit' });
@@ -208,9 +214,10 @@ steps:
       PROCESSED_NUMBERS="[]"
       FEEDBACK_FROM_MEMORY=""
       MEMORY_TMP=$(mktemp -d)
+      CLONE_ERR=$(mktemp)
       if git clone --depth 1 --branch "$MEMORY_REF" \
           "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
-          "$MEMORY_TMP/repo" 2>/dev/null; then
+          "$MEMORY_TMP/repo" 2>"$CLONE_ERR"; then
         SRC_DIR="$MEMORY_TMP/repo/${MILESTONE}"
         if [ -d "$SRC_DIR" ]; then
           mkdir -p "$MEMORY_DIR"
@@ -246,8 +253,13 @@ steps:
         if [ -f "$FEEDBACK_FILE" ]; then
           FEEDBACK_FROM_MEMORY=$(tr -d '[:space:]' < "$FEEDBACK_FILE")
         fi
+      else
+        # Log the error unless it's just a missing branch
+        if ! grep -qi 'not found\|could not find' "$CLONE_ERR"; then
+          echo "::warning::Memory branch clone failed: $(cat "$CLONE_ERR")"
+        fi
       fi
-      rm -rf "$MEMORY_TMP"
+      rm -rf "$MEMORY_TMP" "$CLONE_ERR"
 
       # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
       gh pr list --repo "$REPO" --state merged --limit 5000 \
@@ -386,7 +398,7 @@ Read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`.
 Do **not** `cat` large JSON files — use `jq` to extract only the fields you need.
 If the batch is empty (zero unprocessed PRs), **skip Steps 3, 5, and 6** but still
 continue through Steps 4, 7, and 8. This ensures editorial feedback is applied,
-the "What's New" section is refreshed (entries age out of the 5-day window), and
+the "What's New" section is refreshed (entries age out of the 3-day window), and
 the "PRs processed" footer counts stay current.
 
 ## Step 3: Process the batch PRs
@@ -733,12 +745,7 @@ Only include change type sub-headings that have at least one entry.
 Only include area sections that have at least one entry.
 
 Change type sub-headings (`####`) use only the change type name (e.g.,
-`#### New features`, `#### Bug fixes`, `#### Improvements`). Because the same
-heading text repeats under each area, GitHub appends a numeric suffix to
-disambiguate: the first `#### New features` gets the slug `new-features`, the
-second gets `new-features-1`, the third `new-features-2`, and so on. The suffix
-corresponds to the **zero-based index** of each area section that contains that
-change type, ordered alphabetically by area name.
+`#### New features`, `#### Bug fixes`, `#### Improvements`).
 
 After the header, add a **Table of Contents** section with a link to each area.
 Use Unicode emoji in both the TOC link text and the area heading. GitHub's slug
