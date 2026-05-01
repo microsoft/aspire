@@ -11,9 +11,10 @@ function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
             return programPath;
         }
 
-        // Module entrypoints don't have a program path; fall back to the working directory
-        // so the central cwd derivation in createDebugSessionConfiguration has something to work with.
-        // The per-callback override below sets `cwd` from `working_directory` when present.
+        // Some Python entrypoints, including module-based and executable-based launches, may not
+        // have a program path; fall back to the working directory so the central cwd derivation
+        // in createDebugSessionConfiguration has something to work with. The per-callback
+        // override below sets `cwd` from `working_directory` when present.
         if (launchConfig.working_directory) {
             return launchConfig.working_directory;
         }
