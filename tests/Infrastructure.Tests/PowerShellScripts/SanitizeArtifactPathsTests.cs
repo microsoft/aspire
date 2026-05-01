@@ -17,7 +17,7 @@ public class SanitizeArtifactPathsTests : IDisposable
     public SanitizeArtifactPathsTests(ITestOutputHelper output)
     {
         _output = output;
-        _scriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "sanitize-artifact-paths.ps1");
+        _scriptPath = Path.Combine(TestRepoRoot.Path, "eng", "scripts", "sanitize-artifact-paths.ps1");
     }
 
     public void Dispose() => _tempDir.Dispose();
@@ -110,17 +110,4 @@ public class SanitizeArtifactPathsTests : IDisposable
         Assert.Contains("does not exist; skipping", result.Output);
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
 }
