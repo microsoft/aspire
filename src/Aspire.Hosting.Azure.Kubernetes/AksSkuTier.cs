@@ -6,7 +6,7 @@ namespace Aspire.Hosting.Azure.Kubernetes;
 /// <summary>
 /// Specifies the SKU tier for an AKS cluster.
 /// </summary>
-public enum AksSkuTier
+internal enum AksSkuTier
 {
     /// <summary>
     /// Free tier with no SLA.

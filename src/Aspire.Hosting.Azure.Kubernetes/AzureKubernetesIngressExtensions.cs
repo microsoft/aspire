@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 
 namespace Aspire.Hosting;
