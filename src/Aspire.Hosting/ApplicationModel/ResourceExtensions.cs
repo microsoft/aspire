@@ -1462,7 +1462,7 @@ public static class ResourceExtensions
 
         foreach (var value in rawValues)
         {
-            CollectDependenciesFromValue(value, dependencies, newDependencies, visited);
+            CollectDependenciesFromValue(value, dependencies, newDependencies, visited, executionContext);
         }
     }
 
@@ -1572,11 +1572,21 @@ public static class ResourceExtensions
     /// <summary>
     /// Recursively collects resource dependencies from a value using <see cref="IValueWithReferences"/>.
     /// </summary>
-    private static void CollectDependenciesFromValue(object? value, HashSet<IResource> dependencies, HashSet<IResource> newDependencies, HashSet<object> visitedValues)
+    private static void CollectDependenciesFromValue(
+        object? value,
+        HashSet<IResource> dependencies,
+        HashSet<IResource> newDependencies,
+        HashSet<object> visitedValues,
+        DistributedApplicationExecutionContext executionContext)
     {
         if (value is null || !visitedValues.Add(value))
         {
             return;
+        }
+
+        if (value is HostUrl hostUrl)
+        {
+            CollectHostUrlDependencies(hostUrl, dependencies, newDependencies, executionContext);
         }
 
         // Direct resource references
@@ -1603,7 +1613,42 @@ public static class ResourceExtensions
         {
             foreach (var reference in valueWithReferences.References)
             {
-                CollectDependenciesFromValue(reference, dependencies, newDependencies, visitedValues);
+                CollectDependenciesFromValue(reference, dependencies, newDependencies, visitedValues, executionContext);
+            }
+        }
+    }
+
+    private static void CollectHostUrlDependencies(
+        HostUrl hostUrl,
+        HashSet<IResource> dependencies,
+        HashSet<IResource> newDependencies,
+        DistributedApplicationExecutionContext executionContext)
+    {
+        if (!HostUrl.TryGetLocalHostPort(hostUrl.Url, out var port))
+        {
+            return;
+        }
+
+        DistributedApplicationModel? model;
+        try
+        {
+            model = executionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        if (model is null)
+        {
+            return;
+        }
+
+        foreach (var resource in model.Resources.Where(r => !r.IsContainer()).OfType<IResourceWithEndpoints>())
+        {
+            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => ep.Port == port) && dependencies.Add(resource))
+            {
+                newDependencies.Add(resource);
             }
         }
     }

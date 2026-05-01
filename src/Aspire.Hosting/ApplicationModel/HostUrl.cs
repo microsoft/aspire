@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Hosting.Dcp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -17,7 +18,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
     string IManifestExpressionProvider.ValueExpression => Url;
 
     // Returns the url
-    ValueTask<string?> IValueProvider.GetValueAsync(System.Threading.CancellationToken cancellationToken) => ((IValueProvider)this).GetValueAsync(new(), cancellationToken);
+    ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) => ((IValueProvider)this).GetValueAsync(new(), cancellationToken);
 
     // Returns the url
     async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
@@ -39,7 +40,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
         try
         {
             var uri = new UriBuilder(Url);
-            if (uri.Host is "localhost" or "127.0.0.1" or "[::1]")
+            if (IsLocalHost(uri.Host))
             {
                 if (context.ExecutionContext?.IsRunMode == true)
                 {
@@ -52,37 +53,40 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
                     var infoService = context.ExecutionContext.ServiceProvider.GetRequiredService<IDcpDependencyCheckService>();
                     var dcpInfo = await infoService.GetDcpInfoAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                    // Determine what hostname means that we want to contact the host machine from the container. If using the new tunnel feature, this needs to be the address of the tunnel instance.
-                    // Otherwise we want to try and determine the container runtime appropriate hostname (host.docker.internal or host.containers.internal).
-                    uri.Host = options.Value.EnableAspireContainerTunnel? KnownHostNames.DefaultContainerTunnelHostName : dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
+                    var containerHostName = dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
                     var model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+                    EndpointReference? targetEndpoint = null;
 
                     if (options.Value.EnableAspireContainerTunnel && model is { })
                     {
                         // If we're running with the container tunnel enabled, we need to lookup the port on the tunnel that corresponds to the
                         // target port on the host machine.
-                        
-                        var targetEndpoint = model.Resources.Where(r => !r.IsContainer())
+
+                        targetEndpoint = model.Resources.Where(r => !r.IsContainer())
                             .OfType<IResourceWithEndpoints>()
                             .Select(r =>
                             {
                                 // Find if the resource has a host endpoint with a port matching the one from the request
-                                if (r.GetEndpoints(KnownNetworkIdentifiers.LocalhostNetwork).FirstOrDefault(ep => ep.Port == uri.Port) is EndpointReference ep)
+                                if (r.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(ep => ep.Port == uri.Port) is EndpointAnnotation ep)
                                 {
                                     // Return the corresponding endpoint for the container network context. This will be used to determine the port to use when connecting from the container to the host machine.
-                                    return r.GetEndpoint(ep.EndpointName, networkContext);
+                                    return r.GetEndpoint(ep.Name, networkContext);
                                 }
 
                                 return null;
                             })
-                            .Where(ep => ep is not null)
-                            .FirstOrDefault();
+                            .FirstOrDefault(ep => ep is not null);
+                    }
 
-                        if (targetEndpoint is { })
-                        {
-                            // If we found a container endpoint, remap the requested port
-                            uri.Port = targetEndpoint.Port;
-                        }
+                    if (targetEndpoint is { })
+                    {
+                        uri.Host = KnownHostNames.DefaultContainerTunnelHostName;
+                        var port = await targetEndpoint.Property(EndpointProperty.Port).GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+                        uri.Port = int.Parse(port!, CultureInfo.InvariantCulture);
+                    }
+                    else
+                    {
+                        uri.Host = containerHostName;
                     }
 
                     retval = uri.ToString();
@@ -121,4 +125,27 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
 
         return new(retval);
     }
+
+    internal static bool TryGetLocalHostPort(string url, out int port)
+    {
+        port = 0;
+
+        try
+        {
+            var uri = new UriBuilder(url);
+            if (!IsLocalHost(uri.Host))
+            {
+                return false;
+            }
+
+            port = uri.Port;
+            return true;
+        }
+        catch (UriFormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsLocalHost(string host) => host is "localhost" or "127.0.0.1" or "::1" or "[::1]";
 }
