@@ -260,6 +260,131 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileUsesValidSettingsWithoutScanningInThrowMode()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var targetAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("TargetAppHost");
+        var targetAppHostProjectFile = new FileInfo(Path.Combine(targetAppHostDirectory.FullName, "TargetAppHost.csproj"));
+        await File.WriteAllTextAsync(targetAppHostProjectFile.FullName, "Not a real apphost");
+
+        var decoyAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("DecoyAppHost");
+        var decoyAppHostProjectFile = new FileInfo(Path.Combine(decoyAppHostDirectory.FullName, "DecoyAppHost.csproj"));
+        await File.WriteAllTextAsync(decoyAppHostProjectFile.FullName, "Not a real apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, targetAppHostProjectFile.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            languageDiscovery: new ThrowingLanguageDiscovery());
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        var candidate = Assert.Single(result.AllProjectFileCandidates);
+        Assert.Equal(targetAppHostProjectFile.FullName, candidate.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileUsesValidGuestAppHostSettingsWithoutScanning()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var guestAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(guestAppHostFile.FullName, "// guest apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = "apphost.ts"
+            }
+        }));
+
+        var projectFactory = new GuestAppHostFileProjectFactory("apphost.ts");
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            projectFactory: projectFactory,
+            languageDiscovery: new ThrowingLanguageDiscovery());
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Prompt,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(guestAppHostFile.FullName, result.SelectedProjectFile?.FullName);
+        var candidate = Assert.Single(result.AllProjectFileCandidates);
+        Assert.Equal(guestAppHostFile.FullName, candidate.FullName);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task UseOrFindAppHostProjectFileFallsBackToDiscoveryWhenConfiguredAppHostIsInvalid(bool isUnsupported, bool isPossiblyUnbuildable)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configuredAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("ConfiguredAppHost");
+        var configuredAppHostProjectFile = new FileInfo(Path.Combine(configuredAppHostDirectory.FullName, "ConfiguredAppHost.csproj"));
+        await File.WriteAllTextAsync(configuredAppHostProjectFile.FullName, "Not a real apphost");
+
+        var realAppHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "RealAppHost.csproj"));
+        await File.WriteAllTextAsync(realAppHostProjectFile.FullName, "Not a real apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, configuredAppHostProjectFile.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = projectFile =>
+            {
+                if (projectFile.FullName == realAppHostProjectFile.FullName)
+                {
+                    return new AppHostValidationResult(IsValid: true);
+                }
+                if (projectFile.FullName == configuredAppHostProjectFile.FullName)
+                {
+                    return new AppHostValidationResult(IsValid: false, IsUnsupported: isUnsupported, IsPossiblyUnbuildable: isPossiblyUnbuildable);
+                }
+                return new AppHostValidationResult(IsValid: false);
+            }
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.None,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(realAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileScansWhenCandidateListingModeHasValidSettings()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -931,6 +1056,74 @@ builder.Build().Run();");
 
         public LanguageInfo? GetLanguageByFile(FileInfo file)
             => null;
+    }
+
+    private sealed class GuestAppHostFileProjectFactory : IAppHostProjectFactory
+    {
+        private readonly string _supportedFileName;
+        private readonly GuestAppHostTestProject _project;
+
+        public GuestAppHostFileProjectFactory(string supportedFileName)
+        {
+            _supportedFileName = supportedFileName;
+            _project = new GuestAppHostTestProject(supportedFileName);
+        }
+
+        public IAppHostProject GetProject(LanguageInfo language) => _project;
+
+        public IAppHostProject GetProject(FileInfo appHostFile)
+            => TryGetProject(appHostFile) ?? throw new NotSupportedException($"No handler available for AppHost file '{appHostFile.Name}'.");
+
+        public IAppHostProject? TryGetProject(FileInfo appHostFile)
+            => appHostFile.Name.Equals(_supportedFileName, StringComparison.OrdinalIgnoreCase) ? _project : null;
+
+        public IAppHostProject? GetProjectByLanguageId(string languageId)
+            => string.Equals(languageId, _project.LanguageId, StringComparison.OrdinalIgnoreCase) ? _project : null;
+
+        public IEnumerable<IAppHostProject> GetAllProjects() => [_project];
+
+        private sealed class GuestAppHostTestProject(string supportedFileName) : IAppHostProject
+        {
+            public bool IsUnsupported { get; set; }
+            public string LanguageId => "typescript";
+            public string DisplayName => "TypeScript";
+            public string? AppHostFileName => supportedFileName;
+
+            public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
+
+            public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken)
+                => Task.FromResult<string[]>([supportedFileName]);
+
+            public bool CanHandle(FileInfo appHostFile)
+                => appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase);
+
+            public Task ScaffoldAsync(DirectoryInfo directory, string? projectName, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<IReadOnlyList<(string PackageId, string Version)>> GetPackageReferencesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+                => Task.FromResult(new AppHostValidationResult(IsValid: appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase)));
+
+            public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
+                => Task.FromResult(RunningInstanceResult.NoRunningInstance);
+
+            public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
+                => Task.FromResult<string?>(null);
+        }
     }
 
     private static ProjectLocator CreateProjectLocatorWithSingleFileEnabled(CliExecutionContext executionContext, Func<FileInfo, AppHostValidationResult>? validateCallback = null)
