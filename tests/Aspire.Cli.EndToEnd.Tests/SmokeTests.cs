@@ -142,9 +142,8 @@ public sealed class SmokeTests(ITestOutputHelper output)
             throw new FileNotFoundException($"Expected TypeScript AppHost file to exist: {appHostPath}", appHostPath);
         }
 
-        var expectedConfigChannel = strategy.Quality is CliInstallQuality.Staging ? "staging" : "stable";
-        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"), expectedConfigChannel);
-        output.WriteLine($"Stable TypeScript AppHost config verified with channel '{expectedConfigChannel}'.");
+        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"), "stable");
+        output.WriteLine("Stable TypeScript AppHost config verified with channel 'stable'.");
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
