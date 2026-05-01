@@ -154,7 +154,8 @@ internal sealed class BrowserLogsArtifactWriter : IBrowserLogsArtifactWriter
             }
         }
 
-        return hasValidCharacter ? new string(buffer) : fallback;
+        var sanitized = hasValidCharacter ? new string(buffer) : fallback;
+        return sanitized is "." or ".." ? fallback : sanitized;
     }
 }
 

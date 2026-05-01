@@ -178,9 +178,11 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
         var result = await pageSession.CaptureScreenshotAsync(cancellationToken).ConfigureAwait(false);
 
+        var data = result.Data ?? throw new InvalidOperationException("Tracked browser screenshot capture returned no image data.");
+
         try
         {
-            return Convert.FromBase64String(result.Data!);
+            return Convert.FromBase64String(data);
         }
         catch (FormatException ex)
         {
@@ -190,7 +192,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        _stopCts.Cancel();
+        try { _stopCts.Cancel(); } catch (ObjectDisposedException) { }
 
         // Stopping a dashboard browser-log session should close only the page target it created. The shared browser
         // process/window is released through the lease and may stay alive while other resource sessions are still active.
