@@ -200,34 +200,26 @@ internal sealed class StopCommand : BaseCommand
 
         _interactionService.DisplayMessage(KnownEmojis.StopSign, "Sending stop signal...");
 
-        if (OperatingSystem.IsWindows() && appHostInfo?.CliProcessId is int windowsCliPid)
+        if (appHostInfo?.CliProcessId is int cliPid)
         {
-            _logger.LogDebug("Stopping AppHost process tree via DCP (root CLI PID {Pid})", windowsCliPid);
             try
             {
-                // CliStartedAt is recorded with second-level precision, so validate it locally with tolerance
-                // instead of passing it to DCP's millisecond-precision process-start-time option.
-                await StopProcessTreeWithDcpAsync(windowsCliPid, appHostInfo.CliStartedAt, includeStartTime: false, cancellationToken).ConfigureAwait(false);
+                if (OperatingSystem.IsWindows())
+                {
+                    _logger.LogDebug("Stopping AppHost process tree via DCP (root CLI PID {Pid})", cliPid);
+                    // CliStartedAt is recorded with second-level precision, so validate it locally with tolerance
+                    // instead of passing it to DCP's millisecond-precision process-start-time option.
+                    await StopProcessTreeWithDcpAsync(cliPid, appHostInfo.CliStartedAt, includeStartTime: false, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    _logger.LogDebug("Sending stop signal to CLI process (PID {Pid})", cliPid);
+                    SendStopSignal(cliPid, appHostInfo?.CliStartedAt);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to stop AppHost process tree via DCP for root CLI PID {Pid}", windowsCliPid);
-                _interactionService.DisplayError(StopCommandStrings.FailedToStopAppHost);
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
-            }
-        }
-        else if (appHostInfo?.CliProcessId is int cliPid)
-        {
-            _logger.LogDebug("Sending stop signal to CLI process (PID {Pid})", cliPid);
-            try
-            {
-                SendStopSignal(cliPid, appHostInfo?.CliStartedAt);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send stop signal to CLI process {Pid}", cliPid);
-                _interactionService.DisplayError(StopCommandStrings.FailedToStopAppHost);
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                _logger.LogWarning(ex, "Failed to send stop signal to CLI process {Pid}. Will attempt force-kill.", cliPid);
             }
         }
         else
@@ -261,9 +253,7 @@ internal sealed class StopCommand : BaseCommand
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to send stop signal to process {Pid}", appHostPid);
-                    _interactionService.DisplayError(StopCommandStrings.FailedToStopAppHost);
-                    return ExitCodeConstants.FailedToDotnetRunAppHost;
+                    _logger.LogWarning(ex, "Failed to send stop signal to process {Pid}. Will attempt force-kill.", appHostPid);
                 }
             }
             else if (!rpcSucceeded)
@@ -356,9 +346,11 @@ internal sealed class StopCommand : BaseCommand
             throw new InvalidOperationException($"Could not find DCP executable at '{dcpPath}'.");
         }
 
+        // Ensure we only stop the target process and not all children to allow DCP to avoid accidentally killing the child DCP instance
         var arguments = new List<string>
         {
             "stop-process-tree",
+            "--skip-descendants",
             "--pid",
             pid.ToString(CultureInfo.InvariantCulture)
         };
