@@ -398,7 +398,7 @@ Read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`.
 Do **not** `cat` large JSON files — use `jq` to extract only the fields you need.
 If the batch is empty (zero unprocessed PRs), **skip Steps 3, 5, and 6** but still
 continue through Steps 4, 7, and 8. This ensures editorial feedback is applied,
-the "What's New" section is refreshed (entries age out of the 3-day window), and
+the "What's New" section is refreshed, and
 the "PRs processed" footer counts stay current.
 
 ## Step 3: Process the batch PRs
@@ -762,9 +762,8 @@ Use singular form for counts of 1 (`1 new feature`, `1 improvement`,
 `1 bug fix`).
 
 After the Table of Contents, add a **What's New** section that lists the
-**10 most recent** entries whose most recent associated PR was merged within the
-**last 3 days** (relative to the current run time). Sort entries **newest to oldest**
-by merge date. If there are more than 10 qualifying entries, show only the 10 newest.
+**10 most recent** changelog entries, sorted **newest to oldest** by merge date
+of their most recent PR.
 Each item is a link to the area heading, using the format:
 `- [<date> — <area-emoji> <Area> - <change-emoji> <Name>](#<area-slug>)`
 where `<date>` is the merge date of the last PR in `YYYY-M-D HH:mm` format
@@ -774,8 +773,6 @@ entry's individual emoji, `<Name>` is the changelog entry name, and
 `<area-slug>` is the GitHub-generated slug for that area's `##` heading
 (e.g., `-apphost`, `-cli`, `-dashboard`). The `#` before the slug is mandatory
 markdown anchor syntax — always write `(#-apphost)`, never `(-apphost)`.
-If there are no entries in the last 3 days, still include the section with
-the text `No notable changes in the last 3 days.` beneath the heading.
 
 Under each area heading, add a one-line **summary** counting the entries per change
 type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
@@ -933,5 +930,5 @@ so unprocessed PRs will be retried on the next run.
 - If no new PRs were found since the last run, do not modify the existing entries.
 - Keep descriptions concise — this is a changelog, not release notes prose.
 - If the milestone has no merged PRs at all yet, still create the wiki page
-  with the header, an empty Table of Contents, a `## What's New` section that
-  says `No notable changes in the last 3 days.`, and the PRs processed footer.
+  with the header, an empty Table of Contents, an empty `## What's New` section,
+  and the PRs processed footer.
