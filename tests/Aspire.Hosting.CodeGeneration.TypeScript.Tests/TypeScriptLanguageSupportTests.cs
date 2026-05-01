@@ -189,11 +189,12 @@ public sealed class TypeScriptLanguageSupportTests
     }
 
     [Theory]
+    [InlineData(null)]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(16626)]
     [InlineData(55571)]
-    public void Scaffold_GeneratesProfilePortsOutsideWindowsEphemeralRange(int portSeed)
+    public void Scaffold_GeneratesProfilePortsOutsideWindowsEphemeralRange(int? portSeed)
     {
         using var testDir = new TestTempDirectory();
 
@@ -236,9 +237,11 @@ public sealed class TypeScriptLanguageSupportTests
 
     private static int GetPort(string url) => new Uri(url).Port;
 
+    private const int WindowsEphemeralPortMin = 49152;
+
     private static void AssertPortInRange(int port, int minInclusive, int maxExclusive)
     {
         Assert.InRange(port, minInclusive, maxExclusive - 1);
-        Assert.True(port < AppHostProfilePortGenerator.WindowsEphemeralPortMin, $"Expected port {port} to be below the Windows ephemeral range.");
+        Assert.True(port < WindowsEphemeralPortMin, $"Expected port {port} to be below the Windows ephemeral range.");
     }
 }

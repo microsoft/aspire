@@ -5,7 +5,6 @@ namespace Aspire.Shared;
 
 internal static class AppHostProfilePortGenerator
 {
-    internal const int WindowsEphemeralPortMin = 49152;
     internal const int DashboardHttpPortMin = 15000;
     internal const int DashboardHttpPortMaxExclusive = 15300;
     internal const int DashboardHttpsPortMin = 17000;
