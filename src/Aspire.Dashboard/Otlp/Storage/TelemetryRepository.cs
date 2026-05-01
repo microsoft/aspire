@@ -28,6 +28,7 @@ public sealed partial class TelemetryRepository : IDisposable
 {
     internal const int MaxResourceViewCount = 10_000;
     internal const int MaxInstrumentCount = 10_000;
+    internal const int MaxScopeCount = 10_000;
     internal const int MaxDimensionCount = 10_000;
     internal const int MaxKnownAttributeValueCount = 10_000;
     internal const int MaxKnownAttributeValuesPerKey = 10_000;
@@ -52,7 +53,7 @@ public sealed partial class TelemetryRepository : IDisposable
     private readonly ConcurrentDictionary<ResourceKey, OtlpResource> _resources = new();
 
     private readonly ReaderWriterLockSlim _logsLock = new();
-    // Bounded by the number of unique instrumentation scope names across log producers. Cleared when all logs are cleared.
+    // Bounded by MaxScopeCount. Cleared when all logs are cleared.
     private readonly Dictionary<string, OtlpScope> _logScopes = new();
     private readonly CircularBuffer<OtlpLogEntry> _logs;
     // Bounded by _resources count * MaxAttributeCount. Cleared per-resource or when all logs are cleared.
@@ -62,10 +63,11 @@ public sealed partial class TelemetryRepository : IDisposable
     private readonly Dictionary<ResourceKey, int> _resourceUnviewedErrorLogs = new();
 
     private readonly ReaderWriterLockSlim _tracesLock = new();
-    // Bounded by the number of unique instrumentation scope names across trace producers. Cleared when all traces are cleared.
+    // Bounded by MaxScopeCount. Cleared when all traces are cleared.
     private readonly Dictionary<string, OtlpScope> _traceScopes = new();
     private readonly CircularBuffer<OtlpTrace> _traces;
-    // Bounded by total span link count across traces in _traces. Cleaned up on trace eviction and clear.
+    // Not explicitly capped per add — bounded only by the sum of span links across in-buffer traces.
+    // Cleaned up on trace eviction and clear, so growth is limited by the circular buffer capacity.
     private readonly List<OtlpSpanLink> _spanLinks = new();
     private readonly List<IDisposable> _peerResolverSubscriptions = new();
     internal readonly OtlpContext _otlpContext;
@@ -342,7 +344,7 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             catch (Exception ex)
             {
-                context.FailureCount += rl.ScopeLogs.Count;
+                context.FailureCount += rl.ScopeLogs.Sum(s => s.LogRecords.Count);
                 _otlpContext.Logger.LogInformation(ex, "Error adding resource.");
                 continue;
             }
@@ -1114,7 +1116,7 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             catch (Exception ex)
             {
-                context.FailureCount += rm.ScopeMetrics.Sum(s => s.Metrics.Count);
+                context.FailureCount += rm.ScopeMetrics.Sum(sm => sm.Metrics.Sum(OtlpResource.GetMetricDataPointCount));
                 _otlpContext.Logger.LogInformation(ex, "Error adding resource.");
                 continue;
             }

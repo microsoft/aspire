@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
@@ -45,9 +44,7 @@ public class OtlpResource : IOtlpResource
     public ResourceKey ResourceKey => new ResourceKey(ResourceName, InstanceId);
 
     private readonly ReaderWriterLockSlim _metricsLock = new();
-    // Stores metrics scopes by unique instrumentation scope name for this resource.
-    // Not strictly bounded by TelemetryRepository.MaxInstrumentCount — new scopes can be added even when
-    // the instrument limit is reached, but growth is naturally limited by the number of distinct scope names.
+    // Bounded by TelemetryRepository.MaxScopeCount. Cleared when metrics are cleared.
     private readonly Dictionary<string, OtlpScope> _meters = new();
     private readonly Dictionary<OtlpInstrumentKey, OtlpInstrument> _instruments = new();
     private readonly ConcurrentDictionary<KeyValuePair<string, string>[], OtlpResourceView> _resourceViews = new(ResourceViewKeyComparer.Instance);
@@ -73,7 +70,7 @@ public class OtlpResource : IOtlpResource
             {
                 if (!OtlpHelpers.TryGetOrAddScope(_meters, sm.Scope, Context, TelemetryType.Metrics, out var scope))
                 {
-                    context.FailureCount += sm.Metrics.Count;
+                    context.FailureCount += sm.Metrics.Sum(m => GetMetricDataPointCount(m));
                     continue;
                 }
 
@@ -89,37 +86,35 @@ public class OtlpResource : IOtlpResource
                         }
 
                         var instrumentKey = new OtlpInstrumentKey(scope.Name, metric.Name);
-                        ref var instrumentRef = ref CollectionsMarshal.GetValueRefOrAddDefault(_instruments, instrumentKey, out var instrumentExists);
-                        if (instrumentRef == null)
+                        if (_instruments.TryGetValue(instrumentKey, out var existingInstrument))
                         {
-                            if (instrumentExists || _instruments.Count <= TelemetryRepository.MaxInstrumentCount)
-                            {
-                                // Adds to dictionary if not present.
-                                instrumentRef = new OtlpInstrument
-                                {
-                                    Summary = new OtlpInstrumentSummary
-                                    {
-                                        Name = metric.Name,
-                                        Description = metric.Description,
-                                        Unit = metric.Unit,
-                                        Type = MapMetricType(metric.DataCase),
-                                        AggregationTemporality = MapAggregationTemporality(metric),
-                                        Parent = scope
-                                    },
-                                    Context = Context
-                                };
-
-                                Context.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrumentRef.Summary.Name, scope.Name);
-                            }
-                            else
-                            {
-                                // Over limit. Remove the default entry that GetValueRefOrAddDefault added.
-                                _instruments.Remove(instrumentKey);
-                                throw new InvalidOperationException($"Instrument limit of {TelemetryRepository.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
-                            }
+                            instrument = existingInstrument;
                         }
+                        else if (_instruments.Count < TelemetryRepository.MaxInstrumentCount)
+                        {
+                            var newInstrument = new OtlpInstrument
+                            {
+                                Summary = new OtlpInstrumentSummary
+                                {
+                                    Name = metric.Name,
+                                    Description = metric.Description,
+                                    Unit = metric.Unit,
+                                    Type = MapMetricType(metric.DataCase),
+                                    AggregationTemporality = MapAggregationTemporality(metric),
+                                    Parent = scope
+                                },
+                                Context = Context
+                            };
 
-                        instrument = instrumentRef;
+                            _instruments.Add(instrumentKey, newInstrument);
+                            instrument = newInstrument;
+
+                            Context.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrument.Summary.Name, scope.Name);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Instrument limit of {TelemetryRepository.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -139,7 +134,7 @@ public class OtlpResource : IOtlpResource
         }
     }
 
-    private static int GetMetricDataPointCount(Metric metric)
+    internal static int GetMetricDataPointCount(Metric metric)
     {
         return metric.DataCase switch
         {
