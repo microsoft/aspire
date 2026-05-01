@@ -29,7 +29,6 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 * Never change global.json unless explicitly asked to.
 * Never change package.json or package-lock.json files unless explicitly asked to.
 * Never change NuGet.config files unless explicitly asked to.
-* Before adding helper methods, utilities, test fakes, scripts, or workflow logic, search for existing implementations and reuse or extend them instead of duplicating private helpers. For tests, prefer shared helpers from `tests/Shared/` (for example `TestTempDirectory` for auto-cleaned temporary directories).
 * Do not use cryptographic hashes such as SHA-256 when the hash is not security-related. Prefer `System.IO.Hashing.XxHash3` when you need a stable non-cryptographic hash.
 * When code needs a temporary directory, prefer the repository temp directory abstractions first (for example `IFileSystemService.TempDirectory` / `ITempFileSystemService`) and otherwise use `Directory.CreateTempSubdirectory()` instead of `Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())`; if you need a temporary file path, place it under a securely created temp directory.
 * Don't update files under `*/api/*.cs` (e.g. src/Aspire.Hosting/api/Aspire.Hosting.cs) as they are generated.
