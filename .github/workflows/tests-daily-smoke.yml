@@ -64,6 +64,93 @@ jobs:
             --filter-not-trait "outerloop=true" \
             --hangdump --hangdump-type none --hangdump-timeout 15m
 
+      - name: Verify Aspire CLI versions match
+        run: |
+          versions_dir="${{ github.workspace }}/testresults/cli-versions"
+          shopt -s nullglob
+          version_files=("$versions_dir"/*.env)
+
+          if [ ${#version_files[@]} -eq 0 ]; then
+            echo "::error::No Aspire CLI version records were produced."
+            exit 1
+          fi
+
+          versions=()
+          records=()
+          missing_version_records=()
+
+          for version_file in "${version_files[@]}"; do
+            test_name=""
+            mode=""
+            strategy=""
+            version=""
+
+            while IFS='=' read -r key value || [ -n "$key" ]; do
+              case "$key" in
+                test) test_name="$value" ;;
+                mode) mode="$value" ;;
+                strategy) strategy="$value" ;;
+                version) version="$value" ;;
+              esac
+            done < "$version_file"
+
+            route="${strategy:-${mode:-unknown install route}}"
+            record="${route} | ${test_name:-$(basename "$version_file")} | ${version:-"(missing version)"}"
+            records+=("$record")
+
+            if [ -z "$version" ]; then
+              missing_version_records+=("$record")
+            else
+              versions+=("$version")
+            fi
+          done
+
+          write_failure_summary() {
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              {
+                echo "## Aspire CLI version consistency check failed"
+                echo ""
+                echo "All daily smoke install routes should test the same Aspire CLI version."
+                echo ""
+                echo "### Version records"
+                echo ""
+                for record in "${records[@]}"; do
+                  echo "- \`$record\`"
+                done
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          if [ ${#missing_version_records[@]} -gt 0 ]; then
+            echo "::error::Some Aspire CLI version records did not include a version."
+            for record in "${missing_version_records[@]}"; do
+              echo "Missing version: $record"
+            done
+            write_failure_summary
+            exit 1
+          fi
+
+          unique_versions=()
+          while IFS= read -r version; do
+            if [ -n "$version" ]; then
+              unique_versions+=("$version")
+            fi
+          done < <(printf '%s\n' "${versions[@]}" | sort -u)
+
+          if [ ${#unique_versions[@]} -ne 1 ]; then
+            echo "::error::Daily smoke tests installed ${#unique_versions[@]} different Aspire CLI versions."
+            printf 'Installed versions:\n'
+            printf '  %s\n' "${unique_versions[@]}"
+            printf 'Version records:\n'
+            printf '  %s\n' "${records[@]}"
+            write_failure_summary
+            exit 1
+          fi
+
+          for version in "${unique_versions[@]}"; do
+            echo "All daily smoke tests installed Aspire CLI version: $version"
+          done
+
       - name: Upload logs and test results
         id: upload-logs
         if: always()
