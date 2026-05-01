@@ -114,6 +114,7 @@ internal static class CliTestHelper
         services.AddTransient(options.DotNetCliExecutionFactoryFactory);
         services.AddTransient(options.DotNetCliRunnerFactory);
         services.AddTransient(options.NuGetPackageCacheFactory);
+        services.AddSingleton<TemplateNuGetConfigService>();
         services.AddSingleton(options.TemplateProviderFactory);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
@@ -527,8 +528,8 @@ internal sealed class CliServiceCollectionTestOptions
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var scaffoldingService = serviceProvider.GetRequiredService<IScaffoldingService>();
         var cliTemplateLogger = serviceProvider.GetRequiredService<ILogger<CliTemplateFactory>>();
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService);
-        var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, packagingService, prompter, templateVersionPrompter, executionContext, sdkInstaller, features, configurationService, telemetry, hostEnvironment, templateNuGetConfigService);
+        var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
+        var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService);
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
         var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);

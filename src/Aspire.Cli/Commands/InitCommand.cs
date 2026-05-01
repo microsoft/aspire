@@ -9,6 +9,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -296,24 +297,46 @@ internal sealed class InitCommand : BaseCommand
             return ExitCodeConstants.Success;
         }
 
+        // Resolve the channel-aware template package version + feed mapping. This makes init
+        // honor the global `channel` configuration (matching `aspire new`) and ensures the
+        // staging/daily/PR feed is queried for non-stable CLI builds. PR hives are intentionally
+        // excluded — init should produce the same template on every machine for a given CLI build.
+        TemplatePackageSelection selection;
+        try
+        {
+            var query = new TemplatePackageQuery(
+                ChannelOverride: null,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: false);
+
+            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+        }
+        catch (ChannelNotFoundException ex)
+        {
+            InteractionService.DisplayError(ex.Message);
+            return ExitCodeConstants.FailedToInstallTemplates;
+        }
+        catch (EmptyChoicesException ex)
+        {
+            InteractionService.DisplayError(ex.Message);
+            return ExitCodeConstants.FailedToInstallTemplates;
+        }
+
         // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
         // `dotnet new` does not install templates implicitly, so on a fresh machine
         // (or after a CLI update) the template will be missing. Install first.
-        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
-        var installResult = await InteractionService.ShowStatusAsync(
+        var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
+            selection,
+            _runner,
             "Installing Aspire project templates...",
-            () => _runner.InstallTemplateAsync(
-                packageName: "Aspire.ProjectTemplates",
-                version: aspireVersion,
-                nugetConfigFile: null,
-                nugetSource: null,
-                force: true,
-                options: new ProcessInvocationOptions(),
-                cancellationToken: cancellationToken));
+            statusEmoji: null,
+            cancellationToken);
 
-        if (installResult.ExitCode != 0)
+        if (installOutcome.ExitCode != 0)
         {
-            InteractionService.DisplayError($"Failed to install Aspire.ProjectTemplates (exit code {installResult.ExitCode}).");
+            InteractionService.DisplayLines(installOutcome.OutputLines);
+            InteractionService.DisplayError($"Failed to install Aspire.ProjectTemplates (exit code {installOutcome.ExitCode}).");
             return ExitCodeConstants.FailedToInstallTemplates;
         }
 

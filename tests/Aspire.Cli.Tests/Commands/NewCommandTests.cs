@@ -242,7 +242,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
                 {
                     return (0, version);
                 };
@@ -318,7 +318,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
                 {
                     selectedVersion = version;
                     return (0, version);
@@ -395,7 +395,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
                 {
                     selectedVersion = version;
                     return (0, version);
@@ -535,7 +535,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 var runner = CreateTestRunnerWithStandardPackages();
 
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, options, cancellationToken) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, options, cancellationToken) =>
                 {
                     return (0, version); // Success, return the template version
                 };
@@ -573,7 +573,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 var runner = CreateTestRunnerWithStandardPackages();
 
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, options, cancellationToken) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, options, cancellationToken) =>
                 {
                     return (0, version); // Success, return the template version
                 };
@@ -1606,7 +1606,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = CreateTestRunnerWithStandardPackages();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
                 {
                     return (0, version);
                 };
@@ -1665,7 +1665,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = CreateTestRunnerWithStandardPackages();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
                 {
                     return (0, version);
                 };
@@ -1722,7 +1722,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = CreateTestRunnerWithStandardPackages();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
                 {
                     return (0, version);
                 };
@@ -1784,7 +1784,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 options.DotNetCliRunnerFactory = (sp) =>
                 {
                     var runner = CreateTestRunnerWithStandardPackages();
-                    runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                    runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
                     {
                         return (0, version);
                     };
