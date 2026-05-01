@@ -12,7 +12,7 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, bool allowPrereleaseFallback = true)
 {
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
@@ -21,6 +21,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public bool ConfigureGlobalPackagesFolder { get; } = configureGlobalPackagesFolder;
     public string? CliDownloadBaseUrl { get; } = cliDownloadBaseUrl;
     public string? PinnedVersion { get; } = pinnedVersion;
+    public bool AllowPrereleaseFallback { get; } = allowPrereleaseFallback;
 
     public string SourceDetails { get; } = ComputeSourceDetails(mappings);
 
@@ -170,7 +171,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // In the event that we have no stable packages we fallback to
         // returning prerelease packages. Example a package that is currently
         // in preview (Aspire.Hosting.Docker circa 9.4).
-        if (Quality is PackageChannelQuality.Stable && !packages.Any())
+        if (Quality is PackageChannelQuality.Stable && AllowPrereleaseFallback && !packages.Any())
         {
             packages = await nuGetPackageCache.GetPackagesAsync(
                 workingDirectory: workingDirectory,
@@ -234,7 +235,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // In the event that we have no stable packages we fallback to
         // returning prerelease packages. Example a package that is currently
         // in preview (Aspire.Hosting.Docker circa 9.4).
-        if (Quality is PackageChannelQuality.Stable && !packages.Any())
+        if (Quality is PackageChannelQuality.Stable && AllowPrereleaseFallback && !packages.Any())
         {
             packages = await nuGetPackageCache.GetPackageVersionsAsync(
                 workingDirectory: workingDirectory,
@@ -289,7 +290,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger, AllowPrereleaseFallback);
     }
 
     private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
@@ -429,9 +430,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal);
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, bool allowPrereleaseFallback = true)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger, allowPrereleaseFallback);
     }
 
     public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, ILogger? logger = null)

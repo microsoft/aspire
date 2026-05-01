@@ -83,6 +83,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var stagingChannel = channels.First(c => c.Name == "staging");
         Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
         Assert.True(stagingChannel.ConfigureGlobalPackagesFolder);
+        Assert.False(stagingChannel.AllowPrereleaseFallback);
         Assert.NotNull(stagingChannel.Mappings);
         
         var aspireMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "Aspire*");

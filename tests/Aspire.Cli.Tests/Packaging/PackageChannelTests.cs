@@ -4,6 +4,8 @@
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Shared;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -82,6 +84,33 @@ public class PackageChannelTests
         Assert.Equal(stagingUrl, channel.SourceDetails);
         Assert.Equal(PackageChannelType.Explicit, channel.Type);
         Assert.True(channel.ConfigureGlobalPackagesFolder);
+    }
+
+    [Fact]
+    public async Task GetPackagesAsync_StableChannelWithoutPrereleaseFallback_DoesNotReturnPrereleasePackages()
+    {
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, prerelease, _, _, _) =>
+            {
+                var packages = prerelease
+                    ? new[] { new NuGetPackageCli { Id = packageId, Version = "13.3.0-preview.1.26200.1", Source = "daily" } }
+                    : [];
+
+                return Task.FromResult<IEnumerable<NuGetPackageCli>>(packages);
+            }
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Stable,
+            [new PackageMapping("Aspire*", "https://example.com/nuget/v3/index.json")],
+            cache,
+            allowPrereleaseFallback: false);
+
+        var packages = await channel.GetPackagesAsync("Aspire.AppHost.Sdk", new DirectoryInfo(Environment.CurrentDirectory), CancellationToken.None).DefaultTimeout();
+
+        Assert.Empty(packages);
     }
 
     [Fact]

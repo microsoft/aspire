@@ -522,6 +522,83 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateProjectFileAsync_StagingStableChannel_DoesNotUsePrereleaseFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="13.3.0" />
+            </Project>
+            """);
+
+        var prereleaseSearchInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.EnabledFeatures = [KnownFeatures.StagingChannelEnabled];
+            config.ConfigurationCallback = values =>
+            {
+                values["overrideStagingFeed"] = "https://example.com/nuget/v3/index.json";
+            };
+
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, prerelease, _, _, _, _, _, _) =>
+                    {
+                        Assert.Equal("Aspire.AppHost.Sdk", query);
+
+                        if (prerelease)
+                        {
+                            prereleaseSearchInvoked = true;
+                            return (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.4.0-preview.1.26201.1", Source = "daily" }]);
+                        }
+
+                        return (0, []);
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        if (projectFile.FullName != appHostProjectFile.FullName)
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("13.3.0");
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    }
+                };
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == PackageChannelNames.Staging);
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+
+        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(async () =>
+        {
+            await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+        });
+
+        Assert.False(selectedChannel.AllowPrereleaseFallback);
+        Assert.False(prereleaseSearchInvoked);
+        Assert.Contains("Aspire.AppHost.Sdk", exception.Message);
+        Assert.Contains("staging", exception.Message);
+    }
+
+    [Fact]
     public async Task UpdateProjectFileAsync_DiamondDependency_DoesNotDuplicateUpdates()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
