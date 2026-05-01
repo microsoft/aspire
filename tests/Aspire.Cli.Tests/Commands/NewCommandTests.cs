@@ -817,6 +817,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain((KnownTemplateId.JavaEmptyAppHost, "Empty (Java AppHost)"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React, TypeScript AppHost)"), promptedTemplates);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
     }
 
     [Fact]
@@ -983,6 +984,63 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(KnownLanguageId.JavaDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.GoDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.RustDisplayName, promptedLanguages);
+    }
+
+    [Fact]
+    public async Task NewCommandWithEmptyTemplateIgnoresConfiguredLanguage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), """
+            {
+              "language": "typescript/nodejs"
+            }
+            """);
+
+        var languagePrompted = false;
+        string? scaffoldedLanguageId = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                return features;
+            };
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                {
+                    if (promptText == "Which language would you like to use?")
+                    {
+                        languagePrompted = true;
+                        return choices.Cast<object>().Single(choice => string.Equals(choiceFormatter(choice), KnownLanguageId.JavaDisplayName, StringComparison.Ordinal));
+                    }
+
+                    return choices.Cast<object>().First();
+                }
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "AppHost.java"), "package aspire;");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output .");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(languagePrompted);
+        Assert.Equal(KnownLanguageId.Java, scaffoldedLanguageId);
     }
 
     [Fact]

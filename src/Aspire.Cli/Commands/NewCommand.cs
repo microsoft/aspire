@@ -200,18 +200,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 return (false, null);
             }
 
-            await _configurationService.SetConfigurationAsync("language", normalizedExplicitLanguageId, isGlobal: false, cancellationToken);
             return (true, normalizedExplicitLanguageId);
-        }
-
-        var configuredLanguageId = await _configurationService.GetConfigurationAsync("language", cancellationToken);
-        if (!string.IsNullOrWhiteSpace(configuredLanguageId))
-        {
-            var normalizedConfiguredLanguageId = NormalizeLanguageId(configuredLanguageId);
-            if (template.SelectableAppHostLanguages.Any(l => l.Equals(normalizedConfiguredLanguageId, StringComparison.OrdinalIgnoreCase)))
-            {
-                return (true, normalizedConfiguredLanguageId);
-            }
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -220,7 +209,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         }
 
         var selectedLanguageId = await PromptForAppHostLanguageAsync(template.SelectableAppHostLanguages, cancellationToken);
-        await _configurationService.SetConfigurationAsync("language", selectedLanguageId, isGlobal: false, cancellationToken);
         return (true, selectedLanguageId);
     }
 
