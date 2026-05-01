@@ -441,9 +441,9 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'error');
     });
 
-    test('Finished with exit code 0 shows green pass', () => {
+    test('Finished with exit code 0 shows hollow circle (stopped)', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.Finished, exitCode: 0 }));
-        assert.strictEqual(icon.id, 'pass');
+        assert.strictEqual(icon.id, 'circle-outline');
     });
 
     test('FailedToStart shows error icon', () => {
@@ -476,9 +476,9 @@ suite('getResourceIcon', () => {
         assert.strictEqual(icon.id, 'record');
     });
 
-    test('Finished shows green pass', () => {
+    test('Finished shows hollow circle (stopped)', () => {
         const icon = getResourceIcon(makeResource({ state: ResourceState.Finished }));
-        assert.strictEqual(icon.id, 'pass');
+        assert.strictEqual(icon.id, 'circle-outline');
     });
 
     test('null state shows record', () => {

@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
@@ -8,6 +9,13 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
+
+// Build platform-native paths so dirname comparison works on Windows too
+// (vscode.Uri.file('/foo/bar').fsPath becomes '\\foo\\bar' on Windows, so we
+// need the host paths to use the same separator).
+function p(...segments: string[]): string {
+    return path.join(path.sep, ...segments);
+}
 
 function createMockDocument(content: string, filePath: string): vscode.TextDocument {
     const lines = content.split('\n');
@@ -156,8 +164,8 @@ suite('AspireCodeLensProvider builder lens', () => {
     });
 
     test('emits builder lenses when document matches a running global AppHost', () => {
-        const docPath = '/repo/AppHost/AppHost.cs';
-        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
         const harness = createHarness({ appHosts: [makeAppHost(hostPath)] });
 
         const doc = createMockDocument(APP_HOST_DOC, docPath);
@@ -176,7 +184,7 @@ suite('AspireCodeLensProvider builder lens', () => {
     test('does not emit builder lenses when no AppHost is running', () => {
         const harness = createHarness({});
 
-        const doc = createMockDocument(APP_HOST_DOC, '/repo/AppHost/AppHost.cs');
+        const doc = createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'AppHost.cs'));
         const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
         const builderLenses = lenses.filter(l =>
             l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
@@ -188,9 +196,9 @@ suite('AspireCodeLensProvider builder lens', () => {
     });
 
     test('does not emit builder lenses when running AppHost is in an unrelated directory', () => {
-        const harness = createHarness({ appHosts: [makeAppHost('/elsewhere/Other.csproj')] });
+        const harness = createHarness({ appHosts: [makeAppHost(p('elsewhere', 'Other.csproj'))] });
 
-        const doc = createMockDocument(APP_HOST_DOC, '/repo/AppHost/AppHost.cs');
+        const doc = createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'AppHost.cs'));
         const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
         const builderLenses = lenses.filter(l =>
             l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
@@ -202,8 +210,8 @@ suite('AspireCodeLensProvider builder lens', () => {
     });
 
     test('emits builder lenses for AppHost file with no Add* calls when host is running', () => {
-        const docPath = '/repo/AppHost/AppHost.cs';
-        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
         const harness = createHarness({ appHosts: [makeAppHost(hostPath)] });
 
         const doc = createMockDocument(APP_HOST_NO_RESOURCES, docPath);
@@ -218,8 +226,8 @@ suite('AspireCodeLensProvider builder lens', () => {
     });
 
     test('emits builder lenses for workspace AppHost when document matches workspace path and resources are live', () => {
-        const docPath = '/repo/AppHost/AppHost.cs';
-        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
         const harness = createHarness({
             workspaceAppHostPath: hostPath,
             workspaceResources: [makeResource('cache')],
@@ -239,11 +247,11 @@ suite('AspireCodeLensProvider builder lens', () => {
 
     test('does not emit builder lenses when workspaceAppHostPath is set but no workspace resources are live', () => {
         const harness = createHarness({
-            workspaceAppHostPath: '/repo/AppHost/AppHost.csproj',
+            workspaceAppHostPath: p('repo', 'AppHost', 'AppHost.csproj'),
             workspaceResources: [],
         });
 
-        const doc = createMockDocument(APP_HOST_DOC, '/repo/AppHost/AppHost.cs');
+        const doc = createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'AppHost.cs'));
         const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
         const builderLenses = lenses.filter(l =>
             l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
@@ -256,11 +264,11 @@ suite('AspireCodeLensProvider builder lens', () => {
 
     test('does not emit builder lenses when workspace AppHost is in a different directory', () => {
         const harness = createHarness({
-            workspaceAppHostPath: '/elsewhere/Other.csproj',
+            workspaceAppHostPath: p('elsewhere', 'Other.csproj'),
             workspaceResources: [makeResource('cache')],
         });
 
-        const doc = createMockDocument(APP_HOST_DOC, '/repo/AppHost/AppHost.cs');
+        const doc = createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'AppHost.cs'));
         const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
         const builderLenses = lenses.filter(l =>
             l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
@@ -272,9 +280,9 @@ suite('AspireCodeLensProvider builder lens', () => {
     });
 
     test('returns empty array for non-AppHost documents', () => {
-        const harness = createHarness({ appHosts: [makeAppHost('/repo/AppHost/AppHost.csproj')] });
+        const harness = createHarness({ appHosts: [makeAppHost(p('repo', 'AppHost', 'AppHost.csproj'))] });
 
-        const doc = createMockDocument('using System;\nclass Program { }', '/repo/AppHost/Program.cs');
+        const doc = createMockDocument('using System;\nclass Program { }', p('repo', 'AppHost', 'Program.cs'));
         const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
 
         assert.strictEqual(lenses.length, 0);
@@ -282,8 +290,8 @@ suite('AspireCodeLensProvider builder lens', () => {
     });
 
     test('builder lens points at the builder line, not the resource line', () => {
-        const docPath = '/repo/AppHost/AppHost.cs';
-        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
         const harness = createHarness({ appHosts: [makeAppHost(hostPath)] });
 
         const doc = createMockDocument(APP_HOST_DOC, docPath);
