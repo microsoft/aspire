@@ -77,8 +77,16 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         }
 
         for (const resource of resources) {
-            // Use statementStartLine to position the CodeLens at the top of a multi-line chain
-            const lensLine = resource.statementStartLine ?? resource.range.start.line;
+            // For pipeline steps the whole statement maps to a single Add*(...) call, so
+            // anchoring at the top of the chain reads naturally. For resources, however,
+            // a single fluent chain can declare several (e.g.
+            // `builder.AddPostgres("pg").AddDatabase("db")`) and collapsing them all to
+            // the chain's start line would stack two state/action lenses on the same
+            // line — the user can't tell which "Stopped" / which "Stop" belongs to which
+            // resource. Anchor each resource lens at its own call line instead.
+            const lensLine = resource.kind === 'pipelineStep'
+                ? (resource.statementStartLine ?? resource.range.start.line)
+                : resource.range.start.line;
             const lineRange = new vscode.Range(lensLine, 0, lensLine, 0);
 
             if (resource.kind === 'pipelineStep') {

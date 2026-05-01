@@ -50,9 +50,13 @@ function makeGutterSvgUri(category: GutterCategory): vscode.Uri {
             </svg>`;
             break;
         case 'completed':
-            // Pale green checkmark (lighter than running)
+            // Grey hollow circle with a small check inside — conveys "ran, finished cleanly,
+            // not currently active". Deliberately NOT a bright green check so a stopped
+            // resource is never confused with a running one (the previous pale-green check
+            // was visually too similar to 'running' at gutter icon sizes).
             svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
-                <path d="M3 8.5 L6.5 12 L13 4" stroke="#69d1a0" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="8" cy="8" r="6" fill="none" stroke="#6a737d" stroke-width="1.25"/>
+                <path d="M5 8.5 L7.25 10.5 L11 6" stroke="#6a737d" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>`;
             break;
     }
@@ -166,6 +170,11 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
             gutterCategories.map(c => [c, []])
         );
 
+        // Track which (line, category) pairs we've already pushed so chained resources
+        // sharing a line don't double-stack identical decorations, and so two resources
+        // declared on the same line keep distinct icons rather than silently overwriting
+        // each other.
+        const seenLineCategories = new Set<string>();
         for (const parsed of resources) {
             if (parsed.kind !== 'resource') {
                 continue;
@@ -178,7 +187,13 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
 
             const { resource } = match;
             const category = classifyState(resource.state ?? '', resource.stateStyle ?? '', resource.healthStatus ?? '', resource.exitCode);
-            buckets.get(category)!.push({ range: editor.document.lineAt(parsed.range.start.line).range });
+            const line = parsed.range.start.line;
+            const dedupeKey = `${line}:${category}`;
+            if (seenLineCategories.has(dedupeKey)) {
+                continue;
+            }
+            seenLineCategories.add(dedupeKey);
+            buckets.get(category)!.push({ range: editor.document.lineAt(line).range });
         }
 
         for (const [category, options] of buckets) {

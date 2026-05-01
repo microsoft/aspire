@@ -212,7 +212,11 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
             if (resource.stateStyle === StateStyle.Error || (resource.exitCode != null && resource.exitCode !== 0)) {
                 return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
             }
-            return new vscode.ThemeIcon('pass', new vscode.ThemeColor('charts.green'));
+            // Use a hollow circle (matches the `$(circle-outline)` codicon shown in the
+            // "Stopped" code-lens label) instead of a green check, so a stopped/finished
+            // resource is never visually confused with a Running one (both used to render
+            // as a green check, just in slightly different greens).
+            return new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('descriptionForeground'));
         case ResourceState.FailedToStart:
         case ResourceState.RuntimeUnhealthy:
             return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
