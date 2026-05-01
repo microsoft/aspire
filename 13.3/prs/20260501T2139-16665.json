@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored PR (aspire-repo-bot); excluded",
+  "mergedAt": "2026-05-01T21:39:54Z",
+  "number": 16665,
+  "runDate": "2026-05-01T22:22:39Z",
+  "status": "excluded",
+  "title": "[release/13.3] Fix sticky 'Finding apphosts' notification in VS Code extension"
+}
