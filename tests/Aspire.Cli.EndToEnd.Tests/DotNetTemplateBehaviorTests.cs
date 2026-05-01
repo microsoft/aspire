@@ -367,6 +367,11 @@ internal static partial class DotNetTemplateBehaviorTestHelpers
             _ => throw new ArgumentOutOfRangeException(nameof(templateName), templateName, "Unknown template name.")
         };
 
+        if (!File.Exists(settingsPath))
+        {
+            settingsPath = FindGeneratedAppHostSettingsPath(projectRoot, templateName);
+        }
+
         Assert.True(File.Exists(settingsPath), $"Expected launch settings at {settingsPath}.");
 
         using var document = JsonDocument.Parse(File.ReadAllText(settingsPath));
@@ -400,6 +405,29 @@ internal static partial class DotNetTemplateBehaviorTestHelpers
         }
 
         Assert.True(foundDevLocalhost, $"Expected a .dev.localhost URL in {settingsPath}.");
+    }
+
+    private static string FindGeneratedAppHostSettingsPath(string projectRoot, string templateName)
+    {
+        Assert.True(Directory.Exists(projectRoot), $"Expected project root at {projectRoot}.");
+
+        if (templateName is "aspire-apphost-singlefile")
+        {
+            return Assert.Single(Directory.EnumerateFiles(projectRoot, "apphost.run.json", SearchOption.AllDirectories));
+        }
+
+        var candidates = Directory.EnumerateFiles(projectRoot, "launchSettings.json", SearchOption.AllDirectories)
+            .Where(path =>
+            {
+                var propertiesDirectory = Directory.GetParent(path);
+                var appHostDirectory = propertiesDirectory?.Parent;
+
+                return string.Equals(propertiesDirectory?.Name, "Properties", StringComparison.Ordinal) &&
+                    appHostDirectory?.Name.EndsWith(".AppHost", StringComparison.Ordinal) is true;
+            })
+            .ToArray();
+
+        return Assert.Single(candidates);
     }
 
     internal static void RewriteAsExplicitSdkReference(string appHostProjectPath, bool includeAspireHostingAppHostPackageReference)
