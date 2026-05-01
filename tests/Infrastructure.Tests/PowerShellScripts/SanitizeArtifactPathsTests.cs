@@ -51,7 +51,7 @@ public class SanitizeArtifactPathsTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task AddsSuffixWhenSanitizedArtifactPathAlreadyExists()
+    public async Task FailsWhenSanitizedArtifactPathAlreadyExists()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -67,9 +67,10 @@ public class SanitizeArtifactPathsTests : IDisposable
 
         var result = await cmd.ExecuteAsync($"\"{testResultsPath.FullName}\"");
 
-        result.EnsureSuccessful();
+        result.EnsureExitCode(1);
         Assert.Equal("existing contents", await File.ReadAllTextAsync(Path.Combine(testResultsPath.FullName, "received_snapshot.bin")));
-        Assert.Equal("renamed contents", await File.ReadAllTextAsync(Path.Combine(testResultsPath.FullName, "received_snapshot-2.bin")));
+        Assert.Equal("renamed contents", await File.ReadAllTextAsync(Path.Combine(testResultsPath.FullName, "received:snapshot.bin")));
+        Assert.Contains("already exists", result.Output);
     }
 
     [Fact]

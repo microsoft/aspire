@@ -10,10 +10,7 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-$invalidArtifactFileNameCharacters = [System.Collections.Generic.HashSet[char]]::new()
-foreach ($character in [char[]]@('"', ':', '<', '>', '|', '*', '?', "`r", "`n")) {
-    $invalidArtifactFileNameCharacters.Add($character) | Out-Null
-}
+$invalidArtifactFileNameCharacters = [char[]]@('"', ':', '<', '>', '|', '*', '?', "`r", "`n")
 
 function ConvertTo-ArtifactSafeName {
     param(
@@ -21,46 +18,15 @@ function ConvertTo-ArtifactSafeName {
         [string]$Name
     )
 
-    $builder = [System.Text.StringBuilder]::new($Name.Length)
-    foreach ($character in $Name.ToCharArray()) {
-        if ($invalidArtifactFileNameCharacters.Contains($character)) {
-            $builder.Append('_') | Out-Null
-        } else {
-            $builder.Append($character) | Out-Null
-        }
+    $safeName = $Name
+    foreach ($character in $invalidArtifactFileNameCharacters) {
+        $safeName = $safeName.Replace([string]$character, '_')
     }
-
-    $safeName = $builder.ToString()
     if ([string]::IsNullOrWhiteSpace($safeName)) {
         return 'artifact'
     }
 
     return $safeName
-}
-
-function Get-UniqueTargetName {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Directory,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SafeName
-    )
-
-    $candidate = Join-Path $Directory $SafeName
-    if (-not (Test-Path -LiteralPath $candidate)) {
-        return $SafeName
-    }
-
-    $fileNameWithoutExtension = [System.IO.Path]::GetFileNameWithoutExtension($SafeName)
-    $extension = [System.IO.Path]::GetExtension($SafeName)
-    for ($i = 2; ; $i++) {
-        $candidateName = "$fileNameWithoutExtension-$i$extension"
-        $candidate = Join-Path $Directory $candidateName
-        if (-not (Test-Path -LiteralPath $candidate)) {
-            return $candidateName
-        }
-    }
 }
 
 function Rename-ItemIfNeeded {
@@ -75,9 +41,13 @@ function Rename-ItemIfNeeded {
     }
 
     $directory = if ($Item -is [System.IO.DirectoryInfo]) { $Item.Parent.FullName } else { $Item.DirectoryName }
-    $targetName = Get-UniqueTargetName -Directory $directory -SafeName $safeName
-    Write-Host "Renaming artifact path '$($Item.FullName)' to '$targetName'."
-    Rename-Item -LiteralPath $Item.FullName -NewName $targetName
+    $targetPath = Join-Path $directory $safeName
+    if (Test-Path -LiteralPath $targetPath) {
+        throw "Cannot sanitize artifact path '$($Item.FullName)' because '$targetPath' already exists."
+    }
+
+    Write-Host "Renaming artifact path '$($Item.FullName)' to '$safeName'."
+    Rename-Item -LiteralPath $Item.FullName -NewName $safeName
     return 1
 }
 
