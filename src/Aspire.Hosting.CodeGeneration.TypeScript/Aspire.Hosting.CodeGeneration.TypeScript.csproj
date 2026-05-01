@@ -24,8 +24,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="NpmVersionHelper.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="AppHostProfilePortGenerator.cs" />
+    <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="NpmVersionHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>
