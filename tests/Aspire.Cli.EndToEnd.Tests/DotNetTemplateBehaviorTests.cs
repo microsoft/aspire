@@ -331,8 +331,44 @@ internal static partial class DotNetTemplateBehaviorTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-        return Path.Combine(workspace.WorkspaceRoot.FullName, "TemplateBootstrap", projectName);
+        var markerFileName = templateName switch
+        {
+            "aspire" or "aspire-starter" or "aspire-ts-cs-starter" => "*.sln",
+            "aspire-apphost-singlefile" => "apphost.run.json",
+            _ => null
+        };
+
+        return markerFileName is null
+            ? Path.Combine(GetTemplateBootstrapRoot(workspace), projectName)
+            : ResolveGeneratedTemplateDirectory(workspace, projectName, markerFileName);
     }
+
+    internal static string ResolveGeneratedTemplateDirectory(TemporaryWorkspace workspace, string projectName, string markerFileName)
+    {
+        var bootstrapRoot = GetTemplateBootstrapRoot(workspace);
+        var expectedProjectRoot = Path.Combine(bootstrapRoot, projectName);
+        if (Directory.Exists(expectedProjectRoot))
+        {
+            return expectedProjectRoot;
+        }
+
+        var candidates = Directory.EnumerateFiles(bootstrapRoot, markerFileName, SearchOption.AllDirectories)
+            .Select(path => Path.GetDirectoryName(path)!)
+            .Where(directory =>
+            {
+                var relativePath = Path.GetRelativePath(bootstrapRoot, directory);
+
+                return relativePath != "." &&
+                    !relativePath.StartsWith("TemplateBootstrap", StringComparison.Ordinal);
+            })
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return Assert.Single(candidates);
+    }
+
+    private static string GetTemplateBootstrapRoot(TemporaryWorkspace workspace)
+        => Path.Combine(workspace.WorkspaceRoot.FullName, "TemplateBootstrap");
 
     internal static async Task<string> CreateCliTemplateAsync(
         Hex1bTerminalAutomator auto,

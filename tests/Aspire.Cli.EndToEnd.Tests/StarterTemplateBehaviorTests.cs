@@ -238,7 +238,7 @@ public sealed class SupportProjectTemplateBehaviorTests(ITestOutputHelper output
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-        return Path.Combine(workspace.WorkspaceRoot.FullName, "TemplateBootstrap", projectName);
+        return DotNetTemplateBehaviorTestHelpers.ResolveGeneratedTemplateDirectory(workspace, projectName, "IntegrationTest1.cs");
     }
 
     private static void PrepareSupportProject(string testProjectPath, string appHostProjectName)
