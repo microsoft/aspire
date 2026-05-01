@@ -61,6 +61,27 @@ export function findStatementStartLine(text: string, matchIndex: number, documen
 }
 
 /**
+ * Find the first match of `regex` whose line is not a comment line (// or /* / *).
+ * Used to avoid matching builder-detection patterns inside header/block comments.
+ * The regex must be created with the global flag.
+ */
+export function findFirstMatchOutsideComments(text: string, regex: RegExp, document: vscode.TextDocument): RegExpExecArray | undefined {
+    if (!regex.global) {
+        throw new Error('findFirstMatchOutsideComments requires a global regex');
+    }
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+        const line = document.positionAt(match.index).line;
+        const lineText = document.lineAt(line).text.trimStart();
+        if (lineText.startsWith('//') || lineText.startsWith('/*') || lineText.startsWith('*')) {
+            continue;
+        }
+        return match;
+    }
+    return undefined;
+}
+
+/**
  * Starting from a '}' at closeBraceIdx, walk backwards to find the matching '{'.
  * Returns the index of '{', or -1 if not found.
  */

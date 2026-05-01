@@ -160,12 +160,12 @@ export async function activate(context: vscode.ExtensionContext) {
     return appHostTreeProvider.openDashboard(element);
   });
   const codeLensViewAppHostLogsRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensViewAppHostLogs', (appHostPath?: string) => {
-    let command = 'logs';
+    const additionalArgs: string[] = [];
     if (appHostPath) {
-      command += ` --apphost "${appHostPath}"`;
+      additionalArgs.push('--apphost', appHostPath);
     }
-    command += ' --follow';
-    terminalProvider.sendAspireCommandToAspireTerminal(command);
+    additionalArgs.push('--follow');
+    terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs);
   });
   context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider);
 

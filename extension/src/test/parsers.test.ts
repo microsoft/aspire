@@ -1929,4 +1929,57 @@ suite('findBuilderStatementLine', () => {
         );
         assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
     });
+
+    test('C# parser skips DistributedApplication.CreateBuilder occurrences in comments', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                '// Example: var b = DistributedApplication.CreateBuilder(args);',
+                '/* DistributedApplication.CreateBuilder reference in block comment */',
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                'builder.AddRedis("cache");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 2);
+    });
+
+    test('C# parser returns undefined when only commented CreateBuilder is present', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                '// var builder = DistributedApplication.CreateBuilder(args);',
+                'class Foo { }',
+            ].join('\n'),
+            '/test/Foo.cs'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+    });
+
+    test('JS/TS parser skips createBuilder occurrences in comments', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                '// usage: const b = createBuilder();',
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'const builder = createBuilder();',
+                'await builder.addRedis("cache");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), 3);
+    });
+
+    test('JS/TS parser returns undefined when only commented createBuilder is present', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                '// const builder = createBuilder();',
+                'const x = 1;',
+            ].join('\n'),
+            '/test/foo.ts'
+        );
+        assert.strictEqual(parser.findBuilderStatementLine?.(doc), undefined);
+    });
 });
