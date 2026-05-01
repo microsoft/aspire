@@ -7,6 +7,29 @@ description: |
   editorial feedback (e.g., exclude a change, rename an entry, merge entries).
 
 # ──────────────────────────────────────────────────────────
+# Architecture
+#
+# The workflow uses a multi-job pattern:
+#
+#   1. fetch-data job — Clones the memory branch, fetches all
+#      milestone PRs, computes the unprocessed batch, checks
+#      for feedback updates, and fetches the existing wiki page.
+#      Uploads everything as an artifact and outputs has_work.
+#
+#   2. Agent job — Downloads the artifact, then follows the
+#      step-by-step instructions (Steps 1–8) to analyze PRs,
+#      apply editorial feedback, generate changelog entries,
+#      and write state files to disk.
+#
+#   3. publish job (safe-output) — Pushes the wiki page and
+#      memory branch, and ensures the companion feedback
+#      issue exists.
+#
+# Data flows fetch-data → agent via the changelog-data
+# artifact. Agent → publish uses the framework's built-in
+# safe-output artifact passing.
+#
+# ──────────────────────────────────────────────────────────
 # To change the target milestone, update the MILESTONE value
 # in the env block below, then run:
 #   gh aw compile
@@ -212,153 +235,115 @@ tools:
     min-integrity: unapproved
 safe-outputs:
   jobs:
-    publish-wiki-page:
-      description: "Publish the changelog to the wiki and push state to the memory branch"
+    publish:
+      description: "Publish the wiki page, push state to the memory branch, and ensure the feedback issue exists"
       runs-on: ubuntu-latest
       output: "Wiki page published and memory branch updated!"
       permissions:
         contents: write
         issues: write
-      inputs:
-        body:
-          description: "File reference (FILE:filename) pointing to the changelog body in the agent artifact"
-          required: true
-          type: string
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
         - name: Publish changelog and update memory branch
-          uses: actions/github-script@v9
-          with:
-            script: |
-              const fs = require('fs');
-              const path = require('path');
-              const { execSync } = require('child_process');
+          run: |
+            set -euo pipefail
 
-              const outputFile = process.env.GH_AW_AGENT_OUTPUT;
-              if (!outputFile) {
-                core.setFailed('No GH_AW_AGENT_OUTPUT environment variable found');
-                return;
-              }
+            OUTPUT_FILE="$GH_AW_AGENT_OUTPUT"
+            if [ -z "$OUTPUT_FILE" ]; then
+              echo "::error::No GH_AW_AGENT_OUTPUT environment variable found"
+              exit 1
+            fi
 
-              const fileContent = fs.readFileSync(outputFile, 'utf8');
-              const agentOutput = JSON.parse(fileContent);
-              const items = agentOutput.items.filter(item => item.type === 'publish_wiki_page');
+            ARTIFACT_DIR=$(dirname "$OUTPUT_FILE")
+            BODY_FILE="$ARTIFACT_DIR/agent/new-body.md"
+            if [ ! -f "$BODY_FILE" ]; then
+              echo "::error::Changelog body not found at $BODY_FILE"
+              exit 1
+            fi
+            BODY_SIZE=$(wc -c < "$BODY_FILE")
+            if [ "$BODY_SIZE" -eq 0 ]; then
+              echo "::error::Changelog body file is empty"
+              exit 1
+            fi
+            echo "Changelog body: $BODY_SIZE bytes"
 
-              if (items.length === 0) {
-                core.info('No publish_wiki_page items found, skipping');
-                return;
-              }
+            REPO="${{ github.repository }}"
+            MILESTONE="${{ env.MILESTONE }}"
+            PAGE_NAME="${MILESTONE}-Change-log"
+            FEEDBACK_TITLE="[${MILESTONE}] Changelog feedback"
+            MEMORY_BRANCH="memory/milestone-changelog"
 
-              let body = items[items.length - 1].body;
-              if (!body) {
-                core.setFailed('No body found in publish_wiki_page output');
-                return;
-              }
+            # ── 1. Publish wiki page ──
+            if ! git clone --depth 1 \
+                "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git" \
+                wiki-repo 2>/dev/null; then
+              # Wiki doesn't exist yet — initialize an empty repo
+              git init wiki-repo
+              git -C wiki-repo remote add origin \
+                "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git"
+            fi
+            cp "$BODY_FILE" "wiki-repo/${PAGE_NAME}.md"
+            git -C wiki-repo config user.name "github-actions[bot]"
+            git -C wiki-repo config user.email "github-actions[bot]@users.noreply.github.com"
+            git -C wiki-repo add "${PAGE_NAME}.md"
 
-              // Require file reference — the agent must write the body to
-              // /tmp/gh-aw/agent/<filename> and pass "FILE:<filename>" to avoid
-              // outputting 60 KB+ through model output tokens.
-              const fileRefPrefix = 'FILE:';
-              if (!body.startsWith(fileRefPrefix)) {
-                core.setFailed('publish_wiki_page body must use FILE: prefix (e.g. "FILE:new-body.md"). Inline body content is not supported.');
-                return;
-              }
-              const filename = body.slice(fileRefPrefix.length);
-              if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-                core.setFailed(`Invalid filename in FILE: reference: ${filename}`);
-                return;
-              }
-              // Agent artifact is downloaded to safe-jobs/ directory
-              const artifactDir = path.dirname(outputFile);
-              const bodyFilePath = path.join(artifactDir, 'agent', filename);
-              if (!fs.existsSync(bodyFilePath)) {
-                core.setFailed(`Agent body file not found: ${bodyFilePath}`);
-                return;
-              }
-              body = fs.readFileSync(bodyFilePath, 'utf8');
-              if (!body || body.trim().length === 0) {
-                core.setFailed('Resolved body file is empty');
-                return;
-              }
-              core.info(`Resolved body from agent file (${body.length} bytes)`);
+            if git -C wiki-repo diff --cached --quiet; then
+              echo "No changes to wiki page"
+            else
+              git -C wiki-repo commit -m "Update ${PAGE_NAME}"
+              git -C wiki-repo push
+              echo "Wiki page ${PAGE_NAME} updated"
+            fi
 
-              const repo = process.env.GITHUB_REPOSITORY;
-              const token = process.env.GH_TOKEN;
-              const milestone = process.env.MILESTONE;
-              const pageName = `${milestone}-Change-log`;
-              const feedbackTitle = `[${milestone}] Changelog feedback`;
-              const memoryBranch = 'memory/milestone-changelog';
+            # ── 2. Push state to memory branch ──
+            MEMORY_DIR="$ARTIFACT_DIR/agent/memory/$MILESTONE"
+            if [ -d "$MEMORY_DIR" ]; then
+              if ! git clone --depth 1 --branch "$MEMORY_BRANCH" \
+                  "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
+                  memory-repo 2>/dev/null; then
+                echo "Memory branch does not exist yet, creating orphan branch"
+                git init memory-repo
+                git -C memory-repo checkout --orphan "$MEMORY_BRANCH"
+                git -C memory-repo remote add origin \
+                  "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+              fi
+              git -C memory-repo config user.name "github-actions[bot]"
+              git -C memory-repo config user.email "github-actions[bot]@users.noreply.github.com"
 
-              // ── 1. Publish wiki page ──
-              try {
-                execSync(`git clone --depth 1 https://x-access-token:${token}@github.com/${repo}.wiki.git wiki-repo`, { stdio: 'inherit' });
-              } catch (err) {
-                // Wiki doesn't exist yet — initialize an empty repo
-                execSync('git init wiki-repo', { stdio: 'inherit' });
-                execSync(`git remote add origin https://x-access-token:${token}@github.com/${repo}.wiki.git`, { cwd: 'wiki-repo', stdio: 'inherit' });
-              }
-              fs.writeFileSync(`wiki-repo/${pageName}.md`, body);
-              execSync('git config user.name "github-actions[bot]"', { cwd: 'wiki-repo', stdio: 'inherit' });
-              execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { cwd: 'wiki-repo', stdio: 'inherit' });
-              execSync(`git add "${pageName}.md"`, { cwd: 'wiki-repo', stdio: 'inherit' });
+              # Copy agent memory files into the memory repo
+              mkdir -p "memory-repo/$MILESTONE"
+              cp -r "$MEMORY_DIR/." "memory-repo/$MILESTONE/"
 
-              try {
-                execSync('git diff --cached --quiet', { cwd: 'wiki-repo' });
-                core.info('No changes to wiki page');
-              } catch {
-                execSync(`git commit -m "Update ${pageName}"`, { cwd: 'wiki-repo', stdio: 'inherit' });
-                execSync('git push', { cwd: 'wiki-repo', stdio: 'inherit' });
-                core.info(`Wiki page ${pageName} updated`);
-              }
+              git -C memory-repo add -A
+              if git -C memory-repo diff --cached --quiet; then
+                echo "No changes to memory branch"
+              else
+                RUN_ID="${GITHUB_RUN_ID:-unknown}"
+                git -C memory-repo commit -m "Update repo memory from workflow run $RUN_ID"
+                git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
+                echo "Memory branch updated"
+              fi
+            else
+              echo "No memory directory in agent artifact, skipping memory update"
+            fi
 
-              // ── 2. Push state to memory branch ──
-              const memoryDir = path.join(artifactDir, 'agent', 'memory', milestone);
-              if (fs.existsSync(memoryDir)) {
-                // Clone memory branch (create if missing)
-                try {
-                  execSync(`git clone --depth 1 --branch ${memoryBranch} https://x-access-token:${token}@github.com/${repo}.git memory-repo`, { stdio: 'inherit' });
-                } catch {
-                  core.info('Memory branch does not exist yet, creating orphan branch');
-                  execSync(`git init memory-repo`, { stdio: 'inherit' });
-                  execSync(`git checkout --orphan ${memoryBranch}`, { cwd: 'memory-repo', stdio: 'inherit' });
-                  execSync(`git remote add origin https://x-access-token:${token}@github.com/${repo}.git`, { cwd: 'memory-repo', stdio: 'inherit' });
-                }
-                execSync('git config user.name "github-actions[bot]"', { cwd: 'memory-repo', stdio: 'inherit' });
-                execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { cwd: 'memory-repo', stdio: 'inherit' });
+            # ── 3. Ensure companion feedback issue exists ──
+            EXISTING=$(gh issue list --repo "$REPO" --state open --limit 5 \
+              --search "in:title \"$FEEDBACK_TITLE\"" \
+              --json number,title \
+              --jq ".[] | select(.title == \"$FEEDBACK_TITLE\") | .number" \
+              2>/dev/null || true)
 
-                // Copy agent memory files into the memory repo
-                const destDir = path.join('memory-repo', milestone);
-                fs.cpSync(memoryDir, destDir, { recursive: true });
-
-                execSync('git add -A', { cwd: 'memory-repo', stdio: 'inherit' });
-                try {
-                  execSync('git diff --cached --quiet', { cwd: 'memory-repo' });
-                  core.info('No changes to memory branch');
-                } catch {
-                  const runId = process.env.GITHUB_RUN_ID || 'unknown';
-                  execSync(`git commit -m "Update repo memory from workflow run ${runId}"`, { cwd: 'memory-repo', stdio: 'inherit' });
-                  execSync(`git push origin HEAD:${memoryBranch}`, { cwd: 'memory-repo', stdio: 'inherit' });
-                  core.info('Memory branch updated');
-                }
-              } else {
-                core.info('No memory directory in agent artifact, skipping memory update');
-              }
-
-              // ── 3. Ensure companion feedback issue exists ──
-              const q = `repo:${repo} is:issue is:open in:title ${JSON.stringify(feedbackTitle)}`;
-              const { data: search } = await github.rest.search.issuesAndPullRequests({ q, per_page: 5 });
-              const existing = search.items.find(i => i.title === feedbackTitle);
-              if (!existing) {
-                const wikiUrl = `https://github.com/${repo}/wiki/${pageName}`;
-                await github.rest.issues.create({
-                  ...context.repo,
-                  title: feedbackTitle,
-                  labels: ['changelog'],
-                  body: `Post comments on this issue to provide editorial feedback for the [${pageName} wiki page](${wikiUrl}).\n\nExamples: "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678".`,
-                });
-                core.info(`Created feedback issue: ${feedbackTitle}`);
-              }
+            if [ -z "$EXISTING" ]; then
+              WIKI_URL="https://github.com/${REPO}/wiki/${PAGE_NAME}"
+              ISSUE_BODY=$(printf 'Post comments on this issue to provide editorial feedback for the [%s wiki page](%s).\n\nExamples: "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678".' "$PAGE_NAME" "$WIKI_URL")
+              gh issue create --repo "$REPO" \
+                --title "$FEEDBACK_TITLE" \
+                --label "changelog" \
+                --body "$ISSUE_BODY"
+              echo "Created feedback issue: $FEEDBACK_TITLE"
+            fi
 
 timeout-minutes: 30
 
@@ -941,7 +926,8 @@ if it exists) and check that:
    merge, area override).
 3. **All new entries reference only PR numbers from the current batch** — any PR number
    appearing in a new `Changes:` line that was not in the existing body must be present
-   in `/tmp/gh-aw/pr-data/batch-prs.json`.
+   in `/tmp/gh-aw/pr-data/batch-prs.json`, unless the entry was added via editorial
+   feedback from Step 4 (e.g., "Add entry" instructions).
 4. **Footer and metadata updates are expected** — changes to "PRs analyzed
    through", "PRs processed" counts, "What's New" section, and Table of Contents
    summaries are normal and should not be flagged.
@@ -957,10 +943,9 @@ If any violation is found:
 
 1. Make sure the final changelog markdown from Step 7 is written to
    `/tmp/gh-aw/agent/new-body.md`.
-2. Call `publish_wiki_page` with `body` set to the **short string**
-   `FILE:new-body.md` — do **not** pass the full markdown content.
-   The publish job already downloads the agent artifact and will read
-   the body from the file automatically.
+2. Call `publish` with no arguments. The publish job reads
+   the body directly from `/tmp/gh-aw/agent/new-body.md` in the agent
+   artifact — do **not** pass the markdown content as an input.
 
 The publish job handles both the wiki push **and** the memory branch push
 in a single job. If the wiki push fails, the memory branch is not updated,
