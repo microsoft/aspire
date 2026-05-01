@@ -750,7 +750,7 @@
         },
         "aspire.enableAutoRestore": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "%configuration.aspire.enableAutoRestore%",
           "scope": "window"
         }
