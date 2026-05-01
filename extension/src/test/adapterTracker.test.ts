@@ -245,7 +245,7 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
-    test('apphost output events are mirrored to output callback', async () => {
+    test('apphost output events are mirrored to output callback without service log notification', async () => {
         const outputCallback = sinon.stub();
         const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', undefined, outputCallback);
         const factory = registerFactoryStub.lastCall.args[1];
@@ -267,7 +267,7 @@ suite('Debug Adapter Tracker Tests', () => {
         });
 
         assert.strictEqual(outputCallback.calledOnceWith('tsx compile error\n', 'stderr'), true);
-        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        assert.strictEqual(dcpServer.sendNotification.called, false);
 
         disposable.dispose();
     });

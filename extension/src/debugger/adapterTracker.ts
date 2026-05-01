@@ -45,8 +45,9 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
 
                             const { category, output } = message.body;
                             if (typeof output === 'string' && category !== 'telemetry') {
-                                if (session.configuration.isApphost && onAppHostOutput) {
-                                    onAppHostOutput(output, category === 'stderr' ? 'stderr' : 'stdout');
+                                if (session.configuration.isApphost) {
+                                    onAppHostOutput?.(output, category === 'stderr' ? 'stderr' : 'stdout');
+                                    return;
                                 }
 
                                 const notification: ServiceLogsNotification = {
