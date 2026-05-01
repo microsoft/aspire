@@ -147,11 +147,11 @@ public class ExpressionResolverTests
 
     [Theory]
     [InlineData(false, true, "http://localhost:18889", "http://localhost:18889")]
-    [InlineData(true, true, "http://localhost:18889", "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://localhost:18889", "http://host.docker.internal:18889")]
     [InlineData(false, true, "http://127.0.0.1:18889", "http://127.0.0.1:18889")]
-    [InlineData(true, true, "http://127.0.0.1:18889", "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://127.0.0.1:18889", "http://host.docker.internal:18889")]
     [InlineData(false, true, "http://[::1]:18889", "http://[::1]:18889")]
-    [InlineData(true, true, "http://[::1]:18889", "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://[::1]:18889", "http://host.docker.internal:18889")]
     [InlineData(false, false, "http://localhost:18889", "http://localhost:18889")]
     [InlineData(true, false, "http://localhost:18889", "http://host.docker.internal:18889")]
     [InlineData(false, false, "http://127.0.0.1:18889", "http://127.0.0.1:18889")]
@@ -185,7 +185,7 @@ public class ExpressionResolverTests
 
     [Theory]
     [InlineData(false, true, "http://localhost:18889")]
-    [InlineData(true, true, "http://aspire.dev.internal:18889")]
+    [InlineData(true, true, "http://host.docker.internal:18889")]
     [InlineData(false, false, "http://localhost:18889")]
     [InlineData(true, false, "http://host.docker.internal:18889")]
     public async Task HostUrlPropertyGetsResolvedInOtlpExporterEndpoint(bool container, bool withTunnel, string expectedValue)
