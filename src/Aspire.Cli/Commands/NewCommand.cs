@@ -115,7 +115,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         _languageOption = new Option<string?>("--language")
         {
-            Description = NewCommandStrings.LanguageOptionDescription
+            Description = NewCommandStrings.LanguageOptionDescription,
+            Recursive = true
         };
         Options.Add(_languageOption);
 
