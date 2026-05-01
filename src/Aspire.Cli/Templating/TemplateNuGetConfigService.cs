@@ -84,15 +84,17 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
-    /// Creates or updates NuGet.config for the given channel name without prompting the user.
-    /// Resolves the channel name from configuration if not provided and falls back to the
-    /// global "channel" configuration value. Always uses the silent (non-prompting) merge path,
-    /// suitable for non-interactive code paths such as <c>aspire init</c>.
+    /// Creates or updates NuGet.config for the given channel name without prompting the user
+    /// and without displaying a confirmation message containing "NuGet.config" (which can
+    /// trip up automation/tests that match on substrings). Resolves the channel name from
+    /// configuration if not provided. Suitable for non-interactive code paths such as
+    /// <c>aspire init</c> where the caller wants to display its own message (or none).
     /// </summary>
     /// <param name="channelName">The optional channel name from command input.</param>
     /// <param name="outputPath">The output path where the NuGet.config should be created or updated.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    public async Task CreateOrUpdateNuGetConfigWithoutPromptAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
+    /// <returns><see langword="true"/> if a NuGet.config was created or updated; otherwise <see langword="false"/>.</returns>
+    public async Task<bool> CreateOrUpdateNuGetConfigWithoutPromptAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(channelName))
         {
@@ -101,7 +103,7 @@ internal sealed class TemplateNuGetConfigService(
 
         if (string.IsNullOrWhiteSpace(channelName))
         {
-            return;
+            return false;
         }
 
         var channels = await packagingService.GetChannelsAsync(cancellationToken);
@@ -110,16 +112,19 @@ internal sealed class TemplateNuGetConfigService(
 
         if (matchingChannel is null || matchingChannel.Type is not PackageChannelType.Explicit)
         {
-            return;
+            return false;
         }
 
         var mappings = matchingChannel.Mappings;
         if (mappings is null || mappings.Length == 0)
         {
-            return;
+            return false;
         }
 
-        var nugetConfigPrompter = new NuGetConfigPrompter(interactionService);
-        await nugetConfigPrompter.CreateOrUpdateWithoutPromptAsync(new DirectoryInfo(outputPath), matchingChannel, cancellationToken);
+        // Call the merger directly — bypass NuGetConfigPrompter so we don't emit a
+        // confirmation message containing the substring "NuGet.config", which the
+        // AspireInitAsync test helper false-matches as a user-facing Y/n prompt.
+        await NuGetConfigMerger.CreateOrUpdateAsync(new DirectoryInfo(outputPath), matchingChannel, cancellationToken: cancellationToken);
+        return true;
     }
 }
