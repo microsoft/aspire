@@ -40,6 +40,8 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
+
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
 
