@@ -145,7 +145,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var packageJson = new JsonObject();
         var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
 
-        if (!File.Exists(packageJsonPath))
+        var isGreenfield = !File.Exists(packageJsonPath);
+        if (isGreenfield)
         {
             // Greenfield: include root metadata so the scaffold output is a complete package.json.
             var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
@@ -167,6 +168,16 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         scripts["aspire:start"] = "aspire run";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
+
+        if (isGreenfield)
+        {
+            scripts["lint"] = "npm run aspire:lint";
+            scripts["predev"] = "npm run aspire:lint";
+            scripts["dev"] = "npm run aspire:start";
+            scripts["prebuild"] = "npm run aspire:lint";
+            scripts["build"] = "npm run aspire:build";
+            scripts["watch"] = "npm run aspire:dev";
+        }
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
         EnsureDependency(packageJson, "devDependencies", "@types/node", "^22.0.0");
