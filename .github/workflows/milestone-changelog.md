@@ -761,9 +761,10 @@ entries per change type across **all** areas, e.g.
 Use singular form for counts of 1 (`1 new feature`, `1 improvement`,
 `1 bug fix`).
 
-After the Table of Contents, add a **What's New** section that lists entries
-whose most recent associated PR was merged within the **last 3 days**
-(relative to the current run time). Sort entries **newest to oldest** by merge date.
+After the Table of Contents, add a **What's New** section that lists the
+**10 most recent** entries whose most recent associated PR was merged within the
+**last 3 days** (relative to the current run time). Sort entries **newest to oldest**
+by merge date. If there are more than 10 qualifying entries, show only the 10 newest.
 Each item is a link to the area heading, using the format:
 `- [<date> — <area-emoji> <Area> - <change-emoji> <Name>](#<area-slug>)`
 where `<date>` is the merge date of the last PR in `YYYY-M-D HH:mm` format
