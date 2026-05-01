@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard security fix: removes MarkupString XSS risk from SpanDetails and StructuredLogDetails components",
+  "mergedAt": "2026-04-30T16:59:16Z",
+  "number": 16584,
+  "runDate": "2026-05-01T00:02:54Z",
+  "status": "included",
+  "title": "[release/13.3] Remove MarkupString from SpanDetails and StructuredLogDetails resource strings"
+}

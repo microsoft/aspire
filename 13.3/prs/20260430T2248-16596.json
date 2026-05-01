@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI breaking change: renames --log-level to --pipeline-log-level on pipeline commands to avoid conflict with global --log-level",
+  "mergedAt": "2026-04-30T22:48:57Z",
+  "number": 16596,
+  "runDate": "2026-05-01T00:02:54Z",
+  "status": "included",
+  "title": "[release/13.3] Rename pipeline --log-level to --pipeline-log-level to avoid CLI log overlap"
+}

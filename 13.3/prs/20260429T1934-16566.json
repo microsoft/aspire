@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release stabilization: flips StabilizePackageVersion to true, produces stable 13.3.0 packages",
+  "mergedAt": "2026-04-29T19:34:53Z",
+  "number": 16566,
+  "runDate": "2026-05-01T00:02:54Z",
+  "status": "included",
+  "title": "[release/13.3] Stabilizing builds in preparation for 13.3 release"
+}

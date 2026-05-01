@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored backport PR (app/aspire-repo-bot)",
+  "mergedAt": "2026-04-30T17:01:50Z",
+  "number": 16583,
+  "runDate": "2026-05-01T00:02:54Z",
+  "status": "excluded",
+  "title": "[release/13.3] Ensure compute environment prepare waits for validation"
+}

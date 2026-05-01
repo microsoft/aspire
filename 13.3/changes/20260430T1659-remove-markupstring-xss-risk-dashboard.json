@@ -1,0 +1,16 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "HTML-embedded resource strings in SpanDetails and StructuredLogDetails have been replaced with plain label strings and inline Razor markup, eliminating MarkupString casts and removing a potential XSS risk.",
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-04-30T16:59:16Z",
+  "lastMergedAt": "2026-04-30T16:59:16Z",
+  "name": "Remove MarkupString XSS risk from dashboard components",
+  "prs": [
+    16584
+  ]
+}

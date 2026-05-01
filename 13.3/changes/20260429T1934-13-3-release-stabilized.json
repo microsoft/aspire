@@ -1,0 +1,16 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The 13.3 build has been stabilized: packages are now published at version 13.3.0 without a preview suffix. The four packages with SuppressFinalPackageVersion=true (Aspire.Azure.AI.OpenAI, Aspire.Hosting.Keycloak, Aspire.Keycloak.Authentication, Aspire.Milvus.Client) continue to ship as prerelease.",
+  "docsRequired": false,
+  "emoji": "🎯",
+  "firstMergedAt": "2026-04-29T19:34:53Z",
+  "lastMergedAt": "2026-04-29T19:34:53Z",
+  "name": "13.3.0 release build stabilized",
+  "prs": [
+    16566
+  ]
+}
