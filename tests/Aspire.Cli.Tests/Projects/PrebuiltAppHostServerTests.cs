@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Xml.Linq;
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
@@ -10,6 +10,8 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -350,6 +352,76 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithPackageReferences_SetsOnlyPackageProbeManifest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.2.0",
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0")]);
+
+            Assert.True(result.Success);
+            Assert.Null(server.SelectedProjectLayoutPath);
+            Assert.Equal(2, executionFactory.AttemptCount);
+
+            var manifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
+            Assert.StartsWith(
+                Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore"),
+                manifestPath,
+                StringComparison.OrdinalIgnoreCase);
+
+            var startInfo = server.CreateStartInfo(123);
+            Assert.Equal(manifestPath, startInfo.Environment[KnownConfigNames.IntegrationProbeManifestPath]);
+            Assert.False(startInfo.Environment.ContainsKey(KnownConfigNames.IntegrationLibsPath));
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithOnlyProjectReferences_SetsOnlyProjectLayout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MyIntegration.dll"] = "integration-v1"
+        };
+
+        var layout = CreateBundleLayout(workspace);
+        var server = CreateProjectReferenceServer(workspace, closureFiles, ["MyIntegration"], layout: layout);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.2.0",
+                [IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")]);
+
+            Assert.True(result.Success);
+            Assert.Null(server.IntegrationProbeManifestPath);
+
+            var layoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
+            Assert.True(File.Exists(Path.Combine(layoutPath, "libs", "MyIntegration.dll")));
+
+            var startInfo = server.CreateStartInfo(123);
+            Assert.Equal(Path.Combine(layoutPath, "libs"), startInfo.Environment[KnownConfigNames.IntegrationLibsPath]);
+            Assert.False(startInfo.Environment.ContainsKey(KnownConfigNames.IntegrationProbeManifestPath));
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithProjectReferences_ReusesProjectLayoutWhenClosureIsUnchanged()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -428,6 +500,66 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithProjectReferences_WritesPackageResourcesAndNativeAssetsToProbeManifest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Aspire.Hosting.Redis.dll"] = "redis-v1",
+            ["fr/Aspire.Hosting.Redis.resources.dll"] = "redis-fr",
+            ["runtimes/test-rid/native/testnative.so"] = "native",
+            ["MyIntegration.dll"] = "integration-v1"
+        };
+        var packageMetadata = new Dictionary<string, (string NuGetPackageId, string NuGetPackageVersion, string PathInPackage, string AssetType)>(StringComparer.Ordinal)
+        {
+            ["Aspire.Hosting.Redis.dll"] = ("Aspire.Hosting.Redis", "13.2.0", "lib/net10.0/Aspire.Hosting.Redis.dll", "runtime"),
+            ["fr/Aspire.Hosting.Redis.resources.dll"] = ("Aspire.Hosting.Redis", "13.2.0", "lib/net10.0/fr/Aspire.Hosting.Redis.resources.dll", "resources"),
+            ["runtimes/test-rid/native/testnative.so"] = ("Aspire.Hosting.Redis", "13.2.0", "runtimes/test-rid/native/testnative.so", "native")
+        };
+
+        var server = CreateProjectReferenceServer(workspace, closureFiles, ["MyIntegration"], packageMetadata);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
+            Assert.True(result.Success);
+
+            var layoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
+            var copiedLibs = Directory.GetFiles(Path.Combine(layoutPath, "libs"), "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(Path.Combine(layoutPath, "libs"), path).Replace('\\', '/'))
+                .OrderBy(static path => path, StringComparer.Ordinal)
+                .ToList();
+
+            Assert.Equal(["MyIntegration.dll"], copiedLibs);
+
+            var probeManifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
+            await using var probeManifestStream = File.OpenRead(probeManifestPath);
+            using var probeManifest = await JsonDocument.ParseAsync(probeManifestStream);
+
+            var managedAssemblies = probeManifest.RootElement.GetProperty("managedAssemblies").EnumerateArray().ToList();
+            Assert.Contains(
+                managedAssemblies,
+                assembly => assembly.GetProperty("name").GetString() == "Aspire.Hosting.Redis" &&
+                    !assembly.TryGetProperty("culture", out _));
+            Assert.Contains(
+                managedAssemblies,
+                assembly => assembly.GetProperty("name").GetString() == "Aspire.Hosting.Redis.resources" &&
+                    assembly.GetProperty("culture").GetString() == "fr");
+
+            var nativeLibraries = probeManifest.RootElement.GetProperty("nativeLibraries").EnumerateArray().ToList();
+            Assert.Contains(
+                nativeLibraries,
+                nativeLibrary => nativeLibrary.GetProperty("fileName").GetString() == "testnative.so");
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithProjectReferences_CreatesNewProjectLayoutWhenClosureChanges()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -458,6 +590,43 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotEqual(firstLayoutPath, secondLayoutPath);
             Assert.True(Directory.Exists(firstLayoutPath));
             Assert.True(Directory.Exists(secondLayoutPath));
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithProjectReferences_RecreatesProjectLayoutWhenCachedLayoutIsCorrupt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Aspire.Hosting.Redis.dll"] = "redis-v1",
+            ["MyIntegration.dll"] = "integration-v1"
+        };
+        var packageMetadata = CreatePackageMetadata();
+
+        var server = CreateProjectReferenceServer(workspace, closureFiles, ["MyIntegration"], packageMetadata);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var firstResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
+            Assert.True(firstResult.Success);
+
+            var layoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
+            var copiedFilePath = Path.Combine(layoutPath, "libs", "MyIntegration.dll");
+            await File.WriteAllTextAsync(copiedFilePath, "corrupt");
+
+            var secondResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
+            Assert.True(secondResult.Success);
+
+            Assert.Equal(layoutPath, server.SelectedProjectLayoutPath);
+            Assert.Equal("integration-v1", await File.ReadAllTextAsync(copiedFilePath));
+            Assert.Single(Directory.GetDirectories(Path.Combine(workingDirectory, "project-layouts", "items")));
         }
         finally
         {
@@ -552,6 +721,57 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ClosureManifest_ProjectLayoutManifestIgnoresPackageBackedEntries()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var firstPackageRoot = workspace.WorkspaceRoot.CreateSubdirectory("packages-a");
+        var secondPackageRoot = workspace.WorkspaceRoot.CreateSubdirectory("packages-b");
+        var projectRoot = workspace.WorkspaceRoot.CreateSubdirectory("project");
+        var firstPackagePath = Path.Combine(firstPackageRoot.FullName, "Aspire.Hosting.Redis.dll");
+        var secondPackagePath = Path.Combine(secondPackageRoot.FullName, "Aspire.Hosting.Redis.dll");
+        var projectPath = Path.Combine(projectRoot.FullName, "MyIntegration.dll");
+
+        File.WriteAllText(firstPackagePath, "redis");
+        File.WriteAllText(secondPackagePath, "redis");
+        File.WriteAllText(projectPath, "integration");
+
+        var firstManifest = AppHostServerClosureManifest.Create(
+        [
+            new AppHostServerClosureSource(
+                firstPackagePath,
+                "Aspire.Hosting.Redis.dll",
+                "Aspire.Hosting.Redis",
+                "13.2.0",
+                "lib/net10.0/Aspire.Hosting.Redis.dll",
+                "sha512-redis",
+                "runtime"),
+            new AppHostServerClosureSource(projectPath, "MyIntegration.dll")
+        ],
+        "{}",
+        CancellationToken.None);
+
+        var secondManifest = AppHostServerClosureManifest.Create(
+        [
+            new AppHostServerClosureSource(
+                secondPackagePath,
+                "Aspire.Hosting.Redis.dll",
+                "Aspire.Hosting.Redis",
+                "13.2.0",
+                "lib/net10.0/Aspire.Hosting.Redis.dll",
+                "sha512-redis",
+                "runtime"),
+            new AppHostServerClosureSource(projectPath, "MyIntegration.dll")
+        ],
+        "{}",
+        CancellationToken.None);
+
+        Assert.NotEqual(firstManifest.ManifestFingerprint, secondManifest.ManifestFingerprint);
+        Assert.Equal(firstManifest.ProjectLayoutFingerprint, secondManifest.ProjectLayoutFingerprint);
+        Assert.Equal(firstManifest.GetProjectLayoutManifestLines(), secondManifest.GetProjectLayoutManifestLines());
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithProjectReferences_ReusesProjectLayoutWhenOnlyPackageTimestampChanges()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -600,7 +820,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         TemporaryWorkspace workspace,
         IReadOnlyDictionary<string, string> closureFiles,
         IReadOnlyList<string> projectReferenceAssemblyNames,
-        IReadOnlyDictionary<string, (string NuGetPackageId, string NuGetPackageVersion, string PathInPackage, string AssetType)>? packageMetadata = null)
+        IReadOnlyDictionary<string, (string NuGetPackageId, string NuGetPackageVersion, string PathInPackage, string AssetType)>? packageMetadata = null,
+        LayoutConfiguration? layout = null)
     {
         var dotNetCliRunner = new TestDotNetCliRunner
         {
@@ -615,13 +836,51 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return new PrebuiltAppHostServer(
             workspace.WorkspaceRoot.FullName,
             "test.sock",
-            new LayoutConfiguration(),
+            layout ?? new LayoutConfiguration(),
             nugetService,
             dotNetCliRunner,
             new TestDotNetSdkInstaller(),
             MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+    }
+
+    private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(TemporaryWorkspace workspace)
+    {
+        var layout = CreateBundleLayout(workspace);
+        var executionFactory = new TestProcessExecutionFactory();
+        var nugetService = new BundleNuGetService(
+            new FixedLayoutDiscovery(layout),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            layout,
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            MockPackagingServiceFactory.Create(),
+            new TestConfigurationService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        return (server, executionFactory);
+    }
+
+    private static LayoutConfiguration CreateBundleLayout(TemporaryWorkspace workspace)
+    {
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(
+                managedDirectory.FullName,
+                BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+
+        return new LayoutConfiguration { LayoutPath = layoutRoot.FullName };
     }
 
     private static void WriteClosureInputs(
@@ -720,6 +979,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         {
             Directory.Delete(workingDirectory, recursive: true);
         }
+    }
+
+    private sealed class FixedLayoutDiscovery(LayoutConfiguration layout) : ILayoutDiscovery
+    {
+        public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => layout;
+
+        public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) => layout.GetComponentPath(component);
+
+        public bool IsBundleModeAvailable(string? projectDirectory = null) => true;
     }
 
 }

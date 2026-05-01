@@ -95,6 +95,40 @@ public class IntegrationLoadContextTests
         }
     }
 
+    [Fact]
+    public void PackageProbeManifest_ResolvesSatelliteResourceAssembliesByCulture()
+    {
+        var manifestDirectory = Directory.CreateTempSubdirectory("aspire-remotehost-resource-");
+        try
+        {
+            var resourceAssemblyPath = Path.Combine(manifestDirectory.FullName, "fr", "Aspire.Hosting.Redis.resources.dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(resourceAssemblyPath)!);
+            File.WriteAllText(resourceAssemblyPath, string.Empty);
+
+            var manifestPath = Path.Combine(manifestDirectory.FullName, "integration-package-probe-manifest.json");
+            WriteProbeManifest(
+                manifestPath,
+                managedAssemblies:
+                [
+                    new { Name = "Aspire.Hosting.Redis.resources", Culture = "fr", Path = resourceAssemblyPath }
+                ]);
+
+            var probeManifest = IntegrationPackageProbeManifest.Load(manifestPath);
+
+            Assert.Equal(
+                resourceAssemblyPath,
+                probeManifest.TryGetManagedAssemblyPath(new AssemblyName("Aspire.Hosting.Redis.resources")
+                {
+                    CultureName = "fr"
+                }));
+            Assert.Null(probeManifest.TryGetManagedAssemblyPath(new AssemblyName("Aspire.Hosting.Redis.resources")));
+        }
+        finally
+        {
+            Directory.Delete(manifestDirectory.FullName, recursive: true);
+        }
+    }
+
     private static void WriteProbeManifest(string manifestPath, IEnumerable<object>? managedAssemblies = null, IEnumerable<object>? nativeLibraries = null)
     {
         File.WriteAllText(

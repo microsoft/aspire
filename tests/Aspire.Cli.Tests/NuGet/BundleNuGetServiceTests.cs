@@ -126,6 +126,137 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RestorePackagesAsync_UsesCachedManifestWithoutRunningHelper()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var packageList = new List<(string Id, string Version)> { ("Aspire.Hosting.JavaScript", "9.4.0") };
+        var packageHash = BundleNuGetService.ComputePackageHash(packageList, "net10.0", null, managedPath);
+        var manifestPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "integrations",
+            "package-restore",
+            packageHash,
+            "integration-package-probe-manifest.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
+        File.WriteAllText(manifestPath, "{}");
+
+        List<string[]> invocations = [];
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) => invocations.Add(args.ToArray())
+        };
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+
+        Assert.Equal(manifestPath, result.ManifestPath);
+        Assert.Empty(invocations);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_RegeneratesCachedManifestWhenManifestIsInvalid()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var packageList = new List<(string Id, string Version)> { ("Aspire.Hosting.JavaScript", "9.4.0") };
+        var packageHash = BundleNuGetService.ComputePackageHash(packageList, "net10.0", null, managedPath);
+        var manifestPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "integrations",
+            "package-restore",
+            packageHash,
+            "integration-package-probe-manifest.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
+        File.WriteAllText(manifestPath, "{ invalid json");
+
+        List<string[]> invocations = [];
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) =>
+            {
+                invocations.Add(args.ToArray());
+                if (args.Contains("manifest"))
+                {
+                    File.WriteAllText(manifestPath, """{"managedAssemblies":[],"nativeLibraries":[]}""");
+                }
+            }
+        };
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+
+        Assert.Equal(manifestPath, result.ManifestPath);
+        Assert.Equal(2, invocations.Count);
+        Assert.Equal("restore", invocations[0][1]);
+        Assert.Equal("manifest", invocations[1][1]);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_UsesDistinctCachePathsWhenManagedHelperChanges()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, "v1");
+
+        var executionFactory = new TestProcessExecutionFactory();
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var resultA = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName);
+
+        File.WriteAllText(managedPath, "v2-changed");
+
+        var resultB = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_SharesRestoreCacheAcrossAppHostsInSameWorkspace()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

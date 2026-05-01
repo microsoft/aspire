@@ -106,11 +106,48 @@ public class AssemblyLoaderTests
             packageProbeManifest: probeManifest);
 
         Assert.Equal(
+        [
+            "Aspire.Hosting.Azure.AppService",
+            "Aspire.Hosting.Azure.OperationalInsights"
+        ],
+        assemblyNames);
+    }
+
+    [Fact]
+    public void GetAssemblyNamesToLoad_CombinesPackageProbeManifestAndProjectLibs()
+    {
+        using var integrationLibs = new TemporaryDirectory();
+        using var manifestDirectory = new TemporaryDirectory();
+        using var packageAssemblyDirectory = new TemporaryDirectory();
+
+        integrationLibs.CreateFile("Aspire.Hosting.ProjectIntegration.dll");
+
+        var packageAssemblyPath = System.IO.Path.Combine(packageAssemblyDirectory.Path, "Aspire.Hosting.PackageIntegration.dll");
+        File.WriteAllText(packageAssemblyPath, string.Empty);
+
+        var manifestPath = System.IO.Path.Combine(manifestDirectory.Path, "integration-package-probe-manifest.json");
+        WriteProbeManifest(
+            manifestPath,
+            managedAssemblies:
             [
-                "Aspire.Hosting.Azure.AppService",
-                "Aspire.Hosting.Azure.OperationalInsights"
-            ],
-            assemblyNames);
+                new { Name = "Aspire.Hosting.PackageIntegration", Path = packageAssemblyPath }
+            ]);
+
+        var probeManifest = IntegrationPackageProbeManifest.Load(manifestPath);
+        var configuration = new ConfigurationBuilder().Build();
+
+        var assemblyNames = AssemblyLoader.GetAssemblyNamesToLoad(
+            configuration,
+            integrationLibs.Path,
+            applicationBasePath: System.IO.Path.Combine(manifestDirectory.Path, "missing"),
+            packageProbeManifest: probeManifest);
+
+        Assert.Equal(
+        [
+            "Aspire.Hosting.PackageIntegration",
+            "Aspire.Hosting.ProjectIntegration"
+        ],
+        assemblyNames);
     }
 
     [Fact]

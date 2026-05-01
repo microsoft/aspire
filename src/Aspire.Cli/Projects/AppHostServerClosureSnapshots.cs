@@ -92,6 +92,14 @@ internal sealed class AppHostServerClosureManifest
         return lines;
     }
 
+    internal IReadOnlyList<string> GetProjectLayoutManifestLines()
+    {
+        return Entries
+            .Where(static entry => !entry.IsPackageBacked)
+            .Select(GetProjectEntryFingerprint)
+            .ToList();
+    }
+
     public static AppHostServerClosureManifest Create(
         IEnumerable<AppHostServerClosureSource> sourceFiles,
         string appSettingsContent,
@@ -245,7 +253,7 @@ internal sealed class AppHostServerClosureManifest
         return Convert.ToHexString(hash.GetCurrentHash()).ToLowerInvariant();
     }
 
-    private static string ComputeFileHash(string path, CancellationToken cancellationToken)
+    internal static string ComputeFileHash(string path, CancellationToken cancellationToken)
     {
         var hash = new XxHash3();
         using var stream = File.OpenRead(path);
@@ -358,7 +366,7 @@ internal sealed class AppHostServerProjectLayoutStore
         }
     }
 
-    public AppHostServerProjectLayout? TryLoadLayout(string? fingerprint)
+    public AppHostServerProjectLayout? TryLoadLayout(string? fingerprint, AppHostServerClosureManifest? expectedManifest = null)
     {
         if (string.IsNullOrWhiteSpace(fingerprint))
         {
@@ -372,6 +380,12 @@ internal sealed class AppHostServerProjectLayoutStore
         if (!Directory.Exists(layoutPath) ||
             !Directory.Exists(libsPath) ||
             !File.Exists(manifestPath))
+        {
+            return null;
+        }
+
+        if (expectedManifest is not null &&
+            !IsLayoutCurrent(layoutPath, libsPath, manifestPath, expectedManifest))
         {
             return null;
         }
@@ -394,10 +408,12 @@ internal sealed class AppHostServerProjectLayoutStore
             return null;
         }
 
-        if (TryLoadLayout(manifest.ProjectLayoutFingerprint) is { } existingLayout)
+        if (TryLoadLayout(manifest.ProjectLayoutFingerprint, manifest) is { } existingLayout)
         {
             return existingLayout;
         }
+
+        DeleteInvalidLayoutDirectory(manifest.ProjectLayoutFingerprint);
 
         var stagingPath = Path.Combine(_stagingDirectory, Guid.NewGuid().ToString("n"));
         var libsPath = Path.Combine(stagingPath, "libs");
@@ -445,7 +461,7 @@ internal sealed class AppHostServerProjectLayoutStore
         {
             TryDeleteDirectory(stagingPath);
 
-            if (TryLoadLayout(manifest.ProjectLayoutFingerprint) is { } recoveredLayout)
+            if (TryLoadLayout(manifest.ProjectLayoutFingerprint, manifest) is { } recoveredLayout)
             {
                 return recoveredLayout;
             }
@@ -459,12 +475,55 @@ internal sealed class AppHostServerProjectLayoutStore
         return Path.Combine(_itemsDirectory, fingerprint);
     }
 
+    private static bool IsLayoutCurrent(
+        string layoutPath,
+        string libsPath,
+        string manifestPath,
+        AppHostServerClosureManifest expectedManifest)
+    {
+        try
+        {
+            if (!File.ReadLines(manifestPath).SequenceEqual(expectedManifest.GetProjectLayoutManifestLines(), StringComparer.Ordinal))
+            {
+                return false;
+            }
+
+            foreach (var entry in expectedManifest.Entries.Where(static entry => !entry.IsPackageBacked))
+            {
+                var copiedPath = Path.Combine(libsPath, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(copiedPath) ||
+                    !string.Equals(AppHostServerClosureManifest.ComputeFileHash(copiedPath, CancellationToken.None), entry.FileContentHash, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        return Directory.Exists(layoutPath);
+    }
+
+    private void DeleteInvalidLayoutDirectory(string fingerprint)
+    {
+        var layoutPath = GetLayoutPath(fingerprint);
+        if (!Directory.Exists(layoutPath))
+        {
+            return;
+        }
+
+        _logger.LogInformation("Discarding invalid AppHost project layout {LayoutFingerprint}", fingerprint);
+        TryDeleteDirectory(layoutPath);
+    }
+
     private static async Task WriteManifestFileAsync(
         string path,
         AppHostServerClosureManifest manifest,
         CancellationToken cancellationToken)
     {
-        await File.WriteAllLinesAsync(path, manifest.GetManifestLines(), cancellationToken).ConfigureAwait(false);
+        await File.WriteAllLinesAsync(path, manifest.GetProjectLayoutManifestLines(), cancellationToken).ConfigureAwait(false);
     }
 
     private void TryDeleteDirectory(string path)

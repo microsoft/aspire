@@ -539,10 +539,43 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         string[]? additionalArgs = null,
         bool debug = false)
     {
+        var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
+
+        var process = Process.Start(startInfo)!;
+
+        var outputCollector = new OutputCollector();
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                outputCollector.AppendOutput(e.Data);
+            }
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                outputCollector.AppendError(e.Data);
+            }
+        };
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        return (_socketPath, process, outputCollector);
+    }
+
+    internal ProcessStartInfo CreateStartInfo(
+        int hostPid,
+        IReadOnlyDictionary<string, string>? environmentVariables = null,
+        string[]? additionalArgs = null,
+        bool debug = false)
+    {
         var serverPath = GetServerPath();
         var contentRootPath = _contentRootPath ?? _workingDirectory;
 
-        // aspire-managed is self-contained - run directly
         var startInfo = new ProcessStartInfo(serverPath)
         {
             WorkingDirectory = contentRootPath,
@@ -624,30 +657,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 
-        var process = Process.Start(startInfo)!;
-
-        var outputCollector = new OutputCollector();
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
-        };
-
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        return (_socketPath, process, outputCollector);
+        return startInfo;
     }
 
     /// <inheritdoc />

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
@@ -105,7 +106,7 @@ internal sealed class BundleNuGetService : INuGetService
         var assetsPath = Path.Combine(objDir, "project.assets.json");
 
         // Check if already restored
-        if (File.Exists(manifestPath))
+        if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
         {
             _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
             return new NuGetPackageRestoreResult(manifestPath);
@@ -235,6 +236,20 @@ internal sealed class BundleNuGetService : INuGetService
 
         _logger.LogDebug("Package manifest created at {Path}", manifestPath);
         return new NuGetPackageRestoreResult(manifestPath);
+    }
+
+    private static bool TryValidatePackageManifest(string manifestPath, ILogger logger)
+    {
+        try
+        {
+            _ = IntegrationPackageProbeManifest.Load(manifestPath);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or JsonException or IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Cached package manifest {ManifestPath} is invalid and will be regenerated.", manifestPath);
+            return false;
+        }
     }
 
     internal static string ComputePackageHash(
