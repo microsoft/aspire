@@ -765,10 +765,9 @@ After the Table of Contents, add a **What's New** section that lists the
 **10 most recent** changelog entries, sorted **newest to oldest** by merge date
 of their most recent PR.
 Each item is a link to the area heading, using the format:
-`- [<date> — <area-emoji> <Area> - <change-emoji> <Name>](#<area-slug>)`
+`- [<date> — <change-emoji> <Name>](#<area-slug>)`
 where `<date>` is the merge date of the last PR in `YYYY-M-D HH:mm` format
-(no leading zeroes on month/day, 24-hour UTC time), `<area-emoji>` is the area's Unicode emoji,
-`<Area>` is the area name, `<change-emoji>` is the
+(no leading zeroes on month/day, 24-hour UTC time), `<change-emoji>` is the
 entry's individual emoji, `<Name>` is the changelog entry name, and
 `<area-slug>` is the GitHub-generated slug for that area's `##` heading
 (e.g., `-apphost`, `-cli`, `-dashboard`). The `#` before the slug is mandatory
@@ -796,9 +795,9 @@ Use this exact format:
 
 ## What's New
 
-- [2026-4-22 22:48 — 🏠 AppHost - 🧭 Feature name](#-apphost)
-- [2026-4-21 07:30 — 💻 CLI - 🆕 New CLI command](#-cli)
-- [2026-4-20 23:05 — 🏠 AppHost - 🚀 Another feature](#-apphost)
+- [2026-4-22 22:48 — 🧭 Feature name](#-apphost)
+- [2026-4-21 07:30 — 🆕 New CLI command](#-cli)
+- [2026-4-20 23:05 — 🚀 Another feature](#-apphost)
 
 ## 🏠 AppHost
 
