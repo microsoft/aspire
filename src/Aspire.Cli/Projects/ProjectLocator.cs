@@ -51,7 +51,7 @@ internal sealed class ProjectLocator(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        return await interactionService.ShowStatusAsync(InteractionServiceStrings.SearchingProjects, async () =>
+        return await interactionService.ShowStatusAsync(InteractionServiceStrings.FindingAppHosts, async () =>
         {
             var appHostProjects = new List<FileInfo>();
             var unbuildableSuspectedAppHostProjects = new List<FileInfo>();
@@ -63,8 +63,6 @@ internal sealed class ProjectLocator(
                 RecurseSubdirectories = true,
                 IgnoreInaccessible = true
             };
-
-            interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedLeft, InteractionServiceStrings.FindingAppHosts);
 
             using var validationCancellationTokenSource = stopAfterMultipleBuildableAppHosts
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
