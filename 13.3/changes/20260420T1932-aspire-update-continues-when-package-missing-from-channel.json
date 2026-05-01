@@ -6,7 +6,7 @@
   "communityContributors": [],
   "description": "aspire update now logs a warning and continues updating other packages when a referenced package (e.g. a third-party Aspire.Hosting.* package) is not found in the target channel, instead of aborting the entire update.",
   "docsRequired": false,
-  "emoji": "��",
+  "emoji": "🔄",
   "firstMergedAt": "2026-04-20T19:32:46Z",
   "lastMergedAt": "2026-04-20T19:32:46Z",
   "name": "aspire update continues when a package is missing from channel",

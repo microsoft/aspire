@@ -6,7 +6,7 @@
   "communityContributors": [],
   "description": "`aspire ps` now displays the Dashboard URL alongside running AppHost instances, making it easier to navigate directly to the dashboard from the terminal.",
   "docsRequired": false,
-  "emoji": "��",
+  "emoji": "🔗",
   "firstMergedAt": "2026-04-15T15:29:33Z",
   "lastMergedAt": "2026-04-15T15:29:33Z",
   "name": "Dashboard URL shown in `aspire ps` output",
