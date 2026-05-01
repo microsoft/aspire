@@ -14,6 +14,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
@@ -36,6 +37,7 @@ internal sealed class InitCommand : BaseCommand
     private readonly ICertificateService _certificateService;
     private readonly IScaffoldingService _scaffoldingService;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly TemplateNuGetConfigService _templateNuGetConfigService;
 
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
@@ -66,7 +68,8 @@ internal sealed class InitCommand : BaseCommand
         IDotNetCliRunner runner,
         ICertificateService certificateService,
         IScaffoldingService scaffoldingService,
-        ILanguageDiscovery languageDiscovery)
+        ILanguageDiscovery languageDiscovery,
+        TemplateNuGetConfigService templateNuGetConfigService)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _executionContext = executionContext;
@@ -77,6 +80,7 @@ internal sealed class InitCommand : BaseCommand
         _certificateService = certificateService;
         _scaffoldingService = scaffoldingService;
         _languageDiscovery = languageDiscovery;
+        _templateNuGetConfigService = templateNuGetConfigService;
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -225,15 +229,13 @@ internal sealed class InitCommand : BaseCommand
         return await DropCSharpSingleFileSkeletonAsync(workingDirectory, cancellationToken);
     }
 
-    private Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        _ = cancellationToken;
-
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
         {
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
-            return Task.FromResult(ExitCodeConstants.Success);
+            return ExitCodeConstants.Success;
         }
 
         // Drop bare single-file apphost. Pin the SDK version so later operations
@@ -252,64 +254,25 @@ internal sealed class InitCommand : BaseCommand
         File.WriteAllText(appHostPath, appHostContent);
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
 
-        // If any local hives are present (PR builds, the deployment-tests `local` channel,
-        // or any user-configured hive under ~/.aspire/hives), drop a workspace-local
-        // nuget.config that exposes those hives as package sources. Without this, MSBuild
-        // cannot resolve `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK
-        // directive — neither the implicit restore done by `aspire add` (`dotnet package
-        // add --file apphost.cs`) nor `dotnet run --file apphost.cs` will succeed against
-        // a CLI built from a local hive.
-        DropNuGetConfigForLocalHives(workingDirectory);
+        // Ensure the workspace has a NuGet.config that exposes the configured channel's
+        // package sources. This is required so MSBuild can resolve
+        // `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK directive — both
+        // for `aspire add` (`dotnet package add --file apphost.cs`) and for
+        // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
+        // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.)
+        // is invisible and SDK resolution fails. Mirrors how `aspire new` handles
+        // template output via the same shared service; `NuGetConfigMerger` underneath
+        // creates a new file or merges missing sources into an existing one, so adding
+        // hives later is handled the same way as for templates.
+        await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(
+            channelName: null,
+            outputPath: workingDirectory.FullName,
+            cancellationToken).ConfigureAwait(false);
 
         // Drop aspire.config.json
         var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null);
 
-        return Task.FromResult(configResult);
-    }
-
-    private void DropNuGetConfigForLocalHives(DirectoryInfo workingDirectory)
-    {
-        var nugetConfigPath = Path.Combine(workingDirectory.FullName, "nuget.config");
-        if (File.Exists(nugetConfigPath))
-        {
-            // Don't clobber a user-provided config.
-            return;
-        }
-
-        var hivesDirectory = _executionContext.HivesDirectory;
-        if (!hivesDirectory.Exists)
-        {
-            return;
-        }
-
-        // Each subdirectory of HivesDirectory is a hive; the .nupkg files live in
-        // <hive>/packages (matches PackagingService channel construction). Use forward
-        // slashes for cross-platform NuGet config compatibility.
-        var hivePackageSources = hivesDirectory
-            .GetDirectories()
-            .Select(hive => new DirectoryInfo(Path.Combine(hive.FullName, "packages")))
-            .Where(packagesDir => packagesDir.Exists)
-            .Select(packagesDir => packagesDir.FullName.Replace('\\', '/'))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        if (hivePackageSources.Length == 0)
-        {
-            return;
-        }
-
-        // Mirror AddCommand's approach: list the hive sources WITHOUT package source
-        // mapping restrictions so transitive deps still resolve from inherited sources
-        // (typically nuget.org) via the normal NuGet source hierarchy.
-        var configXml = new System.Xml.Linq.XDocument(
-            new System.Xml.Linq.XElement("configuration",
-                new System.Xml.Linq.XElement("packageSources",
-                    hivePackageSources.Select(s =>
-                        new System.Xml.Linq.XElement("add",
-                            new System.Xml.Linq.XAttribute("key", s),
-                            new System.Xml.Linq.XAttribute("value", s))))));
-        configXml.Save(nugetConfigPath);
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created nuget.config (local hive sources)");
+        return configResult;
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
