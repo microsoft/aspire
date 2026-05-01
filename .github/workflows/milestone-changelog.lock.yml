@@ -1,4 +1,4 @@
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"b30af51e34b79252817027d01c5491b4c3358b7637392d687f90752594778ba8","compiler_version":"v0.71.1","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"aeeff9f2ee4862398be039efc12cbcb751a374c24f2a4ea346c33460622f83fa","compiler_version":"v0.71.1","strict":true,"agent_id":"copilot"}
 # gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"v6.0.2"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"239aec45b78c8799417efdd5bc6d8cc036629ec1","version":"v0.71.1"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.25.28","digest":"sha256:a8834e285807654bf680154faa710d43fe4365a0868142f5c20e48c85e137a7a","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.25.28@sha256:a8834e285807654bf680154faa710d43fe4365a0868142f5c20e48c85e137a7a"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.28","digest":"sha256:93290f2393752252911bd7c39a047f776c0b53063575e7bde4e304962a9a61cb","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.28@sha256:93290f2393752252911bd7c39a047f776c0b53063575e7bde4e304962a9a61cb"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.25.28","digest":"sha256:844c18280f82cd1b06345eb2f4e91966b34185bfc51c9f237c3e022e848fb474","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.25.28@sha256:844c18280f82cd1b06345eb2f4e91966b34185bfc51c9f237c3e022e848fb474"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.0"},{"image":"ghcr.io/github/github-mcp-server:v1.0.2"},{"image":"node:lts-alpine","digest":"sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f","pinned_image":"node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f"}]}
 #    ___                   _   _      
 #   / _ \                 | | (_)     
@@ -189,14 +189,14 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_66bc805aee77da7f_EOF'
+          cat << 'GH_AW_PROMPT_64ecb5db6dd72fb4_EOF'
           <system>
-          GH_AW_PROMPT_66bc805aee77da7f_EOF
+          GH_AW_PROMPT_64ecb5db6dd72fb4_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_66bc805aee77da7f_EOF'
+          cat << 'GH_AW_PROMPT_64ecb5db6dd72fb4_EOF'
           <safe-output-tools>
           Tools: missing_tool, missing_data, noop, publish_wiki_page
           </safe-output-tools>
@@ -228,12 +228,12 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_66bc805aee77da7f_EOF
+          GH_AW_PROMPT_64ecb5db6dd72fb4_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_66bc805aee77da7f_EOF'
+          cat << 'GH_AW_PROMPT_64ecb5db6dd72fb4_EOF'
           </system>
           {{#runtime-import .github/workflows/milestone-changelog.md}}
-          GH_AW_PROMPT_66bc805aee77da7f_EOF
+          GH_AW_PROMPT_64ecb5db6dd72fb4_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
@@ -358,7 +358,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         name: Fetch milestone changelog data
-        run: "set -euo pipefail\nREPO=\"${{ github.repository }}\"\nDATA_DIR=\"/tmp/gh-aw/pr-data\"\nmkdir -p \"$DATA_DIR\"\n\n# 0. Clone the memory branch to read existing state (prs/, changes/,\n#    feedback-issue.txt). The full content is copied to\n#    $DATA_DIR/memory/$MILESTONE/ so the agent can read it directly.\n#    This branch contains only changelog state files, so the clone\n#    is lightweight even without sparse-checkout.\nMEMORY_REF=\"memory/milestone-changelog\"\nMEMORY_DIR=\"$DATA_DIR/memory/$MILESTONE\"\nPROCESSED_NUMBERS=\"[]\"\nFEEDBACK_FROM_MEMORY=\"\"\nMEMORY_TMP=$(mktemp -d)\nif git clone --depth 1 --branch \"$MEMORY_REF\" \\\n    \"https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git\" \\\n    \"$MEMORY_TMP/repo\" 2>/dev/null; then\n  SRC_DIR=\"$MEMORY_TMP/repo/${MILESTONE}\"\n  if [ -d \"$SRC_DIR\" ]; then\n    mkdir -p \"$MEMORY_DIR\"\n    cp -r \"$SRC_DIR/.\" \"$MEMORY_DIR/\"\n    echo \"Copied memory branch content to $MEMORY_DIR (read)\"\n\n    # Seed the write directory with the same content so it starts\n    # as a complete copy. The agent only needs to add/modify files;\n    # the publish job pushes the write directory as the new state.\n    WRITE_DIR=\"/tmp/gh-aw/agent/memory/$MILESTONE\"\n    mkdir -p \"$WRITE_DIR\"\n    cp -r \"$SRC_DIR/.\" \"$WRITE_DIR/\"\n    echo \"Seeded write directory $WRITE_DIR\"\n  fi\n\n  PRS_DIR=\"$MEMORY_DIR/prs\"\n  # Since tracker files only exist for processed PRs, extract all numbers.\n  # Filenames follow the pattern TIMESTAMP-NUMBER.json, so we parse the\n  # PR number from the filename instead of reading every JSON file (which\n  # can fail when the glob expands to hundreds of arguments).\n  if [ -d \"$PRS_DIR\" ]; then\n    PRS_LISTING=$(ls \"$PRS_DIR\" 2>/dev/null \\\n      | sed -n 's/.*-\\([0-9]*\\)\\.json$/\\1/p' \\\n      | jq -Rs '[split(\"\\n\") | .[] | select(. != \"\") | tonumber]')\n    if echo \"$PRS_LISTING\" | jq -e 'type == \"array\" and length > 0' >/dev/null 2>&1; then\n      PROCESSED_NUMBERS=\"$PRS_LISTING\"\n    fi\n    echo \"Extracted $(echo \"$PROCESSED_NUMBERS\" | jq length) processed PR numbers from filenames\"\n  fi\n\n  # Also grab the feedback issue number from memory\n  FEEDBACK_FILE=\"$MEMORY_DIR/feedback-issue.txt\"\n  if [ -f \"$FEEDBACK_FILE\" ]; then\n    FEEDBACK_FROM_MEMORY=$(tr -d '[:space:]' < \"$FEEDBACK_FILE\")\n  fi\nfi\nrm -rf \"$MEMORY_TMP\"\n\n# 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending\ngh pr list --repo \"$REPO\" --state merged --limit 5000 \\\n  --search \"milestone:$MILESTONE\" \\\n  --json number,title,author,mergedAt,labels,additions,deletions,changedFiles \\\n  | jq 'sort_by(.mergedAt)' \\\n  > \"$DATA_DIR/all-milestone-prs.json\"\n\nTOTAL=$(jq length \"$DATA_DIR/all-milestone-prs.json\")\necho \"Total merged PRs in milestone: $TOTAL\"\n\n# 2. Determine the batch of unprocessed PRs\n\n# Filter all-milestone-prs to only unprocessed, take oldest BATCH_SIZE.\n# Build a lookup object from processed numbers for O(1) membership checks.\njq --argjson processed \"$PROCESSED_NUMBERS\" \\\n   --argjson batch_size \"$BATCH_SIZE\" \\\n   '($processed | map({(tostring): true}) | add // {}) as $set | [.[] | select($set[.number | tostring] | not)] | .[0:$batch_size]' \\\n   \"$DATA_DIR/all-milestone-prs.json\" \\\n   > \"$DATA_DIR/batch-prs.json\"\n\nBATCH_COUNT=$(jq length \"$DATA_DIR/batch-prs.json\")\nPROCESSED_COUNT=$(echo \"$PROCESSED_NUMBERS\" | jq length)\necho \"Already processed: $PROCESSED_COUNT\"\necho \"Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT\"\n\n# 3. Find the feedback issue number (check memory branch first, fallback to search)\nFEEDBACK_TITLE=\"[${MILESTONE}] Changelog feedback\"\nFEEDBACK_NUM=\"${FEEDBACK_FROM_MEMORY:-}\"\nif [ -n \"$FEEDBACK_NUM\" ]; then\n  echo \"Feedback issue from memory branch: #$FEEDBACK_NUM\"\nfi\n\nif [ -z \"$FEEDBACK_NUM\" ]; then\n  FEEDBACK_NUM=$(gh issue list --repo \"$REPO\" --state open --limit 5 \\\n    --search \"in:title \\\"$FEEDBACK_TITLE\\\"\" \\\n    --json number,title \\\n    --jq '.[] | select(.title == \"'\"$FEEDBACK_TITLE\"'\") | .number' \\\n    2>/dev/null || true)\nfi\n\nif [ -n \"$FEEDBACK_NUM\" ]; then\n  echo \"$FEEDBACK_NUM\" > \"$DATA_DIR/feedback-issue-number.txt\"\n  echo \"Feedback issue: #$FEEDBACK_NUM\"\nelse\n  echo \"No feedback issue found\"\nfi\n\n# 4. Fetch existing changelog body from wiki page (avoids storing it in the memory branch)\nPAGE_NAME=\"${MILESTONE}-Change-log\"\nWIKI_TMP=$(mktemp -d)\nif git clone --depth 1 \"https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git\" \"$WIKI_TMP/wiki\" 2>/dev/null; then\n  if [ -f \"$WIKI_TMP/wiki/${PAGE_NAME}.md\" ]; then\n    cp \"$WIKI_TMP/wiki/${PAGE_NAME}.md\" \"$DATA_DIR/existing-body.md\"\n    BODY_SIZE=$(wc -c < \"$DATA_DIR/existing-body.md\")\n    echo \"Fetched existing wiki page: ${BODY_SIZE} bytes\"\n  else\n    echo \"No existing wiki page found\"\n  fi\nelse\n  echo \"Could not clone wiki repo (may not exist yet)\"\nfi\nrm -rf \"$WIKI_TMP\"\n"
+        run: "set -euo pipefail\nREPO=\"${{ github.repository }}\"\nDATA_DIR=\"/tmp/gh-aw/pr-data\"\nmkdir -p \"$DATA_DIR\"\n\n# 0. Clone the memory branch to read existing state (prs/, changes/,\n#    feedback-issue.txt). The full content is copied to\n#    $DATA_DIR/memory/$MILESTONE/ so the agent can read it directly.\n#    This branch contains only changelog state files, so the clone\n#    is lightweight even without sparse-checkout.\nMEMORY_REF=\"memory/milestone-changelog\"\nMEMORY_DIR=\"$DATA_DIR/memory/$MILESTONE\"\nPROCESSED_NUMBERS=\"[]\"\nFEEDBACK_FROM_MEMORY=\"\"\nMEMORY_TMP=$(mktemp -d)\nCLONE_ERR=$(mktemp)\nif git clone --depth 1 --branch \"$MEMORY_REF\" \\\n    \"https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git\" \\\n    \"$MEMORY_TMP/repo\" 2>\"$CLONE_ERR\"; then\n  SRC_DIR=\"$MEMORY_TMP/repo/${MILESTONE}\"\n  if [ -d \"$SRC_DIR\" ]; then\n    mkdir -p \"$MEMORY_DIR\"\n    cp -r \"$SRC_DIR/.\" \"$MEMORY_DIR/\"\n    echo \"Copied memory branch content to $MEMORY_DIR (read)\"\n\n    # Seed the write directory with the same content so it starts\n    # as a complete copy. The agent only needs to add/modify files;\n    # the publish job pushes the write directory as the new state.\n    WRITE_DIR=\"/tmp/gh-aw/agent/memory/$MILESTONE\"\n    mkdir -p \"$WRITE_DIR\"\n    cp -r \"$SRC_DIR/.\" \"$WRITE_DIR/\"\n    echo \"Seeded write directory $WRITE_DIR\"\n  fi\n\n  PRS_DIR=\"$MEMORY_DIR/prs\"\n  # Since tracker files only exist for processed PRs, extract all numbers.\n  # Filenames follow the pattern TIMESTAMP-NUMBER.json, so we parse the\n  # PR number from the filename instead of reading every JSON file (which\n  # can fail when the glob expands to hundreds of arguments).\n  if [ -d \"$PRS_DIR\" ]; then\n    PRS_LISTING=$(ls \"$PRS_DIR\" 2>/dev/null \\\n      | sed -n 's/.*-\\([0-9]*\\)\\.json$/\\1/p' \\\n      | jq -Rs '[split(\"\\n\") | .[] | select(. != \"\") | tonumber]')\n    if echo \"$PRS_LISTING\" | jq -e 'type == \"array\" and length > 0' >/dev/null 2>&1; then\n      PROCESSED_NUMBERS=\"$PRS_LISTING\"\n    fi\n    echo \"Extracted $(echo \"$PROCESSED_NUMBERS\" | jq length) processed PR numbers from filenames\"\n  fi\n\n  # Also grab the feedback issue number from memory\n  FEEDBACK_FILE=\"$MEMORY_DIR/feedback-issue.txt\"\n  if [ -f \"$FEEDBACK_FILE\" ]; then\n    FEEDBACK_FROM_MEMORY=$(tr -d '[:space:]' < \"$FEEDBACK_FILE\")\n  fi\nelse\n  # Log the error unless it's just a missing branch\n  if ! grep -qi 'not found\\|could not find' \"$CLONE_ERR\"; then\n    echo \"::warning::Memory branch clone failed: $(cat \"$CLONE_ERR\")\"\n  fi\nfi\nrm -rf \"$MEMORY_TMP\" \"$CLONE_ERR\"\n\n# 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending\ngh pr list --repo \"$REPO\" --state merged --limit 5000 \\\n  --search \"milestone:$MILESTONE\" \\\n  --json number,title,author,mergedAt,labels,additions,deletions,changedFiles \\\n  | jq 'sort_by(.mergedAt)' \\\n  > \"$DATA_DIR/all-milestone-prs.json\"\n\nTOTAL=$(jq length \"$DATA_DIR/all-milestone-prs.json\")\necho \"Total merged PRs in milestone: $TOTAL\"\n\n# 2. Determine the batch of unprocessed PRs\n\n# Filter all-milestone-prs to only unprocessed, take oldest BATCH_SIZE.\n# Build a lookup object from processed numbers for O(1) membership checks.\njq --argjson processed \"$PROCESSED_NUMBERS\" \\\n   --argjson batch_size \"$BATCH_SIZE\" \\\n   '($processed | map({(tostring): true}) | add // {}) as $set | [.[] | select($set[.number | tostring] | not)] | .[0:$batch_size]' \\\n   \"$DATA_DIR/all-milestone-prs.json\" \\\n   > \"$DATA_DIR/batch-prs.json\"\n\nBATCH_COUNT=$(jq length \"$DATA_DIR/batch-prs.json\")\nPROCESSED_COUNT=$(echo \"$PROCESSED_NUMBERS\" | jq length)\necho \"Already processed: $PROCESSED_COUNT\"\necho \"Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT\"\n\n# 3. Find the feedback issue number (check memory branch first, fallback to search)\nFEEDBACK_TITLE=\"[${MILESTONE}] Changelog feedback\"\nFEEDBACK_NUM=\"${FEEDBACK_FROM_MEMORY:-}\"\nif [ -n \"$FEEDBACK_NUM\" ]; then\n  echo \"Feedback issue from memory branch: #$FEEDBACK_NUM\"\nfi\n\nif [ -z \"$FEEDBACK_NUM\" ]; then\n  FEEDBACK_NUM=$(gh issue list --repo \"$REPO\" --state open --limit 5 \\\n    --search \"in:title \\\"$FEEDBACK_TITLE\\\"\" \\\n    --json number,title \\\n    --jq '.[] | select(.title == \"'\"$FEEDBACK_TITLE\"'\") | .number' \\\n    2>/dev/null || true)\nfi\n\nif [ -n \"$FEEDBACK_NUM\" ]; then\n  echo \"$FEEDBACK_NUM\" > \"$DATA_DIR/feedback-issue-number.txt\"\n  echo \"Feedback issue: #$FEEDBACK_NUM\"\nelse\n  echo \"No feedback issue found\"\nfi\n\n# 4. Fetch existing changelog body from wiki page (avoids storing it in the memory branch)\nPAGE_NAME=\"${MILESTONE}-Change-log\"\nWIKI_TMP=$(mktemp -d)\nif git clone --depth 1 \"https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git\" \"$WIKI_TMP/wiki\" 2>/dev/null; then\n  if [ -f \"$WIKI_TMP/wiki/${PAGE_NAME}.md\" ]; then\n    cp \"$WIKI_TMP/wiki/${PAGE_NAME}.md\" \"$DATA_DIR/existing-body.md\"\n    BODY_SIZE=$(wc -c < \"$DATA_DIR/existing-body.md\")\n    echo \"Fetched existing wiki page: ${BODY_SIZE} bytes\"\n  else\n    echo \"No existing wiki page found\"\n  fi\nelse\n  echo \"Could not clone wiki repo (may not exist yet)\"\nfi\nrm -rf \"$WIKI_TMP\"\n"
 
       - name: Configure Git credentials
         env:
@@ -418,9 +418,9 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
-          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_199c167969cb3f2f_EOF'
+          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_c0b7627eda4213f5_EOF'
           {"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"publish-wiki-page":{"description":"Publish the changelog to the wiki and push state to the memory branch","inputs":{"body":{"default":null,"description":"File reference (FILE:filename) pointing to the changelog body in the agent artifact","required":true,"type":"string"}},"output":"Wiki page published and memory branch updated!"},"report_incomplete":{}}
-          GH_AW_SAFE_OUTPUTS_CONFIG_199c167969cb3f2f_EOF
+          GH_AW_SAFE_OUTPUTS_CONFIG_c0b7627eda4213f5_EOF
       - name: Write Safe Outputs Tools
         env:
           GH_AW_TOOLS_META_JSON: |
@@ -600,7 +600,7 @@ jobs:
           
           mkdir -p /home/runner/.copilot
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_c7ca2f9074566252_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_dc1805afe1453948_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
               "github": {
@@ -644,7 +644,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_c7ca2f9074566252_EOF
+          GH_AW_MCP_CONFIG_dc1805afe1453948_EOF
       - name: Clean git credentials
         continue-on-error: true
         run: bash "${RUNNER_TEMP}/gh-aw/actions/clean_git_credentials.sh"
@@ -1220,7 +1220,13 @@ jobs:
             const memoryBranch = 'memory/milestone-changelog';
 
             // ── 1. Publish wiki page ──
-            execSync(`git clone https://x-access-token:${token}@github.com/${repo}.wiki.git wiki-repo`, { stdio: 'inherit' });
+            try {
+              execSync(`git clone --depth 1 https://x-access-token:${token}@github.com/${repo}.wiki.git wiki-repo`, { stdio: 'inherit' });
+            } catch (err) {
+              // Wiki doesn't exist yet — initialize an empty repo
+              execSync('git init wiki-repo', { stdio: 'inherit' });
+              execSync(`git remote add origin https://x-access-token:${token}@github.com/${repo}.wiki.git`, { cwd: 'wiki-repo', stdio: 'inherit' });
+            }
             fs.writeFileSync(`wiki-repo/${pageName}.md`, body);
             execSync('git config user.name "github-actions[bot]"', { cwd: 'wiki-repo', stdio: 'inherit' });
             execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { cwd: 'wiki-repo', stdio: 'inherit' });
