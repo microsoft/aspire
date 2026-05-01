@@ -775,8 +775,7 @@ markdown anchor syntax — always write `(#-apphost)`, never `(-apphost)`.
 
 Under each area heading, add a one-line **summary** counting the entries per change
 type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
-for counts of 1 (`1 new feature`, `1 bug fix`, `1 improvement`). Include the same
-summary in the Table of Contents after the area name, separated by ` — `.
+for counts of 1 (`1 new feature`, `1 bug fix`, `1 improvement`).
 
 **Every line** within a changelog entry (name, description, Changes, and each flag
 line) must end with **two trailing spaces** (`  `) to produce a markdown line break.
@@ -789,9 +788,9 @@ Use this exact format:
 
 3 new features, 2 improvements, 1 bug fix
 
-- [🏠 AppHost — 2 new features, 1 improvement](#-apphost)
-- [💻 CLI — 1 new feature, 1 bug fix](#-cli)
-- [📊 Dashboard — 1 improvement](#-dashboard)
+- [🏠 AppHost](#-apphost)
+- [💻 CLI](#-cli)
+- [📊 Dashboard](#-dashboard)
 
 ## What's New
 
