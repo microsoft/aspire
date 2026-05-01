@@ -52,9 +52,14 @@
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        border-top: 1px solid var(--aspire-border-subtle);
-        border-left: 1px solid var(--aspire-border-subtle);
+        background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%);
+        border-top: none;
+        border-left: none;
         display: flex;
+    }
+
+    :global([data-theme="dark"]) ::deep.layout > .messagebar-container {
+        background: linear-gradient(135deg, #302754 0%, #281F45 58%, #231D39 100%) !important;
     }
 
     ::deep .header-right {
@@ -132,9 +137,14 @@
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        border-top: 1px solid var(--aspire-border-subtle);
-        border-left: 1px solid var(--aspire-border-subtle);
+        background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%);
+        border-top: none;
+        border-left: none;
         display: flex;
+    }
+
+    :global([data-theme="dark"]) ::deep.layout > .messagebar-container {
+        background: linear-gradient(135deg, #302754 0%, #281F45 58%, #231D39 100%) !important;
     }
 
     ::deep .header-right {

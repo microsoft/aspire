@@ -73,6 +73,7 @@
     --aspire-nav-active-border: var(--aspire-gradient-purple-magenta);
     --aspire-hover-fill: rgba(116, 85, 221, 0.05);
     --aspire-focus-ring-color: var(--aspire-color-primary);
+    --aspire-table-header-bg: #FBFAFF;
 }
 
 [data-theme="dark"] {
@@ -83,6 +84,7 @@
     --aspire-border-subtle: #332F55;
     --aspire-border-muted: #3D3960;
     --aspire-hover-fill: rgba(185, 170, 238, 0.08);
+    --aspire-table-header-bg: #211F38;
 }
 
 * {
@@ -1235,7 +1237,9 @@ fluent-text-field::part(root) {
 }
 
 .fluent-data-grid-row[row-type='header'] td,
-.fluent-data-grid-row[row-type='sticky-header'] td {
+.fluent-data-grid-row[row-type='sticky-header'] td,
+.fluent-data-grid-row[row-type='header'] th,
+.fluent-data-grid-row[row-type='sticky-header'] th {
     font-family: 'Poppins', var(--body-font);
     font-weight: 600;
     font-size: 11px;
@@ -1244,8 +1248,8 @@ fluent-text-field::part(root) {
     color: var(--foreground-subtext-rest);
     border-bottom: 1px solid var(--aspire-border-subtle) !important;
     padding: 14px 16px !important;
-    background: transparent !important;
-    background-color: transparent !important;
+    background: var(--aspire-table-header-bg) !important;
+    background-color: var(--aspire-table-header-bg) !important;
 }
 
 /* Also override on the grid table itself */
@@ -1399,6 +1403,15 @@ fluent-toolbar fluent-button[appearance=stealth]::part(control) {
     border-radius: 50%;
 }
 
+/* Sortable grid headers use stealth buttons internally; keep them text-only. */
+.fluent-data-grid-row[row-type='header'] fluent-button.col-sort-button::part(control),
+.fluent-data-grid-row[row-type='sticky-header'] fluent-button.col-sort-button::part(control) {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-radius: 6px;
+    color: var(--foreground-subtext-rest);
+}
+
 /* --- Dividers - subtle --- */
 fluent-divider {
     opacity: 0.5;
@@ -1444,9 +1457,14 @@ fluent-divider {
 
 /* --- Message bar - pill with subtle border --- */
 .messagebar-container {
+    background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%) !important;
     padding: 8px 20px;
     border-top: none !important;
     border-left: none !important;
+}
+
+[data-theme="dark"] .messagebar-container {
+    background: linear-gradient(135deg, #302754 0%, #281F45 58%, #231D39 100%) !important;
 }
 
 .messagebar-container .fluent-messagebar {
