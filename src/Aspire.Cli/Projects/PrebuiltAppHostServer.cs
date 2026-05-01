@@ -233,7 +233,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(channelName, cancellationToken);
         var sources = await GetNuGetSourcesAsync(channelName, cancellationToken);
 
-        var result = await _nugetService.RestorePackagesAsync(
+        return await _nugetService.RestorePackagesAsync(
             packages,
             workingDirectory: _appDirectoryPath,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
@@ -241,7 +241,6 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             sources: sources,
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
             ct: cancellationToken).ConfigureAwait(false);
-        return result.ManifestPath;
     }
 
     /// <summary>

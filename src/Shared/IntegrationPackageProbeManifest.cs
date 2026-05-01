@@ -106,7 +106,7 @@ internal sealed class IntegrationPackageProbeManifest
             return Empty;
         }
 
-        var normalizedManifestPath = Path.GetFullPath(manifestPath);
+        var normalizedManifestPath = NormalizeManifestPath(manifestPath);
         if (!File.Exists(normalizedManifestPath))
         {
             throw new InvalidOperationException($"Integration package probe manifest '{normalizedManifestPath}' does not exist.");
@@ -325,13 +325,32 @@ internal sealed class IntegrationPackageProbeManifest
 
     private static string NormalizeAndValidatePath(string? path, string propertyName)
     {
-        var normalizedPath = Path.GetFullPath(NormalizeRequiredValue(path, propertyName));
+        var normalizedPath = NormalizePath(
+            NormalizeRequiredValue(path, propertyName),
+            $"Integration package probe manifest entry path '{propertyName}' is invalid.");
         if (!File.Exists(normalizedPath))
         {
             throw new InvalidOperationException($"Integration package probe manifest path '{normalizedPath}' does not exist.");
         }
 
         return normalizedPath;
+    }
+
+    private static string NormalizeManifestPath(string manifestPath)
+    {
+        return NormalizePath(manifestPath, "Integration package probe manifest path is invalid.");
+    }
+
+    private static string NormalizePath(string path, string invalidPathMessage)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            throw new InvalidOperationException(invalidPathMessage, ex);
+        }
     }
 
     private static string? NormalizeCulture(string? culture)

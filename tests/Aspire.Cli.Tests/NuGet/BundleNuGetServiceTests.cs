@@ -39,18 +39,18 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var result = await service.RestorePackagesAsync(
+        var manifestPath = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName);
 
         var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
-        var restoreDirectory = Directory.GetParent(result.ManifestPath)!.FullName;
+        var restoreDirectory = Directory.GetParent(manifestPath)!.FullName;
 
-        Assert.StartsWith(restoreRoot, result.ManifestPath, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(restoreRoot, manifestPath, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, invocations.Count);
         Assert.Equal(Path.Combine(restoreDirectory, "obj"), GetArgumentValue(invocations[0], "--output"));
         Assert.Equal("manifest", invocations[1][1]);
-        Assert.Equal(result.ManifestPath, GetArgumentValue(invocations[1], "--output"));
+        Assert.Equal(manifestPath, GetArgumentValue(invocations[1], "--output"));
         Assert.Equal(Path.Combine(restoreDirectory, "obj", "project.assets.json"), GetArgumentValue(invocations[1], "--assets"));
     }
 
@@ -85,7 +85,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             sources: ["https://example.com/feed-b/index.json"],
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
+        Assert.NotEqual(resultA, resultB);
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
 
-        Assert.Equal(manifestPath, result.ManifestPath);
+        Assert.Equal(manifestPath, result);
         Assert.Empty(invocations);
     }
 
@@ -216,7 +216,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
 
-        Assert.Equal(manifestPath, result.ManifestPath);
+        Assert.Equal(manifestPath, result);
         Assert.Equal(2, invocations.Count);
         Assert.Equal("restore", invocations[0][1]);
         Assert.Equal("manifest", invocations[1][1]);
@@ -253,7 +253,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
+        Assert.NotEqual(resultA, resultB);
     }
 
     [Fact]
@@ -288,17 +288,17 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: secondAppHost.FullName);
 
-        Assert.StartsWith(restoreRoot, sharedManifestFirst.ManifestPath, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith(restoreRoot, sharedManifestSecond.ManifestPath, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(sharedManifestFirst.ManifestPath, sharedManifestSecond.ManifestPath);
+        Assert.StartsWith(restoreRoot, sharedManifestFirst, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(restoreRoot, sharedManifestSecond, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(sharedManifestFirst, sharedManifestSecond);
 
         // Different package sets must NOT collide even when workspace is shared.
         var divergedManifest = await service.RestorePackagesAsync(
             [("Aspire.Hosting.Python", "9.4.0")],
             workingDirectory: secondAppHost.FullName);
 
-        Assert.StartsWith(restoreRoot, divergedManifest.ManifestPath, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEqual(sharedManifestSecond.ManifestPath, divergedManifest.ManifestPath);
+        Assert.StartsWith(restoreRoot, divergedManifest, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(sharedManifestSecond, divergedManifest);
     }
 
     [Fact]
@@ -339,7 +339,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
 
-        Assert.Equal(Path.Combine(restoreDirectory, "integration-package-probe-manifest.json"), result.ManifestPath);
+        Assert.Equal(Path.Combine(restoreDirectory, "integration-package-probe-manifest.json"), result);
         Assert.Equal(2, invocations.Count);
         Assert.DoesNotContain(invocations, args => args.Contains("layout"));
         Assert.Equal("manifest", invocations[1][1]);

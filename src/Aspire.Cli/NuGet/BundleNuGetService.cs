@@ -14,7 +14,7 @@ namespace Aspire.Cli.NuGet;
 /// Service for NuGet operations that works in bundle mode.
 /// Uses the NuGetHelper tool via the layout runtime.
 /// </summary>
-public interface INuGetService
+internal interface INuGetService
 {
     /// <summary>
     /// Restores packages to the cache and creates a package probe manifest.
@@ -26,8 +26,8 @@ public interface INuGetService
     /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
     /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The package restore result.</returns>
-    Task<NuGetPackageRestoreResult> RestorePackagesAsync(
+    /// <returns>Path to the package probe manifest.</returns>
+    Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -36,12 +36,6 @@ public interface INuGetService
         string? nugetConfigPath = null,
         CancellationToken ct = default);
 }
-
-/// <summary>
-/// Represents restored NuGet package metadata for the prebuilt AppHost server.
-/// </summary>
-/// <param name="ManifestPath">The path to the package probe manifest.</param>
-public sealed record NuGetPackageRestoreResult(string ManifestPath);
 
 /// <summary>
 /// NuGet service implementation that uses the bundle's NuGetHelper tool.
@@ -68,7 +62,7 @@ internal sealed class BundleNuGetService : INuGetService
         _logger = logger;
     }
 
-    public async Task<NuGetPackageRestoreResult> RestorePackagesAsync(
+    public async Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -109,7 +103,7 @@ internal sealed class BundleNuGetService : INuGetService
         if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
         {
             _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
-            return new NuGetPackageRestoreResult(manifestPath);
+            return manifestPath;
         }
 
         Directory.CreateDirectory(objDir);
@@ -235,7 +229,7 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         _logger.LogDebug("Package manifest created at {Path}", manifestPath);
-        return new NuGetPackageRestoreResult(manifestPath);
+        return manifestPath;
     }
 
     private static bool TryValidatePackageManifest(string manifestPath, ILogger logger)
