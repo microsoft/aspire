@@ -152,6 +152,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             KnownLanguageId.CSharp => KnownLanguageId.CSharpDisplayName,
             KnownLanguageId.TypeScript => "TypeScript (Node.js)",
             KnownLanguageId.Python => KnownLanguageId.PythonDisplayName,
+            KnownLanguageId.Go => KnownLanguageId.GoDisplayName,
+            KnownLanguageId.Java => KnownLanguageId.JavaDisplayName,
+            KnownLanguageId.Rust => KnownLanguageId.RustDisplayName,
             _ => languageId
         };
     }
@@ -224,7 +227,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private ITemplate[] GetTemplatesForPrompt(ITemplate[] availableTemplates, ParseResult parseResult)
     {
         var explicitLanguageId = ParseExplicitLanguageId(parseResult);
-        var templatesForPrompt = availableTemplates.ToList();
+        var templatesForPrompt = availableTemplates
+            .Where(static t => t.ShowInPrompt)
+            .ToList();
 
         if (!string.IsNullOrWhiteSpace(explicitLanguageId))
         {

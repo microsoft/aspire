@@ -17,6 +17,16 @@ namespace Aspire.Cli.Templating;
 
 internal sealed partial class CliTemplateFactory : ITemplateFactory
 {
+    private static readonly string[] s_emptyAppHostLanguages =
+    [
+        KnownLanguageId.CSharp,
+        KnownLanguageId.TypeScript,
+        KnownLanguageId.Python,
+        KnownLanguageId.Go,
+        KnownLanguageId.Java,
+        KnownLanguageId.Rust
+    ];
+
     private static readonly HashSet<string> s_binaryTemplateExtensions =
     [
         ".png",
@@ -105,17 +115,13 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.CSharpEmptyAppHost,
-                "Empty AppHost",
+                "Empty AppHost (Choose language...)",
                 projectName => $"./{projectName}",
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                supportsLanguageCallback: static languageId =>
-                    languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.Python, StringComparison.OrdinalIgnoreCase),
-                selectableAppHostLanguages: [KnownLanguageId.CSharp, KnownLanguageId.TypeScript, KnownLanguageId.Python],
+                supportsLanguageCallback: IsSelectableEmptyAppHostLanguage,
+                selectableAppHostLanguages: GetSelectableEmptyAppHostLanguages(),
                 isEmpty: true),
 
             new CallbackTemplate(
@@ -126,7 +132,19 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.TypeScript,
-                isEmpty: true),
+                isEmpty: true,
+                showInPrompt: false),
+
+            new CallbackTemplate(
+                KnownTemplateId.PythonEmptyAppHost,
+                "Empty (Python AppHost)",
+                projectName => $"./{projectName}",
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Python,
+                isEmpty: true,
+                showInPrompt: false),
 
             new CallbackTemplate(
                 KnownTemplateId.JavaEmptyAppHost,
@@ -136,7 +154,8 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.Java,
-                isEmpty: true),
+                isEmpty: true,
+                showInPrompt: false),
 
             new CallbackTemplate(
                 KnownTemplateId.GoEmptyAppHost,
@@ -146,7 +165,19 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.Go,
-                isEmpty: true),
+                isEmpty: true,
+                showInPrompt: false),
+
+            new CallbackTemplate(
+                KnownTemplateId.RustEmptyAppHost,
+                "Empty (Rust AppHost)",
+                projectName => $"./{projectName}",
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Rust,
+                isEmpty: true,
+                showInPrompt: false),
 
             new CallbackTemplate(
                 KnownTemplateId.PythonStarter,
@@ -172,6 +203,18 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         ];
 
         return templates.Where(IsTemplateAvailable);
+    }
+
+    private IReadOnlyList<string> GetSelectableEmptyAppHostLanguages()
+    {
+        return s_emptyAppHostLanguages
+            .Where(IsSelectableEmptyAppHostLanguage)
+            .ToArray();
+    }
+
+    private bool IsSelectableEmptyAppHostLanguage(string languageId)
+    {
+        return _languageDiscovery.GetLanguageById(new LanguageId(languageId)) is not null;
     }
 
     private bool IsTemplateAvailable(ITemplate template)
