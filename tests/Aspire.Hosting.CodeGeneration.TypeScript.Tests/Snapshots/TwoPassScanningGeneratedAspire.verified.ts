@@ -605,11 +605,17 @@ export namespace TestConfigs {
 }
 
 export namespace WellKnownPipelineSteps {
+    /** The step that runs before the application starts. */
+    export const BeforeStart = "before-start";
+
     /** The well-known step for building resources. */
     export const Build = "build";
 
     /** The prerequisite step that runs before any build operations. */
     export const BuildPrereq = "build-prereq";
+
+    /** The step that checks whether the container runtime (e.g., Docker or Podman) is running. Build steps that need a container runtime should depend on this step. */
+    export const CheckContainerRuntime = "check-container-runtime";
 
     /** Aggregation step for all deploy operations. All deploy steps should be required by this step. */
     export const Deploy = "deploy";
