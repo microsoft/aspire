@@ -1403,6 +1403,79 @@ fluent-toolbar fluent-button[appearance=stealth]::part(control) {
     border-radius: 50%;
 }
 
+/* Icon-only controls should feel lightweight, not like dark Fluent pills. */
+.grid-action-container fluent-button[appearance=lightweight]::part(control),
+.grid-action-container fluent-button[appearance=stealth]::part(control),
+.main-grid-expand-button::part(control),
+.content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button)::part(control),
+fluent-button#resourceFilterButton::part(control) {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    --neutral-fill-stealth-rest: transparent;
+    --neutral-fill-stealth-hover: rgba(185, 170, 238, 0.12);
+    --neutral-fill-stealth-active: rgba(185, 170, 238, 0.18);
+    --neutral-fill-secondary-rest: transparent;
+}
+
+.grid-action-container fluent-button[appearance=lightweight]::part(control),
+.grid-action-container fluent-button[appearance=stealth]::part(control),
+.content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button)::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button)::part(control),
+fluent-button#resourceFilterButton::part(control) {
+    border-radius: 10px;
+}
+
+.main-grid-expand-button::part(control) {
+    border-radius: 50%;
+    min-width: 18px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+}
+
+.grid-action-container fluent-button[appearance=lightweight]:hover::part(control),
+.grid-action-container fluent-button[appearance=stealth]:hover::part(control),
+.main-grid-expand-button:hover::part(control),
+.content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+.content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+.content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button):hover::part(control),
+fluent-button#resourceFilterButton:hover::part(control) {
+    background: rgba(185, 170, 238, 0.12) !important;
+    background-color: rgba(185, 170, 238, 0.12) !important;
+}
+
+[data-theme="light"] .grid-action-container fluent-button[appearance=lightweight]:hover::part(control),
+[data-theme="light"] .grid-action-container fluent-button[appearance=stealth]:hover::part(control),
+[data-theme="light"] .main-grid-expand-button:hover::part(control),
+[data-theme="light"] .content-header fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-header fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-layout fluent-toolbar fluent-button[appearance=stealth]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-layout fluent-toolbar fluent-button[appearance=lightweight]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] .content-layout fluent-toolbar fluent-button[appearance=neutral]:not(.col-sort-button):hover::part(control),
+[data-theme="light"] fluent-button#resourceFilterButton:hover::part(control) {
+    background: rgba(116, 85, 221, 0.08) !important;
+    background-color: rgba(116, 85, 221, 0.08) !important;
+}
+
+.selected-row .grid-action-container fluent-button[appearance=lightweight]:not(:hover)::part(control),
+.selected-row .grid-action-container fluent-button[appearance=stealth]:not(:hover)::part(control),
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover .grid-action-container fluent-button[appearance=lightweight]:not(:hover)::part(control),
+.fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']).hover:hover .grid-action-container fluent-button[appearance=stealth]:not(:hover)::part(control) {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
 /* Sortable grid headers use stealth buttons internally; keep them text-only. */
 .fluent-data-grid-row[row-type='header'] fluent-button.col-sort-button::part(control),
 .fluent-data-grid-row[row-type='sticky-header'] fluent-button.col-sort-button::part(control) {
