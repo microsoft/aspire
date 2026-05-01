@@ -5,8 +5,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RabbitMQ.Provisioning;
 using Aspire.Hosting.RabbitMQ.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
-using Xunit;
 
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
@@ -16,7 +14,8 @@ public class RabbitMQTopologyProvisionerTests
     public async Task ProvisionTopologyAsync_AppliesResourcesInCorrectOrder()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var server = builder.AddRabbitMQ("rabbit");
+        var server = builder.AddRabbitMQ("rabbit")
+            .WithEndpoint(RabbitMQServerResource.PrimaryEndpointName, e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5672));
         var vhost = server.AddVirtualHost("myvhost");
         var exchange = vhost.AddExchange("myexchange");
         var queue = vhost.AddQueue("myqueue");

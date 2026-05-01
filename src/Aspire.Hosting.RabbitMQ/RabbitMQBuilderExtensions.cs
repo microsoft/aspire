@@ -147,9 +147,6 @@ public static class RabbitMQBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="virtualHostName">The name of the virtual host. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// Adding a non-default virtual host (any name other than <c>/</c>) automatically enables the RabbitMQ management plugin via <see cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource})"/>.
-    /// </remarks>
     [AspireExport(Description = "Adds a RabbitMQ virtual host")]
     public static IResourceBuilder<RabbitMQVirtualHostResource> AddVirtualHost(
         this IResourceBuilder<RabbitMQServerResource> builder,
@@ -174,16 +171,22 @@ public static class RabbitMQBuilderExtensions
         var healthCheckKey = $"{name}_check";
         var serverNameForVhost = builder.Resource.Name;
         var vhostResource = vhost;
-
-        return vhostBuilder.WithChildHealthCheck(
-            serverNameForVhost,
-            vhostResource,
+        vhostBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healthCheckKey,
-            async (client, ct) =>
+            sp =>
             {
-                await client.GetOrCreateConnectionAsync(vhostName, ct).ConfigureAwait(false);
-                return HealthCheckResult.Healthy();
-            });
+                var client = (RabbitMQProvisioningClient)sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverNameForVhost);
+                return new RabbitMQEntityHealthCheck(async ct =>
+                {
+                    await vhostResource.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
+                    await client.GetOrCreateConnectionAsync(vhostName, ct).ConfigureAwait(false);
+                    return HealthCheckResult.Healthy();
+                });
+            },
+            failureStatus: null,
+            tags: null));
+
+        return vhostBuilder.WithHealthCheck(healthCheckKey);
     }
 
     internal static RabbitMQVirtualHostResource GetOrAddDefaultVirtualHost(this IResourceBuilder<RabbitMQServerResource> server)
@@ -200,7 +203,7 @@ public static class RabbitMQBuilderExtensions
     /// <summary>
     /// Adds a queue to a RabbitMQ virtual host.
     /// </summary>
-    /// <param name="builder">The RabbitMQ virtual host resource builder.</param>
+    /// <param name="builder"></param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="queueName">The name of the queue. If not provided, defaults to the resource name.</param>
     /// <param name="type">The type of the queue.</param>
@@ -230,18 +233,24 @@ public static class RabbitMQBuilderExtensions
         var healthCheckKey = $"{name}_check";
         var serverName = builder.Resource.Parent.Name;
         var vhostResource = builder.Resource;
-
-        return queueBuilder.WithChildHealthCheck(
-            serverName,
-            vhostResource,
+        queueBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healthCheckKey,
-            async (client, ct) =>
+            sp =>
             {
-                var exists = await client.QueueExistsAsync(vhostResource.VirtualHostName, qName, ct).ConfigureAwait(false);
-                return exists
-                    ? HealthCheckResult.Healthy()
-                    : HealthCheckResult.Unhealthy($"Queue '{qName}' does not exist.");
-            });
+                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName);
+                return new RabbitMQEntityHealthCheck(async ct =>
+                {
+                    await vhostResource.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
+                    var exists = await client.QueueExistsAsync(vhostResource.VirtualHostName, qName, ct).ConfigureAwait(false);
+                    return exists
+                        ? HealthCheckResult.Healthy()
+                        : HealthCheckResult.Unhealthy($"Queue '{qName}' does not exist.");
+                });
+            },
+            failureStatus: null,
+            tags: null));
+
+        return queueBuilder.WithHealthCheck(healthCheckKey);
     }
 
     /// <summary>
@@ -269,15 +278,15 @@ public static class RabbitMQBuilderExtensions
     /// </summary>
     /// <param name="builder">The RabbitMQ virtual host resource builder.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="exchangeName">The name of the exchange. If not provided, defaults to the resource name.</param>
     /// <param name="type">The type of the exchange.</param>
+    /// <param name="exchangeName">The name of the exchange. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport(Description = "Adds an exchange to a RabbitMQ virtual host")]
     public static IResourceBuilder<RabbitMQExchangeResource> AddExchange(
         this IResourceBuilder<RabbitMQVirtualHostResource> builder,
         [ResourceName] string name,
-        string? exchangeName = null,
-        RabbitMQExchangeType type = RabbitMQExchangeType.Direct)
+        RabbitMQExchangeType type = RabbitMQExchangeType.Direct,
+        string? exchangeName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -297,18 +306,24 @@ public static class RabbitMQBuilderExtensions
         var healthCheckKey = $"{name}_check";
         var serverName2 = builder.Resource.Parent.Name;
         var vhostResource2 = builder.Resource;
-
-        return exchangeBuilder.WithChildHealthCheck(
-            serverName2,
-            vhostResource2,
+        exchangeBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healthCheckKey,
-            async (client, ct) =>
+            sp =>
             {
-                var exists = await client.ExchangeExistsAsync(vhostResource2.VirtualHostName, exName, ct).ConfigureAwait(false);
-                return exists
-                    ? HealthCheckResult.Healthy()
-                    : HealthCheckResult.Unhealthy($"Exchange '{exName}' does not exist.");
-            });
+                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName2);
+                return new RabbitMQEntityHealthCheck(async ct =>
+                {
+                    await vhostResource2.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
+                    var exists = await client.ExchangeExistsAsync(vhostResource2.VirtualHostName, exName, ct).ConfigureAwait(false);
+                    return exists
+                        ? HealthCheckResult.Healthy()
+                        : HealthCheckResult.Unhealthy($"Exchange '{exName}' does not exist.");
+                });
+            },
+            failureStatus: null,
+            tags: null));
+
+        return exchangeBuilder.WithHealthCheck(healthCheckKey);
     }
 
     /// <summary>
@@ -316,19 +331,19 @@ public static class RabbitMQBuilderExtensions
     /// </summary>
     /// <param name="builder">The RabbitMQ server resource builder.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="exchangeName">The name of the exchange. If not provided, defaults to the resource name.</param>
     /// <param name="type">The type of the exchange.</param>
+    /// <param name="exchangeName">The name of the exchange. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("addExchangeOnServer", MethodName = "addExchange", Description = "Adds an exchange to the default '/' virtual host")]
     public static IResourceBuilder<RabbitMQExchangeResource> AddExchange(
         this IResourceBuilder<RabbitMQServerResource> builder,
         [ResourceName] string name,
-        string? exchangeName = null,
-        RabbitMQExchangeType type = RabbitMQExchangeType.Direct)
+        RabbitMQExchangeType type = RabbitMQExchangeType.Direct,
+        string? exchangeName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         var vhost = builder.ApplicationBuilder.CreateResourceBuilder(builder.GetOrAddDefaultVirtualHost());
-        return vhost.AddExchange(name, exchangeName, type);
+        return vhost.AddExchange(name, type, exchangeName);
     }
 
     /// <summary>
@@ -339,7 +354,12 @@ public static class RabbitMQBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withQueueProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RabbitMQQueueResource> WithProperties(this IResourceBuilder<RabbitMQQueueResource> builder, Action<RabbitMQQueueResource> configure)
-        => WithPropertiesCore(builder, configure);
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(builder.Resource);
+        return builder;
+    }
 
     /// <summary>
     /// Configures properties of a RabbitMQ exchange.
@@ -349,7 +369,12 @@ public static class RabbitMQBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withExchangeProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RabbitMQExchangeResource> WithProperties(this IResourceBuilder<RabbitMQExchangeResource> builder, Action<RabbitMQExchangeResource> configure)
-        => WithPropertiesCore(builder, configure);
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(builder.Resource);
+        return builder;
+    }
 
     /// <summary>
     /// Configures properties of a RabbitMQ shovel.
@@ -359,10 +384,6 @@ public static class RabbitMQBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withShovelProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RabbitMQShovelResource> WithProperties(this IResourceBuilder<RabbitMQShovelResource> builder, Action<RabbitMQShovelResource> configure)
-        => WithPropertiesCore(builder, configure);
-
-    private static IResourceBuilder<TResource> WithPropertiesCore<TResource>(IResourceBuilder<TResource> builder, Action<TResource> configure)
-        where TResource : Resource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configure);
@@ -379,9 +400,6 @@ public static class RabbitMQBuilderExtensions
     /// <param name="routingKey">The routing key for the binding.</param>
     /// <param name="arguments">The arguments for the binding.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// The exchange and destination must belong to the same virtual host. Cross-virtual-host bindings are not supported; use a shovel instead.
-    /// </remarks>
     [AspireExport(Description = "Adds a binding from an exchange to a queue or another exchange")]
     public static IResourceBuilder<RabbitMQExchangeResource> WithBinding<TDestination>(
         this IResourceBuilder<RabbitMQExchangeResource> exchange,
@@ -413,9 +431,6 @@ public static class RabbitMQBuilderExtensions
     /// <param name="source">The source resource builder.</param>
     /// <param name="destination">The destination resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// Adding a shovel automatically enables the <c>rabbitmq_management</c>, <c>rabbitmq_shovel</c>, and <c>rabbitmq_shovel_management</c> plugins.
-    /// </remarks>
     [AspireExport(Description = "Adds a shovel to a RabbitMQ virtual host")]
     public static IResourceBuilder<RabbitMQShovelResource> AddShovel<TSrc, TDest>(
         this IResourceBuilder<RabbitMQVirtualHostResource> vhost,
@@ -454,18 +469,24 @@ public static class RabbitMQBuilderExtensions
         var healthCheckKey = $"{name}_check";
         var serverName3 = vhost.Resource.Parent.Name;
         var vhostResource3 = vhost.Resource;
-
-        return builder.WithChildHealthCheck(
-            serverName3,
-            vhostResource3,
+        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healthCheckKey,
-            async (client, ct) =>
+            sp =>
             {
-                var state = await client.GetShovelStateAsync(vhostResource3.VirtualHostName, name, ct).ConfigureAwait(false);
-                return state == "running"
-                    ? HealthCheckResult.Healthy()
-                    : HealthCheckResult.Unhealthy($"Shovel '{name}' is in state '{state}'.");
-            });
+                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName3);
+                return new RabbitMQEntityHealthCheck(async ct =>
+                {
+                    await vhostResource3.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
+                    var state = await client.GetShovelStateAsync(vhostResource3.VirtualHostName, name, ct).ConfigureAwait(false);
+                    return state == "running"
+                        ? HealthCheckResult.Healthy()
+                        : HealthCheckResult.Unhealthy($"Shovel '{name}' is in state '{state}'.");
+                });
+            },
+            failureStatus: null,
+            tags: null));
+
+        return builder.WithHealthCheck(healthCheckKey);
     }
 
     /// <summary>
@@ -478,9 +499,6 @@ public static class RabbitMQBuilderExtensions
     /// <param name="source">The source resource builder.</param>
     /// <param name="destination">The destination resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// Adding a shovel automatically enables the <c>rabbitmq_management</c>, <c>rabbitmq_shovel</c>, and <c>rabbitmq_shovel_management</c> plugins.
-    /// </remarks>
     [AspireExport("addShovelOnServer", MethodName = "addShovel", Description = "Adds a shovel to the default '/' virtual host")]
     public static IResourceBuilder<RabbitMQShovelResource> AddShovel<TSrc, TDest>(
         this IResourceBuilder<RabbitMQServerResource> server,
@@ -660,30 +678,6 @@ public static class RabbitMQBuilderExtensions
         }
 
         throw new DistributedApplicationException($"Cannot configure the RabbitMQ resource '{builder.Resource.Name}' to enable the management plugin as it uses an unrecognized container image registry, name, or tag.");
-    }
-
-    private static IResourceBuilder<TResource> WithChildHealthCheck<TResource>(
-        this IResourceBuilder<TResource> builder,
-        string serverName,
-        RabbitMQVirtualHostResource vhost,
-        string healthCheckKey,
-        Func<IRabbitMQProvisioningClient, CancellationToken, Task<HealthCheckResult>> probe)
-        where TResource : Resource
-    {
-        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
-            healthCheckKey,
-            sp =>
-            {
-                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName);
-                return new RabbitMQEntityHealthCheck(async ct =>
-                {
-                    await vhost.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
-                    return await probe(client, ct).ConfigureAwait(false);
-                });
-            },
-            failureStatus: null,
-            tags: null));
-        return builder.WithHealthCheck(healthCheckKey);
     }
 
     private static bool IsVersion(string tag)

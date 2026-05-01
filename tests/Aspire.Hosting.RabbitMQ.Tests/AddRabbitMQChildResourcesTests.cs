@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Microsoft.Extensions.DependencyInjection;
-using Xunit;
 
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
@@ -231,7 +229,8 @@ public class AddRabbitMQChildResourcesTests
     public async Task ConnectionStringExpressions_AreCorrect()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var server = builder.AddRabbitMQ("rabbit");
+        var server = builder.AddRabbitMQ("rabbit")
+            .WithEndpoint(RabbitMQServerResource.PrimaryEndpointName, e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5672));
         var vhost = server.AddVirtualHost("myvhost");
         var queue = vhost.AddQueue("myqueue");
         var exchange = vhost.AddExchange("myexchange");

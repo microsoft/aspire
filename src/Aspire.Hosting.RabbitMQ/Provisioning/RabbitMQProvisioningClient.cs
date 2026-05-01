@@ -35,7 +35,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
     {
         if (_channels.TryGetValue(vhost, out var existing) && existing.Item2.IsOpen)
         {
-            _logger.LogDebug("Reusing existing AMQP channel for vhost '{VirtualHost}'.", vhost);
             return existing.Item2;
         }
 
@@ -52,7 +51,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
             var conn = await f.CreateConnectionAsync(ct).ConfigureAwait(false);
             var ch = await conn.CreateChannelAsync(cancellationToken: ct).ConfigureAwait(false);
             _channels[vhost] = (conn, ch);
-            _logger.LogDebug("Created new AMQP channel for vhost '{VirtualHost}'.", vhost);
             return ch;
         }
         finally
@@ -65,7 +63,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
     {
         if (_http is not null)
         {
-            _logger.LogDebug("Reusing existing HTTP management client.");
             return _http;
         }
 
@@ -74,7 +71,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         {
             if (_http is not null)
             {
-                _logger.LogDebug("Reusing existing HTTP management client.");
                 return _http;
             }
 
@@ -86,7 +82,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
             _http = new HttpClient { BaseAddress = new Uri(mgmt) };
             _http.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{pass}")));
-            _logger.LogDebug("Created HTTP management client for '{ManagementEndpoint}'.", RedactUri(mgmt));
             return _http;
         }
         finally
@@ -101,7 +96,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         try
         {
             await ch.ExchangeDeclareAsync(name, type, durable, autoDelete, args, cancellationToken: ct).ConfigureAwait(false);
-            _logger.LogInformation("Declared exchange '{Exchange}' on vhost '{VirtualHost}'.", name, vhost);
         }
         catch (Exception ex)
         {
@@ -115,7 +109,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         try
         {
             await ch.QueueDeclareAsync(name, durable, exclusive, autoDelete, args, cancellationToken: ct).ConfigureAwait(false);
-            _logger.LogInformation("Declared queue '{Queue}' on vhost '{VirtualHost}'.", name, vhost);
         }
         catch (Exception ex)
         {
@@ -129,7 +122,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         try
         {
             await ch.QueueBindAsync(queue, sourceExchange, routingKey, args, cancellationToken: ct).ConfigureAwait(false);
-            _logger.LogInformation("Bound queue '{Queue}' to exchange '{Exchange}' on vhost '{VirtualHost}'.", queue, sourceExchange, vhost);
         }
         catch (Exception ex)
         {
@@ -143,7 +135,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         try
         {
             await ch.ExchangeBindAsync(destExchange, sourceExchange, routingKey, args, cancellationToken: ct).ConfigureAwait(false);
-            _logger.LogInformation("Bound exchange '{DestExchange}' to exchange '{SourceExchange}' on vhost '{VirtualHost}'.", destExchange, sourceExchange, vhost);
         }
         catch (Exception ex)
         {
@@ -159,9 +150,8 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
             await ch.QueueDeclarePassiveAsync(name, cancellationToken: ct).ConfigureAwait(false);
             return true;
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogDebug(ex, "Queue '{Queue}' does not exist on vhost '{VirtualHost}' (passive declare failed).", name, vhost);
             return false;
         }
     }
@@ -174,9 +164,8 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
             await ch.ExchangeDeclarePassiveAsync(name, cancellationToken: ct).ConfigureAwait(false);
             return true;
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogDebug(ex, "Exchange '{Exchange}' does not exist on vhost '{VirtualHost}' (passive declare failed).", name, vhost);
             return false;
         }
     }
@@ -188,7 +177,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         {
             var response = await http.PutAsync($"/api/vhosts/{Uri.EscapeDataString(vhost)}", null, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            _logger.LogInformation("Created virtual host '{VirtualHost}'.", vhost);
         }
         catch (Exception ex)
         {
@@ -203,7 +191,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         {
             var response = await http.PutAsJsonAsync($"/api/parameters/shovel/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, cancellationToken: ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            _logger.LogInformation("Created shovel '{Shovel}' on vhost '{VirtualHost}'.", name, vhost);
         }
         catch (Exception ex)
         {
@@ -219,7 +206,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
             var response = await http.GetAsync($"/api/shovels/{Uri.EscapeDataString(vhost)}", ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("Failed to get shovel state for vhost '{VirtualHost}': HTTP {StatusCode}.", vhost, (int)response.StatusCode);
                 return null;
             }
 
@@ -227,9 +213,8 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
             var shovel = shovels?.FirstOrDefault(s => s.Name == name);
             return shovel?.State;
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogDebug(ex, "Failed to get shovel state for '{Shovel}' on vhost '{VirtualHost}'.", name, vhost);
             return null;
         }
     }
@@ -239,12 +224,12 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            foreach (var (vhostKey, (conn, ch)) in _channels)
+            foreach (var (_, (conn, ch)) in _channels)
             {
-                try { await ch.CloseAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogWarning(ex, "Error closing AMQP channel for vhost '{VirtualHost}'.", vhostKey); }
-                try { await ch.DisposeAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogWarning(ex, "Error disposing AMQP channel for vhost '{VirtualHost}'.", vhostKey); }
-                try { await conn.CloseAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogWarning(ex, "Error closing AMQP connection for vhost '{VirtualHost}'.", vhostKey); }
-                try { await conn.DisposeAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogWarning(ex, "Error disposing AMQP connection for vhost '{VirtualHost}'.", vhostKey); }
+                try { await ch.CloseAsync().ConfigureAwait(false); } catch { }
+                try { await ch.DisposeAsync().ConfigureAwait(false); } catch { }
+                try { await conn.CloseAsync().ConfigureAwait(false); } catch { }
+                try { await conn.DisposeAsync().ConfigureAwait(false); } catch { }
             }
             _channels.Clear();
         }
@@ -254,24 +239,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         }
         _http?.Dispose();
         _gate.Dispose();
-    }
-
-    private static string RedactUri(string? uri)
-    {
-        if (uri is null)
-        {
-            return "(null)";
-        }
-
-        try
-        {
-            var u = new Uri(uri);
-            return u.UserInfo.Length > 0 ? uri.Replace(u.UserInfo, "***") : uri;
-        }
-        catch
-        {
-            return "(invalid uri)";
-        }
     }
 
     private sealed class RabbitMQShovelStatus

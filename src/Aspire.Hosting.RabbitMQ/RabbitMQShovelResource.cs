@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RabbitMQ.Provisioning;
 
@@ -106,7 +107,7 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
             DestExchange = Destination.Kind == RabbitMQDestinationKind.Exchange ? Destination.Target.EntityName : null,
             AckMode = ackModeString,
             ReconnectDelay = ReconnectDelay.HasValue ? (int)ReconnectDelay.Value.TotalSeconds : null,
-            SrcDeleteAfter = SrcDeleteAfter?.ToString()
+            SrcDeleteAfter = SrcDeleteAfter?.ToString(CultureInfo.InvariantCulture)
         };
 
         await client.PutShovelAsync(

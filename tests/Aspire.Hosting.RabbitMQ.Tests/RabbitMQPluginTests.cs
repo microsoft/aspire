@@ -3,7 +3,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
-using Xunit;
 
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
@@ -53,17 +52,22 @@ public class RabbitMQPluginTests
         server.WithPlugin(RabbitMQPlugin.Prometheus);
         server.WithPlugin("my_custom_plugin");
 
-        var containerFiles = server.Resource.Annotations.OfType<ContainerExtensionFileAnnotation>();
-        var file = Assert.Single(containerFiles);
-        Assert.Equal("/etc/rabbitmq", file.ContainerPath);
+        var containerFiles = server.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>();
+        var annotation = Assert.Single(containerFiles);
+        Assert.Equal("/etc/rabbitmq", annotation.DestinationPath);
 
-        var context = new ContainerExtensionFileContext();
-        await file.Callback(context, default);
+        var context = new ContainerFileSystemCallbackContext
+        {
+            ServiceProvider = new ServiceCollection().BuildServiceProvider(),
+            Model = server.Resource
+        };
+        var items = await annotation.Callback(context, default);
 
-        var enabledPluginsFile = Assert.Single(context.Files);
-        Assert.Equal("enabled_plugins", enabledPluginsFile.TargetFileName);
+        var file = Assert.Single(items) as ContainerFile;
+        Assert.NotNull(file);
+        Assert.Equal("enabled_plugins", file.Name);
 
-        var content = enabledPluginsFile.Content;
+        var content = file.Contents;
         Assert.NotNull(content);
 
         // Should contain defaults + custom
@@ -87,14 +91,19 @@ public class RabbitMQPluginTests
         server.WithPlugin(RabbitMQPlugin.Prometheus);
         server.WithPlugin("rabbitmq_prometheus");
 
-        var containerFiles = server.Resource.Annotations.OfType<ContainerExtensionFileAnnotation>();
-        var file = Assert.Single(containerFiles);
+        var containerFiles = server.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>();
+        var annotation = Assert.Single(containerFiles);
 
-        var context = new ContainerExtensionFileContext();
-        await file.Callback(context, default);
+        var context = new ContainerFileSystemCallbackContext
+        {
+            ServiceProvider = new ServiceCollection().BuildServiceProvider(),
+            Model = server.Resource
+        };
+        var items = await annotation.Callback(context, default);
 
-        var enabledPluginsFile = Assert.Single(context.Files);
-        var content = enabledPluginsFile.Content;
+        var file = Assert.Single(items) as ContainerFile;
+        Assert.NotNull(file);
+        var content = file.Contents;
 
         // Should only appear once
         var count = content!.Split("rabbitmq_prometheus").Length - 1;
