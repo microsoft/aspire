@@ -82,4 +82,44 @@ internal sealed class TemplateNuGetConfigService(
 
         await PromptToCreateOrUpdateNuGetConfigAsync(matchingChannel, outputPath, cancellationToken);
     }
+
+    /// <summary>
+    /// Creates or updates NuGet.config for the given channel name without prompting the user.
+    /// Resolves the channel name from configuration if not provided and falls back to the
+    /// global "channel" configuration value. Always uses the silent (non-prompting) merge path,
+    /// suitable for non-interactive code paths such as <c>aspire init</c>.
+    /// </summary>
+    /// <param name="channelName">The optional channel name from command input.</param>
+    /// <param name="outputPath">The output path where the NuGet.config should be created or updated.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    public async Task CreateOrUpdateNuGetConfigWithoutPromptAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(channelName))
+        {
+            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
+        }
+
+        if (string.IsNullOrWhiteSpace(channelName))
+        {
+            return;
+        }
+
+        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var matchingChannel = channels.FirstOrDefault(c =>
+            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        if (matchingChannel is null || matchingChannel.Type is not PackageChannelType.Explicit)
+        {
+            return;
+        }
+
+        var mappings = matchingChannel.Mappings;
+        if (mappings is null || mappings.Length == 0)
+        {
+            return;
+        }
+
+        var nugetConfigPrompter = new NuGetConfigPrompter(interactionService);
+        await nugetConfigPrompter.CreateOrUpdateWithoutPromptAsync(new DirectoryInfo(outputPath), matchingChannel, cancellationToken);
+    }
 }

@@ -264,7 +264,7 @@ internal sealed class InitCommand : BaseCommand
         // template output via the same shared service; `NuGetConfigMerger` underneath
         // creates a new file or merges missing sources into an existing one, so adding
         // hives later is handled the same way as for templates.
-        await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(
+        await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
             channelName: null,
             outputPath: workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
