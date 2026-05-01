@@ -205,7 +205,7 @@ steps:
       mkdir -p "$DATA_DIR"
 
       # 0. Clone the memory branch to read existing state (prs/, changes/,
-      #    feedback-issue.txt). The full content is copied to
+      #    feedback-issue.json). The full content is copied to
       #    $DATA_DIR/memory/$MILESTONE/ so the agent can read it directly.
       #    This branch contains only changelog state files, so the clone
       #    is lightweight even without sparse-checkout.
@@ -249,9 +249,9 @@ steps:
         fi
 
         # Also grab the feedback issue number from memory
-        FEEDBACK_FILE="$MEMORY_DIR/feedback-issue.txt"
+        FEEDBACK_FILE="$MEMORY_DIR/feedback-issue.json"
         if [ -f "$FEEDBACK_FILE" ]; then
-          FEEDBACK_FROM_MEMORY=$(tr -d '[:space:]' < "$FEEDBACK_FILE")
+          FEEDBACK_FROM_MEMORY=$(jq -r '.number' "$FEEDBACK_FILE")
         fi
       else
         # Log the error unless it's just a missing branch
@@ -302,8 +302,10 @@ steps:
       fi
 
       if [ -n "$FEEDBACK_NUM" ]; then
-        echo "$FEEDBACK_NUM" > "$DATA_DIR/feedback-issue-number.txt"
-        echo "Feedback issue: #$FEEDBACK_NUM"
+        FEEDBACK_UPDATED_AT=$(gh api "repos/$REPO/issues/$FEEDBACK_NUM" --jq '.updated_at' 2>/dev/null || true)
+        jq -n --argjson num "$FEEDBACK_NUM" --arg updatedAt "${FEEDBACK_UPDATED_AT:-}" \
+          '{number: $num, updatedAt: $updatedAt}' > "$DATA_DIR/feedback-issue.json"
+        echo "Feedback issue: #$FEEDBACK_NUM (updated: $FEEDBACK_UPDATED_AT)"
       else
         echo "No feedback issue found"
       fi
@@ -354,7 +356,7 @@ large JSON files in their entirety — use `jq` to extract only the fields you n
 | Memory directory (read-only) | `/tmp/gh-aw/pr-data/memory/${MILESTONE}/` (pristine copy from memory branch) |
 | Memory directory (read-write) | `/tmp/gh-aw/agent/memory/${MILESTONE}/` (pre-seeded copy; agent writes here; pushed by publish job) |
 | Change files directory | `changes/` (under memory directories) |
-| Feedback issue file | `feedback-issue.txt` (under memory directories) |
+| Feedback issue file | `feedback-issue.json` (under memory directories) |
 | Batch file | `/tmp/gh-aw/pr-data/batch-prs.json` (computed from all PRs minus processed) |
 | Existing body file | `/tmp/gh-aw/pr-data/existing-body.md` (fetched from wiki) |
 | PR tracker directory | `prs/` (under memory directories; one JSON file per PR) |
@@ -375,10 +377,11 @@ large JSON files in their entirety — use `jq` to extract only the fields you n
    entry (see Step 6 for the change file schema). Load these as the existing set of
    changelog entries. If the directory does not exist or is empty, there are no
    existing entries.
-4. Check if the file `/tmp/gh-aw/pr-data/feedback-issue-number.txt` exists. If it
-   does, read the issue number from it and then read **all** comments on that issue
-   into memory — these will be processed as editorial instructions in Step 4. If the
-   file does not exist, there is no feedback to process.
+4. Check if the file `/tmp/gh-aw/pr-data/feedback-issue.json` exists. If it
+   does, read the issue number and `updatedAt` timestamp from it and then read
+   **all** comments on that issue into memory — these will be processed as
+   editorial instructions in Step 4. If the file does not exist, there is no
+   feedback to process.
 
 ## Step 2: Review the pre-computed batch
 
@@ -396,10 +399,17 @@ Each entry in `batch-prs.json` contains: `number`, `title`, `author` (object wit
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`.
 Do **not** `cat` large JSON files — use `jq` to extract only the fields you need.
-If the batch is empty (zero unprocessed PRs), **skip Steps 3, 5, and 6** but still
-continue through Steps 4, 7, and 8. This ensures editorial feedback is applied,
-the "What's New" section is refreshed, and
-the "PRs processed" footer counts stay current.
+If the batch is empty (zero unprocessed PRs):
+
+1. Check the feedback issue `updatedAt` from `/tmp/gh-aw/pr-data/feedback-issue.json`
+   against the latest PR merge date (the last entry's `mergedAt` in
+   `/tmp/gh-aw/pr-data/all-milestone-prs.json`). If `updatedAt` is **earlier than**
+   the latest PR merge date (or if there is no feedback issue), there are no new PRs
+   and no new editorial feedback — **skip all remaining steps** and end the run.
+2. Otherwise (the feedback issue was updated after the latest PR merged), **skip
+   Steps 3, 5, and 6** but continue through Steps 4, 7, and 8 to apply new
+   editorial feedback, refresh the "What's New" section, and update the footer
+   counts.
 
 ## Step 3: Process the batch PRs
 
@@ -724,12 +734,11 @@ jq --sort-keys '.' "<filepath>" > /tmp/pr-fmt.json \
   && mv /tmp/pr-fmt.json "<filepath>"
 ```
 
-### 6c. Save feedback issue number
+### 6c. Save feedback issue file
 
-If `/tmp/gh-aw/agent/memory/${MILESTONE}/feedback-issue.txt` does not already exist
-(first run), copy it from `/tmp/gh-aw/pr-data/feedback-issue-number.txt` if that
-file is present. On subsequent runs the file is already pre-seeded from the memory
-branch and does not need to be copied again.
+Copy `/tmp/gh-aw/pr-data/feedback-issue.json` to
+`/tmp/gh-aw/agent/memory/${MILESTONE}/feedback-issue.json` if the data file exists.
+This updates both the issue number and the `updatedAt` timestamp for the next run.
 
 ## Step 7: Build the wiki page body
 
