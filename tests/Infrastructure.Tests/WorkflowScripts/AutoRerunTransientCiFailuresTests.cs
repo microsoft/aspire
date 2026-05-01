@@ -735,7 +735,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             [
                 "- name: Checkout code",
                 "- name: Set up .NET Core",
-                "- name: Install sdk for nuget based testing",
                 "- name: Build test project",
                 "- name: Run tests (Windows)",
                 "- name: Upload logs, and test results",
