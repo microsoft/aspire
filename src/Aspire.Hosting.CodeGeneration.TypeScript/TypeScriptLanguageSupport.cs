@@ -102,7 +102,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
               extends: [tseslint.configs.base],
               languageOptions: {
                 parserOptions: {
-                  projectService: true,
+                  project: './tsconfig.apphost.json',
+                  tsconfigRootDir: import.meta.dirname,
                 },
               },
               rules: {

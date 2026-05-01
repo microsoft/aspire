@@ -56,6 +56,7 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.DoesNotContain("\\u003E", files["package.json"]);
 
         Assert.Contains("eslint.config.mjs", files.Keys);
+        Assert.Contains("project: './tsconfig.apphost.json'", files["eslint.config.mjs"]);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
         Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
