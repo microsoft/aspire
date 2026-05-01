@@ -255,6 +255,16 @@ internal sealed class GuestRuntime
 
         foreach (var arg in args)
         {
+            if (arg == "{args}")
+            {
+                if (additionalArgs is { Length: > 0 })
+                {
+                    result.AddRange(additionalArgs);
+                }
+
+                continue;
+            }
+
             var replaced = arg
                 .Replace("{appHostFile}", appHostFile?.FullName ?? "")
                 .Replace("{appHostDir}", directory.FullName);
