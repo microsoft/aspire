@@ -5,8 +5,8 @@
   "scripts": {
     "aspire:lint": "eslint apphost.ts",
     "aspire:start": "aspire run",
-    "aspire:build": "tsc -p tsconfig.json",
-    "aspire:dev": "tsc --watch -p tsconfig.json",
+    "aspire:build": "tsc -p tsconfig.apphost.json",
+    "aspire:dev": "tsc --watch -p tsconfig.apphost.json",
     "lint": "npm run aspire:lint",
     "predev": "npm run aspire:lint",
     "dev": "npm run aspire:start",
