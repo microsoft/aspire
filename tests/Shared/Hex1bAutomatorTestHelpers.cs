@@ -497,12 +497,33 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
 
-        // Do not send Enter after typing "n" — the Spectre Console [Y/n] confirmation
-        // prompt accepts a single character. Sending Enter risks a race: if aspire init
-        // exits after reading "n" but before the Enter is delivered, bash receives the
-        // Enter and executes a phantom blank command, advancing CMDCOUNT and desyncing
-        // the test counter from the shell counter.
+        // Some prompts accept a single "n" immediately, while others require Enter.
+        // Only send Enter if the command did not already finish to avoid a phantom
+        // blank shell command that advances CMDCOUNT and desyncs prompt tracking.
+        var successPromptFound = false;
+        try
+        {
+            await auto.WaitUntilAsync(s =>
+            {
+                var successSearcher = new CellPatternSearcher()
+                    .FindPattern(counter.Value.ToString())
+                    .RightText(" OK] $ ");
+                successPromptFound = successSearcher.Search(s).Count > 0;
 
+                return successPromptFound;
+            }, timeout: TimeSpan.FromSeconds(2), description: $"success prompt [{counter.Value} OK] $ after agent init response");
+        }
+        catch (Hex1bAutomationException)
+        {
+        }
+
+        if (successPromptFound)
+        {
+            counter.Increment();
+            return;
+        }
+
+        await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
     }
 

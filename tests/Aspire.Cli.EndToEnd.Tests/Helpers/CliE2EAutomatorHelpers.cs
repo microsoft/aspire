@@ -712,7 +712,46 @@ internal static class CliE2EAutomatorHelpers
 
         await auto.TypeAsync(string.Join(" ", commandParts));
         await auto.EnterAsync();
-        await auto.DeclineAgentInitPromptAsync(counter);
+        await auto.CompleteAspireNewSubcommandPromptsAsync(counter);
+    }
+
+    private static async Task CompleteAspireNewSubcommandPromptsAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
+        var devLocalhostPrompt = new CellPatternSearcher()
+            .Find("Use *.dev.localhost URLs");
+        var agentInitPrompt = new CellPatternSearcher()
+            .Find("configure AI agent environments");
+
+        var devLocalhostPromptFound = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            if (devLocalhostPrompt.Search(snapshot).Count > 0)
+            {
+                devLocalhostPromptFound = true;
+                return true;
+            }
+
+            if (agentInitPrompt.Search(snapshot).Count > 0)
+            {
+                return true;
+            }
+
+            var successSearcher = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+            return successSearcher.Search(snapshot).Count > 0;
+        }, timeout: effectiveTimeout, description: $"dev localhost prompt, agent init prompt, or success prompt [{counter.Value} OK] $");
+
+        if (devLocalhostPromptFound)
+        {
+            await auto.EnterAsync();
+        }
+
+        await auto.DeclineAgentInitPromptAsync(counter, effectiveTimeout);
     }
 
     /// <summary>
