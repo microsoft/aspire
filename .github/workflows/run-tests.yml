@@ -601,6 +601,14 @@ jobs:
           docker volume ls
           docker network ls
 
+      - name: Sanitize artifact paths
+        if: always()
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE/eng/scripts/sanitize-artifact-paths.ps1" `
+            "$env:GITHUB_WORKSPACE/testresults" `
+            "$env:GITHUB_WORKSPACE/artifacts/log/test-logs"
+
       - name: Upload logs, and test results
         id: upload-logs
         if: always()
