@@ -340,11 +340,11 @@
     <trans-unit id="command.openAppHostSource">
       <source xml:lang="en">Open AppHost source</source>
     </trans-unit>
-    <trans-unit id="command.openDashboard">
+    <trans-unit id="command.codeLensOpenDashboard">
       <source xml:lang="en">Open Aspire Dashboard</source>
     </trans-unit>
-    <trans-unit id="command.codeLensOpenDashboard">
-      <source xml:lang="en">Open Aspire dashboard</source>
+    <trans-unit id="command.openDashboard">
+      <source xml:lang="en">Open Aspire Dashboard</source>
     </trans-unit>
     <trans-unit id="command.openTerminal">
       <source xml:lang="en">Open Aspire terminal</source>

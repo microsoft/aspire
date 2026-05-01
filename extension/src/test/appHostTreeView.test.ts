@@ -531,3 +531,121 @@ suite('buildResourceDescription', () => {
         assert.strictEqual(buildResourceDescription(makeResource({ healthReports: {} })), 'Project');
     });
 });
+
+suite('AspireAppHostTreeProvider.findAppHostElement', () => {
+    test('returns undefined when given empty path', () => {
+        const provider = makeTreeProvider([makeAppHost({ appHostPath: '/repo/AppHost/AppHost.csproj' })]);
+        assert.strictEqual(provider.findAppHostElement(''), undefined);
+        provider.dispose();
+    });
+
+    test('returns undefined when no AppHosts are tracked (global mode)', () => {
+        const provider = makeTreeProvider([]);
+        assert.strictEqual(provider.findAppHostElement('/repo/AppHost/AppHost.csproj'), undefined);
+        provider.dispose();
+    });
+
+    test('matches an AppHostItem by exact path (global mode)', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const provider = makeTreeProvider([makeAppHost({ appHostPath: hostPath })]);
+
+        const result = provider.findAppHostElement(hostPath);
+
+        assert.ok(result, 'Expected to find an AppHostItem');
+        provider.dispose();
+    });
+
+    test('matches an AppHostItem by same-directory path (global mode)', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const docPath = '/repo/AppHost/AppHost.cs';
+        const provider = makeTreeProvider([makeAppHost({ appHostPath: hostPath })]);
+
+        const result = provider.findAppHostElement(docPath);
+
+        assert.ok(result, 'Expected to find an AppHostItem via directory match');
+        provider.dispose();
+    });
+
+    test('returns undefined when AppHost lives in a different directory', () => {
+        const provider = makeTreeProvider([makeAppHost({ appHostPath: '/elsewhere/Other.csproj' })]);
+
+        const result = provider.findAppHostElement('/repo/AppHost/AppHost.cs');
+
+        assert.strictEqual(result, undefined);
+        provider.dispose();
+    });
+
+    test('matches WorkspaceResourcesItem by exact path (workspace mode)', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [makeResource()],
+            workspaceAppHostPath: hostPath,
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+
+        const result = provider.findAppHostElement(hostPath);
+
+        assert.ok(result, 'Expected to find a WorkspaceResourcesItem');
+        provider.dispose();
+    });
+
+    test('matches WorkspaceResourcesItem by same-directory path (workspace mode)', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [makeResource()],
+            workspaceAppHostPath: hostPath,
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+
+        const result = provider.findAppHostElement('/repo/AppHost/AppHost.cs');
+
+        assert.ok(result, 'Expected to find a WorkspaceResourcesItem via directory match');
+        provider.dispose();
+    });
+
+    test('returns undefined for workspace mode without resources', () => {
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: '/repo/AppHost/AppHost.csproj',
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+
+        const result = provider.findAppHostElement('/repo/AppHost/AppHost.csproj');
+
+        // Workspace tree builds no top-level item when there are no resources, so no match.
+        assert.strictEqual(result, undefined);
+        provider.dispose();
+    });
+
+    test('matches the right AppHostItem when multiple are tracked', () => {
+        const hostA = '/repo/A/A.csproj';
+        const hostB = '/repo/B/B.csproj';
+        const provider = makeTreeProvider([
+            makeAppHost({ appHostPath: hostA, appHostPid: 111 }),
+            makeAppHost({ appHostPath: hostB, appHostPid: 222 }),
+        ]);
+
+        const resultA = provider.findAppHostElement('/repo/A/A.cs');
+        const resultB = provider.findAppHostElement(hostB);
+
+        assert.ok(resultA);
+        assert.ok(resultB);
+        assert.notStrictEqual(resultA, resultB, 'Expected distinct items for distinct AppHosts');
+        provider.dispose();
+    });
+});

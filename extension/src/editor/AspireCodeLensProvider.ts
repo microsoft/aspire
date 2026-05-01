@@ -58,9 +58,6 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         }
 
         const resources = parser.parseResources(document);
-        if (resources.length === 0) {
-            return [];
-        }
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
@@ -70,9 +67,13 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         const lenses: vscode.CodeLens[] = [];
 
-        // Builder-statement lenses (Open Dashboard + View Logs) appear when live data is available.
-        if (hasRunningData) {
-            this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath);
+        // Builder-statement lenses (Open Dashboard + View Logs) appear only when this
+        // document maps to a concretely-running AppHost — independent of whether any
+        // Add* resource calls were found in the file.
+        this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath, workspaceResources);
+
+        if (resources.length === 0) {
+            return lenses;
         }
 
         for (const resource of resources) {
@@ -114,14 +115,21 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         document: vscode.TextDocument,
         parser: { findBuilderStatementLine?(document: vscode.TextDocument): number | undefined },
         workspaceAppHostPath: string,
+        workspaceResources: readonly ResourceJson[],
     ): void {
         const builderLine = parser.findBuilderStatementLine?.(document);
         if (builderLine === undefined) {
             return;
         }
 
-        // Resolve the AppHost path that this file represents so the commands target the right host.
-        const appHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath);
+        // Only emit the lens when the document maps to a concretely-running AppHost.
+        // This prevents stale lenses on AppHost files whose host is not currently running,
+        // and avoids dispatching commands with a `.cs` source path the CLI cannot resolve.
+        const appHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath, workspaceResources);
+        if (appHostPath === undefined) {
+            return;
+        }
+
         const range = new vscode.Range(builderLine, 0, builderLine, 0);
 
         lenses.push(new vscode.CodeLens(range, {
@@ -140,11 +148,23 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     /**
-     * Determines which running AppHost the given document represents.
-     * Prefers an exact match against `appHosts` (global mode), falls back to the
-     * workspace AppHost path (workspace mode), and finally the document path itself.
+     * Resolves the running-AppHost path that the given document represents, or
+     * `undefined` when the document cannot be tied to a running host.
+     *
+     * Resolution order:
+     *  1. Exact path or same-directory match against {@link AppHostDataRepository.appHosts}
+     *     (covers global mode and any workspace AppHosts that surface there).
+     *  2. The repository's `workspaceAppHostPath` when workspace describe data is live
+     *     and the document lives in the same directory as that AppHost.
+     *
+     * The document path itself is intentionally not used as a fallback — for C#
+     * AppHosts the CLI requires a `.csproj`, not a `.cs` file.
      */
-    private _resolveAppHostPathForDocument(document: vscode.TextDocument, workspaceAppHostPath: string): string {
+    private _resolveAppHostPathForDocument(
+        document: vscode.TextDocument,
+        workspaceAppHostPath: string,
+        workspaceResources: readonly ResourceJson[],
+    ): string | undefined {
         const docPath = document.uri.fsPath;
         const docDir = path.dirname(docPath);
         const match = this._dataRepository.appHosts.find(host => {
@@ -157,10 +177,12 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         if (match) {
             return match.appHostPath;
         }
-        if (workspaceAppHostPath) {
-            return workspaceAppHostPath;
+        if (workspaceAppHostPath && workspaceResources.length > 0) {
+            if (workspaceAppHostPath === docPath || path.dirname(workspaceAppHostPath) === docDir) {
+                return workspaceAppHostPath;
+            }
         }
-        return docPath;
+        return undefined;
     }
 
     private _addStateLenses(
