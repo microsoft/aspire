@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored PR excluded from changelog",
+  "mergedAt": "2026-05-01T18:30:30Z",
+  "number": 16649,
+  "runDate": "2026-05-01T18:36:44Z",
+  "status": "excluded",
+  "title": "[release/13.3] Fix TypeScript AppHost generated port ranges"
+}
