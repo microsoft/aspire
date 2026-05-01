@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
@@ -652,6 +653,56 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
         Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("missing-channel", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenChannelTemplateSearchFails_DisplaysFriendlyError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+
+            // Fake cache throws NuGetPackageCacheException to simulate offline / inaccessible feed.
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        throw new NuGetPackageCacheException("Package search failed: simulated network failure")
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    throw new InvalidOperationException("InstallTemplateAsync should not run when channel search fails.");
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
+        Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
     }
 
     private sealed class FakeConfigurationServiceWithChannel(string channelValue) : IConfigurationService

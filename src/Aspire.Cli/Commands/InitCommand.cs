@@ -11,6 +11,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
@@ -322,6 +323,15 @@ internal sealed class InitCommand : BaseCommand
             InteractionService.DisplayError(ex.Message);
             return ExitCodeConstants.FailedToInstallTemplates;
         }
+        catch (NuGetPackageCacheException ex)
+        {
+            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
+            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
+            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
+            // restores parity with the prior init failure mode for these scenarios.
+            InteractionService.DisplayError(ex.Message);
+            return ExitCodeConstants.FailedToInstallTemplates;
+        }
 
         // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
         // `dotnet new` does not install templates implicitly, so on a fresh machine
@@ -336,7 +346,7 @@ internal sealed class InitCommand : BaseCommand
         if (installOutcome.ExitCode != 0)
         {
             InteractionService.DisplayLines(installOutcome.OutputLines);
-            InteractionService.DisplayError($"Failed to install Aspire.ProjectTemplates (exit code {installOutcome.ExitCode}).");
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode, _executionContext.LogFilePath));
             return ExitCodeConstants.FailedToInstallTemplates;
         }
 

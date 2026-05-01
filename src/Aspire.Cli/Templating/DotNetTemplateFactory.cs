@@ -450,11 +450,9 @@ internal class DotNetTemplateFactory(
     {
         try
         {
-            // Some templates have additional arguments that need to be applied to the `dotnet new` command
-            // when it is executed. This callback will get those arguments and potentially prompt for them.
-            // Run before resolving the template package so prompt/error precedence is unchanged.
-            var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
-
+            // Resolve the template package first, matching the pre-extraction order in
+            // release/13.3. Surfacing channel/version errors before prompting for extra args
+            // avoids discarding answers the user just gave.
             var query = new TemplatePackageQuery(
                 ChannelOverride: inputs.Channel,
                 VersionOverride: inputs.Version,
@@ -462,6 +460,10 @@ internal class DotNetTemplateFactory(
                 IncludePrHives: true);
 
             var selectedTemplateDetails = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+
+            // Some templates have additional arguments that need to be applied to the `dotnet new` command
+            // when it is executed. This callback will get those arguments and potentially prompt for them.
+            var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
 
             var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
                 selectedTemplateDetails,

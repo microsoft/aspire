@@ -267,6 +267,11 @@ internal sealed class TemplateNuGetConfigService(
         // from the right feed. If we are using an implicit channel then we just use the
         // ambient configuration (although we should still specify the source) because
         // the user would have selected it.
+        //
+        // The temporary config is disposed when this method returns. That is intentional —
+        // only `dotnet new install` consumes the config; the subsequent `dotnet new <template>`
+        // call (in DotNetTemplateFactory and InitCommand) operates against the already-installed
+        // template hive and uses the ambient NuGet configuration.
         using var temporaryConfig = selection.Channel.Type == PackageChannelType.Explicit
             ? await TemporaryNuGetConfig.CreateAsync(selection.Channel.Mappings!)
             : null;
