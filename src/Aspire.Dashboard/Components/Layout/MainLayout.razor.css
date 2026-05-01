@@ -52,13 +52,17 @@
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%);
+        background: linear-gradient(90deg, #7455DD 0%, #B30F87 50%, #F65163 100%);
         border-top: none;
         border-left: none;
         display: flex;
     }
 
-    :global([data-theme="dark"]) ::deep.layout > .messagebar-container {
+    ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+        background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%);
+    }
+
+    :global([data-theme="dark"]) ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
         background: linear-gradient(135deg, #302754 0%, #281F45 58%, #231D39 100%) !important;
     }
 
@@ -137,13 +141,17 @@
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%);
+        background: linear-gradient(90deg, #7455DD 0%, #B30F87 50%, #F65163 100%);
         border-top: none;
         border-left: none;
         display: flex;
     }
 
-    :global([data-theme="dark"]) ::deep.layout > .messagebar-container {
+    ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+        background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%);
+    }
+
+    :global([data-theme="dark"]) ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
         background: linear-gradient(135deg, #302754 0%, #281F45 58%, #231D39 100%) !important;
     }
 
@@ -196,6 +204,13 @@
        Remove the default horizontal padding to allow for more text  */
     padding-left: 0;
     padding-right: 0;
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+::deep .desktop-nav-menu > .fluent-appbar-item > .fluentui-counterbadge-container > a {
+    font-family: 'Poppins', var(--body-font);
 }
 
 ::deep.layout > header > .header-gutters > fluent-button[appearance=stealth]:not(:hover)::part(control),

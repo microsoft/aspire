@@ -1457,13 +1457,27 @@ fluent-divider {
 
 /* --- Message bar - pill with subtle border --- */
 .messagebar-container {
-    background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%) !important;
-    padding: 8px 20px;
+    background: linear-gradient(90deg, #7455DD 0%, #B30F87 50%, #F65163 100%) !important;
+    min-height: 4px;
+    padding: 0 20px;
     border-top: none !important;
     border-left: none !important;
 }
 
 [data-theme="dark"] .messagebar-container {
+    background: linear-gradient(90deg, #7455DD 0%, #B30F87 50%, #F65163 100%) !important;
+}
+
+.messagebar-container:not(:has(.fluent-messagebar, fluent-message-bar)) .top-messagebar {
+    display: none;
+}
+
+.messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+    background: linear-gradient(135deg, #F6F2FF 0%, #FFF4FC 100%) !important;
+    padding: 8px 20px;
+}
+
+[data-theme="dark"] .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
     background: linear-gradient(135deg, #302754 0%, #281F45 58%, #231D39 100%) !important;
 }
 
