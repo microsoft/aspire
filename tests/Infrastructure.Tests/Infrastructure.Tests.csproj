@@ -28,7 +28,6 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
-    <Compile Include="$(TestsSharedDir)RepoRoot.cs" Link="shared/RepoRoot.cs" />
   </ItemGroup>
 
   <ItemGroup>
