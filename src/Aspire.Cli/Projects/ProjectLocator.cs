@@ -206,7 +206,20 @@ internal sealed class ProjectLocator(
             return settingsAppHost;
         }
 
-        logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it is no longer a valid AppHost project.", settingsAppHost.FullName);
+        var messageSuffix = validationResult.Message is { Length: > 0 } message ? $": {message}" : string.Empty;
+        if (validationResult.IsUnsupported)
+        {
+            logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it is not supported in the current environment{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
+        }
+        else if (validationResult.IsPossiblyUnbuildable)
+        {
+            logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it may not be a buildable AppHost project{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
+        }
+        else
+        {
+            logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because it is no longer a valid AppHost project{MessageSuffix}.", settingsAppHost.FullName, messageSuffix);
+        }
+
         return null;
     }
 
@@ -404,7 +417,19 @@ internal sealed class ProjectLocator(
             }
         }
 
-        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(silent: true, cancellationToken);
+        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(silent: false, cancellationToken);
+
+        if (settingsAppHost is not null && multipleAppHostProjectsFoundBehavior is not MultipleAppHostProjectsFoundBehavior.None)
+        {
+            logger.LogDebug("Using AppHost path from settings without scanning: {AppHost}", settingsAppHost.FullName);
+
+            if (createSettingsFile)
+            {
+                await CreateSettingsFileAsync(settingsAppHost, cancellationToken);
+            }
+
+            return new AppHostProjectSearchResult(settingsAppHost, [settingsAppHost]);
+        }
 
         logger.LogDebug("No project file specified, searching for apphost projects in {CurrentDirectory}", executionContext.WorkingDirectory);
         var results = await FindAppHostProjectFilesAsync(
@@ -479,7 +504,18 @@ internal sealed class ProjectLocator(
             await CreateSettingsFileAsync(selectedAppHost!, cancellationToken);
         }
 
-        return new AppHostProjectSearchResult(selectedAppHost, results.BuildableAppHost);
+        // Ensure the selected AppHost is always represented in the candidate list so callers
+        // can rely on SelectedProjectFile being present in AllProjectFileCandidates. This
+        // covers cases where the configured settings AppHost is selected but lives outside
+        // the discovered candidate set (e.g. parent directory or excluded by enumeration).
+        var allCandidates = results.BuildableAppHost;
+        if (selectedAppHost is not null
+            && !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+        {
+            allCandidates = [.. allCandidates, selectedAppHost];
+        }
+
+        return new AppHostProjectSearchResult(selectedAppHost, allCandidates);
     }
 
     public async Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken = default)
