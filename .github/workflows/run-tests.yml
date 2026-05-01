@@ -216,13 +216,6 @@ jobs:
             Write-Host "NuGet package source '$source' does not exist — skipping copy"
           }
 
-      - name: Install sdk for nuget based testing
-        if: ${{ fromJson(inputs.properties).requiresTestSdk == true }}
-        run: >
-          ${{ env.DOTNET_SCRIPT }} build ${{ github.workspace }}/tests/workloads.proj
-          /p:SkipPackageCheckForTemplatesTesting=true
-          /bl:${{ github.workspace }}/artifacts/log/Debug/InstallSdkForTesting.binlog
-
       - name: Install Azure Functions Core Tools
         if: runner.os == 'Linux' && (inputs.testShortName == 'Playground' || inputs.testShortName == 'Azure')
         run: |

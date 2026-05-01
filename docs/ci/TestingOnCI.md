@@ -58,7 +58,7 @@ This invokes `eng/TestEnumerationRunsheetBuilder/TestEnumerationRunsheetBuilder.
 - Writes a `.tests-metadata.json` file to `artifacts/helix/` containing:
   - `projectName`, `shortName`, `testProjectPath`
   - `supportedOSes` array (e.g., `["windows", "linux", "macos"]`)
-  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `requiresGitHubToken`, `enablePlaywrightInstall`
+  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresCliArchive`, `requiresGitHubToken`, `enablePlaywrightInstall`
   - `testSessionTimeout`, `testHangTimeout` values
   - `uncollectedTestsSessionTimeout`, `uncollectedTestsHangTimeout` values
   - `splitTests` flag
@@ -99,7 +99,6 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
       "supportedOSes": ["linux"],
       "properties": {
         "requiresNugets": true,
-        "requiresTestSdk": false,
         "requiresCliArchive": true,
         "enablePlaywrightInstall": false
       },
@@ -114,7 +113,6 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
       "supportedOSes": ["linux"],
       "properties": {
         "requiresNugets": false,
-        "requiresTestSdk": false,
         "requiresCliArchive": false,
         "enablePlaywrightInstall": false
       },
@@ -253,8 +251,6 @@ For tests that need the built Aspire packages (e.g., template tests, end-to-end 
 ```xml
 <PropertyGroup>
   <RequiresNugets>true</RequiresNugets>
-  <!-- Also common for template tests -->
-  <RequiresTestSdk>true</RequiresTestSdk>
 </PropertyGroup>
 ```
 
@@ -299,14 +295,13 @@ This flag is tracked in the test metadata and controls whether Playwright browse
 
 ## CI Test Property Registry
 
-All boolean test properties (such as `RequiresNugets`, `RequiresTestSdk`, `RequiresCliArchive`, `EnablePlaywrightInstall`) are defined in a single source of truth:
+All boolean test properties (such as `RequiresNugets`, `RequiresCliArchive`, `EnablePlaywrightInstall`) are defined in a single source of truth:
 
 **`eng/testing/CITestsProperties.props`**
 
 ```xml
 <ItemGroup>
   <CITestsProperty Include="requiresNugets" MSBuildProp="RequiresNugets" Default="false" />
-  <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
   <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
   <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
 </ItemGroup>

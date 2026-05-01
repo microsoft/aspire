@@ -832,14 +832,13 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter,
         TimeSpan? timeout = null)
     {
-        var successMarker = $"{label}-http-200";
+        var failurePrefix = $"{label}-http-status=";
 
         await auto.TypeAsync(
-            $"curl -ksSL -o /dev/null -w '{successMarker}' {AspireCliShellCommandHelpers.QuoteBashArg(url)} " +
-            $"|| echo '{label}-http-failed'");
+            $"status=$(curl -ksSL -o /dev/null -w '%{{http_code}}' {AspireCliShellCommandHelpers.QuoteBashArg(url)}) && " +
+            $"{{ [ \"$status\" = \"200\" ] || {{ printf '%s%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg(failurePrefix)} \"$status\"; exit 1; }}; }}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(successMarker, timeout: timeout ?? TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout ?? TimeSpan.FromSeconds(30));
     }
 
     private static async Task ExtractLocalHiveArchiveAsync(

@@ -90,7 +90,6 @@
     <Exec Condition="'$(TestPartitionVerboseLogging)' == 'true'" Command="cat $(_TestPartitionsJsonAbsolutePath)" />
   </Target>
 
-  <Import Project="$(TestsSharedDir)Aspire.Templates.Testing.targets" Condition="'$(IsTemplateTestProject)' == 'true'" />
   <Import Project="$(RepositoryEngineeringDir)Testing.targets" />
 
   <!-- Must be after Testing.targets import where IsAzdoHelixRunner, IsGitHubActionsRunner, and RunOnAzdoHelix are computed -->

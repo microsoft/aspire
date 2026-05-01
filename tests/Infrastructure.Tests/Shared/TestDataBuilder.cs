@@ -27,7 +27,6 @@ public static class TestDataBuilder
         string? shortName = null,
         string? mtpBaseArgs = null,
         bool requiresNugets = false,
-        bool requiresTestSdk = false,
         bool requiresCliArchive = false,
         bool enablePlaywrightInstall = false,
         string? extraTestArgs = null,
@@ -44,7 +43,6 @@ public static class TestDataBuilder
             Properties = new Dictionary<string, bool>
             {
                 ["requiresNugets"] = requiresNugets,
-                ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
                 ["enablePlaywrightInstall"] = enablePlaywrightInstall
             },
@@ -74,7 +72,6 @@ public static class TestDataBuilder
         string? mtpBaseArgs = null,
         string? uncollectedMtpBaseArgs = null,
         bool requiresNugets = false,
-        bool requiresTestSdk = false,
         bool requiresCliArchive = false,
         bool enablePlaywrightInstall = false,
         string[]? supportedOSes = null,
@@ -91,7 +88,6 @@ public static class TestDataBuilder
             Properties = new Dictionary<string, bool>
             {
                 ["requiresNugets"] = requiresNugets,
-                ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
                 ["enablePlaywrightInstall"] = enablePlaywrightInstall
             },
@@ -190,7 +186,6 @@ public static class TestDataBuilder
         string? extraTestArgs = null,
         string mtpBaseArgs = "",
         bool requiresNugets = false,
-        bool requiresTestSdk = false,
         bool requiresCliArchive = false,
         bool enablePlaywrightInstall = false,
         string[]? supportedOSes = null,
@@ -211,7 +206,6 @@ public static class TestDataBuilder
             Properties = new Dictionary<string, bool>
             {
                 ["requiresNugets"] = requiresNugets,
-                ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
                 ["enablePlaywrightInstall"] = enablePlaywrightInstall
             },

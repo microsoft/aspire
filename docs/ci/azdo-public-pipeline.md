@@ -69,9 +69,8 @@ Which tests run here is controlled by the `RunOnAzdoCI` property (see [Test Rout
 
 #### Helix Tests (`runHelixTests: true`)
 
-1. Installs SDKs for testing (`tests/workloads.proj`)
-2. Sends test work items to Helix via `send-to-helix.yml` → `send-to-helix-ci.proj`
-3. Downloads `.trx` result files from Helix after completion
+1. Sends test work items to Helix via `send-to-helix.yml` → `send-to-helix-ci.proj`
+2. Downloads `.trx` result files from Helix after completion
 
 ## Helix Test Infrastructure
 
@@ -85,7 +84,7 @@ The entry point is `tests/helix/send-to-helix-ci.proj`, which defines **three te
 | `endtoendtests`     | `send-to-helix-endtoendtests.targets`     | ❌              | ✅            | End-to-end scenario tests (needs Docker)                          |
 | `buildonhelixtests` | `send-to-helix-buildonhelixtests.targets` | ❌              | ✅            | Tests that `dotnet build` + `dotnet test` on Helix (needs Docker) |
 
-The `send-to-helix-ci.proj` first runs `PrepareDependencies` sequentially, then dispatches all categories in parallel via MSBuild.
+The `send-to-helix-ci.proj` first runs `PrepareDependencies` sequentially, then dispatches all categories in parallel via MSBuild. The removed template coverage is replaced by a directly-run AzDO subset of `Aspire.Cli.EndToEnd.Tests`, not by a Helix category.
 
 Each category is handled by `send-to-helix-inner.proj` (the Helix SDK project), which imports the category-specific `.targets` file.
 
@@ -126,7 +125,7 @@ Each test category has its own strategy for splitting tests into Helix work item
 
 Each work item follows this lifecycle:
 
-1. **Pre-commands**: Clean up stale processes (dotnet-tests, dcp.exe), start Docker cleanup, set environment variables (DCP paths, SDK paths, dev certs, Docker BuildKit)
+1. **Pre-commands**: Clean up stale `dcp.exe` processes, start Docker cleanup, set environment variables (DCP paths, dev certs, Docker BuildKit)
 2. **Command**: Run the test executable with MTP arguments, blame/crash dump collection, quarantine exclusion
 3. **Post-commands**: List Docker state, rename `.trx` files for collection
 
@@ -137,7 +136,6 @@ These are shared across all work items in a Helix job:
 - **DCP binary** — the orchestrator binary, set via `DcpPublisher__CliPath`
 - **Dev cert scripts** — for HTTPS dev certificate setup on Linux
 - **Docker CLI** — specific version installed on the agent
-- **SDKs for testing** — `dotnet-tests` directory with a configured .NET SDK
 - **Built NuGet packages** — `artifacts/packages/Shipping/` for template tests
 - **Playwright browser dependencies** — for UI tests
 - **Azure Functions CLI** — for Functions integration tests
@@ -260,7 +258,6 @@ Since AzDO tests don't run on PRs, changes can silently break the pipeline. The 
 
 **Real incidents**:
 - `49b1fd3b`: Template tests ran `dotnet test --list-tests` which invoked the system dotnet (6.0) instead of the repo's dotnet (8.0+) → "You must install or update .NET" error. A prior PR removed `DOTNET_ROOT` environment variable override for GitHub Actions, breaking AzDO.
-- `258d2e95`: `dotnet-tests` SDK directory wasn't properly prepared for template and helix test runs
 
 **What to watch for**: Changes to `DOTNET_ROOT`, `PATH`, or SDK version settings in `BuildAndTest.yml`, `tests/Directory.Build.targets`, or helix targets. If a change works by relying on the system dotnet or GitHub Actions' pre-installed SDK, it will likely break AzDO/Helix.
 
@@ -347,7 +344,6 @@ When reviewing PRs, flag these for manual AzDO validation (`/azp run aspire-test
 - [ ] Tests using `AddProject<T>()` in projects that run on Helix
 - [ ] Changes to `AspireProjectOrPackageReference` items
 - [ ] New or modified Verify snapshot tests
-- [ ] Changes to `tests/workloads.proj` or SDK setup
 
 ## How to Manually Trigger AzDO Tests
 

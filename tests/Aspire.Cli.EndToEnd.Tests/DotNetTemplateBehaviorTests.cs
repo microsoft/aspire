@@ -295,7 +295,7 @@ public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper out
     }
 }
 
-internal static class DotNetTemplateBehaviorTestHelpers
+internal static partial class DotNetTemplateBehaviorTestHelpers
 {
     internal static async Task CreateTemplateBootstrapAsync(Hex1bTerminalAutomator auto, SequenceCounter counter)
     {
@@ -389,7 +389,7 @@ internal static class DotNetTemplateBehaviorTestHelpers
             foundDevLocalhost = true;
             Assert.Contains($"{expectedHostname}.dev.localhost:", urls, StringComparison.Ordinal);
 
-            foreach (Match match in Regex.Matches(urls, @"://([^:]+)\.dev\.localhost:"))
+            foreach (Match match in DevLocalhostHostnameRegex().Matches(urls))
             {
                 var hostname = match.Groups[1].Value;
                 Assert.DoesNotContain("_", hostname, StringComparison.Ordinal);
@@ -478,4 +478,7 @@ internal static class DotNetTemplateBehaviorTestHelpers
     }
 
     internal static string Quote(string value) => $"\"{value}\"";
+
+    [GeneratedRegex(@"://([^:]+)\.dev\.localhost:")]
+    private static partial Regex DevLocalhostHostnameRegex();
 }

@@ -16,9 +16,10 @@ else
 fi
 
 REPO_ROOT=$(cd "${scriptroot}";pwd)
-SDK_PATH=$REPO_ROOT/artifacts/bin/dotnet-tests
+SDK_PATH=$REPO_ROOT/.dotnet
 if [ ! -x "$SDK_PATH/dotnet" ]; then
     echo "Error: Could not find dotnet at $SDK_PATH/dotnet"
+    echo "Run ./restore.sh first to install the repo-local SDK."
     return
 fi
 

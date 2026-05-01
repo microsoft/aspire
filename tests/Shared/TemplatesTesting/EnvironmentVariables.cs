@@ -7,7 +7,6 @@ namespace Aspire.Templates.Tests;
 
 public static class EnvironmentVariables
 {
-    public static readonly string? SdkForTemplateTestingPath       = Environment.GetEnvironmentVariable("SDK_FOR_TEMPLATES_TESTING_PATH");
     public static readonly string? TestLogPath                     = Environment.GetEnvironmentVariable("TEST_LOG_PATH");
     public static readonly string? SkipProjectCleanup              = Environment.GetEnvironmentVariable("SKIP_PROJECT_CLEANUP");
     public static readonly string? BuiltNuGetsPath                 = Environment.GetEnvironmentVariable("BUILT_NUGETS_PATH");

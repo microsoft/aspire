@@ -4,8 +4,6 @@
     <WorkItemArchiveWildCard>$(TestArchiveTestsDir)**/*.zip</WorkItemArchiveWildCard>
     <BuildHelixWorkItemsDependsOn>$(BuildHelixWorkItemsDependsOn);BuildHelixWorkItemsForDefaultTests</BuildHelixWorkItemsDependsOn>
     <NeedsDcpPathOverride>true</NeedsDcpPathOverride>
-    <!-- needed to run 9.0 tests on helix -->
-    <NeedsSdksForTesting>true</NeedsSdksForTesting>
     <IncludeDotNetCli>false</IncludeDotNetCli>
 
     <TargetFrameworkSuffixRegex>^(.*?)(-net[\d.]+)?$</TargetFrameworkSuffixRegex>

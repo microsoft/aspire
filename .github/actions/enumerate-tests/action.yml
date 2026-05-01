@@ -19,7 +19,6 @@ inputs:
 #   - testSessionTimeout: Timeout for the test session (e.g., '20m')
 #   - testHangTimeout: Timeout for hung tests (e.g., '10m')
 #   - requiresNugets: Boolean indicating if NuGet packages are needed
-#   - requiresTestSdk: Boolean indicating if test SDK is needed
 #   - extraTestArgs: Additional test arguments (e.g., '--filter-trait "Partition=P1"')
 #   - collection: (collection type only) Collection/partition name
 #   - classname: (class type only) Fully qualified test class name

@@ -28,7 +28,7 @@ jobs:
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
         with:
-          buildArgs: '/p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
+          buildArgs: '/p:IncludeCliE2ETests=true'
 
       - name: Split matrix by dependency type
         id: split_matrix

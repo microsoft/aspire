@@ -21,12 +21,6 @@
     <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
   </PropertyGroup>
 
-  <Import Project="Shared\Aspire.Templates.Testing.props" Condition="'$(IsTemplateTestProject)' == 'true'" />
-
-  <PropertyGroup Condition="'$(IsTemplateTestProject)' == 'true'">
-    <BuiltNuGetsDir>$(ArtifactsShippingPackagesDir)</BuiltNuGetsDir>
-  </PropertyGroup>
-
   <PropertyGroup>
     <!--
       Test projects don't need XML docs

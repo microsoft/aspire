@@ -3,14 +3,7 @@
 The Helix CI job builds `tests/helix/send-to-helix-ci.proj`, which in turns builds the `Test` target on `tests/helix/send-to-helix-inner.proj`. This inner project uses the Helix SDK to construct `@(HelixWorkItem)`s, and send them to Helix to run.
 
 - `tests/helix/send-to-helix-basictests.targets` - this prepares all the tests that don't need special preparation
-- `tests/helix/send-to-helix-endtoend-tests.targets` - this is for tests that require a SDK installed
-
-## Install SDK from artifacts
-
-1. `.\build.cmd -pack`
-2. `dotnet build tests\workloads.proj`
-
-.. which results in `artifacts\bin\dotnet-tests` which has a SDK (version from `global.json`) with the necessary components installed using packs from `artifacts/packages`.
+- `tests/helix/send-to-helix-endtoendtests.targets` - this is for end-to-end scenario tests that require Docker
 
 ## Controlling test runs on CI
 
@@ -29,6 +22,6 @@ Individual test projects can be opted-out by setting appropriate MSBuild propert
 
 - Use `--filter-method`, `--filter-class`, or `--filter-namespace` (after `--`) to run specific tests.
 - Set `TestCaptureOutput=false` as an environment variable to see the output on the command line.
-- Use `-tl:false` to disable msbuild's terminal logger so live output can be seen.
+- Set `MSBUILDTERMINALLOGGER=false` to disable MSBuild's terminal logger so live output can be seen.
 
-Example: `dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj -tl:false -- --filter-class "*.TemplateVariantSmokeTests"`
+Example: `MSBUILDTERMINALLOGGER=false dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj --no-launch-profile -- --filter-class "*.TemplateVariantSmokeTests"`

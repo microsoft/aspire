@@ -34,6 +34,9 @@ parameters:
   - name: vscePublishPreRelease
     type: boolean
     default: false
+  - name: targetRids
+    type: object
+    default: []
 
 steps:
   # Internal pipeline: Build with pack+sign
@@ -58,7 +61,7 @@ steps:
     # Verify the signed win-x64 CLI archive works (version check + starter/AppHost template smokes)
     - pwsh: |
         $ErrorActionPreference = 'Stop'
-        $archiveDir = "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}"
+        $archiveDir = "${{ parameters.repoArtifactsPath }}/signed-archives/${{ parameters.buildConfig }}"
         $archive = Get-ChildItem -Path $archiveDir -Filter "aspire-cli-win-x64-*.zip" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $archive) {
           Write-Host "##[warning]No win-x64 CLI archive found - skipping verification"
@@ -213,6 +216,30 @@ steps:
         PathtoPublish: '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
         ArtifactName: aspire-vscode-extension
 
+    # Run a small, intentionally marked CLI E2E template-coverage subset directly on AzDO.
+    - ${{ if ne(parameters.isWindows, 'true') }}:
+      - script: |
+          set -euo pipefail
+
+          archive_dir="$(Build.StagingDirectory)/cli-e2e-archives"
+          mkdir -p "$archive_dir"
+
+          cp "${{ parameters.repoArtifactsPath }}/signed-archives/${{ parameters.buildConfig }}/aspire-cli-linux-x64-"*.tar.gz "$archive_dir/"
+          cp "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping/"*.nupkg "$archive_dir/"
+
+          ASPIRE_E2E_CLI_ARCHIVE_DIR="$archive_dir" \
+            ${{ parameters.dotnetScript }} test \
+              --project "$(Build.SourcesDirectory)/tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj" \
+              --no-launch-profile \
+              -- \
+              --filter-trait "azdo-template-coverage=true" \
+              --filter-not-trait "quarantined=true" \
+              --filter-not-trait "outerloop=true"
+        env:
+          DOCKER_BUILDKIT: 1
+          DOTNET_ROOT: $(Build.SourcesDirectory)/.dotnet
+        displayName: 🟣Run CLI E2E template coverage subset
+
     # Publish Windows CLI archives as separate artifacts so the Prepare Installers
     # stage can download them by name (matching the native_archives_<rid> pattern
     # used by build_sign_native for macOS/Linux).
@@ -220,7 +247,7 @@ steps:
       - ${{ each targetRid in parameters.targetRids }}:
         - pwsh: |
             $ErrorActionPreference = 'Stop'
-            $sourceDir = '${{ parameters.repoArtifactsPath }}/packages'
+            $sourceDir = '${{ parameters.repoArtifactsPath }}/signed-archives/${{ parameters.buildConfig }}'
             $pattern = 'aspire-cli-${{ targetRid }}-*'
             $stagingDir = '$(Build.StagingDirectory)/native_archives_${{ replace(targetRid, '-', '_') }}'
 
@@ -306,13 +333,6 @@ steps:
 
   # Helix tests are run only on the public pipeline
   - ${{ if and(eq(parameters.runAsPublic, 'true'), eq(parameters.runHelixTests, 'true')) }}:
-    - script: ${{ parameters.buildScript }}
-              /p:Configuration=${{ parameters.buildConfig }}
-              $(_OfficialBuildIdArgs)
-              /bl:${{ parameters.repoLogPath }}/InstallSdksForTesting.binlog
-              -projects $(Build.SourcesDirectory)/tests/workloads.proj
-      displayName: Install sdk for testing
-
     # Helix captures code coverage information and, once tests are complete, the code coverage information is
     # downloaded to <repo root>/artifacts/helixresults folder.
     - template: /eng/pipelines/templates/send-to-helix.yml

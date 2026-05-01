@@ -344,33 +344,6 @@ public class BuildTestMatrixTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task PassesRequiresTestSdkProperty()
-    {
-        // Arrange
-        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
-        Directory.CreateDirectory(artifactsDir);
-
-        TestDataBuilder.CreateTestsMetadataJson(
-            Path.Combine(artifactsDir, "SdkProject.tests-metadata.json"),
-            projectName: "SdkProject",
-            testProjectPath: "tests/SdkProject/SdkProject.csproj",
-            requiresTestSdk: true);
-
-        var outputFile = Path.Combine(_tempDir.Path, "matrix.json");
-
-        // Act
-        var result = await RunScript(artifactsDir, outputFile);
-
-        // Assert
-        result.EnsureSuccessful();
-
-        var matrix = ParseCanonicalMatrix(outputFile);
-        var entry = Assert.Single(matrix.Tests);
-        Assert.True(entry.Properties.GetValueOrDefault("requiresTestSdk"));
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
     public async Task PreservesSupportedOSes()
     {
         // Arrange

@@ -23,10 +23,8 @@
 /tests/Aspire.Hosting.Maui.Tests      @jfversluis
 /tests/Aspire.Hosting.Testing.Tests   @sebastienros
 /tests/Aspire.Hosting.Tests           @mitchdenny
-/tests/Aspire.Templates.Tests         @radical @eerhardt
 /tests/Shared                         @radical @eerhardt
 /tests/helix                          @radical @eerhardt
-/tests/templates.proj                 @radical @eerhardt
 
 # playground apps
 /playground/deployers                @mitchdenny
