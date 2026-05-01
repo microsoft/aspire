@@ -759,8 +759,8 @@ whose most recent associated PR was merged within the **last 3 days**
 (relative to the current run time). Sort entries **newest to oldest** by merge date.
 Each item is a link to the area heading, using the format:
 `- [<date> — <area-emoji> <Area> - <change-emoji> <Name>](#<area-slug>)`
-where `<date>` is the merge date of the last PR in `YYYY-M-D HH:mm UTC` format
-(no leading zeroes on month/day, 24-hour time in UTC), `<area-emoji>` is the area's Unicode emoji,
+where `<date>` is the merge date of the last PR in `YYYY-M-D HH:mm` format
+(no leading zeroes on month/day, 24-hour UTC time), `<area-emoji>` is the area's Unicode emoji,
 `<Area>` is the area name, `<change-emoji>` is the
 entry's individual emoji, `<Name>` is the changelog entry name, and
 `<area-slug>` is the GitHub-generated slug for that area's `##` heading
@@ -791,9 +791,9 @@ Use this exact format:
 
 ## What's New
 
-- [2026-4-22 22:48 UTC — 🏠 AppHost - 🧭 Feature name](#-apphost)
-- [2026-4-21 07:30 UTC — 💻 CLI - 🆕 New CLI command](#-cli)
-- [2026-4-20 23:05 UTC — 🏠 AppHost - 🚀 Another feature](#-apphost)
+- [2026-4-22 22:48 — 🏠 AppHost - 🧭 Feature name](#-apphost)
+- [2026-4-21 07:30 — 💻 CLI - 🆕 New CLI command](#-cli)
+- [2026-4-20 23:05 — 🏠 AppHost - 🚀 Another feature](#-apphost)
 
 ## 🏠 AppHost
 
