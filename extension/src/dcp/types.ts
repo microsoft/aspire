@@ -38,6 +38,7 @@ export interface PythonLaunchConfiguration extends ExecutableLaunchConfiguration
 
     module?: string;
     interpreter_path?: string;
+    working_directory?: string;
 }
 
 export function isPythonLaunchConfiguration(obj: any): obj is PythonLaunchConfiguration {

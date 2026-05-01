@@ -16,4 +16,7 @@ internal sealed class PythonLaunchConfiguration() : ExecutableLaunchConfiguratio
 
     [JsonPropertyName("interpreter_path")]
     public string InterpreterPath { get; set; } = string.Empty;
+
+    [JsonPropertyName("working_directory")]
+    public string WorkingDirectory { get; set; } = string.Empty;
 }

@@ -4,6 +4,7 @@
 #pragma warning disable CS0612
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREEXTENSION001 // SupportsDebuggingAnnotation is experimental
 
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Hosting.Utils;
@@ -1491,6 +1492,88 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         // Verify "-m" and module name were removed but other args remain
         Assert.Collection(commandArguments,
             arg => Assert.Equal("run", arg));
+    }
+
+    [Fact]
+    public void WithDebugSupport_PopulatesWorkingDirectory_ForScriptEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+
+        var pythonApp = builder.AddPythonApp("myapp", appDirectory, "main.py")
+            .WithVirtualEnvironment(virtualEnvironmentPath);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal(Path.Combine(appDirectory, "main.py"), launchConfig.ProgramPath);
+        Assert.Equal(string.Empty, launchConfig.Module);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PopulatesWorkingDirectory_ForModuleEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+
+        var pythonApp = builder.AddPythonModule("myapp", appDirectory, "flask")
+            .WithVirtualEnvironment(virtualEnvironmentPath);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal("flask", launchConfig.Module);
+        // ProgramPath must be empty for module entrypoints; the working_directory field
+        // now carries the cwd to the debugger instead of being smuggled through program_path.
+        Assert.Equal(string.Empty, launchConfig.ProgramPath);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PropagatesWorkingDirectoryOverride()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+        var customWorkingDirectory = Path.Combine(tempDir.Path, "custom");
+        Directory.CreateDirectory(customWorkingDirectory);
+
+        var pythonApp = builder.AddPythonApp("myapp", appDirectory, "main.py")
+            .WithVirtualEnvironment(virtualEnvironmentPath)
+            .WithWorkingDirectory(customWorkingDirectory);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        var expectedWorkingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(
+            Path.Combine(builder.AppHostDirectory, customWorkingDirectory));
+        Assert.Equal(expectedWorkingDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal(Path.Combine(expectedWorkingDirectory, "main.py"), launchConfig.ProgramPath);
+    }
+
+    private static PythonLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var exe = Executable.Create("test", "python");
+        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<PythonLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigs));
+        return Assert.Single(launchConfigs);
     }
 
     [Fact]

@@ -10,6 +10,13 @@ function getProjectFile(launchConfig: ExecutableLaunchConfiguration): string {
         if (programPath) {
             return programPath;
         }
+
+        // Module entrypoints don't have a program path; fall back to the working directory
+        // so the central cwd derivation in createDebugSessionConfiguration has something to work with.
+        // The per-callback override below sets `cwd` from `working_directory` when present.
+        if (launchConfig.working_directory) {
+            return launchConfig.working_directory;
+        }
     }
 
     throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
@@ -30,6 +37,12 @@ export const pythonDebuggerExtension: ResourceDebuggerExtension = {
 
         if (launchConfig.interpreter_path) {
             debugConfiguration.python = launchConfig.interpreter_path;
+        }
+
+        // Use the explicit working_directory when provided so .WithWorkingDirectory(...) overrides
+        // and the resource's app directory both flow through to the debugger's cwd.
+        if (launchConfig.working_directory) {
+            debugConfiguration.cwd = launchConfig.working_directory;
         }
 
         // By default, activate support for Jinja debugging
