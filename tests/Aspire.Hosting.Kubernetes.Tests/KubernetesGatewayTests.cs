@@ -227,4 +227,46 @@ public class KubernetesGatewayTests
         Assert.DoesNotContain(files, f => f.Contains("gateway", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(files, f => f.Contains("route", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public async Task AddGateway_WithTls_NoHostname_GeneratesHttpsListenerWithoutHostname()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("azure-alb-external");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        // WithTls() without WithHostname() — should still generate an HTTPS listener
+        gateway
+            .WithRoute("/", api.GetEndpoint("http"))
+            .WithTls("my-tls-secret");
+
+        var app = builder.Build();
+        app.Run();
+
+        // Check Gateway has HTTPS listener without a hostname
+        var gatewayFile = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var content = await File.ReadAllTextAsync(gatewayFile);
+
+        Assert.Contains("HTTPS", content);
+        Assert.Contains("Terminate", content);
+        Assert.Contains("my-tls-secret", content);
+        // Should also have HTTP listener
+        Assert.Contains("HTTP", content);
+
+        // The HTTPS listener should NOT have a hostname field (since no WithHostname was called)
+        // Verify it has the listener but the hostname line should not appear after HTTPS
+        var lines = content.Split('\n').Select(l => l.Trim()).ToList();
+        var httpsIndex = lines.FindIndex(l => l.Contains("protocol:") && l.Contains("HTTPS"));
+        Assert.True(httpsIndex >= 0, "HTTPS listener not found in:\n" + content);
+
+        // Find the next listener or end of listeners to check there's no hostname
+        var nextListenerOrEnd = lines.FindIndex(httpsIndex + 1, l => l.StartsWith("- name:") || l == "");
+        var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex);
+        Assert.DoesNotContain(httpsSection, l => l.StartsWith("hostname:") || l.StartsWith("hostname "));
+    }
 }
