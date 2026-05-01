@@ -348,14 +348,6 @@ fluent-select.resource-list {
 
 /* (h1 styling moved to Modern UI Overhaul section below) */
 
-#components-reconnect-modal {
-    background-color: var(--neutral-layer-floating) !important;
-}
-
-.components-rejoining-animation div {
-    border-color: var(--accent-fill-active) !important;
-}
-
 @media (max-width: 768px) {
     fluent-toolbar[orientation=horizontal].main-toolbar {
         padding-left: calc(var(--design-unit) * 2px);
