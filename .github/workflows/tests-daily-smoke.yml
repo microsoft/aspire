@@ -65,91 +65,122 @@ jobs:
             --hangdump --hangdump-type none --hangdump-timeout 15m
 
       - name: Verify Aspire CLI versions match
+        shell: pwsh
         run: |
-          versions_dir="${{ github.workspace }}/testresults/cli-versions"
-          shopt -s nullglob
-          version_files=("$versions_dir"/*.env)
+          $ErrorActionPreference = 'Stop'
+          $versionsDir = Join-Path $env:GITHUB_WORKSPACE 'testresults/cli-versions'
 
-          if [ ${#version_files[@]} -eq 0 ]; then
-            echo "::error::No Aspire CLI version records were produced."
+          if (-not (Test-Path -LiteralPath $versionsDir -PathType Container)) {
+            Write-Host "::error::Aspire CLI version records directory was not created: $versionsDir"
             exit 1
-          fi
-
-          versions=()
-          records=()
-          missing_version_records=()
-
-          for version_file in "${version_files[@]}"; do
-            test_name=""
-            mode=""
-            strategy=""
-            version=""
-
-            while IFS='=' read -r key value || [ -n "$key" ]; do
-              case "$key" in
-                test) test_name="$value" ;;
-                mode) mode="$value" ;;
-                strategy) strategy="$value" ;;
-                version) version="$value" ;;
-              esac
-            done < "$version_file"
-
-            route="${strategy:-${mode:-unknown install route}}"
-            record="${route} | ${test_name:-$(basename "$version_file")} | ${version:-"(missing version)"}"
-            records+=("$record")
-
-            if [ -z "$version" ]; then
-              missing_version_records+=("$record")
-            else
-              versions+=("$version")
-            fi
-          done
-
-          write_failure_summary() {
-            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-              {
-                echo "## Aspire CLI version consistency check failed"
-                echo ""
-                echo "All daily smoke install routes should test the same Aspire CLI version."
-                echo ""
-                echo "### Version records"
-                echo ""
-                for record in "${records[@]}"; do
-                  echo "- \`$record\`"
-                done
-              } >> "$GITHUB_STEP_SUMMARY"
-            fi
           }
 
-          if [ ${#missing_version_records[@]} -gt 0 ]; then
-            echo "::error::Some Aspire CLI version records did not include a version."
-            for record in "${missing_version_records[@]}"; do
-              echo "Missing version: $record"
-            done
-            write_failure_summary
+          $versionFiles = @(Get-ChildItem -LiteralPath $versionsDir -Filter '*.env' -File)
+
+          if ($versionFiles.Count -eq 0) {
+            Write-Host '::error::No Aspire CLI version records were produced.'
             exit 1
-          fi
+          }
 
-          unique_versions=()
-          while IFS= read -r version; do
-            if [ -n "$version" ]; then
-              unique_versions+=("$version")
-            fi
-          done < <(printf '%s\n' "${versions[@]}" | sort -u)
+          function Read-CliVersionRecord {
+            param([System.IO.FileInfo]$File)
 
-          if [ ${#unique_versions[@]} -ne 1 ]; then
-            echo "::error::Daily smoke tests installed ${#unique_versions[@]} different Aspire CLI versions."
-            printf 'Installed versions:\n'
-            printf '  %s\n' "${unique_versions[@]}"
-            printf 'Version records:\n'
-            printf '  %s\n' "${records[@]}"
-            write_failure_summary
+            $values = @{}
+            foreach ($line in Get-Content -LiteralPath $File.FullName) {
+              $separatorIndex = $line.IndexOf('=')
+              if ($separatorIndex -lt 0) {
+                continue
+              }
+
+              $key = $line.Substring(0, $separatorIndex)
+              if ([string]::IsNullOrWhiteSpace($key)) {
+                continue
+              }
+
+              $values[$key] = $line.Substring($separatorIndex + 1)
+            }
+
+            $testName = $values['test']
+            $mode = $values['mode']
+            $strategy = $values['strategy']
+            $version = $values['version']
+
+            $route = if (-not [string]::IsNullOrWhiteSpace($strategy)) {
+              $strategy
+            }
+            elseif (-not [string]::IsNullOrWhiteSpace($mode)) {
+              $mode
+            }
+            else {
+              'unknown install route'
+            }
+
+            if ([string]::IsNullOrWhiteSpace($testName)) {
+              $testName = $File.Name
+            }
+
+            $versionLabel = if ([string]::IsNullOrWhiteSpace($version)) {
+              '(missing version)'
+            }
+            else {
+              $version
+            }
+
+            [pscustomobject]@{
+              Test = $testName
+              Mode = $mode
+              Strategy = $strategy
+              Version = $version
+              Route = $route
+              Description = "$route | $testName | $versionLabel"
+            }
+          }
+
+          function Write-FailureSummary {
+            param([object[]]$Records)
+
+            if ([string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+              return
+            }
+
+            $summaryLines = @(
+              '## Aspire CLI version consistency check failed'
+              ''
+              'All daily smoke install routes should test the same Aspire CLI version.'
+              ''
+              '### Version records'
+              ''
+            )
+
+            foreach ($record in $Records) {
+              $summaryLines += "- ``$($record.Description)``"
+            }
+
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value ($summaryLines -join [Environment]::NewLine)
+          }
+
+          $records = @($versionFiles | ForEach-Object { Read-CliVersionRecord $_ })
+          $missingVersionRecords = @($records | Where-Object { [string]::IsNullOrWhiteSpace($_.Version) })
+
+          if ($missingVersionRecords.Count -gt 0) {
+            Write-Host '::error::Some Aspire CLI version records did not include a version.'
+            $missingVersionRecords | ForEach-Object { Write-Host "Missing version: $($_.Description)" }
+            Write-FailureSummary $records
             exit 1
-          fi
+          }
 
-          for version in "${unique_versions[@]}"; do
-            echo "All daily smoke tests installed Aspire CLI version: $version"
-          done
+          $uniqueVersions = @($records | ForEach-Object { $_.Version } | Sort-Object -Unique)
+          if ($uniqueVersions.Count -ne 1) {
+            Write-Host "::error::Daily smoke tests installed $($uniqueVersions.Count) different Aspire CLI versions."
+            Write-Host 'Installed versions:'
+            $uniqueVersions | ForEach-Object { Write-Host "  $_" }
+            Write-Host 'Version records:'
+            $records | ForEach-Object { Write-Host "  $($_.Description)" }
+            Write-FailureSummary $records
+            exit 1
+          }
+
+          Write-Host "All daily smoke tests installed Aspire CLI version: $($uniqueVersions[0])"
 
       - name: Upload logs and test results
         id: upload-logs
