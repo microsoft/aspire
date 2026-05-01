@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix for unbounded memory growth in TelemetryRepository dashboard telemetry storage",
+  "mergedAt": "2026-05-01T18:39:24Z",
+  "number": 16590,
+  "runDate": "2026-05-01T20:25:44Z",
+  "status": "included",
+  "title": "[release/13.3] Fix unbounded collection growth in TelemetryRepository"
+}
