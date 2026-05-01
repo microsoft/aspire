@@ -291,7 +291,7 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void Detect_DotnetTool_IncludesPrereleaseForStagingQuality()
+    public void Detect_DotnetTool_UsesStagingFeedForStagingQuality()
     {
         using var environment = new EnvironmentVariableScope(
             ("ASPIRE_E2E_ARCHIVE", null),
@@ -308,7 +308,8 @@ public class CliInstallStrategyTests
         var strategy = CliInstallStrategy.Detect();
 
         Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
-        Assert.True(strategy.IncludePrerelease);
+        Assert.False(strategy.IncludePrerelease);
+        Assert.True(strategy.UsesStagingDotnetToolFeed);
     }
 
     [Fact]
@@ -380,8 +381,9 @@ public class CliInstallStrategyTests
         var strategy = DotnetToolSmokeTests.GetDotnetToolStrategy();
 
         Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
-        Assert.True(strategy.IncludePrerelease);
+        Assert.False(strategy.IncludePrerelease);
         Assert.Null(strategy.Version);
+        Assert.True(strategy.UsesStagingDotnetToolFeed);
     }
 
     [Fact]
@@ -483,6 +485,21 @@ public class CliInstallStrategyTests
         var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
 
         Assert.Equal("dotnet tool install --global Aspire.Cli --prerelease --configfile '/opt/aspire-scripts/NuGet.config'", command);
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithStagingQuality()
+    {
+        var strategy = CliInstallStrategy.FromPublishedDotnetToolFeed(version: null, CliInstallQuality.Staging);
+        var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+        Assert.Contains("/opt/aspire-scripts/get-aspire-cli.sh --quality staging --install-path \"$STAGING_INSTALL_DIR\" --skip-path", command);
+        Assert.Contains("darc-pub-microsoft-aspire-${STAGING_SHA8}/nuget/v3/index.json", command);
+        Assert.Contains("/opt/aspire-scripts/NuGet.config", command);
+        Assert.Contains("\"$STAGING_NUGET_CONFIG\"", command);
+        Assert.Contains("<packageSource key=\\\"aspire-staging\\\">", command);
+        Assert.Contains("dotnet tool install --global Aspire.Cli --version \"$STAGING_BASE_VERSION\" --configfile \"$STAGING_NUGET_CONFIG\"", command);
+        Assert.DoesNotContain("--prerelease", command);
     }
 
     [Fact]

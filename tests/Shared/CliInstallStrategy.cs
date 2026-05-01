@@ -155,10 +155,49 @@ internal static class AspireCliShellCommandHelpers
 
     internal static string GetDotnetToolInstallCommandInDocker(CliInstallStrategy strategy)
     {
+        if (strategy.UsesStagingDotnetToolFeed)
+        {
+            return GetStagingDotnetToolInstallCommand(
+                AspireCliShellCommandHelpers.DockerInstallScriptCommandPrefix,
+                DockerNuGetConfigPath);
+        }
+
         var nupkgSourcePath = strategy.NupkgSourcePath is not null ? "/tmp/aspire-nupkg-source" : null;
         var nuGetConfigPath = strategy.RequiresDotnetToolNuGetConfig ? DockerNuGetConfigPath : null;
 
         return $"dotnet tool install {GetDotnetToolInstallArgs(strategy, nupkgSourcePath, nuGetConfigPath)}";
+    }
+
+    internal static string GetStagingDotnetToolInstallCommand(string installScriptCommandPrefix, string baseNuGetConfigPath)
+    {
+        var script = $$"""
+set -euo pipefail
+TMP_DIR=$(mktemp -d)
+cleanup() { rm -rf "$TMP_DIR"; }
+trap cleanup EXIT
+STAGING_INSTALL_DIR="$TMP_DIR/install-script"
+STAGING_NUGET_CONFIG="$TMP_DIR/NuGet.config"
+{{installScriptCommandPrefix}} --quality staging --install-path "$STAGING_INSTALL_DIR" --skip-path
+STAGING_VERSION=$("$STAGING_INSTALL_DIR/aspire" --version)
+STAGING_BASE_VERSION=${STAGING_VERSION%%+*}
+STAGING_SHA=${STAGING_VERSION#*+}
+if [ "$STAGING_SHA" = "$STAGING_VERSION" ] || [ -z "$STAGING_SHA" ]; then
+  echo "Unable to derive staging feed SHA from Aspire CLI version '$STAGING_VERSION'." >&2
+  exit 1
+fi
+STAGING_SHA8=${STAGING_SHA:0:8}
+STAGING_FEED="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-${STAGING_SHA8}/nuget/v3/index.json"
+cp {{QuoteBashArg(baseNuGetConfigPath)}} "$STAGING_NUGET_CONFIG"
+sed -i \
+  -e "s|<add key=\"dotnet9\" value=\"[^\"]*\" />|<add key=\"aspire-staging\" value=\"$STAGING_FEED\" />|" \
+  -e "s|<packageSource key=\"dotnet9\">|<packageSource key=\"aspire-staging\">|" \
+  "$STAGING_NUGET_CONFIG"
+echo "Resolved staging Aspire CLI version: $STAGING_VERSION"
+echo "Resolved staging dotnet tool feed: $STAGING_FEED"
+dotnet tool install --global Aspire.Cli --version "$STAGING_BASE_VERSION" --configfile "$STAGING_NUGET_CONFIG"
+""";
+
+        return $"bash -c {QuoteBashArg(script)}";
     }
 
     private static string GetDotnetToolInstallArgs(CliInstallStrategy strategy, string? nupkgSourcePath, string? nuGetConfigPath = null)
@@ -245,6 +284,15 @@ internal sealed class CliInstallStrategy
     /// For DotnetTool: include prerelease package versions when installing the latest available version.
     /// </summary>
     public bool IncludePrerelease { get; }
+
+    /// <summary>
+    /// Gets whether published DotnetTool installation should first resolve the staging CLI build and use its SHA-specific package feed.
+    /// </summary>
+    public bool UsesStagingDotnetToolFeed =>
+        Mode is CliInstallMode.DotnetTool &&
+        NupkgSourcePath is null &&
+        Version is null &&
+        Quality is CliInstallQuality.Staging;
 
     /// <summary>
     /// The expected CLI version after installation, when known.
@@ -372,8 +420,13 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public static CliInstallStrategy FromPublishedDotnetToolFeed(string? version, CliInstallQuality? quality)
     {
+        if (version is not null && !CliPackageDiscovery.IsValidVersion(version))
+        {
+            throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
+        }
+
         var includePrerelease = ShouldIncludePrereleaseForPublishedDotnetTool(version, quality);
-        return FromDotnetTool(version, includePrerelease);
+        return new CliInstallStrategy(CliInstallMode.DotnetTool, quality: version is null ? quality : null, version: version, includePrerelease: version is null && includePrerelease, expectedVersion: version);
     }
 
     /// <summary>
@@ -454,7 +507,12 @@ internal sealed class CliInstallStrategy
             var toolVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
             var quality = GetQualityFromEnvironment();
             var strategy = FromPublishedDotnetToolFeed(toolVersion, quality);
-            var versionDescription = toolVersion ?? (strategy.IncludePrerelease ? "(latest prerelease)" : "(latest stable)");
+            var versionDescription = toolVersion ?? strategy switch
+            {
+                { UsesStagingDotnetToolFeed: true } => "(staging)",
+                { IncludePrerelease: true } => "(latest prerelease)",
+                _ => "(latest stable)"
+            };
             log?.Invoke($"  → Selected: DotnetTool published feed (ASPIRE_E2E_DOTNET_TOOL={dotnetTool}, version={versionDescription})");
             return strategy;
         }
@@ -575,6 +633,7 @@ internal sealed class CliInstallStrategy
             CliInstallMode.InstallScript => "InstallScript (latest GA)",
             CliInstallMode.DotnetTool when NupkgSourcePath is not null => $"DotnetTool (local: {NupkgSourcePath}, --version {Version})",
             CliInstallMode.DotnetTool when Version is not null => $"DotnetTool (--version {Version})",
+            CliInstallMode.DotnetTool when UsesStagingDotnetToolFeed => "DotnetTool (staging)",
             CliInstallMode.DotnetTool when IncludePrerelease => "DotnetTool (latest prerelease)",
             CliInstallMode.DotnetTool => "DotnetTool (latest)",
             _ => Mode.ToString(),
@@ -603,7 +662,7 @@ internal sealed class CliInstallStrategy
 
     private static bool ShouldIncludePrereleaseForPublishedDotnetTool(string? version, CliInstallQuality? quality)
     {
-        return string.IsNullOrEmpty(version) && quality is CliInstallQuality.Dev or CliInstallQuality.Staging;
+        return string.IsNullOrEmpty(version) && quality is CliInstallQuality.Dev;
     }
 
     private static bool IsPrereleaseVersion(string? version)
