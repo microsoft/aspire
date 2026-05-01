@@ -1,9 +1,9 @@
 {
   "author": null,
-  "comment": "Community bug fix in shared CircularBuffer utility",
+  "comment": "Excluded per editorial feedback from JamesNK (issue #16490)",
   "mergedAt": "2026-02-22T23:42:41Z",
   "number": 14609,
-  "runDate": "2026-04-30T04:01:39Z",
-  "status": "included",
+  "runDate": "2026-05-01T16:03:38Z",
+  "status": "excluded",
   "title": null
 }
