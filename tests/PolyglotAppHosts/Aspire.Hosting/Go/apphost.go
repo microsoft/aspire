@@ -147,19 +147,19 @@ func main() {
 	// ===================================================================
 
 	// WithEnvironment - EndpointReference
-	container.WithEnvironmentEndpoint("MY_ENDPOINT", endpoint)
+	container.WithEnvironment("MY_ENDPOINT", endpoint)
 	container.WithEnvironment("MY_ENDPOINT_URL", endpointURL)
 
 	// WithEnvironment — with ReferenceExpression (via WithEnvironment any overload)
 	container.WithEnvironment("MY_EXPR", expr)
 
 	// WithEnvironment — with ParameterResource
-	container.WithEnvironmentParameter("MY_PARAM", configParam)
-	container.WithEnvironmentParameter("MY_SECRET_PARAM", secretParam)
-	container.WithEnvironmentParameter("MY_GENERATED_PARAM", generatedParam)
+	container.WithEnvironment("MY_PARAM", configParam)
+	container.WithEnvironment("MY_SECRET_PARAM", secretParam)
+	container.WithEnvironment("MY_GENERATED_PARAM", generatedParam)
 
 	// WithEnvironment — with connection string resource
-	container.WithEnvironmentConnectionString("MY_CONN", envConnectionString)
+	container.WithEnvironment("MY_CONN", envConnectionString)
 
 	// ExcludeFromManifest
 	container.ExcludeFromManifest()
