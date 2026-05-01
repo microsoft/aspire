@@ -240,10 +240,11 @@ public class LayoutCommandTests
             var restoreExitCode = await restoreParseResult.InvokeAsync();
             Assert.Equal(0, restoreExitCode);
 
+            var assetsPath = Path.Combine(objPath, "project.assets.json");
             var manifestPath = Path.Combine(workspaceRoot, "restore", "integration-package-probe-manifest.json");
             var manifestCommand = ManifestCommand.Create();
             var manifestParseResult = manifestCommand.Parse([
-                "--assets", Path.Combine(objPath, "project.assets.json"),
+                "--assets", assetsPath,
                 "--output", manifestPath,
                 "--framework", "net10.0"
             ]);
@@ -255,7 +256,7 @@ public class LayoutCommandTests
             await using var manifestStream = File.OpenRead(manifestPath);
             using var manifest = await JsonDocument.ParseAsync(manifestStream);
             var managedAssemblies = manifest.RootElement.GetProperty("managedAssemblies").EnumerateArray().ToList();
-            var expectedAssemblyPath = Path.Combine(globalPackagesPath, "test.package", "1.0.0", "lib", "net10.0", "Test.Package.dll");
+            var expectedAssemblyPath = Path.Combine(GetPackageFolderFromAssets(assetsPath), "test.package", "1.0.0", "lib", "net10.0", "Test.Package.dll");
 
             Assert.Contains(
                 managedAssemblies,
@@ -407,6 +408,17 @@ public class LayoutCommandTests
                         new XAttribute("value", sourcePath)))));
 
         document.Save(nugetConfigPath);
+    }
+
+    private static string GetPackageFolderFromAssets(string assetsPath)
+    {
+        using var stream = File.OpenRead(assetsPath);
+        using var document = JsonDocument.Parse(stream);
+        var packageFolders = document.RootElement.GetProperty("packageFolders").EnumerateObject();
+
+        return packageFolders.MoveNext()
+            ? packageFolders.Current.Name
+            : throw new InvalidOperationException("project.assets.json did not contain a packageFolders entry.");
     }
 
     private static string CreateAssetsJsonWithRuntimeSpecificTarget(string rootPath, string runtimeIdentifier, string runtimeAssemblyPath)
