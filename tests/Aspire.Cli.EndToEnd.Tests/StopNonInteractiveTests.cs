@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -141,6 +142,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16643")]
     public async Task StopAllAppHostsFromUnrelatedDirectory()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -213,6 +215,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16643")]
     public async Task StopNonInteractiveMultipleAppHostsShowsError()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

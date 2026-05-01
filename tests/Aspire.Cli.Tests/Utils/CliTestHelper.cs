@@ -145,6 +145,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.AppHostServerSessionFactory);
         services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
         services.AddSingleton(options.LanguageServiceFactory);
+        services.AddSingleton<TemplateNuGetConfigService>();
 
         // Bundle layout services - return null/no-op implementations to trigger SDK mode fallback
         // This ensures backward compatibility: no layout found = use legacy SDK mode

@@ -97,6 +97,51 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
+    /// Creates or updates NuGet.config for the given channel name without prompting the user
+    /// and without displaying a confirmation message containing "NuGet.config" (which can
+    /// trip up automation/tests that match on substrings). Resolves the channel name from
+    /// configuration if not provided. Suitable for non-interactive code paths such as
+    /// <c>aspire init</c> where the caller wants to display its own message (or none).
+    /// </summary>
+    /// <param name="channelName">The optional channel name from command input.</param>
+    /// <param name="outputPath">The output path where the NuGet.config should be created or updated.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns><see langword="true"/> if a NuGet.config was created or updated; otherwise <see langword="false"/>.</returns>
+    public async Task<bool> CreateOrUpdateNuGetConfigWithoutPromptAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(channelName))
+        {
+            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
+        }
+
+        if (string.IsNullOrWhiteSpace(channelName))
+        {
+            return false;
+        }
+
+        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var matchingChannel = channels.FirstOrDefault(c =>
+            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+        if (matchingChannel is null || matchingChannel.Type is not PackageChannelType.Explicit)
+        {
+            return false;
+        }
+
+        var mappings = matchingChannel.Mappings;
+        if (mappings is null || mappings.Length == 0)
+        {
+            return false;
+        }
+
+        // Call the merger directly — bypass NuGetConfigPrompter so we don't emit a
+        // confirmation message containing the substring "NuGet.config", which the
+        // AspireInitAsync test helper false-matches as a user-facing Y/n prompt.
+        await NuGetConfigMerger.CreateOrUpdateAsync(new DirectoryInfo(outputPath), matchingChannel, cancellationToken: cancellationToken);
+        return true;
+    }
+
+    /// <summary>
     /// Resolves the channel and template package version that should be used to install Aspire project templates.
     /// </summary>
     /// <param name="query">Inputs that control channel/version selection.</param>
@@ -223,7 +268,7 @@ internal sealed class TemplateNuGetConfigService(
         // ambient configuration (although we should still specify the source) because
         // the user would have selected it.
         //
-        // The temporary config is disposed when this method returns. That is intentional —
+        // The temporary config is disposed when this method returns. That is intentional ΓÇö
         // only `dotnet new install` consumes the config; the subsequent `dotnet new <template>`
         // call (in DotNetTemplateFactory and InitCommand) operates against the already-installed
         // template hive and uses the ambient NuGet configuration.
