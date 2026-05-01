@@ -755,19 +755,19 @@ Use singular form for counts of 1 (`1 new feature`, `1 improvement`,
 `1 bug fix`).
 
 After the Table of Contents, add a **What's New** section that lists entries
-whose most recent associated PR was merged within the **last 5 days**
+whose most recent associated PR was merged within the **last 3 days**
 (relative to the current run time). Sort entries **newest to oldest** by merge date.
 Each item is a link to the area heading, using the format:
 `- [<date> — <area-emoji> <Area> - <change-emoji> <Name>](#<area-slug>)`
-where `<date>` is the merge date of the last PR in `YYYY-M-D` format (no leading
-zeroes on month/day), `<area-emoji>` is the area's Unicode emoji,
+where `<date>` is the merge date of the last PR in `YYYY-M-D HH:mm UTC` format
+(no leading zeroes on month/day, 24-hour time in UTC), `<area-emoji>` is the area's Unicode emoji,
 `<Area>` is the area name, `<change-emoji>` is the
 entry's individual emoji, `<Name>` is the changelog entry name, and
 `<area-slug>` is the GitHub-generated slug for that area's `##` heading
 (e.g., `-apphost`, `-cli`, `-dashboard`). The `#` before the slug is mandatory
 markdown anchor syntax — always write `(#-apphost)`, never `(-apphost)`.
-If there are no entries in the last 5 days, still include the section with
-the text `No notable changes in the last 5 days.` beneath the heading.
+If there are no entries in the last 3 days, still include the section with
+the text `No notable changes in the last 3 days.` beneath the heading.
 
 Under each area heading, add a one-line **summary** counting the entries per change
 type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
@@ -791,9 +791,9 @@ Use this exact format:
 
 ## What's New
 
-- [2026-4-22 — 🏠 AppHost - 🧭 Feature name](#-apphost)
-- [2026-4-21 — 💻 CLI - 🆕 New CLI command](#-cli)
-- [2026-4-20 — 🏠 AppHost - 🚀 Another feature](#-apphost)
+- [2026-4-22 22:48 UTC — 🏠 AppHost - 🧭 Feature name](#-apphost)
+- [2026-4-21 07:30 UTC — 💻 CLI - 🆕 New CLI command](#-cli)
+- [2026-4-20 23:05 UTC — 🏠 AppHost - 🚀 Another feature](#-apphost)
 
 ## 🏠 AppHost
 
@@ -926,4 +926,4 @@ so unprocessed PRs will be retried on the next run.
 - Keep descriptions concise — this is a changelog, not release notes prose.
 - If the milestone has no merged PRs at all yet, still create the wiki page
   with the header, an empty Table of Contents, a `## What's New` section that
-  says `No notable changes in the last 5 days.`, and the PRs processed footer.
+  says `No notable changes in the last 3 days.`, and the PRs processed footer.
