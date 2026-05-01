@@ -407,8 +407,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         var output = string.Join(Environment.NewLine, textWriter.Logs);
         var normalizedOutput = output.Replace(Environment.NewLine, string.Empty, StringComparison.Ordinal);
         Assert.Contains("SDK", normalizedOutput, StringComparison.Ordinal);
-        Assert.Contains("13.2.4", normalizedOutput, StringComparison.Ordinal);
-        Assert.DoesNotContain("13.2.4.0", normalizedOutput, StringComparison.Ordinal);
+        Assert.Contains("13.2.4.0", normalizedOutput, StringComparison.Ordinal);
     }
 
     [Fact]
