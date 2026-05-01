@@ -1215,6 +1215,14 @@ fluent-text-field::part(root) {
 }
 
 /* Grid header row - clean and minimal */
+.fluent-data-grid-row[row-type='header'],
+.fluent-data-grid-row[row-type='sticky-header'] {
+    background: transparent !important;
+    background-color: transparent !important;
+    --neutral-fill-layer-rest: transparent;
+    --neutral-fill-secondary-rest: transparent;
+}
+
 .fluent-data-grid-row[row-type='header'] td,
 .fluent-data-grid-row[row-type='sticky-header'] td {
     font-family: 'Poppins', var(--body-font);
@@ -1225,10 +1233,17 @@ fluent-text-field::part(root) {
     color: var(--foreground-subtext-rest);
     border-bottom: 1px solid var(--aspire-border-subtle) !important;
     padding: 14px 16px !important;
-    background: transparent;
+    background: transparent !important;
+    background-color: transparent !important;
 }
 
-/* Data rows - airy, no harsh lines */
+/* Also override on the grid table itself */
+.fluent-data-grid {
+    --neutral-fill-layer-rest: transparent;
+    --neutral-fill-secondary-rest: transparent;
+}
+
+/* Data rows - airy, modern font */
 .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) {
     border-bottom: none !important;
     transition: all 0.15s ease;
@@ -1237,6 +1252,8 @@ fluent-text-field::part(root) {
 .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
     padding: 14px 16px !important;
     border-bottom: 1px solid color-mix(in srgb, var(--aspire-border-subtle) 50%, transparent) !important;
+    font-family: 'Poppins', var(--body-font);
+    font-size: 13px;
 }
 
 /* Hover - soft rounded highlight */
@@ -1426,9 +1443,37 @@ fluent-divider {
     overflow: hidden;
 }
 
-/* --- Page heading area --- */
+/* Override grey message bar backgrounds */
+fluent-message-bar,
+.fluent-messagebar {
+    --neutral-fill-layer-rest: transparent;
+    --neutral-fill-secondary-rest: transparent;
+    border-radius: 12px !important;
+}
+
+[data-theme="dark"] fluent-message-bar,
+[data-theme="dark"] .fluent-messagebar {
+    background: rgba(116, 85, 221, 0.08) !important;
+    background-color: rgba(116, 85, 221, 0.08) !important;
+    border: 1px solid var(--aspire-border-muted) !important;
+}
+
+[data-theme="light"] fluent-message-bar,
+[data-theme="light"] .fluent-messagebar {
+    background: rgba(116, 85, 221, 0.04) !important;
+    background-color: rgba(116, 85, 221, 0.04) !important;
+    border: 1px solid var(--aspire-border-subtle) !important;
+}
+
+/* --- Page heading area - gradient background --- */
 .content-header {
-    padding: 20px 24px 8px;
+    padding: 24px 24px 12px;
+    background: linear-gradient(135deg, rgba(116, 85, 221, 0.08) 0%, rgba(179, 15, 135, 0.04) 100%);
+    border-radius: 16px 16px 0 0;
+}
+
+[data-theme="dark"] .content-header {
+    background: linear-gradient(135deg, rgba(116, 85, 221, 0.15) 0%, rgba(179, 15, 135, 0.08) 100%);
 }
 
 .content-header h1 {
