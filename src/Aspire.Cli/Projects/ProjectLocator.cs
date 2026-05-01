@@ -419,7 +419,7 @@ internal sealed class ProjectLocator(
             }
         }
 
-        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(silent: false, cancellationToken);
+        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(silent: true, cancellationToken);
 
         if (settingsAppHost is not null && multipleAppHostProjectsFoundBehavior is not MultipleAppHostProjectsFoundBehavior.None)
         {
