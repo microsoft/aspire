@@ -39,17 +39,18 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var libsPath = await service.RestorePackagesAsync(
+        var result = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName);
 
-        var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "packages", "restore");
-        var restoreDirectory = Directory.GetParent(libsPath)!.FullName;
+        var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
+        var restoreDirectory = Directory.GetParent(result.ManifestPath)!.FullName;
 
-        Assert.StartsWith(restoreRoot, libsPath, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(restoreRoot, result.ManifestPath, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, invocations.Count);
         Assert.Equal(Path.Combine(restoreDirectory, "obj"), GetArgumentValue(invocations[0], "--output"));
-        Assert.Equal(libsPath, GetArgumentValue(invocations[1], "--output"));
+        Assert.Equal("manifest", invocations[1][1]);
+        Assert.Equal(result.ManifestPath, GetArgumentValue(invocations[1], "--output"));
         Assert.Equal(Path.Combine(restoreDirectory, "obj", "project.assets.json"), GetArgumentValue(invocations[1], "--assets"));
     }
 
@@ -74,17 +75,17 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var libsPathA = await service.RestorePackagesAsync(
+        var resultA = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/feed-a/index.json"],
             workingDirectory: appHostDirectory.FullName);
 
-        var libsPathB = await service.RestorePackagesAsync(
+        var resultB = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/feed-b/index.json"],
             workingDirectory: appHostDirectory.FullName);
 
-        Assert.NotEqual(libsPathA, libsPathB);
+        Assert.NotEqual(resultA.ManifestPath, resultB.ManifestPath);
     }
 
     [Fact]
@@ -146,27 +147,71 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "packages", "restore");
+        var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
 
         // Same packages + sources across two apphosts in one workspace should share the cache.
-        var sharedLibsFirst = await service.RestorePackagesAsync(
+        var sharedManifestFirst = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: firstAppHost.FullName);
-        var sharedLibsSecond = await service.RestorePackagesAsync(
+        var sharedManifestSecond = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: secondAppHost.FullName);
 
-        Assert.StartsWith(restoreRoot, sharedLibsFirst, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith(restoreRoot, sharedLibsSecond, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(sharedLibsFirst, sharedLibsSecond);
+        Assert.StartsWith(restoreRoot, sharedManifestFirst.ManifestPath, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(restoreRoot, sharedManifestSecond.ManifestPath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(sharedManifestFirst.ManifestPath, sharedManifestSecond.ManifestPath);
 
         // Different package sets must NOT collide even when workspace is shared.
-        var divergedLibs = await service.RestorePackagesAsync(
+        var divergedManifest = await service.RestorePackagesAsync(
             [("Aspire.Hosting.Python", "9.4.0")],
             workingDirectory: secondAppHost.FullName);
 
-        Assert.StartsWith(restoreRoot, divergedLibs, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEqual(sharedLibsSecond, divergedLibs);
+        Assert.StartsWith(restoreRoot, divergedManifest.ManifestPath, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(sharedManifestSecond.ManifestPath, divergedManifest.ManifestPath);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_IgnoresLockedLegacyLibsDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var packageList = new List<(string Id, string Version)> { ("Aspire.Hosting.JavaScript", "9.4.0") };
+        var packageHash = BundleNuGetService.ComputePackageHash(packageList, "net10.0", null, managedPath);
+        var restoreDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore", packageHash);
+        var legacyLibsDirectory = Path.Combine(restoreDirectory, "libs");
+        Directory.CreateDirectory(legacyLibsDirectory);
+        var lockedFilePath = Path.Combine(legacyLibsDirectory, "Microsoft.Extensions.DependencyInjection.xml");
+        File.WriteAllText(lockedFilePath, "legacy");
+
+        List<string[]> invocations = [];
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) => invocations.Add(args.ToArray())
+        };
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        using var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+
+        Assert.Equal(Path.Combine(restoreDirectory, "integration-package-probe-manifest.json"), result.ManifestPath);
+        Assert.Equal(2, invocations.Count);
+        Assert.DoesNotContain(invocations, args => args.Contains("layout"));
+        Assert.Equal("manifest", invocations[1][1]);
     }
 
     private static string GetArgumentValue(string[] arguments, string optionName)

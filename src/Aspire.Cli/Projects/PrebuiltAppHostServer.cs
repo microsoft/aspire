@@ -46,11 +46,12 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private readonly ILogger _logger;
     private readonly string _workingDirectory;
     private readonly string _projectReferencePrepareLockPath;
-    private readonly AppHostServerClosureSnapshotStore _snapshotStore;
+    private readonly AppHostServerProjectLayoutStore _projectLayoutStore;
 
     private string? _contentRootPath;
     private string? _integrationLibsPath;
-    private AppHostServerClosureSnapshot? _selectedSnapshot;
+    private string? _integrationProbeManifestPath;
+    private AppHostServerProjectLayout? _selectedProjectLayout;
 
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
@@ -88,19 +89,21 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // Create a working directory for this app host session
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appDirectoryPath));
         var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-        var workspaceAspireDirectory = ConfigurationHelper.GetWorkspaceAspireDirectory(new DirectoryInfo(_appDirectoryPath));
-        _workingDirectory = Path.Combine(workspaceAspireDirectory.FullName, "bundle-hosts", pathDir);
+        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(new DirectoryInfo(_appDirectoryPath));
+        _workingDirectory = Path.Combine(integrationCacheDirectory.FullName, "apphosts", pathDir);
         Directory.CreateDirectory(_workingDirectory);
-        _projectReferencePrepareLockPath = Path.Combine(_workingDirectory, "snapshots", "prepare.lock");
-        _snapshotStore = new AppHostServerClosureSnapshotStore(_workingDirectory, _logger);
+        _projectReferencePrepareLockPath = Path.Combine(_workingDirectory, "project-layouts", "prepare.lock");
+        _projectLayoutStore = new AppHostServerProjectLayoutStore(_workingDirectory, _logger);
     }
 
     /// <inheritdoc />
     public string AppDirectoryPath => _appDirectoryPath;
 
-    internal string? SelectedSnapshotFingerprint => _selectedSnapshot?.ManifestFingerprint;
+    internal string? SelectedProjectLayoutFingerprint => _selectedProjectLayout?.Fingerprint;
 
-    internal string? SelectedSnapshotPath => _selectedSnapshot?.SnapshotPath;
+    internal string? SelectedProjectLayoutPath => _selectedProjectLayout?.LayoutPath;
+
+    internal string? IntegrationProbeManifestPath => _integrationProbeManifestPath;
 
     /// <summary>
     /// Gets the path to the aspire-managed executable (used as the server).
@@ -129,9 +132,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         try
         {
-            _selectedSnapshot = null;
+            _selectedProjectLayout = null;
             _contentRootPath = _workingDirectory;
             _integrationLibsPath = null;
+            _integrationProbeManifestPath = null;
 
             // Resolve the configured channel (local settings.json → global config fallback)
             channelName = await ResolveChannelNameAsync(cancellationToken);
@@ -149,7 +153,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
                 var channelSources = await GetNuGetSourcesAsync(channelName, cancellationToken);
                 using var fileLock = await FileLock.AcquireAsync(_projectReferencePrepareLockPath, cancellationToken).ConfigureAwait(false);
-                _snapshotStore.CleanupStagingDirectories();
+                _projectLayoutStore.CleanupStagingDirectories();
 
                 var closureManifest = await BuildIntegrationClosureManifestAsync(
                     packageRefs,
@@ -157,25 +161,29 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                     channelSources,
                     cancellationToken).ConfigureAwait(false);
 
-                _selectedSnapshot = _snapshotStore.TryLoadSnapshot(closureManifest.ManifestFingerprint);
-                if (_selectedSnapshot is null)
+                if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
                 {
-                    _selectedSnapshot = await _snapshotStore.CreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    _logger.LogInformation("Reusing AppHost closure snapshot {SnapshotFingerprint}", closureManifest.ManifestFingerprint);
+                    _integrationProbeManifestPath = Path.Combine(_workingDirectory, IntegrationPackageProbeManifest.FileName);
+                    await IntegrationPackageProbeManifest.WriteAsync(
+                        _integrationProbeManifestPath,
+                        closureManifest.CreatePackageProbeManifest(),
+                        cancellationToken).ConfigureAwait(false);
                 }
 
-                _contentRootPath = _selectedSnapshot.ContentRootPath;
-                _integrationLibsPath = _selectedSnapshot.IntegrationLibsPath;
+                _selectedProjectLayout = await _projectLayoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
+                if (_selectedProjectLayout is not null)
+                {
+                    _integrationLibsPath = _selectedProjectLayout.IntegrationLibsPath;
+                }
+
+                await WriteAppSettingsAsync(_workingDirectory, closureManifest.AppSettingsContent, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 if (packageRefs.Count > 0)
                 {
                     // NuGet-only — use the bundled NuGet service (no SDK required)
-                    _integrationLibsPath = await RestoreNuGetPackagesAsync(
+                    _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
                         packageRefs, channelName, cancellationToken);
                 }
 
@@ -225,14 +233,15 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(channelName, cancellationToken);
         var sources = await GetNuGetSourcesAsync(channelName, cancellationToken);
 
-        return await _nugetService.RestorePackagesAsync(
+        var result = await _nugetService.RestorePackagesAsync(
             packages,
             workingDirectory: _appDirectoryPath,
             targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
-            ct: cancellationToken);
+            ct: cancellationToken).ConfigureAwait(false);
+        return result.ManifestPath;
     }
 
     /// <summary>
@@ -561,7 +570,6 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        // Pass the integration libs path so the server can resolve assemblies via AssemblyLoader
         if (_integrationLibsPath is not null)
         {
             _logger.LogDebug("Setting {EnvironmentVariable} to {Path}", KnownConfigNames.IntegrationLibsPath, _integrationLibsPath);
@@ -569,16 +577,16 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         }
         else
         {
-            _logger.LogWarning("Integration libs path is null - assemblies may not resolve correctly");
+            startInfo.Environment.Remove(KnownConfigNames.IntegrationLibsPath);
         }
 
-        if (_selectedSnapshot is not null)
+        if (_integrationProbeManifestPath is not null)
         {
             _logger.LogDebug(
                 "Setting {EnvironmentVariable} to {Path}",
                 KnownConfigNames.IntegrationProbeManifestPath,
-                _selectedSnapshot.IntegrationPackageProbeManifestPath);
-            startInfo.Environment[KnownConfigNames.IntegrationProbeManifestPath] = _selectedSnapshot.IntegrationPackageProbeManifestPath;
+                _integrationProbeManifestPath);
+            startInfo.Environment[KnownConfigNames.IntegrationProbeManifestPath] = _integrationProbeManifestPath;
         }
         else
         {

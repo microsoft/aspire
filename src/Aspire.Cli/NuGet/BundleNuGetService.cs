@@ -4,6 +4,7 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.NuGet;
@@ -15,7 +16,7 @@ namespace Aspire.Cli.NuGet;
 public interface INuGetService
 {
     /// <summary>
-    /// Restores packages to the cache and creates a flat layout.
+    /// Restores packages to the cache and creates a package probe manifest.
     /// </summary>
     /// <param name="packages">The packages to restore.</param>
     /// <param name="targetFramework">The target framework.</param>
@@ -24,8 +25,8 @@ public interface INuGetService
     /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
     /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Path to the restored libs directory.</returns>
-    Task<string> RestorePackagesAsync(
+    /// <returns>The package restore result.</returns>
+    Task<NuGetPackageRestoreResult> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -34,6 +35,12 @@ public interface INuGetService
         string? nugetConfigPath = null,
         CancellationToken ct = default);
 }
+
+/// <summary>
+/// Represents restored NuGet package metadata for the prebuilt AppHost server.
+/// </summary>
+/// <param name="ManifestPath">The path to the package probe manifest.</param>
+public sealed record NuGetPackageRestoreResult(string ManifestPath);
 
 /// <summary>
 /// NuGet service implementation that uses the bundle's NuGetHelper tool.
@@ -60,7 +67,7 @@ internal sealed class BundleNuGetService : INuGetService
         _logger = logger;
     }
 
-    public async Task<string> RestorePackagesAsync(
+    public async Task<NuGetPackageRestoreResult> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string workingDirectory,
         string targetFramework = "net10.0",
@@ -91,17 +98,17 @@ internal sealed class BundleNuGetService : INuGetService
 
         // Compute a hash for the package set to create a unique restore location.
         var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, managedPath, sources);
-        var packagesDirectory = GetPackagesDirectory(workingDirectory);
-        var restoreDir = Path.Combine(packagesDirectory, "restore", packageHash);
+        var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
+        var restoreDir = Path.Combine(restoreCacheDirectory, packageHash);
         var objDir = Path.Combine(restoreDir, "obj");
-        var libsDir = Path.Combine(restoreDir, "libs");
+        var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
         var assetsPath = Path.Combine(objDir, "project.assets.json");
 
         // Check if already restored
-        if (Directory.Exists(libsDir) && Directory.GetFiles(libsDir, "*.dll").Length > 0)
+        if (File.Exists(manifestPath))
         {
-            _logger.LogDebug("Using cached restore at {Path}", libsDir);
-            return libsDir;
+            _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
+            return new NuGetPackageRestoreResult(manifestPath);
         }
 
         Directory.CreateDirectory(objDir);
@@ -180,54 +187,54 @@ internal sealed class BundleNuGetService : INuGetService
             throw new InvalidOperationException($"Package restore failed: {error}");
         }
 
-        // Step 2: Create flat layout
+        // Step 2: Create package probe manifest
         // Prepend "nuget" subcommand for aspire-managed dispatch
-        var layoutArgs = new List<string>
+        var manifestArgs = new List<string>
         {
             "nuget",
-            "layout",
+            "manifest",
             "--assets", assetsPath,
-            "--output", libsDir,
+            "--output", manifestPath,
             "--framework", targetFramework
         };
 
         if (!string.IsNullOrEmpty(runtimeIdentifier))
         {
-            layoutArgs.Add("--runtime-identifier");
-            layoutArgs.Add(runtimeIdentifier);
+            manifestArgs.Add("--runtime-identifier");
+            manifestArgs.Add(runtimeIdentifier);
         }
 
         // Enable verbose output for debugging
         if (_logger.IsEnabled(LogLevel.Debug))
         {
-            layoutArgs.Add("--verbose");
+            manifestArgs.Add("--verbose");
         }
 
-        _logger.LogDebug("Creating layout from {AssetsPath}", assetsPath);
-        _logger.LogDebug("NuGet layout args: {Args}", string.Join(" ", layoutArgs));
+        _logger.LogDebug("Creating package manifest from {AssetsPath}", assetsPath);
+        _logger.LogDebug("NuGet manifest args: {Args}", string.Join(" ", manifestArgs));
 
         (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
-            layoutArgs,
+            manifestArgs,
             environmentVariables: environmentVariables,
             ct: ct);
 
         // Log stderr at debug level for diagnostics
         if (!string.IsNullOrWhiteSpace(error))
         {
-            _logger.LogDebug("NuGetHelper layout stderr: {Error}", error);
+            _logger.LogDebug("NuGetHelper manifest stderr: {Error}", error);
         }
 
         if (exitCode != 0)
         {
-            _logger.LogError("Layout creation failed with exit code {ExitCode}", exitCode);
-            _logger.LogError("Layout creation stderr: {Error}", error);
-            _logger.LogError("Layout creation stdout: {Output}", output);
-            throw new InvalidOperationException($"Layout creation failed: {error}");
+            _logger.LogError("Manifest creation failed with exit code {ExitCode}", exitCode);
+            _logger.LogError("Manifest creation stderr: {Error}", error);
+            _logger.LogError("Manifest creation stdout: {Output}", output);
+            throw new InvalidOperationException($"Manifest creation failed: {error}");
         }
 
-        _logger.LogDebug("Packages restored to {Path}", libsDir);
-        return libsDir;
+        _logger.LogDebug("Package manifest created at {Path}", manifestPath);
+        return new NuGetPackageRestoreResult(manifestPath);
     }
 
     internal static string ComputePackageHash(
@@ -282,10 +289,10 @@ internal sealed class BundleNuGetService : INuGetService
         }
     }
 
-    private static string GetPackagesDirectory(string workingDirectory)
+    private static string GetPackageRestoreCacheDirectory(string workingDirectory)
     {
-        var workspaceAspireDirectory = ConfigurationHelper.GetWorkspaceAspireDirectory(
+        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(
             new DirectoryInfo(Path.GetFullPath(workingDirectory)));
-        return Path.Combine(workspaceAspireDirectory.FullName, "packages");
+        return Path.Combine(integrationCacheDirectory.FullName, "package-restore");
     }
 }

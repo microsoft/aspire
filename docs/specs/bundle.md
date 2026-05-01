@@ -297,11 +297,12 @@ The parent directory check supports the installed layout where the CLI binary li
 | `ASPIRE_DCP_PATH` | DCP binaries location | `/opt/aspire/dcp` |
 | `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the dashboard binary (now points to `aspire-managed`) | `/opt/aspire/managed/aspire-managed` |
 | `ASPIRE_MANAGED_PATH` | CLI-only path for the `aspire-managed` binary | `/opt/aspire/managed/aspire-managed` |
-| `ASPIRE_INTEGRATION_LIBS_PATH` | Path to integration DLLs for aspire-server assembly resolution | `/home/user/.aspire/libs` |
+| `ASPIRE_INTEGRATION_LIBS_PATH` | Path to copied project-reference integration DLLs for aspire-server assembly resolution | `/home/user/myapp/.aspire/integrations/apphosts/app-hash/project-layouts/items/fingerprint/libs` |
+| `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` | Path to the NuGet package probe manifest for package-backed integration assemblies | `/home/user/myapp/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json` |
 | `ASPIRE_USE_GLOBAL_DOTNET` | Force SDK mode | `true` |
 | `ASPIRE_REPO_ROOT` | Dev mode (Aspire repo path, DEBUG builds only) | `/home/user/aspire` |
 
-**Note:** `ASPIRE_INTEGRATION_LIBS_PATH` is set by the CLI when running guest apphosts that require additional hosting integration packages (e.g., `Aspire.Hosting.Redis`). The aspire-server uses this path to resolve integration assemblies at runtime.
+**Note:** NuGet package-backed integrations are resolved from `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` and loaded directly from the NuGet package cache. `ASPIRE_INTEGRATION_LIBS_PATH` is only needed when project references produce copied integration DLLs.
 
 ### Transition Compatibility
 
@@ -403,12 +404,18 @@ The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, 
   --package "Aspire.Hosting.Redis" \
   --version "13.2.0" \
   --framework net10.0 \
-  --output ~/.aspire/packages
+  --output <workspace>/.aspire/integrations/package-restore/hash/obj
 
-# Create flat layout from restored packages (DLLs + XML doc files)
+# Create package probe manifest from restored packages
+{managed}/aspire-managed nuget manifest \
+  --assets <workspace>/.aspire/integrations/package-restore/hash/obj/project.assets.json \
+  --output <workspace>/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json \
+  --framework net10.0
+
+# Create flat layout from restored packages (legacy and diagnostic scenarios)
 {managed}/aspire-managed nuget layout \
-  --assets ~/.aspire/packages/obj/project.assets.json \
-  --output ~/.aspire/packages/libs \
+  --assets <workspace>/.aspire/integrations/package-restore/hash/obj/project.assets.json \
+  --output <workspace>/.aspire/integrations/legacy-layout/libs \
   --framework net10.0
 ```
 
@@ -431,26 +438,28 @@ The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, 
 }
 ```
 
-### Package Cache Structure
+### AppHost Integration Cache Structure
 
 ```text
-~/.aspire/packages/
-├── aspire.hosting.redis/
-│   └── 13.2.0/
-│       ├── aspire.hosting.redis.13.2.0.nupkg
-│       └── lib/
-│           └── net10.0/
-│               └── Aspire.Hosting.Redis.dll
-├── aspire.hosting.valkey/
-│   └── 13.2.0/
-│       └── ...
-└── libs/                               # Flat layout for probing
-    ├── Aspire.Hosting.Redis.dll
-    ├── Aspire.Hosting.Redis.xml         # XML doc file (for IntelliSense/MCP)
-    ├── Aspire.Hosting.Valkey.dll
-    ├── Aspire.Hosting.Valkey.xml
-    └── ...
+<workspace>/.aspire/integrations/
+├── package-restore/
+│   └── {package-restore-hash}/
+│       ├── obj/
+│       │   └── project.assets.json
+│       └── integration-package-probe-manifest.json
+└── apphosts/
+    └── {app-path-hash}/
+        ├── appsettings.json
+        ├── integration-package-probe-manifest.json
+        ├── integration-restore/
+        └── project-layouts/
+            └── items/
+                └── {project-output-fingerprint}/
+                    └── libs/
+                        └── MyIntegration.dll
 ```
+
+NuGet package-backed assets are loaded directly from the NuGet package cache via the probe manifest. Project-reference outputs are the only integration assets copied into `libs`, and those layouts are immutable and fingerprinted by content.
 
 ---
 
@@ -507,10 +516,11 @@ The bundle includes a pre-built AppHost Server with core hosting only (no integr
 When a project references integrations (e.g., `Aspire.Hosting.Redis`):
 
 1. CLI reads `.aspire/settings.json` for package list
-2. CLI checks local cache (`~/.aspire/packages/`)
+2. CLI checks local integration cache (`<workspace>/.aspire/integrations/`)
 3. Missing packages are downloaded via NuGet Helper
-4. Packages are extracted to flat layout for assembly loading
-5. AppHost Server loads integration assemblies at startup
+4. Packages are represented by a probe manifest that points at the NuGet package cache
+5. Project-reference outputs are copied to immutable fingerprinted layouts when needed
+6. AppHost Server loads integration assemblies at startup
 
 ### Pre-built Mode Execution
 
@@ -526,8 +536,9 @@ When a project references integrations (e.g., `Aspire.Hosting.Redis`):
 When the user's project requires integrations not included in the bundle:
 
 1. CLI downloads missing packages using NuGet Helper to a project-specific cache
-2. NuGet Helper restores packages and creates a flat DLL layout in `ASPIRE_INTEGRATION_LIBS_PATH`
-3. AppHost Server loads integration assemblies via `IntegrationLoadContext`
+2. NuGet Helper restores packages and writes a package probe manifest
+3. Project-reference outputs, when present, are copied to an immutable `ASPIRE_INTEGRATION_LIBS_PATH` layout
+4. AppHost Server loads integration assemblies via `IntegrationLoadContext`
 
 #### Aspire.TypeSystem
 
@@ -539,7 +550,8 @@ All types in `Aspire.TypeSystem` are public. It is loaded in the default context
 
 Integration assemblies are loaded in a custom `AssemblyLoadContext` ("Aspire.Integrations") that:
 
-- **Probes directories** for assemblies — `ASPIRE_INTEGRATION_LIBS_PATH` and `AppContext.BaseDirectory`
+- **Loads package assets by manifest** — `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` points at package-cache assemblies and native libraries
+- **Probes directories** for assemblies — `ASPIRE_INTEGRATION_LIBS_PATH` for copied project-reference outputs and `AppContext.BaseDirectory`
 - **Shares `Aspire.TypeSystem`** — always defers to the default context for type identity
 - **Performs version unification** — before loading an assembly from the probe directory, checks if the default context already provides it at a higher or equal version; if so, defers to the default
 
@@ -763,9 +775,7 @@ ASPIRE_* env vars > relative path auto-detect > assembly metadata (NuGet package
 
 ### Integration Cache
 
-Downloaded integration packages are cached in:
-- Linux/macOS: `~/.aspire/packages/`
-- Windows: `%LOCALAPPDATA%\Aspire\packages\`
+AppHost integration restore artifacts are cached under `<workspace>/.aspire/integrations/`.
 
 ---
 

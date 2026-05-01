@@ -200,7 +200,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
 
-        var rootDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bundle-hosts");
+        var rootDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "apphosts");
         var isUnderRoot = workingDirectory.StartsWith(rootDirectory, StringComparison.OrdinalIgnoreCase);
         var parentDirectory = Path.GetDirectoryName(workingDirectory);
         var isDirectChildOfRoot = parentDirectory is not null &&
@@ -253,12 +253,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var firstWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(firstServer));
         var secondWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(secondServer));
 
-        var bundleHostsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bundle-hosts");
+        var appHostsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "apphosts");
 
         try
         {
-            Assert.StartsWith(bundleHostsRoot, firstWorkingDirectory, StringComparison.OrdinalIgnoreCase);
-            Assert.StartsWith(bundleHostsRoot, secondWorkingDirectory, StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith(appHostsRoot, firstWorkingDirectory, StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith(appHostsRoot, secondWorkingDirectory, StringComparison.OrdinalIgnoreCase);
             Assert.NotEqual(firstWorkingDirectory, secondWorkingDirectory);
         }
         finally
@@ -335,7 +335,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var result = await server.PrepareAsync("13.2.0", []);
 
             Assert.True(result.Success);
-            Assert.Null(server.SelectedSnapshotPath);
+            Assert.Null(server.SelectedProjectLayoutPath);
 
             var appSettingsPath = Path.Combine(workingDirectory, "appsettings.json");
             Assert.True(File.Exists(appSettingsPath));
@@ -350,7 +350,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferences_ReusesSnapshotWhenClosureIsUnchanged()
+    public async Task PrepareAsync_WithProjectReferences_ReusesProjectLayoutWhenClosureIsUnchanged()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -369,12 +369,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var firstResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(firstResult.Success);
 
-            var firstSnapshotPath = Assert.IsType<string>(server.SelectedSnapshotPath);
+            var firstLayoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
 
             var secondResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(secondResult.Success);
-            Assert.Equal(firstSnapshotPath, server.SelectedSnapshotPath);
-            Assert.Single(Directory.GetDirectories(Path.Combine(workingDirectory, "snapshots", "items")));
+            Assert.Equal(firstLayoutPath, server.SelectedProjectLayoutPath);
+            Assert.Single(Directory.GetDirectories(Path.Combine(workingDirectory, "project-layouts", "items")));
         }
         finally
         {
@@ -402,15 +402,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var result = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(result.Success);
 
-            var snapshotPath = Assert.IsType<string>(server.SelectedSnapshotPath);
-            var copiedLibs = Directory.GetFiles(Path.Combine(snapshotPath, "libs"), "*", SearchOption.AllDirectories)
-                .Select(path => Path.GetRelativePath(Path.Combine(snapshotPath, "libs"), path).Replace('\\', '/'))
+            var layoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
+            var copiedLibs = Directory.GetFiles(Path.Combine(layoutPath, "libs"), "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(Path.Combine(layoutPath, "libs"), path).Replace('\\', '/'))
                 .OrderBy(static path => path, StringComparer.Ordinal)
                 .ToList();
 
             Assert.Equal(["MyIntegration.dll"], copiedLibs);
 
-            var probeManifestPath = Path.Combine(snapshotPath, "content", AppHostServerClosureSnapshot.IntegrationPackageProbeManifestFileName);
+            var probeManifestPath = Assert.IsType<string>(server.IntegrationProbeManifestPath);
             await using var probeManifestStream = File.OpenRead(probeManifestPath);
             using var probeManifest = await JsonDocument.ParseAsync(probeManifestStream);
 
@@ -428,7 +428,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferences_CreatesNewSnapshotWhenClosureChanges()
+    public async Task PrepareAsync_WithProjectReferences_CreatesNewProjectLayoutWhenClosureChanges()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -447,17 +447,17 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var firstResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(firstResult.Success);
 
-            var firstSnapshotPath = Assert.IsType<string>(server.SelectedSnapshotPath);
+            var firstLayoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
 
-            closureFiles["MyIntegration.dll"] = "integration-v2-with-different-length";
+            closureFiles["MyIntegration.dll"] = "integration-v2";
 
             var secondResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(secondResult.Success);
 
-            var secondSnapshotPath = Assert.IsType<string>(server.SelectedSnapshotPath);
-            Assert.NotEqual(firstSnapshotPath, secondSnapshotPath);
-            Assert.True(Directory.Exists(firstSnapshotPath));
-            Assert.True(Directory.Exists(secondSnapshotPath));
+            var secondLayoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
+            Assert.NotEqual(firstLayoutPath, secondLayoutPath);
+            Assert.True(Directory.Exists(firstLayoutPath));
+            Assert.True(Directory.Exists(secondLayoutPath));
         }
         finally
         {
@@ -466,7 +466,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferences_DoesNotTouchLockedPreviousSnapshot()
+    public async Task PrepareAsync_WithProjectReferences_DoesNotTouchLockedPreviousProjectLayout()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -485,20 +485,20 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var firstResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(firstResult.Success);
 
-            var firstSnapshotPath = Assert.IsType<string>(server.SelectedSnapshotPath);
-            var lockedFilePath = Path.Combine(firstSnapshotPath, "libs", "MyIntegration.dll");
+            var firstLayoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
+            var lockedFilePath = Path.Combine(firstLayoutPath, "libs", "MyIntegration.dll");
 
             using (var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.None))
             {
-                closureFiles["MyIntegration.dll"] = "integration-v2-with-different-length";
+                closureFiles["MyIntegration.dll"] = "integration-v2";
 
                 var secondResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
                 Assert.True(secondResult.Success);
 
-                var secondSnapshotPath = Assert.IsType<string>(server.SelectedSnapshotPath);
-                Assert.NotEqual(firstSnapshotPath, secondSnapshotPath);
+                var secondLayoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
+                Assert.NotEqual(firstLayoutPath, secondLayoutPath);
                 Assert.True(File.Exists(lockedFilePath));
-                Assert.True(File.Exists(Path.Combine(secondSnapshotPath, "libs", "MyIntegration.dll")));
+                Assert.True(File.Exists(Path.Combine(secondLayoutPath, "libs", "MyIntegration.dll")));
             }
         }
         finally
@@ -552,7 +552,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PrepareAsync_WithProjectReferences_ReusesSnapshotWhenOnlyPackageTimestampChanges()
+    public async Task PrepareAsync_WithProjectReferences_ReusesProjectLayoutWhenOnlyPackageTimestampChanges()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -571,14 +571,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var firstResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(firstResult.Success);
 
-            var firstSnapshotPath = Assert.IsType<string>(server.SelectedSnapshotPath);
+            var firstLayoutPath = Assert.IsType<string>(server.SelectedProjectLayoutPath);
             var packageSourcePath = Path.Combine(workingDirectory, "integration-restore", "closure-sources", "Aspire.Hosting.Redis.dll");
             File.SetLastWriteTimeUtc(packageSourcePath, File.GetLastWriteTimeUtc(packageSourcePath).AddMinutes(5));
 
             var secondResult = await server.PrepareAsync("13.2.0", CreateProjectReferenceIntegrations());
             Assert.True(secondResult.Success);
-            Assert.Equal(firstSnapshotPath, server.SelectedSnapshotPath);
-            Assert.Single(Directory.GetDirectories(Path.Combine(workingDirectory, "snapshots", "items")));
+            Assert.Equal(firstLayoutPath, server.SelectedProjectLayoutPath);
+            Assert.Single(Directory.GetDirectories(Path.Combine(workingDirectory, "project-layouts", "items")));
         }
         finally
         {

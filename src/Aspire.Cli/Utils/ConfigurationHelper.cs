@@ -12,6 +12,8 @@ namespace Aspire.Cli.Utils;
 
 internal static class ConfigurationHelper
 {
+    internal const string IntegrationCacheFolderName = "integrations";
+
     /// <summary>
     /// Standard options for parsing JSON that may contain non-spec features like comments and trailing commas.
     /// </summary>
@@ -114,6 +116,12 @@ internal static class ConfigurationHelper
     {
         var configRoot = GetConfigRootDirectory(startDirectory);
         return new DirectoryInfo(Path.Combine(configRoot.FullName, AspireJsonConfiguration.SettingsFolder));
+    }
+
+    internal static DirectoryInfo GetIntegrationCacheDirectory(DirectoryInfo startDirectory)
+    {
+        var workspaceAspireDirectory = GetWorkspaceAspireDirectory(startDirectory);
+        return new DirectoryInfo(Path.Combine(workspaceAspireDirectory.FullName, IntegrationCacheFolderName));
     }
 
     /// <summary>

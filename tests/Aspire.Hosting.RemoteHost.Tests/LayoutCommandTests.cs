@@ -3,6 +3,7 @@
 
 using Aspire.Managed.NuGet.Commands;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -132,6 +133,71 @@ public class LayoutCommandTests
 
             Assert.Equal(0, exitCode);
             Assert.Equal("base", await File.ReadAllTextAsync(Path.Combine(outputPath, "Test.Package.dll")));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ManifestCommand_WritesPackageProbeManifestWithoutCreatingLibsLayout()
+    {
+        var workspaceRoot = Directory.CreateTempSubdirectory("aspire-manifest-tests").FullName;
+
+        try
+        {
+            var packageRoot = Path.Combine(workspaceRoot, "packages", "test.package", "1.0.0");
+            Directory.CreateDirectory(Path.Combine(packageRoot, "lib", "net10.0", "fr"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", GetCurrentRuntimeIdentifier(), "native"));
+
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "lib", "net10.0", "Test.Package.dll"), "base");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0", "Test.Package.dll"), "unix");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0", "Test.Package.dll"), "win");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "lib", "net10.0", "fr", "Test.Package.resources.dll"), "fr");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", GetCurrentRuntimeIdentifier(), "native", GetNativeFileName()), "runtime-native");
+
+            var assetsPath = Path.Combine(workspaceRoot, "project.assets.json");
+            await File.WriteAllTextAsync(assetsPath, CreateAssetsJsonWithResolvedRidTarget(workspaceRoot, GetCurrentRuntimeIdentifier(), GetNativeFileName()));
+
+            var outputPath = Path.Combine(workspaceRoot, "integration-package-probe-manifest.json");
+            var command = ManifestCommand.Create();
+            var parseResult = command.Parse([
+                "--assets", assetsPath,
+                "--output", outputPath,
+                "--framework", "net10.0",
+                "--runtime-identifier", GetCurrentRuntimeIdentifier()
+            ]);
+
+            var exitCode = await parseResult.InvokeAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.False(Directory.Exists(Path.Combine(workspaceRoot, "libs")));
+
+            await using var manifestStream = File.OpenRead(outputPath);
+            using var manifest = await JsonDocument.ParseAsync(manifestStream);
+
+            var managedAssemblies = manifest.RootElement.GetProperty("managedAssemblies").EnumerateArray().ToList();
+            Assert.Contains(
+                managedAssemblies,
+                assembly => assembly.GetProperty("name").GetString() == "Test.Package" &&
+                    assembly.GetProperty("path").GetString() == Path.Combine(packageRoot, GetExpectedRuntimeAssemblyPath().Replace('/', Path.DirectorySeparatorChar)));
+            Assert.Contains(
+                managedAssemblies,
+                assembly => assembly.GetProperty("name").GetString() == "Test.Package.resources" &&
+                    assembly.GetProperty("culture").GetString() == "fr" &&
+                    assembly.GetProperty("path").GetString() == Path.Combine(packageRoot, "lib", "net10.0", "fr", "Test.Package.resources.dll"));
+
+            var nativeLibraries = manifest.RootElement.GetProperty("nativeLibraries").EnumerateArray().ToList();
+            Assert.Contains(
+                nativeLibraries,
+                nativeLibrary => nativeLibrary.GetProperty("fileName").GetString() == GetNativeFileName() &&
+                    nativeLibrary.GetProperty("path").GetString() == Path.Combine(packageRoot, "runtimes", GetCurrentRuntimeIdentifier(), "native", GetNativeFileName()));
         }
         finally
         {

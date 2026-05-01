@@ -5,32 +5,99 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace Aspire.Hosting.RemoteHost;
+namespace Aspire.Hosting;
 
 /// <summary>
-/// Represents the package-backed integration asset probe manifest emitted by the CLI.
+/// Represents the NuGet package-backed integration asset probe manifest emitted by the CLI.
 /// </summary>
 internal sealed class IntegrationPackageProbeManifest
 {
-    public static IntegrationPackageProbeManifest Empty { get; } = new(
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
-        []);
+    public const string FileName = "integration-package-probe-manifest.json";
+
+    public static IntegrationPackageProbeManifest Empty { get; } = Create([], []);
 
     private readonly IReadOnlyDictionary<string, string> _managedAssemblyPaths;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _nativeLibraryPaths;
 
     private IntegrationPackageProbeManifest(
-        IReadOnlyDictionary<string, string> managedAssemblyPaths,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> nativeLibraryPaths,
-        IReadOnlyList<string> runtimeAssemblyNames)
+        IReadOnlyList<IntegrationPackageManagedAssembly> managedAssemblies,
+        IReadOnlyList<IntegrationPackageNativeLibrary> nativeLibraries)
     {
-        _managedAssemblyPaths = managedAssemblyPaths;
-        _nativeLibraryPaths = nativeLibraryPaths;
-        RuntimeAssemblyNames = runtimeAssemblyNames;
+        ManagedAssemblies = managedAssemblies;
+        NativeLibraries = nativeLibraries;
+        _managedAssemblyPaths = CreateManagedAssemblyLookup(managedAssemblies);
+        _nativeLibraryPaths = CreateNativeLibraryLookup(nativeLibraries);
+        RuntimeAssemblyNames = GetRuntimeAssemblyNames(managedAssemblies);
     }
 
+    public IReadOnlyList<IntegrationPackageManagedAssembly> ManagedAssemblies { get; }
+
+    public IReadOnlyList<IntegrationPackageNativeLibrary> NativeLibraries { get; }
+
     public IReadOnlyList<string> RuntimeAssemblyNames { get; }
+
+    public static IntegrationPackageProbeManifest Create(
+        IEnumerable<IntegrationPackageManagedAssembly> managedAssemblies,
+        IEnumerable<IntegrationPackageNativeLibrary> nativeLibraries)
+    {
+        ArgumentNullException.ThrowIfNull(managedAssemblies);
+        ArgumentNullException.ThrowIfNull(nativeLibraries);
+
+        var managedLookup = new Dictionary<string, IntegrationPackageManagedAssembly>(StringComparer.OrdinalIgnoreCase);
+        foreach (var assembly in managedAssemblies)
+        {
+            var normalizedAssembly = new IntegrationPackageManagedAssembly
+            {
+                Name = NormalizeRequiredValue(assembly.Name, "managedAssemblies[].name"),
+                Culture = NormalizeCulture(assembly.Culture),
+                Path = NormalizeRequiredValue(assembly.Path, "managedAssemblies[].path")
+            };
+
+            managedLookup.TryAdd(
+                CreateManagedAssemblyLookupKey(normalizedAssembly.Name, normalizedAssembly.Culture),
+                normalizedAssembly);
+        }
+
+        var nativeLookup = new Dictionary<string, IntegrationPackageNativeLibrary>(StringComparer.OrdinalIgnoreCase);
+        foreach (var nativeLibrary in nativeLibraries)
+        {
+            var normalizedNativeLibrary = new IntegrationPackageNativeLibrary
+            {
+                FileName = NormalizeRequiredValue(nativeLibrary.FileName, "nativeLibraries[].fileName"),
+                Path = NormalizeRequiredValue(nativeLibrary.Path, "nativeLibraries[].path")
+            };
+
+            nativeLookup.TryAdd(
+                $"{normalizedNativeLibrary.FileName}|{normalizedNativeLibrary.Path}",
+                normalizedNativeLibrary);
+        }
+
+        var managedAssemblyList = managedLookup.Values.ToList();
+        managedAssemblyList.Sort(static (left, right) =>
+        {
+            var nameComparison = StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name);
+            if (nameComparison != 0)
+            {
+                return nameComparison;
+            }
+
+            var cultureComparison = StringComparer.OrdinalIgnoreCase.Compare(left.Culture, right.Culture);
+            return cultureComparison != 0
+                ? cultureComparison
+                : StringComparer.Ordinal.Compare(left.Path, right.Path);
+        });
+
+        var nativeLibraryList = nativeLookup.Values.ToList();
+        nativeLibraryList.Sort(static (left, right) =>
+        {
+            var nameComparison = StringComparer.OrdinalIgnoreCase.Compare(left.FileName, right.FileName);
+            return nameComparison != 0
+                ? nameComparison
+                : StringComparer.Ordinal.Compare(left.Path, right.Path);
+        });
+
+        return new IntegrationPackageProbeManifest(managedAssemblyList, nativeLibraryList);
+    }
 
     public static IntegrationPackageProbeManifest Load(string? manifestPath)
     {
@@ -50,10 +117,50 @@ internal sealed class IntegrationPackageProbeManifest
         var managedAssemblies = ReadManagedAssemblies(document.RootElement);
         var nativeLibraries = ReadNativeLibraries(document.RootElement);
 
-        return new IntegrationPackageProbeManifest(
-            CreateManagedAssemblyLookup(managedAssemblies),
-            CreateNativeLibraryLookup(nativeLibraries),
-            GetRuntimeAssemblyNames(managedAssemblies));
+        return Create(managedAssemblies, nativeLibraries);
+    }
+
+    public static Task WriteAsync(
+        string path,
+        IntegrationPackageProbeManifest manifest,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        ArgumentNullException.ThrowIfNull(manifest);
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("managedAssemblies");
+            writer.WriteStartArray();
+            foreach (var managedAssembly in manifest.ManagedAssemblies)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", managedAssembly.Name);
+                if (managedAssembly.Culture is not null)
+                {
+                    writer.WriteString("culture", managedAssembly.Culture);
+                }
+                writer.WriteString("path", managedAssembly.Path);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+
+            writer.WritePropertyName("nativeLibraries");
+            writer.WriteStartArray();
+            foreach (var nativeLibrary in manifest.NativeLibraries)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("fileName", nativeLibrary.FileName);
+                writer.WriteString("path", nativeLibrary.Path);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+
+        return File.WriteAllBytesAsync(path, stream.ToArray(), cancellationToken);
     }
 
     public string? TryGetManagedAssemblyPath(AssemblyName assemblyName)
@@ -148,25 +255,19 @@ internal sealed class IntegrationPackageProbeManifest
         }
     }
 
-    private static IReadOnlyDictionary<string, string> CreateManagedAssemblyLookup(IEnumerable<ManagedAssemblyEntry> managedAssemblies)
+    private static IReadOnlyDictionary<string, string> CreateManagedAssemblyLookup(IEnumerable<IntegrationPackageManagedAssembly> managedAssemblies)
     {
         var lookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var assembly in managedAssemblies)
         {
-            var lookupKey = CreateManagedAssemblyLookupKey(assembly.Name, assembly.Culture);
-
-            if (!lookup.TryAdd(lookupKey, assembly.Path))
-            {
-                throw new InvalidOperationException(
-                    $"Integration package probe manifest contains duplicate managed assembly entry '{assembly.Name}'{(assembly.Culture is null ? string.Empty : $" ({assembly.Culture})")}.");
-            }
+            lookup[CreateManagedAssemblyLookupKey(assembly.Name, assembly.Culture)] = assembly.Path;
         }
 
         return lookup;
     }
 
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> CreateNativeLibraryLookup(IEnumerable<NativeLibraryEntry> nativeLibraries)
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> CreateNativeLibraryLookup(IEnumerable<IntegrationPackageNativeLibrary> nativeLibraries)
     {
         var lookup = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -193,7 +294,7 @@ internal sealed class IntegrationPackageProbeManifest
             StringComparer.OrdinalIgnoreCase);
     }
 
-    private static IReadOnlyList<string> GetRuntimeAssemblyNames(IEnumerable<ManagedAssemblyEntry> managedAssemblies)
+    private static IReadOnlyList<string> GetRuntimeAssemblyNames(IEnumerable<IntegrationPackageManagedAssembly> managedAssemblies)
     {
         var assemblyNames = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -250,7 +351,7 @@ internal sealed class IntegrationPackageProbeManifest
         return value.Trim();
     }
 
-    private static IReadOnlyList<ManagedAssemblyEntry> ReadManagedAssemblies(JsonElement rootElement)
+    private static IReadOnlyList<IntegrationPackageManagedAssembly> ReadManagedAssemblies(JsonElement rootElement)
     {
         if (!rootElement.TryGetProperty("managedAssemblies", out var managedAssembliesElement) ||
             managedAssembliesElement.ValueKind != JsonValueKind.Array)
@@ -258,19 +359,21 @@ internal sealed class IntegrationPackageProbeManifest
             return [];
         }
 
-        var managedAssemblies = new List<ManagedAssemblyEntry>();
+        var managedAssemblies = new List<IntegrationPackageManagedAssembly>();
         foreach (var element in managedAssembliesElement.EnumerateArray())
         {
-            managedAssemblies.Add(new ManagedAssemblyEntry(
-                NormalizeRequiredValue(ReadStringProperty(element, "name"), "managedAssemblies[].name"),
-                NormalizeCulture(ReadStringProperty(element, "culture", required: false)),
-                NormalizeAndValidatePath(ReadStringProperty(element, "path"), "managedAssemblies[].path")));
+            managedAssemblies.Add(new IntegrationPackageManagedAssembly
+            {
+                Name = NormalizeRequiredValue(ReadStringProperty(element, "name"), "managedAssemblies[].name"),
+                Culture = NormalizeCulture(ReadStringProperty(element, "culture", required: false)),
+                Path = NormalizeAndValidatePath(ReadStringProperty(element, "path"), "managedAssemblies[].path")
+            });
         }
 
         return managedAssemblies;
     }
 
-    private static IReadOnlyList<NativeLibraryEntry> ReadNativeLibraries(JsonElement rootElement)
+    private static IReadOnlyList<IntegrationPackageNativeLibrary> ReadNativeLibraries(JsonElement rootElement)
     {
         if (!rootElement.TryGetProperty("nativeLibraries", out var nativeLibrariesElement) ||
             nativeLibrariesElement.ValueKind != JsonValueKind.Array)
@@ -278,12 +381,14 @@ internal sealed class IntegrationPackageProbeManifest
             return [];
         }
 
-        var nativeLibraries = new List<NativeLibraryEntry>();
+        var nativeLibraries = new List<IntegrationPackageNativeLibrary>();
         foreach (var element in nativeLibrariesElement.EnumerateArray())
         {
-            nativeLibraries.Add(new NativeLibraryEntry(
-                NormalizeRequiredValue(ReadStringProperty(element, "fileName"), "nativeLibraries[].fileName"),
-                NormalizeAndValidatePath(ReadStringProperty(element, "path"), "nativeLibraries[].path")));
+            nativeLibraries.Add(new IntegrationPackageNativeLibrary
+            {
+                FileName = NormalizeRequiredValue(ReadStringProperty(element, "fileName"), "nativeLibraries[].fileName"),
+                Path = NormalizeAndValidatePath(ReadStringProperty(element, "path"), "nativeLibraries[].path")
+            });
         }
 
         return nativeLibraries;
@@ -309,8 +414,26 @@ internal sealed class IntegrationPackageProbeManifest
 
         return propertyElement.GetString();
     }
+}
 
-    private readonly record struct ManagedAssemblyEntry(string Name, string? Culture, string Path);
+/// <summary>
+/// Represents a package-backed managed assembly that should be loaded from the package cache.
+/// </summary>
+internal sealed class IntegrationPackageManagedAssembly
+{
+    public required string Name { get; init; }
 
-    private readonly record struct NativeLibraryEntry(string FileName, string Path);
+    public string? Culture { get; init; }
+
+    public required string Path { get; init; }
+}
+
+/// <summary>
+/// Represents a package-backed native library that should be loaded from the package cache.
+/// </summary>
+internal sealed class IntegrationPackageNativeLibrary
+{
+    public required string FileName { get; init; }
+
+    public required string Path { get; init; }
 }

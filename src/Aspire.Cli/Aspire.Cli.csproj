@@ -97,6 +97,7 @@
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
