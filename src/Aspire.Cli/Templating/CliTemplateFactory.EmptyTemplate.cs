@@ -74,7 +74,12 @@ internal sealed partial class CliTemplateFactory
                     else
                     {
                         _logger.LogDebug("Using scaffolding service for language '{LanguageDisplayName}' in '{OutputPath}'.", language.DisplayName, outputPath);
-                        var context = new ScaffoldContext(language, new DirectoryInfo(outputPath), projectName);
+                        var context = new ScaffoldContext(
+                            language,
+                            new DirectoryInfo(outputPath),
+                            projectName,
+                            SdkVersion: inputs.Version,
+                            Channel: inputs.Channel);
                         if (!await _scaffoldingService.ScaffoldAsync(context, cancellationToken))
                         {
                             return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);

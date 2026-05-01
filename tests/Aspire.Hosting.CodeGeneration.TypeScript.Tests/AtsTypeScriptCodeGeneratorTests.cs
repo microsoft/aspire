@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
@@ -397,16 +399,17 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Scanner_HostingAssembly_WithBrowserLogsCapability()
+    public void Scanner_BrowsersAssembly_WithBrowserLogsCapability()
     {
-        var capabilities = ScanCapabilitiesFromHostingAssembly();
+        var capabilities = ScanCapabilitiesFromBrowsersAssembly();
 
-        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting/withBrowserLogs");
+        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting.Browsers/withBrowserLogs");
         Assert.NotNull(withBrowserLogs);
         Assert.Equal("withBrowserLogs", withBrowserLogs.MethodName);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", withBrowserLogs.TargetTypeId);
         Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "browser" && p.Type?.TypeId == "string" && p.IsOptional);
         Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "profile" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "userDataMode" && p.IsOptional);
         Assert.True(withBrowserLogs.ReturnsBuilder);
     }
 
@@ -880,18 +883,6 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void TwoPassScanning_GeneratesDeprecatedJSDocForObsoleteExports()
-    {
-        var atsContext = CreateContextFromBothAssemblies();
-
-        var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
-
-        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead.", aspireTs);
-        Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
-    }
-
-    [Fact]
     public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
     {
         var atsContext = CreateContextFromBothAssemblies();
@@ -935,6 +926,13 @@ public class AtsTypeScriptCodeGeneratorTests
     {
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+        return result.Capabilities;
+    }
+
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromBrowsersAssembly()
+    {
+        var browsersAssembly = typeof(global::Aspire.Hosting.BrowserLogsBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(browsersAssembly);
         return result.Capabilities;
     }
 

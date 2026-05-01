@@ -1396,35 +1396,6 @@ public class BeforeStartEvent extends HandleWrapperBase {
 
 }
 
-// ===== BrowserUserDataMode.java =====
-// BrowserUserDataMode.java - GENERATED CODE - DO NOT EDIT
-
-package aspire;
-
-import java.util.*;
-import java.util.function.*;
-
-/** BrowserUserDataMode enum. */
-public enum BrowserUserDataMode implements WireValueEnum {
-    SHARED("Shared"),
-    ISOLATED("Isolated");
-
-    private final String value;
-
-    BrowserUserDataMode(String value) {
-        this.value = value;
-    }
-
-    public String getValue() { return value; }
-
-    public static BrowserUserDataMode fromValue(String value) {
-        for (BrowserUserDataMode e : values()) {
-            if (e.value.equals(value)) return e;
-        }
-        throw new IllegalArgumentException("Unknown value: " + value);
-    }
-}
-
 // ===== BuildOptions.java =====
 // BuildOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -1464,35 +1435,6 @@ import java.util.function.*;
 public class CSharpAppResource extends ProjectResource {
     CSharpAppResource(Handle handle, AspireClient client) {
         super(handle, client);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public CSharpAppResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public CSharpAppResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private CSharpAppResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
     }
 
     /** Configures a resource to use a container registry */
@@ -1668,16 +1610,6 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public CSharpAppResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public CSharpAppResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -1692,40 +1624,6 @@ public class CSharpAppResource extends ProjectResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public CSharpAppResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public CSharpAppResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public CSharpAppResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public CSharpAppResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -4360,35 +4258,6 @@ public class ContainerResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public ContainerResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public ContainerResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private ContainerResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
-    }
-
     /** Configures a resource to use a container registry */
     public ContainerResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4771,16 +4640,6 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public ContainerResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public ContainerResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4795,40 +4654,6 @@ public class ContainerResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public ContainerResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public ContainerResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public ContainerResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public ContainerResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -6656,35 +6481,6 @@ public class DotnetToolResource extends ExecutableResource {
         super(handle, client);
     }
 
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public DotnetToolResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public DotnetToolResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private DotnetToolResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
-    }
-
     /** Configures a resource to use a container registry */
     public DotnetToolResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -6906,16 +6702,6 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public DotnetToolResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public DotnetToolResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -6930,40 +6716,6 @@ public class DotnetToolResource extends ExecutableResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public DotnetToolResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public DotnetToolResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public DotnetToolResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public DotnetToolResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -8767,35 +8519,6 @@ public class ExecutableResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public ExecutableResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public ExecutableResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private ExecutableResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
-    }
-
     /** Configures a resource to use a container registry */
     public ExecutableResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -8966,16 +8689,6 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public ExecutableResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public ExecutableResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -8990,40 +8703,6 @@ public class ExecutableResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public ExecutableResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public ExecutableResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public ExecutableResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public ExecutableResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -14140,35 +13819,6 @@ public class ProjectResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public ProjectResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public ProjectResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private ProjectResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
-    }
-
     /** Configures a resource to use a container registry */
     public ProjectResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14342,16 +13992,6 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public ProjectResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public ProjectResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14366,40 +14006,6 @@ public class ProjectResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public ProjectResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public ProjectResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public ProjectResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public ProjectResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -16619,35 +16225,6 @@ public class TestDatabaseResource extends ContainerResource {
         super(handle, client);
     }
 
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public TestDatabaseResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public TestDatabaseResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private TestDatabaseResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
-    }
-
     /** Configures a resource to use a container registry */
     public TestDatabaseResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17030,16 +16607,6 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public TestDatabaseResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public TestDatabaseResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17054,40 +16621,6 @@ public class TestDatabaseResource extends ContainerResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public TestDatabaseResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public TestDatabaseResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public TestDatabaseResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public TestDatabaseResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -18552,35 +18085,6 @@ public class TestRedisResource extends ContainerResource {
         super(handle, client);
     }
 
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public TestRedisResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public TestRedisResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private TestRedisResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
-    }
-
     /** Configures a resource to use a container registry */
     public TestRedisResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18963,16 +18467,6 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public TestRedisResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public TestRedisResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18987,40 +18481,6 @@ public class TestRedisResource extends ContainerResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public TestRedisResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public TestRedisResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public TestRedisResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public TestRedisResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     public TestRedisResource withConnectionProperty(String name, String value) {
@@ -20578,35 +20038,6 @@ public class TestVaultResource extends ContainerResource {
         super(handle, client);
     }
 
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    public TestVaultResource withBrowserLogs(WithBrowserLogsOptions options) {
-        var browser = options == null ? null : options.getBrowser();
-        var profile = options == null ? null : options.getProfile();
-        var userDataMode = options == null ? null : options.getUserDataMode();
-        return withBrowserLogsImpl(browser, profile, userDataMode);
-    }
-
-    public TestVaultResource withBrowserLogs() {
-        return withBrowserLogs(null);
-    }
-
-    /** Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots. */
-    private TestVaultResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (browser != null) {
-            reqArgs.put("browser", AspireClient.serializeValue(browser));
-        }
-        if (profile != null) {
-            reqArgs.put("profile", AspireClient.serializeValue(profile));
-        }
-        if (userDataMode != null) {
-            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
-        return this;
-    }
-
     /** Configures a resource to use a container registry */
     public TestVaultResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -20989,16 +20420,6 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    /** Sets an environment variable from a reference expression */
-    public TestVaultResource withEnvironmentExpression(String name, ReferenceExpression value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentExpression", reqArgs);
-        return this;
-    }
-
     /** Sets environment variables via callback */
     public TestVaultResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -21013,40 +20434,6 @@ public class TestVaultResource extends ContainerResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
         return this;
-    }
-
-    /** Sets an environment variable from an endpoint reference */
-    public TestVaultResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentEndpoint", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a parameter resource */
-    public TestVaultResource withEnvironmentParameter(String name, ParameterResource parameter) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("name", AspireClient.serializeValue(name));
-        reqArgs.put("parameter", AspireClient.serializeValue(parameter));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentParameter", reqArgs);
-        return this;
-    }
-
-    /** Sets an environment variable from a connection string resource */
-    public TestVaultResource withEnvironmentConnectionString(String envVarName, IResourceWithConnectionString resource) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("envVarName", AspireClient.serializeValue(envVarName));
-        reqArgs.put("resource", AspireClient.serializeValue(resource));
-        getClient().invokeCapability("Aspire.Hosting/withEnvironmentConnectionString", reqArgs);
-        return this;
-    }
-
-    public TestVaultResource withEnvironmentConnectionString(String envVarName, ResourceBuilderBase resource) {
-        return withEnvironmentConnectionString(envVarName, new IResourceWithConnectionString(resource.getHandle(), resource.getClient()));
     }
 
     /** Adds arguments */
@@ -22489,40 +21876,6 @@ public interface WireValueEnum {
     String getValue();
 }
 
-// ===== WithBrowserLogsOptions.java =====
-// WithBrowserLogsOptions.java - GENERATED CODE - DO NOT EDIT
-
-package aspire;
-
-import java.util.*;
-import java.util.function.*;
-
-/** Options for WithBrowserLogs. */
-public final class WithBrowserLogsOptions {
-    private String browser;
-    private String profile;
-    private BrowserUserDataMode userDataMode;
-
-    public String getBrowser() { return browser; }
-    public WithBrowserLogsOptions browser(String value) {
-        this.browser = value;
-        return this;
-    }
-
-    public String getProfile() { return profile; }
-    public WithBrowserLogsOptions profile(String value) {
-        this.profile = value;
-        return this;
-    }
-
-    public BrowserUserDataMode getUserDataMode() { return userDataMode; }
-    public WithBrowserLogsOptions userDataMode(BrowserUserDataMode value) {
-        this.userDataMode = value;
-        return this;
-    }
-
-}
-
 // ===== WithContainerCertificatePathsOptions.java =====
 // WithContainerCertificatePathsOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -23189,7 +22542,6 @@ public final class WithVolumeOptions {
 .modules/BaseRegistrations.java
 .modules/BeforeResourceStartedEvent.java
 .modules/BeforeStartEvent.java
-.modules/BrowserUserDataMode.java
 .modules/BuildOptions.java
 .modules/CSharpAppResource.java
 .modules/CancellationToken.java
@@ -23326,7 +22678,6 @@ public final class WithVolumeOptions {
 .modules/WellKnownPipelineSteps.java
 .modules/WellKnownPipelineTags.java
 .modules/WireValueEnum.java
-.modules/WithBrowserLogsOptions.java
 .modules/WithContainerCertificatePathsOptions.java
 .modules/WithDataVolumeOptions.java
 .modules/WithDockerfileBaseImageOptions.java

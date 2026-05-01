@@ -388,10 +388,6 @@ Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting
 Aspire.Hosting/withEntrypoint(entrypoint: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentConnectionString(envVarName: string, resource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentEndpoint(name: string, endpointReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentExpression(name: string, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentParameter(name: string, parameter: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withExecutableCommand(command: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/withExplicitStart() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withExternalHttpEndpoints() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints

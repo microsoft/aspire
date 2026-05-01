@@ -989,6 +989,55 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithTypeScriptEmptyTemplatePassesResolvedVersionAndChannelToScaffolding()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        string? scaffoldSdkVersion = null;
+        string? scaffoldChannel = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.PackagingServiceFactory = (sp) =>
+            {
+                var packagingService = new TestPackagingService();
+                packagingService.GetChannelsAsyncCallback = (ct) =>
+                {
+                    var stableCache = new FakeNuGetPackageCache();
+                    stableCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                    };
+
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache);
+                    return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
+                };
+
+                return packagingService;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldSdkVersion = context.SdkVersion;
+                scaffoldChannel = context.Channel;
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("new aspire-ts-empty --name TestApp --output . --channel stable --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal("9.2.0", scaffoldSdkVersion);
+        Assert.Equal("stable", scaffoldChannel);
+    }
+
+    [Fact]
     public async Task NewCommandWithEmptyTemplateNormalizesDefaultOutputPath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -53,9 +53,25 @@ internal sealed class ScaffoldingService : IScaffoldingService
         var language = context.Language;
 
         // Step 1: Resolve SDK and package strategy
-        var sdkVersion = VersionHelper.GetDefaultSdkVersion();
+        var sdkVersion = string.IsNullOrWhiteSpace(context.SdkVersion)
+            ? VersionHelper.GetDefaultSdkVersion()
+            : context.SdkVersion;
         var config = AspireConfigFile.LoadOrCreate(directory.FullName, sdkVersion);
+        if (!string.IsNullOrWhiteSpace(context.SdkVersion))
+        {
+            config.SdkVersion = context.SdkVersion;
+        }
+        if (!string.IsNullOrWhiteSpace(context.Channel))
+        {
+            config.Channel = context.Channel;
+        }
+
         PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
+        if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
+            !string.IsNullOrWhiteSpace(context.Channel))
+        {
+            config.Save(directory.FullName);
+        }
 
         // Include the code generation package for scaffolding and code gen
         var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(language.LanguageId, cancellationToken);

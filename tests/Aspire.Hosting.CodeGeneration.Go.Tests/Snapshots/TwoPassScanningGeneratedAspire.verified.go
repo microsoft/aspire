@@ -23,14 +23,6 @@ var _ = time.Second
 // Enums
 // ============================================================================
 
-// BrowserUserDataMode represents BrowserUserDataMode.
-type BrowserUserDataMode string
-
-const (
-	BrowserUserDataModeShared BrowserUserDataMode = "Shared"
-	BrowserUserDataModeIsolated BrowserUserDataMode = "Isolated"
-)
-
 // ContainerLifetime represents ContainerLifetime.
 type ContainerLifetime string
 
@@ -808,7 +800,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithBuildArg(name string, value any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithBuildSecret(name string, value ParameterResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -835,10 +826,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithEntrypoint(entrypoint string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithEnvironment(name string, value any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithEnvironmentVariables(variables map[string]string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithExplicitStart() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithExternalHttpEndpoints() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1248,24 +1235,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBindMount(
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBindMount", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1683,62 +1652,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentExpression(name string, value *ReferenceExpression) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentParameter(name string, parameter ParameterResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2738,7 +2651,6 @@ type CSharpAppResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) CSharpAppResource
 	WithArgs(args []string) CSharpAppResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) CSharpAppResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) CSharpAppResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) CSharpAppResource
 	WithCertificateTrustScope(scope CertificateTrustScope) CSharpAppResource
 	WithChildRelationship(child Resource) CSharpAppResource
@@ -2755,10 +2667,6 @@ type CSharpAppResource interface {
 	WithEndpoints(endpoints []string) CSharpAppResource
 	WithEnvironment(name string, value any) CSharpAppResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) CSharpAppResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) CSharpAppResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) CSharpAppResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) CSharpAppResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) CSharpAppResource
 	WithEnvironmentVariables(variables map[string]string) CSharpAppResource
 	WithExplicitStart() CSharpAppResource
 	WithExternalHttpEndpoints() CSharpAppResource
@@ -3173,24 +3081,6 @@ func (s *cSharpAppResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *cSharpAppResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) CSharpAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithCancellableOperation performs a cancellable operation
 func (s *cSharpAppResource) WithCancellableOperation(operation func(arg *CancellationToken)) CSharpAppResource {
 	if s.err != nil { return s }
@@ -3447,62 +3337,6 @@ func (s *cSharpAppResource) WithEnvironmentCallback(callback func(arg Environmen
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *cSharpAppResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) CSharpAppResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *cSharpAppResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) CSharpAppResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *cSharpAppResource) WithEnvironmentExpression(name string, value *ReferenceExpression) CSharpAppResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *cSharpAppResource) WithEnvironmentParameter(name string, parameter ParameterResource) CSharpAppResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -5620,7 +5454,6 @@ type ContainerResource interface {
 	WithArgs(args []string) ContainerResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ContainerResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) ContainerResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) ContainerResource
 	WithBuildArg(name string, value any) ContainerResource
 	WithBuildSecret(name string, value ParameterResource) ContainerResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ContainerResource
@@ -5647,10 +5480,6 @@ type ContainerResource interface {
 	WithEntrypoint(entrypoint string) ContainerResource
 	WithEnvironment(name string, value any) ContainerResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ContainerResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) ContainerResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) ContainerResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) ContainerResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) ContainerResource
 	WithEnvironmentVariables(variables map[string]string) ContainerResource
 	WithExplicitStart() ContainerResource
 	WithExternalHttpEndpoints() ContainerResource
@@ -6059,24 +5888,6 @@ func (s *containerResource) WithBindMount(source string, target string, options 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBindMount", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *containerResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) ContainerResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6494,62 +6305,6 @@ func (s *containerResource) WithEnvironmentCallback(callback func(arg Environmen
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *containerResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) ContainerResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *containerResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) ContainerResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *containerResource) WithEnvironmentExpression(name string, value *ReferenceExpression) ContainerResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *containerResource) WithEnvironmentParameter(name string, parameter ParameterResource) ContainerResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -8865,7 +8620,6 @@ type DotnetToolResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) DotnetToolResource
 	WithArgs(args []string) DotnetToolResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) DotnetToolResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) DotnetToolResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) DotnetToolResource
 	WithCertificateTrustScope(scope CertificateTrustScope) DotnetToolResource
 	WithChildRelationship(child Resource) DotnetToolResource
@@ -8882,10 +8636,6 @@ type DotnetToolResource interface {
 	WithEndpoints(endpoints []string) DotnetToolResource
 	WithEnvironment(name string, value any) DotnetToolResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) DotnetToolResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) DotnetToolResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) DotnetToolResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) DotnetToolResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) DotnetToolResource
 	WithEnvironmentVariables(variables map[string]string) DotnetToolResource
 	WithExecutableCommand(command string) DotnetToolResource
 	WithExplicitStart() DotnetToolResource
@@ -9275,24 +9025,6 @@ func (s *dotnetToolResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *dotnetToolResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) DotnetToolResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithCancellableOperation performs a cancellable operation
 func (s *dotnetToolResource) WithCancellableOperation(operation func(arg *CancellationToken)) DotnetToolResource {
 	if s.err != nil { return s }
@@ -9549,62 +9281,6 @@ func (s *dotnetToolResource) WithEnvironmentCallback(callback func(arg Environme
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *dotnetToolResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) DotnetToolResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *dotnetToolResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) DotnetToolResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *dotnetToolResource) WithEnvironmentExpression(name string, value *ReferenceExpression) DotnetToolResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *dotnetToolResource) WithEnvironmentParameter(name string, parameter ParameterResource) DotnetToolResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11447,7 +11123,6 @@ type ExecutableResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ExecutableResource
 	WithArgs(args []string) ExecutableResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ExecutableResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) ExecutableResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ExecutableResource
 	WithCertificateTrustScope(scope CertificateTrustScope) ExecutableResource
 	WithChildRelationship(child Resource) ExecutableResource
@@ -11464,10 +11139,6 @@ type ExecutableResource interface {
 	WithEndpoints(endpoints []string) ExecutableResource
 	WithEnvironment(name string, value any) ExecutableResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ExecutableResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) ExecutableResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) ExecutableResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) ExecutableResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) ExecutableResource
 	WithEnvironmentVariables(variables map[string]string) ExecutableResource
 	WithExecutableCommand(command string) ExecutableResource
 	WithExplicitStart() ExecutableResource
@@ -11851,24 +11522,6 @@ func (s *executableResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *executableResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) ExecutableResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithCancellableOperation performs a cancellable operation
 func (s *executableResource) WithCancellableOperation(operation func(arg *CancellationToken)) ExecutableResource {
 	if s.err != nil { return s }
@@ -12125,62 +11778,6 @@ func (s *executableResource) WithEnvironmentCallback(callback func(arg Environme
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *executableResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) ExecutableResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *executableResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) ExecutableResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *executableResource) WithEnvironmentExpression(name string, value *ReferenceExpression) ExecutableResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *executableResource) WithEnvironmentParameter(name string, parameter ParameterResource) ExecutableResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16034,7 +15631,6 @@ type ProjectResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ProjectResource
 	WithArgs(args []string) ProjectResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ProjectResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) ProjectResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ProjectResource
 	WithCertificateTrustScope(scope CertificateTrustScope) ProjectResource
 	WithChildRelationship(child Resource) ProjectResource
@@ -16051,10 +15647,6 @@ type ProjectResource interface {
 	WithEndpoints(endpoints []string) ProjectResource
 	WithEnvironment(name string, value any) ProjectResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ProjectResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) ProjectResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) ProjectResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) ProjectResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) ProjectResource
 	WithEnvironmentVariables(variables map[string]string) ProjectResource
 	WithExplicitStart() ProjectResource
 	WithExternalHttpEndpoints() ProjectResource
@@ -16469,24 +16061,6 @@ func (s *projectResource) WithArgsCallback(callback func(obj CommandLineArgsCall
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *projectResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) ProjectResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithCancellableOperation performs a cancellable operation
 func (s *projectResource) WithCancellableOperation(operation func(arg *CancellationToken)) ProjectResource {
 	if s.err != nil { return s }
@@ -16743,62 +16317,6 @@ func (s *projectResource) WithEnvironmentCallback(callback func(arg EnvironmentC
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *projectResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) ProjectResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *projectResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) ProjectResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *projectResource) WithEnvironmentExpression(name string, value *ReferenceExpression) ProjectResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *projectResource) WithEnvironmentParameter(name string, parameter ParameterResource) ProjectResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18962,7 +18480,6 @@ type TestDatabaseResource interface {
 	WithArgs(args []string) TestDatabaseResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestDatabaseResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) TestDatabaseResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) TestDatabaseResource
 	WithBuildArg(name string, value any) TestDatabaseResource
 	WithBuildSecret(name string, value ParameterResource) TestDatabaseResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource
@@ -18989,10 +18506,6 @@ type TestDatabaseResource interface {
 	WithEntrypoint(entrypoint string) TestDatabaseResource
 	WithEnvironment(name string, value any) TestDatabaseResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) TestDatabaseResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) TestDatabaseResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) TestDatabaseResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) TestDatabaseResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) TestDatabaseResource
 	WithEnvironmentVariables(variables map[string]string) TestDatabaseResource
 	WithExplicitStart() TestDatabaseResource
 	WithExternalHttpEndpoints() TestDatabaseResource
@@ -19401,24 +18914,6 @@ func (s *testDatabaseResource) WithBindMount(source string, target string, optio
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBindMount", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *testDatabaseResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) TestDatabaseResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19836,62 +19331,6 @@ func (s *testDatabaseResource) WithEnvironmentCallback(callback func(arg Environ
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *testDatabaseResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) TestDatabaseResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *testDatabaseResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) TestDatabaseResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *testDatabaseResource) WithEnvironmentExpression(name string, value *ReferenceExpression) TestDatabaseResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *testDatabaseResource) WithEnvironmentParameter(name string, parameter ParameterResource) TestDatabaseResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20940,7 +20379,6 @@ type TestRedisResource interface {
 	WithArgs(args []string) TestRedisResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestRedisResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) TestRedisResource
-	WithBrowserLogs(options ...*WithBrowserLogsOptions) TestRedisResource
 	WithBuildArg(name string, value any) TestRedisResource
 	WithBuildSecret(name string, value ParameterResource) TestRedisResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource
@@ -20971,10 +20409,6 @@ type TestRedisResource interface {
 	WithEntrypoint(entrypoint string) TestRedisResource
 	WithEnvironment(name string, value any) TestRedisResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) TestRedisResource
-	WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) TestRedisResource
-	WithEnvironmentEndpoint(name string, endpointReference EndpointReference) TestRedisResource
-	WithEnvironmentExpression(name string, value *ReferenceExpression) TestRedisResource
-	WithEnvironmentParameter(name string, parameter ParameterResource) TestRedisResource
 	WithEnvironmentVariables(variables map[string]string) TestRedisResource
 	WithExplicitStart() TestRedisResource
 	WithExternalHttpEndpoints() TestRedisResource
@@ -21545,24 +20979,6 @@ func (s *testRedisResource) WithBindMount(source string, target string, options 
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
-func (s *testRedisResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithBrowserLogsOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBrowserLogs", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithBuildArg adds a build argument from a string value or parameter resource
 // Allowed types for parameter value: string, ParameterResource.
 func (s *testRedisResource) WithBuildArg(name string, value any) TestRedisResource {
@@ -22040,62 +21456,6 @@ func (s *testRedisResource) WithEnvironmentCallback(callback func(arg Environmen
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentConnectionString sets an environment variable from a connection string resource
-func (s *testRedisResource) WithEnvironmentConnectionString(envVarName string, resource ResourceWithConnectionString) TestRedisResource {
-	if s.err != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["envVarName"] = serializeValue(envVarName)
-	reqArgs["resource"] = serializeValue(resource)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentEndpoint sets an environment variable from an endpoint reference
-func (s *testRedisResource) WithEnvironmentEndpoint(name string, endpointReference EndpointReference) TestRedisResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentExpression sets an environment variable from a reference expression
-func (s *testRedisResource) WithEnvironmentExpression(name string, value *ReferenceExpression) TestRedisResource {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEnvironmentParameter sets an environment variable from a parameter resource
-func (s *testRedisResource) WithEnvironmentParameter(name string, parameter ParameterResource) TestRedisResource {
-	if s.err != nil { return s }
-	if parameter != nil { if err := parameter.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["parameter"] = serializeValue(parameter)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEnvironmentParameter", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23295,22 +22655,6 @@ func (s *userSecretsManager) TrySetSecret(name string, value string) (bool, erro
 // ============================================================================
 // Options structs
 // ============================================================================
-
-// WithBrowserLogsOptions carries optional parameters for WithBrowserLogs.
-type WithBrowserLogsOptions struct {
-	Browser *string `json:"browser,omitempty"`
-	Profile *string `json:"profile,omitempty"`
-	UserDataMode *BrowserUserDataMode `json:"userDataMode,omitempty"`
-}
-
-func (o *WithBrowserLogsOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Browser != nil { m["browser"] = serializeValue(o.Browser) }
-	if o.Profile != nil { m["profile"] = serializeValue(o.Profile) }
-	if o.UserDataMode != nil { m["userDataMode"] = serializeValue(o.UserDataMode) }
-	return m
-}
 
 // AddContainerRegistryOptions carries optional parameters for AddContainerRegistry.
 type AddContainerRegistryOptions struct {

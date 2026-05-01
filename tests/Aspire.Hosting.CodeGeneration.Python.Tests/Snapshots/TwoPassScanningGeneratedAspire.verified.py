@@ -1495,8 +1495,6 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 # Enum Types
 # ============================================================================
 
-BrowserUserDataMode = typing.Literal["Shared", "Isolated"]
-
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
 CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
@@ -1578,12 +1576,6 @@ class MergeRouteParameters(typing.TypedDict, total=False):
     handler: typing.Required[str]
     priority: typing.Required[int]
     middleware: str
-
-
-class BrowserLogsParameters(typing.TypedDict, total=False):
-    browser: str
-    profile: str
-    user_data_mode: BrowserUserDataMode
 
 
 class BindMountParameters(typing.TypedDict, total=False):
@@ -5878,10 +5870,6 @@ class AbstractResourceWithEndpoints(AbstractResource):
     """Abstract base class for AbstractResourceWithEndpoints interface."""
 
     @abc.abstractmethod
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-
-    @abc.abstractmethod
     def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
 
@@ -5952,22 +5940,6 @@ class AbstractResourceWithEnvironment(AbstractResource):
     @abc.abstractmethod
     def with_env_callback(self, callback: typing.Callable[[EnvironmentCallbackContext], None]) -> typing.Self:
         """Sets environment variables via callback"""
-
-    @abc.abstractmethod
-    def with_env_expression(self, name: str, value: ReferenceExpression) -> typing.Self:
-        """Sets an environment variable from a reference expression"""
-
-    @abc.abstractmethod
-    def with_env_endpoint(self, name: str, endpoint_reference: EndpointReference) -> typing.Self:
-        """Sets an environment variable from an endpoint reference"""
-
-    @abc.abstractmethod
-    def with_env_parameter(self, name: str, parameter: ParameterResource) -> typing.Self:
-        """Sets an environment variable from a parameter resource"""
-
-    @abc.abstractmethod
-    def with_env_connection_string(self, env_var_name: str, resource: AbstractResourceWithConnectionString) -> typing.Self:
-        """Sets an environment variable from a connection string resource"""
 
     @abc.abstractmethod
     def with_reference_env(self, options: ReferenceEnvironmentInjectionOptions) -> typing.Self:
@@ -6953,7 +6925,6 @@ class ContainerRegistryResource(_BaseResource, AbstractContainerRegistry):
 class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     """ContainerResource options."""
 
-    browser_logs: BrowserLogsParameters | typing.Literal[True]
     bind_mount: tuple[str, str] | BindMountParameters
     entrypoint: str
     image_tag: str
@@ -6977,10 +6948,6 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     publish_as_connection_string: typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
-    env_expression: tuple[str, ReferenceExpression]
-    env_endpoint: tuple[str, EndpointReference]
-    env_parameter: tuple[str, ParameterResource]
-    env_connection_string: tuple[str, AbstractResourceWithConnectionString]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
     reference_env: ReferenceEnvironmentInjectionOptions
@@ -7016,22 +6983,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
 
     def __repr__(self) -> str:
         return "ContainerResource(handle={self._handle.handle_id})"
-
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        if browser is not None:
-            rpc_args['browser'] = browser
-        if profile is not None:
-            rpc_args['profile'] = profile
-        if user_data_mode is not None:
-            rpc_args['userDataMode'] = user_data_mode
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withBrowserLogs',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
 
     def with_bind_mount(self, source: str, target: str, *, is_read_only: bool = False) -> typing.Self:
         """Adds a bind mount"""
@@ -7303,54 +7254,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withEnvironmentCallback',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_expression(self, name: str, value: ReferenceExpression) -> typing.Self:
-        """Sets an environment variable from a reference expression"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['value'] = value
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_endpoint(self, name: str, endpoint_reference: EndpointReference) -> typing.Self:
-        """Sets an environment variable from an endpoint reference"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['endpointReference'] = endpoint_reference
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_parameter(self, name: str, parameter: ParameterResource) -> typing.Self:
-        """Sets an environment variable from a parameter resource"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['parameter'] = parameter
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_connection_string(self, env_var_name: str, resource: AbstractResourceWithConnectionString) -> typing.Self:
-        """Sets an environment variable from a connection string resource"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['envVarName'] = env_var_name
-        rpc_args['resource'] = resource
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentConnectionString',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7766,18 +7669,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ContainerResourceKwargs]) -> None:
-        if _browser_logs := kwargs.pop("browser_logs", None):
-            if _validate_dict_types(_browser_logs, BrowserLogsParameters):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
-                rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
-                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            elif _browser_logs is True:
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'browser_logs'. Expected: BrowserLogsParameters or Literal[True]")
         if _bind_mount := kwargs.pop("bind_mount", None):
             if _validate_tuple_types(_bind_mount, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7977,38 +7868,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_callback'. Expected: Callable[[EnvironmentCallbackContext], None]")
-        if _env_expression := kwargs.pop("env_expression", None):
-            if _validate_tuple_types(_env_expression, (str, ReferenceExpression)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, ReferenceExpression], _env_expression)[0]
-                rpc_args["value"] = typing.cast(tuple[str, ReferenceExpression], _env_expression)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentExpression', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_expression'. Expected: (str, ReferenceExpression)")
-        if _env_endpoint := kwargs.pop("env_endpoint", None):
-            if _validate_tuple_types(_env_endpoint, (str, EndpointReference)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, EndpointReference], _env_endpoint)[0]
-                rpc_args["endpointReference"] = typing.cast(tuple[str, EndpointReference], _env_endpoint)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentEndpoint', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_endpoint'. Expected: (str, EndpointReference)")
-        if _env_parameter := kwargs.pop("env_parameter", None):
-            if _validate_tuple_types(_env_parameter, (str, ParameterResource)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, ParameterResource], _env_parameter)[0]
-                rpc_args["parameter"] = typing.cast(tuple[str, ParameterResource], _env_parameter)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentParameter', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_parameter'. Expected: (str, ParameterResource)")
-        if _env_connection_string := kwargs.pop("env_connection_string", None):
-            if _validate_tuple_types(_env_connection_string, (str, AbstractResourceWithConnectionString)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["envVarName"] = typing.cast(tuple[str, AbstractResourceWithConnectionString], _env_connection_string)[0]
-                rpc_args["resource"] = typing.cast(tuple[str, AbstractResourceWithConnectionString], _env_connection_string)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentConnectionString', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_connection_string'. Expected: (str, AbstractResourceWithConnectionString)")
         if _args := kwargs.pop("args", None):
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8312,7 +8171,6 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
 class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     """ProjectResource options."""
 
-    browser_logs: BrowserLogsParameters | typing.Literal[True]
     mcp_server: McpServerParameters | typing.Literal[True]
     otlp_exporter: OtlpProtocol | typing.Literal[True]
     replicas: int
@@ -8320,10 +8178,6 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     publish_as_docker_file: typing.Callable[[ContainerResource], None] | typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
-    env_expression: tuple[str, ReferenceExpression]
-    env_endpoint: tuple[str, EndpointReference]
-    env_parameter: tuple[str, ParameterResource]
-    env_connection_string: tuple[str, AbstractResourceWithConnectionString]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
     reference_env: ReferenceEnvironmentInjectionOptions
@@ -8359,22 +8213,6 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
 
     def __repr__(self) -> str:
         return "ProjectResource(handle={self._handle.handle_id})"
-
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        if browser is not None:
-            rpc_args['browser'] = browser
-        if profile is not None:
-            rpc_args['profile'] = profile
-        if user_data_mode is not None:
-            rpc_args['userDataMode'] = user_data_mode
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withBrowserLogs',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
 
     def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
@@ -8453,54 +8291,6 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withEnvironmentCallback',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_expression(self, name: str, value: ReferenceExpression) -> typing.Self:
-        """Sets an environment variable from a reference expression"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['value'] = value
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_endpoint(self, name: str, endpoint_reference: EndpointReference) -> typing.Self:
-        """Sets an environment variable from an endpoint reference"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['endpointReference'] = endpoint_reference
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_parameter(self, name: str, parameter: ParameterResource) -> typing.Self:
-        """Sets an environment variable from a parameter resource"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['parameter'] = parameter
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_connection_string(self, env_var_name: str, resource: AbstractResourceWithConnectionString) -> typing.Self:
-        """Sets an environment variable from a connection string resource"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['envVarName'] = env_var_name
-        rpc_args['resource'] = resource
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentConnectionString',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8913,18 +8703,6 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ProjectResourceKwargs]) -> None:
-        if _browser_logs := kwargs.pop("browser_logs", None):
-            if _validate_dict_types(_browser_logs, BrowserLogsParameters):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
-                rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
-                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            elif _browser_logs is True:
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'browser_logs'. Expected: BrowserLogsParameters or Literal[True]")
         if _mcp_server := kwargs.pop("mcp_server", None):
             if _validate_dict_types(_mcp_server, McpServerParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8984,38 +8762,6 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_callback'. Expected: Callable[[EnvironmentCallbackContext], None]")
-        if _env_expression := kwargs.pop("env_expression", None):
-            if _validate_tuple_types(_env_expression, (str, ReferenceExpression)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, ReferenceExpression], _env_expression)[0]
-                rpc_args["value"] = typing.cast(tuple[str, ReferenceExpression], _env_expression)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentExpression', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_expression'. Expected: (str, ReferenceExpression)")
-        if _env_endpoint := kwargs.pop("env_endpoint", None):
-            if _validate_tuple_types(_env_endpoint, (str, EndpointReference)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, EndpointReference], _env_endpoint)[0]
-                rpc_args["endpointReference"] = typing.cast(tuple[str, EndpointReference], _env_endpoint)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentEndpoint', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_endpoint'. Expected: (str, EndpointReference)")
-        if _env_parameter := kwargs.pop("env_parameter", None):
-            if _validate_tuple_types(_env_parameter, (str, ParameterResource)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, ParameterResource], _env_parameter)[0]
-                rpc_args["parameter"] = typing.cast(tuple[str, ParameterResource], _env_parameter)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentParameter', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_parameter'. Expected: (str, ParameterResource)")
-        if _env_connection_string := kwargs.pop("env_connection_string", None):
-            if _validate_tuple_types(_env_connection_string, (str, AbstractResourceWithConnectionString)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["envVarName"] = typing.cast(tuple[str, AbstractResourceWithConnectionString], _env_connection_string)[0]
-                rpc_args["resource"] = typing.cast(tuple[str, AbstractResourceWithConnectionString], _env_connection_string)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentConnectionString', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_connection_string'. Expected: (str, AbstractResourceWithConnectionString)")
         if _args := kwargs.pop("args", None):
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9328,7 +9074,6 @@ class CSharpAppResource(ProjectResource):
 class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     """ExecutableResource options."""
 
-    browser_logs: BrowserLogsParameters | typing.Literal[True]
     publish_as_docker_file: typing.Callable[[ContainerResource], None]
     executable_command: str
     working_dir: str
@@ -9336,10 +9081,6 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     otlp_exporter: OtlpProtocol | typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
-    env_expression: tuple[str, ReferenceExpression]
-    env_endpoint: tuple[str, EndpointReference]
-    env_parameter: tuple[str, ParameterResource]
-    env_connection_string: tuple[str, AbstractResourceWithConnectionString]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
     reference_env: ReferenceEnvironmentInjectionOptions
@@ -9374,22 +9115,6 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
 
     def __repr__(self) -> str:
         return "ExecutableResource(handle={self._handle.handle_id})"
-
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        if browser is not None:
-            rpc_args['browser'] = browser
-        if profile is not None:
-            rpc_args['profile'] = profile
-        if user_data_mode is not None:
-            rpc_args['userDataMode'] = user_data_mode
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withBrowserLogs',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
 
     def publish_as_docker_file(self, configure: typing.Callable[[ContainerResource], None]) -> typing.Self:
         """Publishes an executable as a Docker file"""
@@ -9468,54 +9193,6 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withEnvironmentCallback',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_expression(self, name: str, value: ReferenceExpression) -> typing.Self:
-        """Sets an environment variable from a reference expression"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['value'] = value
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentExpression',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_endpoint(self, name: str, endpoint_reference: EndpointReference) -> typing.Self:
-        """Sets an environment variable from an endpoint reference"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['endpointReference'] = endpoint_reference
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentEndpoint',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_parameter(self, name: str, parameter: ParameterResource) -> typing.Self:
-        """Sets an environment variable from a parameter resource"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['parameter'] = parameter
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentParameter',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_env_connection_string(self, env_var_name: str, resource: AbstractResourceWithConnectionString) -> typing.Self:
-        """Sets an environment variable from a connection string resource"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['envVarName'] = env_var_name
-        rpc_args['resource'] = resource
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withEnvironmentConnectionString',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9916,18 +9593,6 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ExecutableResourceKwargs]) -> None:
-        if _browser_logs := kwargs.pop("browser_logs", None):
-            if _validate_dict_types(_browser_logs, BrowserLogsParameters):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
-                rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
-                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            elif _browser_logs is True:
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'browser_logs'. Expected: BrowserLogsParameters or Literal[True]")
         if _publish_as_docker_file := kwargs.pop("publish_as_docker_file", None):
             if _validate_type(_publish_as_docker_file, typing.Callable[[ContainerResource], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9985,38 +9650,6 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_callback'. Expected: Callable[[EnvironmentCallbackContext], None]")
-        if _env_expression := kwargs.pop("env_expression", None):
-            if _validate_tuple_types(_env_expression, (str, ReferenceExpression)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, ReferenceExpression], _env_expression)[0]
-                rpc_args["value"] = typing.cast(tuple[str, ReferenceExpression], _env_expression)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentExpression', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_expression'. Expected: (str, ReferenceExpression)")
-        if _env_endpoint := kwargs.pop("env_endpoint", None):
-            if _validate_tuple_types(_env_endpoint, (str, EndpointReference)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, EndpointReference], _env_endpoint)[0]
-                rpc_args["endpointReference"] = typing.cast(tuple[str, EndpointReference], _env_endpoint)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentEndpoint', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_endpoint'. Expected: (str, EndpointReference)")
-        if _env_parameter := kwargs.pop("env_parameter", None):
-            if _validate_tuple_types(_env_parameter, (str, ParameterResource)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, ParameterResource], _env_parameter)[0]
-                rpc_args["parameter"] = typing.cast(tuple[str, ParameterResource], _env_parameter)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentParameter', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_parameter'. Expected: (str, ParameterResource)")
-        if _env_connection_string := kwargs.pop("env_connection_string", None):
-            if _validate_tuple_types(_env_connection_string, (str, AbstractResourceWithConnectionString)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["envVarName"] = typing.cast(tuple[str, AbstractResourceWithConnectionString], _env_connection_string)[0]
-                rpc_args["resource"] = typing.cast(tuple[str, AbstractResourceWithConnectionString], _env_connection_string)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentConnectionString', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'env_connection_string'. Expected: (str, AbstractResourceWithConnectionString)")
         if _args := kwargs.pop("args", None):
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

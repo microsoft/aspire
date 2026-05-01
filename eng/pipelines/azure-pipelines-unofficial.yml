@@ -172,6 +172,36 @@ extends:
                   # validation (Homebrew cask audit, WinGet manifest) against published URLs.
                   targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download Native CLI Tool Packages
+                inputs:
+                  itemPattern: |
+                    **/Aspire.Cli*.nupkg
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)'
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $downloadRoot = "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
+                  $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  New-Item -ItemType Directory -Path $shippingDir -Force | Out-Null
+
+                  $packages = @(Get-ChildItem -Path $downloadRoot -Filter "Aspire.Cli*.nupkg" -File -Recurse |
+                    Where-Object { $_.Name -notmatch '\.symbols\.' } |
+                    Sort-Object FullName)
+                  if ($packages.Count -eq 0) {
+                    throw "No native CLI tool packages were downloaded to $downloadRoot."
+                  }
+
+                  foreach ($packageGroup in $packages | Group-Object Name) {
+                    $package = $packageGroup.Group[0]
+                    if ($packageGroup.Count -gt 1) {
+                      Write-Host "Using $($package.FullName) for duplicate package name $($packageGroup.Name)."
+                    }
+
+                    Copy-Item -LiteralPath $package.FullName -Destination (Join-Path $shippingDir $package.Name) -Force
+                  }
+                displayName: 🟣Stage Native CLI Tool Packages
+
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
                 inputs:

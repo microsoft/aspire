@@ -459,6 +459,8 @@ internal static class Hex1bAutomatorTestHelpers
             .Find("configure AI agent environments");
 
         var agentInitFound = false;
+        var agentInitPromptRequiresEnter = false;
+        var errorPromptFound = false;
 
         // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
         await auto.WaitUntilAsync(s =>
@@ -466,13 +468,31 @@ internal static class Hex1bAutomatorTestHelpers
             if (agentInitPrompt.Search(s).Count > 0)
             {
                 agentInitFound = true;
+                agentInitPromptRequiresEnter = new CellPatternSearcher()
+                    .Find("[Y/n]")
+                    .RightText(": ")
+                    .Search(s).Count > 0;
                 return true;
             }
             var successSearcher = new CellPatternSearcher()
                 .FindPattern(counter.Value.ToString())
                 .RightText(" OK] $ ");
-            return successSearcher.Search(s).Count > 0;
-        }, timeout: effectiveTimeout, description: $"agent init prompt or success prompt [{counter.Value} OK] $");
+            if (successSearcher.Search(s).Count > 0)
+            {
+                return true;
+            }
+
+            var errorSearcher = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" ERR:");
+            errorPromptFound = errorSearcher.Search(s).Count > 0;
+            return errorPromptFound;
+        }, timeout: effectiveTimeout, description: $"agent init prompt, success prompt [{counter.Value} OK] $, or error prompt [{counter.Value} ERR:*] $");
+
+        if (errorPromptFound)
+        {
+            throw new InvalidOperationException($"Command failed with error prompt [{counter.Value} ERR:*] while waiting for the agent init prompt or success prompt.");
+        }
 
         if (!agentInitFound)
         {
@@ -482,16 +502,12 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-
-        await auto.WaitUntilAsync(s =>
+        if (agentInitPromptRequiresEnter)
         {
-            var successSearcher = new CellPatternSearcher()
-                .FindPattern(counter.Value.ToString())
-                .RightText(" OK] $ ");
-            return successSearcher.Search(s).Count > 0;
-        }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ after agent init");
+            await auto.EnterAsync();
+        }
 
-        counter.Increment();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
     }
 
     /// <summary>

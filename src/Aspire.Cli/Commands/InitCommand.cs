@@ -14,6 +14,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
@@ -36,6 +37,7 @@ internal sealed class InitCommand : BaseCommand
     private readonly ICertificateService _certificateService;
     private readonly IScaffoldingService _scaffoldingService;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly TemplateNuGetConfigService _templateNuGetConfigService;
 
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
@@ -66,7 +68,8 @@ internal sealed class InitCommand : BaseCommand
         IDotNetCliRunner runner,
         ICertificateService certificateService,
         IScaffoldingService scaffoldingService,
-        ILanguageDiscovery languageDiscovery)
+        ILanguageDiscovery languageDiscovery,
+        TemplateNuGetConfigService templateNuGetConfigService)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _executionContext = executionContext;
@@ -77,6 +80,7 @@ internal sealed class InitCommand : BaseCommand
         _certificateService = certificateService;
         _scaffoldingService = scaffoldingService;
         _languageDiscovery = languageDiscovery;
+        _templateNuGetConfigService = templateNuGetConfigService;
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -225,15 +229,13 @@ internal sealed class InitCommand : BaseCommand
         return await DropCSharpSingleFileSkeletonAsync(workingDirectory, cancellationToken);
     }
 
-    private Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        _ = cancellationToken;
-
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
         {
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
-            return Task.FromResult(ExitCodeConstants.Success);
+            return ExitCodeConstants.Success;
         }
 
         // Drop bare single-file apphost. Pin the SDK version so later operations
@@ -252,10 +254,32 @@ internal sealed class InitCommand : BaseCommand
         File.WriteAllText(appHostPath, appHostContent);
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
 
+        // Ensure the workspace has a NuGet.config that exposes the configured channel's
+        // package sources. This is required so MSBuild can resolve
+        // `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK directive — both
+        // for `aspire add` (`dotnet package add --file apphost.cs`) and for
+        // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
+        // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.)
+        // is invisible and SDK resolution fails. Mirrors how `aspire new` handles
+        // template output via the same shared service; `NuGetConfigMerger` underneath
+        // creates a new file or merges missing sources into an existing one, so adding
+        // hives later is handled the same way as for templates.
+        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+            channelName: null,
+            outputPath: workingDirectory.FullName,
+            cancellationToken).ConfigureAwait(false);
+        if (createdNuGetConfig)
+        {
+            // Use a confirmation message that does NOT contain the literal substring
+            // "NuGet.config" — the AspireInitAsync E2E helper false-matches that
+            // substring as a Y/n prompt and gets out of sync with the real prompts.
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created package sources file");
+        }
+
         // Drop aspire.config.json
         var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null);
 
-        return Task.FromResult(configResult);
+        return configResult;
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
