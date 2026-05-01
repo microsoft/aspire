@@ -171,11 +171,10 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("9.9.9", "9.9.9")]
-    [InlineData("13.2.4.0", "13.2.4")]
-    [InlineData("13.2.4.0+e7762a46d31842884a0bc72c92e07ba700c99bf5", "13.2.4")]
-    [InlineData("13.3.0-pr.16502.g809f606f+e7762a46d31842884a0bc72c92e07ba700c99bf5", "13.3.0-pr.16502.g809f606f")]
-    [InlineData("13.2.4.0-preview.1+e7762a46d31842884a0bc72c92e07ba700c99bf5", "13.2.4-preview.1")]
-    public async Task PsCommand_JsonFormat_NormalizesSdkVersionFromV2AppHostInfo(string sdkVersion, string expectedSdkVersion)
+    [InlineData("13.2.4", "13.2.4")]
+    [InlineData("13.3.0-pr.16502.g809f606f", "13.3.0-pr.16502.g809f606f")]
+    [InlineData("13.2.4-preview.1", "13.2.4-preview.1")]
+    public async Task PsCommand_JsonFormat_DisplaysSdkVersionFromV2AppHostInfo(string sdkVersion, string expectedSdkVersion)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
