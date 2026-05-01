@@ -1533,9 +1533,61 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
         Assert.Equal("flask", launchConfig.Module);
-        // ProgramPath must be empty for module entrypoints; the working_directory field
-        // now carries the cwd to the debugger instead of being smuggled through program_path.
-        Assert.Equal(string.Empty, launchConfig.ProgramPath);
+        // ProgramPath continues to mirror the working directory for module entrypoints to
+        // preserve compatibility with older VS Code extensions that derive cwd from program_path
+        // when they don't yet understand the new working_directory field.
+        Assert.Equal(appDirectory, launchConfig.ProgramPath);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PopulatesWorkingDirectory_ForExecutableEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+
+        var pythonApp = builder.AddPythonExecutable("myapp", appDirectory, "uvicorn")
+            .WithVirtualEnvironment(virtualEnvironmentPath)
+            .WithDebugging();
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal("uvicorn", launchConfig.Module);
+        // ProgramPath continues to mirror the working directory for executable entrypoints (same code
+        // path as Module) to preserve compatibility with older VS Code extensions.
+        Assert.Equal(appDirectory, launchConfig.ProgramPath);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PropagatesWorkingDirectoryOverride_ForExecutableEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var tempDir = new TestTempDirectory();
+
+        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+        var customWorkingDirectory = Path.Combine(tempDir.Path, "custom");
+        Directory.CreateDirectory(customWorkingDirectory);
+
+        var pythonApp = builder.AddPythonExecutable("myapp", appDirectory, "uvicorn")
+            .WithVirtualEnvironment(virtualEnvironmentPath)
+            .WithDebugging()
+            .WithWorkingDirectory(customWorkingDirectory);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        var expectedWorkingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(
+            Path.Combine(builder.AppHostDirectory, customWorkingDirectory));
+        Assert.Equal(expectedWorkingDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal("uvicorn", launchConfig.Module);
+        Assert.Equal(expectedWorkingDirectory, launchConfig.ProgramPath);
     }
 
     [Fact]

@@ -946,9 +946,12 @@ public static class PythonAppResourceBuilderExtensions
                 }
                 else
                 {
-                    // For Module entrypoints, the working_directory field carries the cwd to the
-                    // debugger; ProgramPath is left empty (the extension drops `program` when `module` is set).
-                    programPath = string.Empty;
+                    // For Module and Executable entrypoints the new `working_directory` field on the launch
+                    // configuration carries the cwd to the Python debugger. Older versions of the VS Code
+                    // extension only look at `program_path`/`project_path` to derive the cwd and don't
+                    // understand `working_directory`, so to preserve backward compatibility we still
+                    // populate `ProgramPath` with the working directory like the previous behavior.
+                    programPath = workingDirectory;
                     module = entrypoint;
                 }
 
