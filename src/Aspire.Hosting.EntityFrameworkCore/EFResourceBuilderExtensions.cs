@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREDOTNETTOOL
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
 using System.Diagnostics;
 using System.Text;
@@ -142,13 +143,13 @@ public static class EFResourceBuilderExtensions
 
         if (contextTypeName != null)
         {
-            if (existingMigrations.Any(r => r.ContextTypeName == contextTypeName))
+            if (existingMigrations.Any(r => r.DbContextTypeName == contextTypeName))
             {
                 throw new InvalidOperationException(
                     $"The DbContext type '{GetShortTypeName(contextTypeName)}' has already been registered for EF migrations on resource '{builder.Resource.Name}'.");
             }
 
-            if (existingMigrations.Any(r => r.ContextTypeName == null))
+            if (existingMigrations.Any(r => r.DbContextTypeName == null))
             {
                 throw new InvalidOperationException(
                     $"Cannot add migrations for a specific DbContext type when auto-detected migrations have already been registered on resource '{builder.Resource.Name}'.");
@@ -270,7 +271,7 @@ public static class EFResourceBuilderExtensions
         using var executor = new EFCoreOperationExecutor(
             migrationResource.ProjectResource,
             migrationResource.MigrationsProjectPath,
-            migrationResource.ContextTypeName,
+            migrationResource.DbContextTypeName,
             logger,
             stepContext.CancellationToken,
             stepContext.Services,
@@ -718,7 +719,7 @@ public static class EFResourceBuilderExtensions
             using var executor = new EFCoreOperationExecutor(
                 migrationResource.ProjectResource,
                 migrationResource.MigrationsProjectPath,
-                migrationResource.ContextTypeName,
+                migrationResource.DbContextTypeName,
                 logger,
                 context.CancellationToken,
                 context.ServiceProvider,

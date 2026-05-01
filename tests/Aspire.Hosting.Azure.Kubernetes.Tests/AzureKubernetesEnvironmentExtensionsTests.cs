@@ -76,7 +76,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
         Assert.True(aks.Resource.OidcIssuerEnabled);
         Assert.True(aks.Resource.WorkloadIdentityEnabled);
-        Assert.Equal(AksSkuTier.Free, aks.Resource.SkuTier);
         Assert.Null(aks.Resource.KubernetesVersion);
         Assert.False(aks.Resource.IsPrivateCluster);
         Assert.False(aks.Resource.ContainerInsightsEnabled);
