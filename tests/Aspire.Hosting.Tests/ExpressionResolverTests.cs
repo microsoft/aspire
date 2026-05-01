@@ -183,6 +183,43 @@ public class ExpressionResolverTests
         Assert.Equal(expectedValue, config["envname"]);
     }
 
+    [Fact]
+    public async Task ContainerHostUrlIgnoresMatchingNonHostEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var nonHostEndpoint = new EndpointAnnotation(
+            System.Net.Sockets.ProtocolType.Tcp,
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            uriScheme: "http",
+            name: "internal",
+            port: 18889,
+            targetPort: 18889);
+
+        nonHostEndpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new AllocatedEndpoint(
+                nonHostEndpoint,
+                KnownHostNames.DefaultContainerTunnelHostName,
+                47092,
+                EndpointBindingMode.SingleAddress,
+                targetPortExpression: "47092",
+                KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
+        builder.AddResource(new TestHostResource("nonHost"))
+            .WithAnnotation(nonHostEndpoint);
+
+        var test = builder.AddContainer("testSource", "someimage")
+            .WithEnvironment("envname", new HostUrl("http://localhost:18889/path"));
+
+        var testServiceProvider = new TestServiceProvider();
+        testServiceProvider.AddService(Options.Create(new DcpOptions() { EnableAspireContainerTunnel = true }));
+        testServiceProvider.AddService(new DistributedApplicationModel(builder.Resources));
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(test.Resource, DistributedApplicationOperation.Run, testServiceProvider).DefaultTimeout();
+        Assert.Equal("http://host.docker.internal:18889/path", config["envname"]);
+    }
+
     [Theory]
     [InlineData(false, true, "http://localhost:18889")]
     [InlineData(true, true, "http://host.docker.internal:18889")]

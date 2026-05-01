@@ -1646,7 +1646,7 @@ public static class ResourceExtensions
 
         foreach (var resource in model.Resources.Where(r => !r.IsContainer()).OfType<IResourceWithEndpoints>())
         {
-            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => ep.Port == port) && dependencies.Add(resource))
+            if (resource.Annotations.OfType<EndpointAnnotation>().Any(ep => HostUrl.MatchesHostPort(ep, port)) && dependencies.Add(resource))
             {
                 newDependencies.Add(resource);
             }

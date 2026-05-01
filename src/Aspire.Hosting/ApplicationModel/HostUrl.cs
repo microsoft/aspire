@@ -67,7 +67,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
                             .Select(r =>
                             {
                                 // Find if the resource has a host endpoint with a port matching the one from the request
-                                if (r.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(ep => ep.Port == uri.Port) is EndpointAnnotation ep)
+                                if (r.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(ep => MatchesHostPort(ep, uri.Port)) is EndpointAnnotation ep)
                                 {
                                     // Return the corresponding endpoint for the container network context. This will be used to determine the port to use when connecting from the container to the host machine.
                                     return r.GetEndpoint(ep.Name, networkContext);
@@ -145,6 +145,11 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
         {
             return false;
         }
+    }
+
+    internal static bool MatchesHostPort(EndpointAnnotation endpoint, int port)
+    {
+        return endpoint.DefaultNetworkID == KnownNetworkIdentifiers.LocalhostNetwork && endpoint.Port == port;
     }
 
     private static bool IsLocalHost(string host) => host is "localhost" or "127.0.0.1" or "::1" or "[::1]";
