@@ -1,7 +1,7 @@
 ---
 description: |
   Generates and maintains a changelog for a configured Aspire milestone by
-  analyzing merged pull requests. Runs every 30 minutes and can be triggered manually.
+  analyzing merged pull requests.
   Creates or updates a wiki page named "<milestone>-Change-log" with a list
   of new features, improvements, and notable bug fixes. A companion GitHub issue collects
   editorial feedback (e.g., exclude a change, rename an entry, merge entries).
@@ -41,7 +41,7 @@ env:
 
 on:
   schedule:
-    - cron: '0,30 * * * *'
+    - cron: '0 */2 * * *' # every 2 hours
   workflow_dispatch:
 
 jobs:
