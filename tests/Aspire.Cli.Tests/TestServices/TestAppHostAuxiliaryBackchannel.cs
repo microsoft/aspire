@@ -140,11 +140,21 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public ExecuteResourceCommandResponse ExecuteResourceCommandResult { get; set; } = new ExecuteResourceCommandResponse { Success = true };
 
+    public Func<string, string, CancellationToken, Task<ExecuteResourceCommandResponse>>? ExecuteResourceCommandHandler { get; set; }
+
+    public int ExecuteResourceCommandCallCount { get; private set; }
+
     public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
         CancellationToken cancellationToken = default)
     {
+        ExecuteResourceCommandCallCount++;
+        if (ExecuteResourceCommandHandler is not null)
+        {
+            return ExecuteResourceCommandHandler(resourceName, commandName, cancellationToken);
+        }
+
         return Task.FromResult(ExecuteResourceCommandResult);
     }
 

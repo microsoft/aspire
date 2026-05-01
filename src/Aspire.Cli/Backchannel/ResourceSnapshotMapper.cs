@@ -110,7 +110,8 @@ internal static class ResourceSnapshotMapper
                 c => c.Name,
                 c => new ResourceCommandJson
                 {
-                    Description = c.Description
+                    Description = c.Description,
+                    ConfirmationMessage = c.ConfirmationMessage
                 });
 
         // Get source information using the shared ResourceSourceViewModel

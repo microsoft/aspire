@@ -704,6 +704,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 Name = c.Name,
                 DisplayName = c.DisplayName,
                 Description = c.DisplayDescription,
+                ConfirmationMessage = c.ConfirmationMessage,
                 State = c.State.ToString()
             })
             .ToArray();
