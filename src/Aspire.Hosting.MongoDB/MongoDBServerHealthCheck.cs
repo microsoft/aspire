@@ -29,11 +29,21 @@ internal sealed class MongoDBServerHealthCheck(MongoDBServerResource resource, F
                     try
                     {
                         var targetPort = resource.PrimaryEndpoint.TargetPort ?? 27017;
-                        var initCmd = new BsonDocument("replSetInitiate", new BsonDocument
+                        var initCmd = new BsonDocument
                         {
-                            { "_id", replicaSetName },
-                            { "members", new BsonArray { new BsonDocument { { "_id", 0 }, { "host", $"{resource.Name}:{targetPort}" } } } }
-                        });
+                            ["replSetInitiate"] = new BsonDocument
+                            {
+                                ["_id"] = replicaSetName,
+                                ["members"] = new BsonArray
+                                {
+                                    new BsonDocument
+                                    {
+                                        ["_id"] = 0,
+                                        ["host"] = $"{resource.Name}:{targetPort}"
+                                    }
+                                }
+                            }
+                        };
 
                         await admin.RunCommandAsync<BsonDocument>(initCmd, ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
                     }

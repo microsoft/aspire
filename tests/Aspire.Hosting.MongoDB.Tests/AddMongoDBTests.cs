@@ -252,6 +252,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     {
         var builder = DistributedApplication.CreateBuilder();
         var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+
         Assert.Equal("rs0", mongo.Resource.ReplicaSetName);
     }
 
@@ -260,6 +261,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     {
         var builder = DistributedApplication.CreateBuilder();
         var mongo = builder.AddMongoDB("mongodb").WithReplicaSet("myset");
+
         Assert.Equal("myset", mongo.Resource.ReplicaSetName);
     }
 
@@ -268,7 +270,8 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     {
         var builder = DistributedApplication.CreateBuilder();
         var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
-        var args = await mongo.Resource.GetArgumentValuesAsync(DistributedApplicationOperation.Run);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo.Resource);
+
         Assert.Contains("--replSet", args);
         Assert.Contains("rs0", args);
         Assert.Contains("--keyFile", args);
@@ -281,6 +284,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     {
         var builder = DistributedApplication.CreateBuilder();
         var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+
         Assert.Single(mongo.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>(),
             a => a.DestinationPath == "/tmp");
     }
@@ -310,6 +314,7 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     {
         var content1 = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongo1-mongodb-keyfile")));
         var content2 = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongo2-mongodb-keyfile")));
+
         Assert.NotEqual(content1, content2);
     }
 
@@ -334,11 +339,15 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void WithReplicaSetServerConnectionStringIncludesDirectConnectionWithoutAuth()
     {
-        var resource = new MongoDBServerResource("mongodb");
-        resource.ReplicaSetName = "rs0";
+        // Use AddResource to create a resource without a password so we can verify
+        // the '?' separator (no auth query string prefix) rather than '&'.
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var mongo = appBuilder.AddResource(new MongoDBServerResource("mongodb")).WithReplicaSet();
 
-        Assert.Contains("?directConnection=true", resource.ConnectionStringExpression.ValueExpression);
-        Assert.DoesNotContain("&directConnection=true", resource.ConnectionStringExpression.ValueExpression);
+        // No password configured → directConnection is appended with '?' not '&'
+        Assert.Null(mongo.Resource.PasswordParameter);
+        Assert.Contains("?directConnection=true", mongo.Resource.ConnectionStringExpression.ValueExpression);
+        Assert.DoesNotContain("&directConnection=true", mongo.Resource.ConnectionStringExpression.ValueExpression);
     }
 
     [Fact]

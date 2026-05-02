@@ -78,7 +78,13 @@ public static class MongoDBBuilderExtensions
         var healthCheckKey = $"{name}_check";
         var healthCheck = new MongoDBServerHealthCheck(mongoDBContainer, () => connectionString);
         builder.Services.AddHealthChecks()
-            .Add(new HealthCheckRegistration(healthCheckKey, _ => healthCheck, failureStatus: default, tags: default));
+            .Add(new HealthCheckRegistration(
+                healthCheckKey,
+                _ => healthCheck,
+                failureStatus: default,
+                tags: default,
+                timeout: default
+                ));
 
         return builder
             .AddResource(mongoDBContainer)
