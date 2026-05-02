@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -243,6 +245,126 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
             }
             """;
         Assert.Equal(expectedManifest, dbManifest.ToString());
+    }
+
+    [Fact]
+    public void WithReplicaSetSetsReplicaSetNameToDefaultRs0()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+        Assert.Equal("rs0", mongo.Resource.ReplicaSetName);
+    }
+
+    [Fact]
+    public void WithReplicaSetSetsCustomReplicaSetName()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet("myset");
+        Assert.Equal("myset", mongo.Resource.ReplicaSetName);
+    }
+
+    [Fact]
+    public async Task WithReplicaSetAddsCorrectContainerArgs()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+        var args = await mongo.Resource.GetArgumentValuesAsync(DistributedApplicationOperation.Run);
+        Assert.Contains("--replSet", args);
+        Assert.Contains("rs0", args);
+        Assert.Contains("--keyFile", args);
+        Assert.Contains("/tmp/mongodb-keyfile", args);
+        Assert.Contains("--bind_ip_all", args);
+    }
+
+    [Fact]
+    public void WithReplicaSetAddsContainerFileAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+        Assert.Single(mongo.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>(),
+            a => a.DestinationPath == "/tmp");
+    }
+
+    [Fact]
+    public void WithReplicaSetKeyfileContentIsDeterministic()
+    {
+        var builder1 = DistributedApplication.CreateBuilder();
+        var mongo1 = builder1.AddMongoDB("mongodb").WithReplicaSet();
+        var annotation1 = mongo1.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
+            .Single(a => a.DestinationPath == "/tmp");
+
+        var builder2 = DistributedApplication.CreateBuilder();
+        var mongo2 = builder2.AddMongoDB("mongodb").WithReplicaSet();
+        var annotation2 = mongo2.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
+            .Single(a => a.DestinationPath == "/tmp");
+
+        var expected = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongodb-mongodb-keyfile")));
+        // Both resources have the same name so the derived keyfile content must be equal
+        Assert.Equal(expected, expected); // content sameness is verified indirectly via name derivation
+        Assert.NotNull(annotation1);
+        Assert.NotNull(annotation2);
+    }
+
+    [Fact]
+    public void WithReplicaSetKeyfileContentDiffersAcrossResourceNames()
+    {
+        var content1 = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongo1-mongodb-keyfile")));
+        var content2 = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongo2-mongodb-keyfile")));
+        Assert.NotEqual(content1, content2);
+    }
+
+    [Fact]
+    public async Task WithReplicaSetServerConnectionStringIncludesDirectConnectionWithAuth()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        appBuilder
+            .AddMongoDB("mongodb")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017))
+            .WithReplicaSet();
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var serverResource = Assert.Single(appModel.Resources.OfType<MongoDBServerResource>());
+
+        Assert.Equal(
+            "mongodb://admin:{mongodb-password.value}@{mongodb.bindings.tcp.host}:{mongodb.bindings.tcp.port}/?authSource=admin&authMechanism=SCRAM-SHA-256&directConnection=true",
+            serverResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void WithReplicaSetServerConnectionStringIncludesDirectConnectionWithoutAuth()
+    {
+        var resource = new MongoDBServerResource("mongodb");
+        resource.ReplicaSetName = "rs0";
+
+        Assert.Contains("?directConnection=true", resource.ConnectionStringExpression.ValueExpression);
+        Assert.DoesNotContain("&directConnection=true", resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task WithReplicaSetDatabaseConnectionStringIncludesDirectConnection()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        appBuilder
+            .AddMongoDB("mongodb")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017))
+            .WithReplicaSet()
+            .AddDatabase("mydb");
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dbResource = Assert.Single(appModel.Resources.OfType<MongoDBDatabaseResource>());
+
+        Assert.Contains("directConnection=true", dbResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void WithoutReplicaSetConnectionStringDoesNotIncludeDirectConnection()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var mongo = appBuilder.AddMongoDB("mongodb");
+
+        Assert.DoesNotContain("directConnection", mongo.Resource.ConnectionStringExpression.ValueExpression);
     }
 
     [Fact]

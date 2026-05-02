@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MongoDB.Driver;
 
 namespace Aspire.Hosting;
@@ -73,12 +76,9 @@ public static class MongoDBBuilderExtensions
         });
 
         var healthCheckKey = $"{name}_check";
-        // cache the client so it is reused on subsequent calls to the health check
-        IMongoClient? client = null;
+        var healthCheck = new MongoDBServerHealthCheck(mongoDBContainer, () => connectionString);
         builder.Services.AddHealthChecks()
-            .AddMongoDb(
-                sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
-                name: healthCheckKey);
+            .Add(new HealthCheckRegistration(healthCheckKey, _ => healthCheck, failureStatus: default, tags: default));
 
         return builder
             .AddResource(mongoDBContainer)
@@ -254,6 +254,54 @@ public static class MongoDBBuilderExtensions
         var importFullPath = Path.GetFullPath(source, builder.ApplicationBuilder.AppHostDirectory);
 
         return builder.WithContainerFiles(initPath, importFullPath);
+    }
+
+    /// <summary>
+    /// Configures the MongoDB container to start as a single-node replica set.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Enabling replica set mode is required for applications that use MongoDB transactions or change streams.
+    /// A deterministic keyfile is injected into the container to satisfy MongoDB's authentication requirements
+    /// for replica set mode. The keyfile content is derived from the resource name and is stable across
+    /// AppHost restarts, making it safe for use with persistent containers.
+    /// </para>
+    /// <para>This method is not available in polyglot app hosts.</para>
+    /// </remarks>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="replicaSetName">The name of the replica set. Defaults to <c>rs0</c>.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExportIgnore(Reason = "Uses WithContainerFiles which is not available in polyglot app hosts.")]
+    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string replicaSetName = "rs0")
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(replicaSetName);
+
+        if (builder.Resource.ReplicaSetName is not null)
+        {
+            throw new InvalidOperationException($"A replica set has already been configured for the '{builder.Resource.Name}' MongoDB resource.");
+        }
+
+        builder.Resource.ReplicaSetName = replicaSetName;
+
+        // Deterministic keyfile: content is derived from the resource name so it is stable across
+        // AppHost restarts (required for persistent containers — WithContainerFiles triggers container
+        // recreation when file content changes). Content is irrelevant for a single-node replica set
+        // since intra-cluster authentication is never exercised, but the file must exist with mode 0600
+        // and be readable by the mongodb process user (UID 999 in the official image).
+        var keyFileContent = Convert.ToBase64String(
+            SHA256.HashData(Encoding.UTF8.GetBytes($"{builder.Resource.Name}-mongodb-keyfile")));
+
+        return builder
+            .WithArgs("--replSet", replicaSetName, "--keyFile", "/tmp/mongodb-keyfile", "--bind_ip_all")
+            .WithContainerFiles("/tmp", [
+                new ContainerFile
+                {
+                    Name = "mongodb-keyfile",
+                    Contents = keyFileContent,
+                    Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                }
+            ], defaultOwner: 999, defaultGroup: 999);
     }
 
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)

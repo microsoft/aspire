@@ -442,6 +442,48 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
         }
     }
 
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task VerifyMongoDBReplicaSetResource()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(2) })
+            .Build();
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var mongodb = builder.AddMongoDB("mongodb").WithReplicaSet();
+        var db = mongodb.AddDatabase("testdb");
+        using var app = builder.Build();
+
+        await app.StartAsync(cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(mongodb.Resource.Name, cts.Token);
+
+        var connectionString = await db.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+
+        var client = new MongoClient(connectionString);
+        var mongoDatabase = client.GetDatabase("testdb");
+
+        // Verify that transactions work — this requires a replica set.
+        await pipeline.ExecuteAsync(async token =>
+        {
+            using var session = await client.StartSessionAsync(cancellationToken: token);
+            session.StartTransaction();
+
+            var collection = mongoDatabase.GetCollection<Movie>(CollectionName);
+            await collection.InsertManyAsync(session, s_movies, cancellationToken: token);
+
+            await session.CommitTransactionAsync(token);
+
+            var results = await collection.Find(new BsonDocument()).ToListAsync(token);
+            Assert.Equal(s_movies.Length, results.Count);
+        }, cts.Token);
+
+        await app.StopAsync();
+    }
+
     private static async Task CreateTestDataAsync(IMongoDatabase mongoDatabase, CancellationToken token)
     {
         await mongoDatabase.CreateCollectionAsync(CollectionName, cancellationToken: token);

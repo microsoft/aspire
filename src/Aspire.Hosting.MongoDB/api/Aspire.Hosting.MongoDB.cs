@@ -38,6 +38,9 @@ namespace Aspire.Hosting
         [AspireExport("withMongoExpress", Description = "Adds a MongoExpress administration platform for MongoDB", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithMongoExpress<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<MongoDB.MongoExpressContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.MongoDBServerResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Uses WithContainerFiles which is not available in polyglot app hosts.")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithReplicaSet(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string replicaSetName = "rs0") { throw null; }
     }
 }
 
@@ -78,6 +81,8 @@ namespace Aspire.Hosting.ApplicationModel
         public EndpointReferenceExpression Port { get { throw null; } }
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public string? ReplicaSetName { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
 
