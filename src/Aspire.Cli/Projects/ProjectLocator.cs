@@ -23,7 +23,7 @@ internal interface IProjectLocator
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
+    /// <returns>A list of candidate AppHost projects with language metadata sorted by full path, or an empty list from the default implementation used by test fakes.</returns>
     Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken) => Task.FromResult<List<AppHostProjectCandidate>>([]);
 
     /// <summary>
@@ -31,7 +31,7 @@ internal interface IProjectLocator
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
+    /// <returns>A list of candidate AppHost project files sorted by full path, or an empty list from the default implementation used by test fakes.</returns>
     Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken) => Task.FromResult<List<FileInfo>>([]);
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
     Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken);
@@ -73,9 +73,9 @@ internal sealed class ProjectLocator(
     }
 
     /// <summary>
-    /// Finds all candidate AppHost project files in the specified search directory.
+    /// Finds all candidate AppHost project files in the specified search directory path.
     /// </summary>
-    /// <param name="searchDirectory">The directory to search recursively.</param>
+    /// <param name="searchDirectory">The directory path to search recursively.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
     public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken)
