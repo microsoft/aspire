@@ -199,11 +199,11 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("yarn", preExecute.Command);
-        Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
+        Assert.Equal(["run", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
         Assert.Equal("yarn", runtimeSpec.Execute.Command);
-        Assert.Equal(["exec", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal(["run", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("yarn", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains("yarn exec tsc --noEmit -p tsconfig.apphost.json && yarn exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+        Assert.Contains("yarn run tsc --noEmit -p tsconfig.apphost.json && yarn run tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     [Fact]

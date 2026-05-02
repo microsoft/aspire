@@ -176,7 +176,7 @@ internal static class TypeScriptAppHostToolchainResolver
                 TypeScriptAppHostToolchain.Yarn => new CommandSpec
                 {
                     Command = "yarn",
-                    Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
+                    Args = ["run", "tsc", "--noEmit", "-p", tsConfigFileName]
                 },
                 TypeScriptAppHostToolchain.Pnpm => new CommandSpec
                 {
@@ -197,11 +197,11 @@ internal static class TypeScriptAppHostToolchainResolver
                 Command = "bun",
                 Args = ["run", "{appHostFile}"]
             },
-            TypeScriptAppHostToolchain.Yarn => new CommandSpec
-            {
-                Command = "yarn",
-                Args = ["exec", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
-            },
+                TypeScriptAppHostToolchain.Yarn => new CommandSpec
+                {
+                    Command = "yarn",
+                    Args = ["run", "tsx", "--tsconfig", tsConfigFileName, "{appHostFile}"]
+                },
             TypeScriptAppHostToolchain.Pnpm => new CommandSpec
             {
                 Command = "pnpm",
@@ -242,7 +242,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"yarn exec tsc --noEmit -p {tsConfigFileName} && yarn exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
+                    "--exec", $"yarn run tsc --noEmit -p {tsConfigFileName} && yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             TypeScriptAppHostToolchain.Pnpm => new CommandSpec
