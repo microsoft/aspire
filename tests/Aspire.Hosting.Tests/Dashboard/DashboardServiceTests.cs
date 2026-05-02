@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.Dashboard;
@@ -151,6 +152,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var testResource = new TestResource("test-resource");
         using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
         var builder = applicationBuilder.AddResource(testResource);
+#pragma warning disable CS0618 // Parameter is obsolete but this verifies dashboard wire compatibility.
         builder.WithCommand(
             name: "TestName",
             displayName: "Display name!",
@@ -160,11 +162,24 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
                 UpdateState = c => Aspire.Hosting.ApplicationModel.ResourceCommandState.Enabled,
                 Description = "Display description!",
                 Parameter = new[] { "One", "Two" },
+                ArgumentInputs =
+                [
+                    new Aspire.Hosting.InteractionInput
+                    {
+                        Name = "selector",
+                        Label = "Selector",
+                        Description = "CSS selector to click.",
+                        InputType = Aspire.Hosting.InputType.Text,
+                        Required = true,
+                        Placeholder = "#submit"
+                    }
+                ],
                 ConfirmationMessage = "Confirmation message!",
                 IconName = "Icon name!",
                 IconVariant = Aspire.Hosting.ApplicationModel.IconVariant.Filled,
                 IsHighlighted = true
             });
+#pragma warning restore CS0618
 
         logger.LogInformation("Publishing resource.");
         await resourceNotificationService.PublishUpdateAsync(testResource, s =>
@@ -202,13 +217,71 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("TestName", commandData.Name);
         Assert.Equal("Display name!", commandData.DisplayName);
         Assert.Equal("Display description!", commandData.DisplayDescription);
+#pragma warning disable CS0612 // Parameter is obsolete but still verified for compatibility.
         Assert.Equal(Value.ForList(Value.ForString("One"), Value.ForString("Two")), commandData.Parameter);
+#pragma warning restore CS0612
+        var argumentInput = Assert.Single(commandData.ArgumentInputs);
+        Assert.Equal("selector", argumentInput.Name);
+        Assert.Equal("Selector", argumentInput.Label);
+        Assert.Equal("CSS selector to click.", argumentInput.Description);
+        Assert.Equal(Aspire.DashboardService.Proto.V1.InputType.Text, argumentInput.InputType);
+        Assert.True(argumentInput.Required);
+        Assert.Equal("#submit", argumentInput.Placeholder);
         Assert.Equal("Confirmation message!", commandData.ConfirmationMessage);
         Assert.Equal("Icon name!", commandData.IconName);
         Assert.Equal(DashboardService.Proto.V1.IconVariant.Filled, commandData.IconVariant);
         Assert.True(commandData.IsHighlighted);
 
         await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommand_WithArguments_PassesArgumentsToCommand()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
+        using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+
+        JsonElement? capturedArguments = null;
+        var testResource = new TestResource("test-resource");
+        using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
+        var builder = applicationBuilder.AddResource(testResource);
+        builder.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: c =>
+            {
+                capturedArguments = c.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            });
+
+        await resourceNotificationService.PublishUpdateAsync(testResource, s =>
+        {
+            return s with { State = new ResourceStateSnapshot("Running", null) };
+        }).DefaultTimeout();
+
+        var context = TestServerCallContext.Create();
+        var response = await dashboardService.ExecuteResourceCommand(
+            new ResourceCommandRequest
+            {
+                ResourceName = testResource.Name,
+                CommandName = "click",
+                Arguments = Value.ForStruct(new Struct
+                {
+                    Fields =
+                    {
+                        ["selector"] = Value.ForString("#submit"),
+                        ["clickCount"] = Value.ForNumber(2)
+                    }
+                })
+            },
+            context);
+
+        Assert.Equal(ResourceCommandResponseKind.Succeeded, response.Kind);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.Value.GetProperty("selector").GetString());
+        Assert.Equal(2, capturedArguments.Value.GetProperty("clickCount").GetInt32());
     }
 
     [Theory]

@@ -2,6 +2,21 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="de" original="../ResourceCommandStrings.resx">
     <body>
+      <trans-unit id="CommandArgumentsJsonInvalid">
+        <source>Invalid command arguments JSON: {0}</source>
+        <target state="new">Invalid command arguments JSON: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandArgumentsJsonInvalidObject">
+        <source>Invalid command arguments JSON: expected a JSON object.</source>
+        <target state="new">Invalid command arguments JSON: expected a JSON object.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CommandArgumentsJsonOptionDescription">
+        <source>JSON object containing invocation arguments to pass to the resource command</source>
+        <target state="new">JSON object containing invocation arguments to pass to the resource command</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandDescription">
         <source>Execute a command on a resource (e.g. start, stop, restart)</source>
         <target state="needs-review-translation">Führen Sie einen Befehl auf einer Ressource aus.</target>

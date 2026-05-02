@@ -23,7 +23,9 @@ internal sealed class ExecuteResourceCommandTool(
 
     public override JsonElement GetInputSchema()
     {
-        return JsonDocument.Parse("""
+        // MCP input schema JSON accepts optional nested command arguments:
+        // { "resourceName": "web", "commandName": "click", "arguments": { "selector": "#submit" } }
+        using var document = JsonDocument.Parse("""
             {
               "type": "object",
               "properties": {
@@ -34,19 +36,25 @@ internal sealed class ExecuteResourceCommandTool(
                 "commandName": {
                   "type": "string",
                   "description": "The command name"
+                },
+                "arguments": {
+                  "type": "object",
+                  "description": "Optional invocation arguments to pass to the resource command",
+                  "additionalProperties": true
                 }
               },
               "required": ["resourceName", "commandName"]
             }
-            """).RootElement;
+            """);
+        return document.RootElement.Clone();
     }
 
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
-        var arguments = context.Arguments;
-        if (arguments is null ||
-            !arguments.TryGetValue("resourceName", out var resourceNameElement) ||
-            !arguments.TryGetValue("commandName", out var commandNameElement))
+        var toolArguments = context.Arguments;
+        if (toolArguments is null ||
+            !toolArguments.TryGetValue("resourceName", out var resourceNameElement) ||
+            !toolArguments.TryGetValue("commandName", out var commandNameElement))
         {
             throw new McpProtocolException("Missing required arguments 'resourceName' and 'commandName'.", McpErrorCode.InvalidParams);
         }
@@ -57,6 +65,17 @@ internal sealed class ExecuteResourceCommandTool(
         if (string.IsNullOrEmpty(resourceName) || string.IsNullOrEmpty(commandName))
         {
             throw new McpProtocolException("Arguments 'resourceName' and 'commandName' cannot be empty.", McpErrorCode.InvalidParams);
+        }
+
+        JsonElement? commandArguments = null;
+        if (toolArguments.TryGetValue("arguments", out var commandArgumentsElement))
+        {
+            if (commandArgumentsElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new McpProtocolException("Argument 'arguments' must be a JSON object.", McpErrorCode.InvalidParams);
+            }
+
+            commandArguments = commandArgumentsElement.Clone();
         }
 
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
@@ -70,7 +89,7 @@ internal sealed class ExecuteResourceCommandTool(
         {
             logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}' via backchannel", commandName, resourceName);
 
-            var response = await connection.ExecuteResourceCommandAsync(resourceName, commandName, cancellationToken).ConfigureAwait(false);
+            var response = await connection.ExecuteResourceCommandAsync(resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
 
             if (response.Success)
             {

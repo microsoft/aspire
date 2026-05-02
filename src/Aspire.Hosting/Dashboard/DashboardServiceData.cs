@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
@@ -94,11 +95,11 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value)> ExecuteCommandAsync(string resourceId, string type, JsonElement? arguments, CancellationToken cancellationToken)
     {
         try
         {
-            var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, cancellationToken).ConfigureAwait(false);
+            var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
                 return (ExecuteCommandResultType.Canceled, result.Message, null);

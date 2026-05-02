@@ -40,7 +40,7 @@ public sealed class MockDashboardClient : IDashboardClient
     public Task WhenConnected => Task.CompletedTask;
     public string ApplicationName => "IntegrationTestApplication";
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, CancellationToken cancellationToken) => throw new NotImplementedException();
     public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
     public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
 

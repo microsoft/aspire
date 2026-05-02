@@ -69,5 +69,23 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string CommandArgumentsJsonOptionDescription {
+            get {
+                return ResourceManager.GetString("CommandArgumentsJsonOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsJsonInvalid {
+            get {
+                return ResourceManager.GetString("CommandArgumentsJsonInvalid", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsJsonInvalidObject {
+            get {
+                return ResourceManager.GetString("CommandArgumentsJsonInvalidObject", resourceCulture);
+            }
+        }
+
     }
 }

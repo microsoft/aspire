@@ -12,6 +12,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Backchannel;
 
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe command argument metadata in tests.
+
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 {
@@ -163,7 +165,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Contains(result, r => r.Name == "myresource-def456");
         Assert.All(result.Where(r => r.Name.StartsWith("myresource-")), r => Assert.Equal("myresource", r.DisplayName));
 
-        await app.StopAsync().DefaultTimeout();
+        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
     }
 
     [Fact]
@@ -207,7 +209,24 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                 new EnvironmentVariableSnapshot("ANOTHER_VAR", "another-value", true)
             ],
             Commands = [
-                new ResourceCommandSnapshot("start", ResourceCommandState.Enabled, "Start", "Start the resource", null, null, null, null, false),
+                new ResourceCommandSnapshot("start", ResourceCommandState.Enabled, "Start", "Start the resource", null, null, null, null, false)
+                {
+                    ArgumentInputs =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            Description = "CSS selector to click.",
+                            EnableDescriptionMarkdown = true,
+                            InputType = InputType.Text,
+                            Required = true,
+                            Placeholder = "#submit",
+                            Disabled = true,
+                            MaxLength = 128
+                        }
+                    ]
+                },
                 new ResourceCommandSnapshot("stop", ResourceCommandState.Disabled, "Stop", "Stop the resource", null, null, null, null, false),
                 new ResourceCommandSnapshot("restart", ResourceCommandState.Hidden, "Restart", null, null, null, null, null, true)
             ],
@@ -272,7 +291,17 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         // Commands
         Assert.Equal(3, snapshot.Commands.Length);
-        Assert.Contains(snapshot.Commands, c => c.Name == "start" && c.DisplayName == "Start" && c.Description == "Start the resource" && c.State == "Enabled");
+        var startCommand = Assert.Single(snapshot.Commands, c => c.Name == "start" && c.DisplayName == "Start" && c.Description == "Start the resource" && c.State == "Enabled");
+        var argumentInput = Assert.Single(startCommand.ArgumentInputs);
+        Assert.Equal("selector", argumentInput.Name);
+        Assert.Equal("Selector", argumentInput.Label);
+        Assert.Equal("CSS selector to click.", argumentInput.Description);
+        Assert.True(argumentInput.EnableDescriptionMarkdown);
+        Assert.Equal(nameof(InputType.Text), argumentInput.InputType);
+        Assert.True(argumentInput.Required);
+        Assert.Equal("#submit", argumentInput.Placeholder);
+        Assert.True(argumentInput.Disabled);
+        Assert.Equal(128, argumentInput.MaxLength);
         Assert.Contains(snapshot.Commands, c => c.Name == "stop" && c.DisplayName == "Stop" && c.Description == "Stop the resource" && c.State == "Disabled");
         Assert.Contains(snapshot.Commands, c => c.Name == "restart" && c.DisplayName == "Restart" && c.Description == null && c.State == "Hidden");
 
@@ -826,3 +855,5 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StopAsync().DefaultTimeout();
     }
 }
+
+#pragma warning restore ASPIREINTERACTION001

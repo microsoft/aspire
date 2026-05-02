@@ -3,6 +3,8 @@
 
 namespace Aspire.Hosting.ApplicationModel;
 
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
+
 /// <summary>
 /// Optional configuration for resource commands added with <see cref="ResourceBuilderExtensions.WithCommand{T}(Aspire.Hosting.ApplicationModel.IResourceBuilder{T}, string, string, Func{Aspire.Hosting.ApplicationModel.ExecuteCommandContext, Task{Aspire.Hosting.ApplicationModel.ExecuteCommandResult}}, Aspire.Hosting.ApplicationModel.CommandOptions?)"/>.
 /// </summary>
@@ -18,10 +20,23 @@ public class CommandOptions
     public string? Description { get; set; }
 
     /// <summary>
-    /// Optional parameter that configures the command in some way.
+    /// Obsolete optional parameter that configures the command in some way.
     /// Clients must return any value provided by the server when invoking the command.
     /// </summary>
+    [Obsolete("Use ArgumentInputs to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
     public object? Parameter { get; set; }
+
+    /// <summary>
+    /// Gets or sets the inputs used to describe the invocation arguments accepted by the command.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each input name maps to a property in the JSON object supplied to <see cref="ExecuteCommandContext.Arguments"/>.
+    /// Dashboard clients can render these inputs before invoking the command, while non-interactive clients can use the
+    /// metadata to construct the same JSON object directly.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<InteractionInput>? ArgumentInputs { get; set; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -50,3 +65,5 @@ public class CommandOptions
     /// </summary>
     public Func<UpdateCommandStateContext, ResourceCommandState>? UpdateState { get; set; }
 }
+
+#pragma warning restore ASPIREINTERACTION001

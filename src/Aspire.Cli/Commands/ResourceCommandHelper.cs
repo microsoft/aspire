@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,7 @@ internal static class ResourceCommandHelper
     /// <param name="progressVerb">The verb to display during progress (e.g., "Starting", "Stopping").</param>
     /// <param name="baseVerb">The base verb for error messages (e.g., "start", "stop").</param>
     /// <param name="pastTenseVerb">The past tense verb for success messages (e.g., "started", "stopped").</param>
+    /// <param name="arguments">Optional invocation arguments to pass to the command.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Exit code indicating success or failure.</returns>
     public static async Task<int> ExecuteResourceCommandAsync(
@@ -35,13 +37,14 @@ internal static class ResourceCommandHelper
         string progressVerb,
         string baseVerb,
         string pastTenseVerb,
+        JsonElement? arguments,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("{Verb} resource '{ResourceName}'", progressVerb, resourceName);
 
         var response = await interactionService.ShowStatusAsync(
             $"{progressVerb} resource '{resourceName}'...",
-            async () => await connection.ExecuteResourceCommandAsync(resourceName, commandName, cancellationToken));
+            async () => await connection.ExecuteResourceCommandAsync(resourceName, commandName, arguments, cancellationToken));
 
         return HandleResponse(response, interactionService, resourceName, progressVerb, baseVerb, pastTenseVerb);
     }
@@ -55,6 +58,7 @@ internal static class ResourceCommandHelper
         ILogger logger,
         string resourceName,
         string commandName,
+        JsonElement? arguments,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
@@ -64,7 +68,7 @@ internal static class ResourceCommandHelper
 
         var response = await interactionService.ShowStatusAsync(
             $"Executing command '{commandName}' on resource '{resourceName}'...",
-            async () => await connection.ExecuteResourceCommandAsync(resourceName, commandName, cancellationToken));
+            async () => await connection.ExecuteResourceCommandAsync(resourceName, commandName, arguments, cancellationToken));
 
         if (response.Success)
         {

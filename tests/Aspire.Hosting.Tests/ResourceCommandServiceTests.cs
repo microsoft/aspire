@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -448,6 +449,36 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(result.Success);
         Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithArguments_PassesArgumentsToCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        JsonElement? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
+        using var document = JsonDocument.Parse("""{ "selector": "#submit", "clickCount": 2 }""");
+        var arguments = document.RootElement.Clone();
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand", arguments);
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.Value.GetProperty("selector").GetString());
+        Assert.Equal(2, capturedArguments.Value.GetProperty("clickCount").GetInt32());
     }
 
     [Fact]

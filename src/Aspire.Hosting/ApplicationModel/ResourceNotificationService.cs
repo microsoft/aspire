@@ -801,7 +801,12 @@ public class ResourceNotificationService : IDisposable
         {
             var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = serviceProvider });
 
-            return new ResourceCommandSnapshot(annotation.Name, state, annotation.DisplayName, annotation.DisplayDescription, annotation.Parameter, annotation.ConfirmationMessage, annotation.IconName, annotation.IconVariant, annotation.IsHighlighted);
+#pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
+            return new ResourceCommandSnapshot(annotation.Name, state, annotation.DisplayName, annotation.DisplayDescription, annotation.Parameter, annotation.ConfirmationMessage, annotation.IconName, annotation.IconVariant, annotation.IsHighlighted)
+            {
+                ArgumentInputs = annotation.ArgumentInputs
+            };
+#pragma warning restore CS0618
         }
     }
 

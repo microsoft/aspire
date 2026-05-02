@@ -107,11 +107,14 @@ internal static class ResourceSnapshotMapper
             .Where(c => string.Equals(c.State, "Enabled", StringComparison.OrdinalIgnoreCase))
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
-                c => c.Name,
-                c => new ResourceCommandJson
-                {
-                    Description = c.Description
-                });
+                 c => c.Name,
+                 c => new ResourceCommandJson
+                 {
+                     Description = c.Description,
+                     ArgumentInputs = c.ArgumentInputs.Length > 0
+                         ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
+                         : null
+                 });
 
         // Get source information using the shared ResourceSourceViewModel
         var sourceViewModel = ResourceSource.GetSourceModel(snapshot.ResourceType, snapshot.Properties);
@@ -145,6 +148,24 @@ internal static class ResourceSnapshotMapper
             Properties = properties,
             Relationships = relationships.ToArray(),
             Commands = commands
+        };
+    }
+
+    private static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)
+    {
+        return new ResourceCommandArgumentJson
+        {
+            Name = input.Name,
+            Label = input.Label,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            InputType = input.InputType,
+            Required = input.Required,
+            Placeholder = input.Placeholder,
+            Options = input.Options,
+            AllowCustomChoice = input.AllowCustomChoice,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength
         };
     }
 

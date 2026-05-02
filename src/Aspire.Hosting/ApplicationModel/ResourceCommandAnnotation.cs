@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Represents a command annotation for a resource.
@@ -22,6 +25,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
         string? displayDescription,
         object? parameter,
+        IReadOnlyList<InteractionInput>? argumentInputs,
         string? confirmationMessage,
         string? iconName,
         IconVariant? iconVariant,
@@ -37,7 +41,10 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         UpdateState = updateState;
         ExecuteCommand = executeCommand;
         DisplayDescription = displayDescription;
+#pragma warning disable CS0618 // Parameter is obsolete but still stored for compatibility.
         Parameter = parameter;
+#pragma warning restore CS0618
+        ArgumentInputs = argumentInputs;
         ConfirmationMessage = confirmationMessage;
         IconName = iconName;
         IconVariant = iconVariant;
@@ -73,10 +80,21 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     public string? DisplayDescription { get; }
 
     /// <summary>
-    /// Optional parameter that configures the command in some way.
+    /// Obsolete optional parameter that configures the command in some way.
     /// Clients must return any value provided by the server when invoking the command.
     /// </summary>
+    [Obsolete("Use ArgumentInputs to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
     public object? Parameter { get; }
+
+    /// <summary>
+    /// Gets the inputs used to describe the invocation arguments accepted by the command.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each input name maps to a property in the JSON object supplied to <see cref="ExecuteCommandContext.Arguments"/>.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<InteractionInput>? ArgumentInputs { get; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -301,4 +319,17 @@ public sealed class ExecuteCommandContext
     /// The logger for the resource.
     /// </summary>
     public required ILogger Logger { get; init; }
+
+    /// <summary>
+    /// Optional invocation arguments supplied by the client when the command is executed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These arguments are distinct from <see cref="ResourceCommandAnnotation.Parameter"/>, which is static command metadata
+    /// published to clients with the resource snapshot. Invocation arguments are supplied for a single command execution.
+    /// </para>
+    /// </remarks>
+    public JsonElement? Arguments { get; init; }
 }
+
+#pragma warning restore ASPIREINTERACTION001
