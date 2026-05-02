@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
-#pragma warning disable ASPIREPIPELINES003
 
 using System.Collections.Immutable;
 using System.Diagnostics;
@@ -16,7 +15,6 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
@@ -263,7 +261,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var dcpContainer = cr.DcpResource;
         var modelContainer = cr.ModelResource;
 
-        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext.ServiceProvider, cToken).ConfigureAwait(false);
+        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext.ServiceProvider, logger, cToken).ConfigureAwait(false);
 
         var spec = dcpContainer.Spec;
 
@@ -735,7 +733,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return (runArgs, failedToApplyArgs);
     }
 
-    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, IServiceProvider serviceProvider, ILogger logger, CancellationToken cancellationToken)
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
@@ -787,15 +785,17 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 Secrets = dcpBuildSecrets
             };
 
+#pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
             var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
                 serviceProvider,
-                NullLogger.Instance,
+                logger,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
             if (buildOptionsContext.TargetPlatform is { } targetPlatform)
             {
                 dcpContainerResource.Spec.Build.Platform = targetPlatform.ToRuntimePlatformString();
             }
+#pragma warning restore ASPIREPIPELINES003
         }
     }
 

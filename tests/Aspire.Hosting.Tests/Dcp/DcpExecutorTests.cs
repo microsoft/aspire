@@ -12,6 +12,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
@@ -57,7 +58,10 @@ public class DcpExecutorTests
         using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
 
         var builder = DistributedApplication.CreateBuilder();
-        builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath);
+#pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
+        builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+               .WithContainerBuildOptions(ctx => ctx.TargetPlatform = ContainerTargetPlatform.LinuxArm64);
+#pragma warning restore ASPIREPIPELINES003
 
         var kubernetesService = new TestKubernetesService();
 
@@ -70,7 +74,7 @@ public class DcpExecutorTests
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         Assert.NotNull(container.Spec.Build);
-        Assert.Equal("linux/amd64", container.Spec.Build!.Platform);
+        Assert.Equal("linux/arm64", container.Spec.Build!.Platform);
     }
 
     [Fact]
