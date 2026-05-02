@@ -73,6 +73,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var selectorArgument = Assert.Single(clickCommand.ArgumentInputs!, input => input.Name == "selector");
         Assert.Equal(InputType.Text, selectorArgument.InputType);
         Assert.True(selectorArgument.Required);
+        Assert.Contains(clickCommand.ArgumentInputs!, input => input.Name == "snapshotAfter" && input.InputType == InputType.Boolean && !input.Required);
         var fillCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FillBrowserCommandName);
         Assert.Contains(fillCommand.ArgumentInputs!, input => input.Name == "value" && input.InputType == InputType.Text && input.Required);
         Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.NavigateBrowserCommandName);
@@ -841,7 +842,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.ClickBrowserCommandName, """{"selector":"#submit"}""");
+        var result = await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.ClickBrowserCommandName, """{"selector":"#submit","snapshotAfter":true}""");
 
         Assert.True(result.Success);
         Assert.NotNull(result.Data);
@@ -850,6 +851,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using (var resultDocument = JsonDocument.Parse(result.Data.Value))
         {
             Assert.Equal("click", resultDocument.RootElement.GetProperty("action").GetString());
+            Assert.True(resultDocument.RootElement.GetProperty("snapshotAfter").GetBoolean());
+            Assert.Equal("snapshot", resultDocument.RootElement.GetProperty("snapshot").GetProperty("action").GetString());
         }
 
         await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.FocusBrowserElementCommandName, """{"selector":"#name"}""");
@@ -865,6 +868,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Equal(
             [
                 "ClickAsync:web-browser-logs:#submit",
+                "GetPageSnapshotAsync:web-browser-logs:80:8000",
                 "FocusAsync:web-browser-logs:#name",
                 "TypeAsync:web-browser-logs:#name:Aspire",
                 "HoverAsync:web-browser-logs:#submit",

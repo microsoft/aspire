@@ -97,6 +97,8 @@ internal static class BrowserCommandStrings
     internal static string CloseTrackedBrowserSucceeded => GetString(nameof(CloseTrackedBrowserSucceeded));
     internal static string SelectorArgumentLabel => GetString(nameof(SelectorArgumentLabel));
     internal static string SelectorArgumentDescription => GetString(nameof(SelectorArgumentDescription));
+    internal static string SnapshotAfterArgumentLabel => GetString(nameof(SnapshotAfterArgumentLabel));
+    internal static string SnapshotAfterArgumentDescription => GetString(nameof(SnapshotAfterArgumentDescription));
     internal static string ValueArgumentLabel => GetString(nameof(ValueArgumentLabel));
     internal static string ValueArgumentDescription => GetString(nameof(ValueArgumentDescription));
     internal static string TypeTextArgumentDescription => GetString(nameof(TypeTextArgumentDescription));

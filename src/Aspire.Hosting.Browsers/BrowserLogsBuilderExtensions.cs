@@ -9,6 +9,7 @@ using Aspire.Hosting.Browsers.Resources;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -282,8 +283,10 @@ public static class BrowserLogsBuilderExtensions
                             throw new InvalidOperationException("The browser navigation URL must be an absolute URI.");
                         }
 
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.NavigateAsync(browserLogsResource, context.ResourceName, url, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.NavigateBrowserSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -294,7 +297,10 @@ public static class BrowserLogsBuilderExtensions
                 CreateBrowserCommandOptions(
                     BrowserCommandStrings.NavigateBrowserDescription,
                     "Navigation",
-                    [CreateTextArgument("url", BrowserCommandStrings.UrlArgumentLabel, BrowserCommandStrings.UrlArgumentDescription, required: true, placeholder: "https://example.com/")]))
+                    [
+                        CreateTextArgument("url", BrowserCommandStrings.UrlArgumentLabel, BrowserCommandStrings.UrlArgumentDescription, required: true, placeholder: "https://example.com/"),
+                        CreateSnapshotAfterArgument()
+                    ]))
             .WithCommand(
                 ClickBrowserCommandName,
                 BrowserCommandStrings.ClickBrowserName,
@@ -303,8 +309,10 @@ public static class BrowserLogsBuilderExtensions
                     try
                     {
                         var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.ClickAsync(context.ResourceName, selector, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.ClickBrowserSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -315,7 +323,7 @@ public static class BrowserLogsBuilderExtensions
                 CreateBrowserCommandOptions(
                     BrowserCommandStrings.ClickBrowserDescription,
                     "CursorClick",
-                    [CreateSelectorArgument()]))
+                    [CreateSelectorArgument(), CreateSnapshotAfterArgument()]))
             .WithCommand(
                 FillBrowserCommandName,
                 BrowserCommandStrings.FillBrowserName,
@@ -325,8 +333,10 @@ public static class BrowserLogsBuilderExtensions
                     {
                         var selector = GetRequiredStringArgument(context.Arguments, "selector");
                         var value = GetRequiredStringArgument(context.Arguments, "value", allowEmpty: true);
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.FillAsync(context.ResourceName, selector, value, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.FillBrowserSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -339,7 +349,8 @@ public static class BrowserLogsBuilderExtensions
                     "TextEdit",
                     [
                         CreateSelectorArgument(),
-                        CreateTextArgument("value", BrowserCommandStrings.ValueArgumentLabel, BrowserCommandStrings.ValueArgumentDescription, required: true)
+                        CreateTextArgument("value", BrowserCommandStrings.ValueArgumentLabel, BrowserCommandStrings.ValueArgumentDescription, required: true),
+                        CreateSnapshotAfterArgument()
                     ]))
             .WithCommand(
                 FocusBrowserElementCommandName,
@@ -349,8 +360,10 @@ public static class BrowserLogsBuilderExtensions
                     try
                     {
                         var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.FocusAsync(context.ResourceName, selector, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.FocusBrowserElementSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -361,7 +374,7 @@ public static class BrowserLogsBuilderExtensions
                 CreateBrowserCommandOptions(
                     BrowserCommandStrings.FocusBrowserElementDescription,
                     "Cursor",
-                    [CreateSelectorArgument()]))
+                    [CreateSelectorArgument(), CreateSnapshotAfterArgument()]))
             .WithCommand(
                 TypeBrowserTextCommandName,
                 BrowserCommandStrings.TypeBrowserTextName,
@@ -371,8 +384,10 @@ public static class BrowserLogsBuilderExtensions
                     {
                         var selector = GetRequiredStringArgument(context.Arguments, "selector");
                         var text = GetRequiredStringArgument(context.Arguments, "text", allowEmpty: true);
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.TypeAsync(context.ResourceName, selector, text, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.TypeBrowserTextSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -385,7 +400,8 @@ public static class BrowserLogsBuilderExtensions
                     "TextEdit",
                     [
                         CreateSelectorArgument(),
-                        CreateTextArgument("text", BrowserCommandStrings.TextArgumentLabel, BrowserCommandStrings.TypeTextArgumentDescription, required: true)
+                        CreateTextArgument("text", BrowserCommandStrings.TextArgumentLabel, BrowserCommandStrings.TypeTextArgumentDescription, required: true),
+                        CreateSnapshotAfterArgument()
                     ]))
             .WithCommand(
                 PressBrowserKeyCommandName,
@@ -396,8 +412,10 @@ public static class BrowserLogsBuilderExtensions
                     {
                         var selector = GetOptionalStringArgument(context.Arguments, "selector");
                         var key = GetRequiredStringArgument(context.Arguments, "key");
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.PressAsync(context.ResourceName, selector, key, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.PressBrowserKeySucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -410,7 +428,8 @@ public static class BrowserLogsBuilderExtensions
                     "Keyboard",
                     [
                         CreateTextArgument("key", BrowserCommandStrings.KeyArgumentLabel, BrowserCommandStrings.KeyArgumentDescription, required: true, placeholder: "Enter"),
-                        CreateSelectorArgument(required: false)
+                        CreateSelectorArgument(required: false),
+                        CreateSnapshotAfterArgument()
                     ]))
             .WithCommand(
                 HoverBrowserElementCommandName,
@@ -420,8 +439,10 @@ public static class BrowserLogsBuilderExtensions
                     try
                     {
                         var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.HoverAsync(context.ResourceName, selector, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.HoverBrowserElementSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -432,7 +453,7 @@ public static class BrowserLogsBuilderExtensions
                 CreateBrowserCommandOptions(
                     BrowserCommandStrings.HoverBrowserElementDescription,
                     "CursorHover",
-                    [CreateSelectorArgument()]))
+                    [CreateSelectorArgument(), CreateSnapshotAfterArgument()]))
             .WithCommand(
                 SelectBrowserOptionCommandName,
                 BrowserCommandStrings.SelectBrowserOptionName,
@@ -442,8 +463,10 @@ public static class BrowserLogsBuilderExtensions
                     {
                         var selector = GetRequiredStringArgument(context.Arguments, "selector");
                         var value = GetRequiredStringArgument(context.Arguments, "value", allowEmpty: true);
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.SelectAsync(context.ResourceName, selector, value, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.SelectBrowserOptionSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -456,7 +479,8 @@ public static class BrowserLogsBuilderExtensions
                     "CheckboxChecked",
                     [
                         CreateSelectorArgument(),
-                        CreateTextArgument("value", BrowserCommandStrings.ValueArgumentLabel, BrowserCommandStrings.SelectValueArgumentDescription, required: true)
+                        CreateTextArgument("value", BrowserCommandStrings.ValueArgumentLabel, BrowserCommandStrings.SelectValueArgumentDescription, required: true),
+                        CreateSnapshotAfterArgument()
                     ]))
             .WithCommand(
                 ScrollBrowserCommandName,
@@ -468,8 +492,10 @@ public static class BrowserLogsBuilderExtensions
                         var deltaY = GetOptionalIntegerArgument(context.Arguments, "deltaY", 600, -100_000, 100_000);
                         var deltaX = GetOptionalIntegerArgument(context.Arguments, "deltaX", 0, -100_000, 100_000);
                         var selector = GetOptionalStringArgument(context.Arguments, "selector");
+                        var snapshotAfter = GetOptionalBooleanArgument(context.Arguments, "snapshotAfter", defaultValue: false);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
                         var resultJson = await sessionManager.ScrollAsync(context.ResourceName, selector, deltaX, deltaY, context.CancellationToken).ConfigureAwait(false);
+                        resultJson = await AddSnapshotAfterAsync(sessionManager, context.ResourceName, resultJson, snapshotAfter, context.CancellationToken).ConfigureAwait(false);
                         return BrowserJsonCommandSuccess(BrowserCommandStrings.ScrollBrowserSucceeded, resultJson);
                     }
                     catch (Exception ex)
@@ -483,7 +509,8 @@ public static class BrowserLogsBuilderExtensions
                     [
                         CreateNumberArgument("deltaY", BrowserCommandStrings.DeltaYArgumentLabel, BrowserCommandStrings.DeltaYArgumentDescription, "600", required: false),
                         CreateNumberArgument("deltaX", BrowserCommandStrings.DeltaXArgumentLabel, BrowserCommandStrings.DeltaXArgumentDescription, "0", required: false),
-                        CreateSelectorArgument(required: false)
+                        CreateSelectorArgument(required: false),
+                        CreateSnapshotAfterArgument()
                     ]))
             .WithCommand(
                 WaitForBrowserCommandName,
@@ -863,6 +890,28 @@ public static class BrowserLogsBuilderExtensions
             });
     }
 
+    private static async Task<string> AddSnapshotAfterAsync(IBrowserLogsSessionManager sessionManager, string resourceName, string resultJson, bool snapshotAfter, CancellationToken cancellationToken)
+    {
+        if (!snapshotAfter)
+        {
+            return resultJson;
+        }
+
+        var snapshotJson = await sessionManager.GetPageSnapshotAsync(resourceName, DefaultSnapshotMaxElements, DefaultSnapshotMaxTextLength, cancellationToken).ConfigureAwait(false);
+
+        // Browser action and snapshot command results are JSON objects shaped like:
+        // { "action": "click", ... } and { "action": "snapshot", "elements": [ ... ] }.
+        var result = JsonNode.Parse(resultJson)?.AsObject()
+            ?? throw new InvalidOperationException("Browser command returned an invalid JSON object.");
+        var snapshot = JsonNode.Parse(snapshotJson)?.AsObject()
+            ?? throw new InvalidOperationException("Browser snapshot command returned an invalid JSON object.");
+
+        result["snapshotAfter"] = true;
+        result["snapshot"] = snapshot;
+
+        return result.ToJsonString(s_commandResultJsonOptions);
+    }
+
     private static InteractionInput CreateSelectorArgument(bool required = true)
     {
         return CreateTextArgument(
@@ -871,6 +920,16 @@ public static class BrowserLogsBuilderExtensions
             BrowserCommandStrings.SelectorArgumentDescription,
             required,
             placeholder: "#submit");
+    }
+
+    private static InteractionInput CreateSnapshotAfterArgument()
+    {
+        return CreateBooleanArgument(
+            "snapshotAfter",
+            BrowserCommandStrings.SnapshotAfterArgumentLabel,
+            BrowserCommandStrings.SnapshotAfterArgumentDescription,
+            value: "false",
+            required: false);
     }
 
     private static InteractionInput CreateTextArgument(string name, string label, string description, bool required, string? placeholder = null)
@@ -884,6 +943,19 @@ public static class BrowserLogsBuilderExtensions
             Required = required,
             Placeholder = placeholder,
             MaxLength = 50_000
+        };
+    }
+
+    private static InteractionInput CreateBooleanArgument(string name, string label, string description, string value, bool required)
+    {
+        return new InteractionInput
+        {
+            Name = name,
+            Label = label,
+            Description = description,
+            InputType = InputType.Boolean,
+            Required = required,
+            Value = value
         };
     }
 
@@ -978,6 +1050,22 @@ public static class BrowserLogsBuilderExtensions
         }
 
         return result;
+    }
+
+    private static bool GetOptionalBooleanArgument(JsonElement? arguments, string name, bool defaultValue)
+    {
+        if (!TryGetArgumentObject(arguments, out var argumentObject) || !argumentObject.TryGetProperty(name, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return defaultValue;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String when bool.TryParse(value.GetString(), out var result) => result,
+            _ => throw new InvalidOperationException($"Browser command argument '{name}' must be a boolean.")
+        };
     }
 
     private static bool TryGetArgumentObject(JsonElement? arguments, out JsonElement argumentObject)

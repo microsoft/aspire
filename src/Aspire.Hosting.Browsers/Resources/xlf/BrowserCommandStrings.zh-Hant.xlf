@@ -413,13 +413,23 @@
         <note />
       </trans-unit>
       <trans-unit id="SelectorArgumentDescription">
-        <source>CSS selector for the target element. Use selectors returned by Inspect browser page when possible.</source>
-        <target state="new">CSS selector for the target element. Use selectors returned by Inspect browser page when possible.</target>
+        <source>CSS selector or snapshot ref for the target element. Use refs such as e1 returned by Inspect browser page when possible.</source>
+        <target state="new">CSS selector or snapshot ref for the target element. Use refs such as e1 returned by Inspect browser page when possible.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectorArgumentLabel">
         <source>Selector</source>
         <target state="new">Selector</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SnapshotAfterArgumentDescription">
+        <source>Return a fresh browser page snapshot with the action result for immediate verification.</source>
+        <target state="new">Return a fresh browser page snapshot with the action result for immediate verification.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SnapshotAfterArgumentLabel">
+        <source>Snapshot after</source>
+        <target state="new">Snapshot after</target>
         <note />
       </trans-unit>
       <trans-unit id="StateArgumentLabel">

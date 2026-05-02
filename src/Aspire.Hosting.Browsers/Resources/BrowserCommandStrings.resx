@@ -264,7 +264,13 @@
     <value>Selector</value>
   </data>
   <data name="SelectorArgumentDescription" xml:space="preserve">
-    <value>CSS selector for the target element. Use selectors returned by Inspect browser page when possible.</value>
+    <value>CSS selector or snapshot ref for the target element. Use refs such as e1 returned by Inspect browser page when possible.</value>
+  </data>
+  <data name="SnapshotAfterArgumentLabel" xml:space="preserve">
+    <value>Snapshot after</value>
+  </data>
+  <data name="SnapshotAfterArgumentDescription" xml:space="preserve">
+    <value>Return a fresh browser page snapshot with the action result for immediate verification.</value>
   </data>
   <data name="ValueArgumentLabel" xml:space="preserve">
     <value>Value</value>

@@ -65,6 +65,19 @@ const associatedLabel = element => {
   const label = element.closest('label');
   return label ? normalizeText(label.innerText || label.textContent) : undefined;
 };
+const interactiveSelector = [
+  'a[href]',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'summary',
+  '[role]',
+  '[contenteditable="true"]',
+  '[onclick]',
+  '[tabindex]:not([tabindex="-1"])'
+].join(',');
+const getInteractiveElements = () => Array.from(document.querySelectorAll(interactiveSelector)).filter(isVisible);
 const describeElement = (element, index) => {
   const rect = element.getBoundingClientRect();
   const tag = element.localName;
@@ -75,6 +88,7 @@ const describeElement = (element, index) => {
     : undefined;
   return {
     index,
+    ref: index >= 0 ? `e${index + 1}` : undefined,
     selector: preferredSelector(element),
     tag,
     role: element.getAttribute('role') || undefined,
@@ -97,7 +111,23 @@ const describeElement = (element, index) => {
     options
   };
 };
+const describeResolvedElement = element => {
+  const index = getInteractiveElements().indexOf(element);
+  return describeElement(element, index);
+};
 const findElement = selector => {
+  const refMatch = /^e([1-9]\d*)$/.exec(selector);
+  if (refMatch) {
+    const elements = getInteractiveElements();
+    const index = Number(refMatch[1]) - 1;
+    const element = elements[index];
+    if (!element) {
+      throw new Error(`No element matched snapshot ref '${selector}'. Refresh the browser snapshot and try again.`);
+    }
+
+    return element;
+  }
+
   const element = document.querySelector(selector);
   if (!element) {
     throw new Error(`No element matched selector '${selector}'.`);
@@ -177,20 +207,7 @@ const appendText = (element, text) => {
 {{Helpers}}
 const maxElements = {{maxElements}};
 const maxTextLength = {{maxTextLength}};
-const interactiveSelector = [
-  'a[href]',
-  'button',
-  'input',
-  'textarea',
-  'select',
-  'summary',
-  '[role]',
-  '[contenteditable="true"]',
-  '[onclick]',
-  '[tabindex]:not([tabindex="-1"])'
-].join(',');
-const elements = Array.from(document.querySelectorAll(interactiveSelector))
-  .filter(isVisible)
+const elements = getInteractiveElements()
   .slice(0, maxElements)
   .map(describeElement);
 return {
@@ -217,7 +234,7 @@ return {
   action: 'click',
   url: location.href,
   selector,
-  element: describeElement(element, 0)
+  element: describeResolvedElement(element)
 };
 """);
     }
@@ -237,7 +254,7 @@ return {
   url: location.href,
   selector,
   value,
-  element: describeElement(element, 0)
+  element: describeResolvedElement(element)
 };
 """);
     }
@@ -254,7 +271,7 @@ return {
   url: location.href,
   selector,
   activeElementSelector: preferredSelector(document.activeElement),
-  element: describeElement(element, 0)
+  element: describeResolvedElement(element)
 };
 """);
     }
@@ -279,7 +296,7 @@ return {
   url: location.href,
   selector,
   text,
-  element: describeElement(element, 0)
+  element: describeResolvedElement(element)
 };
 """);
     }
@@ -318,7 +335,7 @@ return {
   url: location.href,
   selector: selector ?? preferredSelector(element),
   key,
-  element: describeElement(element, 0)
+  element: describeResolvedElement(element)
 };
 """);
     }
@@ -346,7 +363,7 @@ return {
   action: 'hover',
   url: location.href,
   selector,
-  element: describeElement(element, 0)
+  element: describeResolvedElement(element)
 };
 """);
     }
@@ -377,7 +394,7 @@ return {
   selector,
   value: option.value,
   label: normalizeText(option.textContent),
-  element: describeElement(element, 0)
+  element: describeResolvedElement(element)
 };
 """);
     }
@@ -404,7 +421,7 @@ return {
   scroll: target === window
     ? { x: Math.round(window.scrollX), y: Math.round(window.scrollY) }
     : { x: Math.round(target.scrollLeft), y: Math.round(target.scrollTop) },
-  element: target === window ? undefined : describeElement(target, 0)
+  element: target === window ? undefined : describeResolvedElement(target)
 };
 """);
     }
@@ -432,7 +449,7 @@ while (Date.now() - startedAt < timeoutMilliseconds) {
       selector,
       text,
       elapsedMilliseconds: Date.now() - startedAt,
-      element: element ? describeElement(element, 0) : undefined
+      element: element ? describeResolvedElement(element) : undefined
     };
   }
 
@@ -575,7 +592,7 @@ while (Date.now() - startedAt < timeoutMilliseconds) {
       selector,
       state,
       elapsedMilliseconds: Date.now() - startedAt,
-      element: element ? describeElement(element, 0) : undefined
+      element: element ? describeResolvedElement(element) : undefined
     };
   }
 
