@@ -52,6 +52,7 @@ public static class BrowserLogsBuilderExtensions
     internal const string HoverBrowserElementCommandName = "hover-browser-element";
     internal const string SelectBrowserOptionCommandName = "select-browser-option";
     internal const string ScrollBrowserCommandName = "scroll-browser";
+    internal const string WaitCommandName = "wait";
     internal const string WaitForBrowserCommandName = "wait-for-browser";
     internal const string WaitForBrowserUrlCommandName = "wait-for-browser-url";
     internal const string WaitForBrowserLoadStateCommandName = "wait-for-browser-load-state";
@@ -512,6 +513,58 @@ public static class BrowserLogsBuilderExtensions
                         CreateNumberArgument("timeoutMilliseconds", BrowserCommandStrings.TimeoutMillisecondsArgumentLabel, BrowserCommandStrings.TimeoutMillisecondsArgumentDescription, DefaultBrowserCommandTimeoutMilliseconds.ToString(CultureInfo.InvariantCulture), required: false)
                     ]))
             .WithCommand(
+                WaitCommandName,
+                BrowserCommandStrings.WaitBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var selector = GetOptionalStringArgument(context.Arguments, "selector");
+                        var text = GetOptionalStringArgument(context.Arguments, "text");
+                        var urlContains = GetOptionalStringArgument(context.Arguments, "urlContains");
+                        var url = GetOptionalStringArgument(context.Arguments, "url");
+                        var match = GetOptionalStringArgument(context.Arguments, "match") ?? "contains";
+                        var loadState = GetOptionalStringArgument(context.Arguments, "loadState");
+                        var elementState = GetOptionalStringArgument(context.Arguments, "elementState");
+                        var function = GetOptionalStringArgument(context.Arguments, "function");
+                        var timeoutMilliseconds = GetOptionalIntegerArgument(context.Arguments, "timeoutMilliseconds", DefaultBrowserCommandTimeoutMilliseconds, MinimumBrowserCommandTimeoutMilliseconds, MaximumBrowserCommandTimeoutMilliseconds);
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await ExecuteUnifiedWaitAsync(
+                            sessionManager,
+                            context.ResourceName,
+                            selector,
+                            text,
+                            urlContains,
+                            url,
+                            match,
+                            loadState,
+                            elementState,
+                            function,
+                            timeoutMilliseconds,
+                            context.CancellationToken).ConfigureAwait(false);
+
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.WaitBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.WaitBrowserDescription,
+                    "Timer",
+                    [
+                        CreateSelectorArgument(required: false),
+                        CreateTextArgument("text", BrowserCommandStrings.TextArgumentLabel, BrowserCommandStrings.TextArgumentDescription, required: false),
+                        CreateTextArgument("urlContains", BrowserCommandStrings.UrlContainsArgumentLabel, BrowserCommandStrings.UrlContainsArgumentDescription, required: false, placeholder: "/dashboard"),
+                        CreateTextArgument("url", BrowserCommandStrings.UrlArgumentLabel, BrowserCommandStrings.WaitUrlArgumentDescription, required: false, placeholder: "/orders"),
+                        CreateChoiceArgument("match", BrowserCommandStrings.MatchArgumentLabel, BrowserCommandStrings.MatchArgumentDescription, "contains", required: false, ["contains", "exact", "regex"]),
+                        CreateChoiceArgument("loadState", BrowserCommandStrings.LoadStateArgumentLabel, BrowserCommandStrings.LoadStateArgumentDescription, value: null, required: false, ["domcontentloaded", "load", "complete", "networkidle"]),
+                        CreateChoiceArgument("elementState", BrowserCommandStrings.ElementStateArgumentLabel, BrowserCommandStrings.ElementStateArgumentDescription, value: null, required: false, ["attached", "detached", "visible", "hidden", "enabled", "disabled", "checked", "unchecked"]),
+                        CreateTextArgument("function", BrowserCommandStrings.FunctionArgumentLabel, BrowserCommandStrings.FunctionArgumentDescription, required: false, placeholder: "window.__appReady === true"),
+                        CreateNumberArgument("timeoutMilliseconds", BrowserCommandStrings.TimeoutMillisecondsArgumentLabel, BrowserCommandStrings.TimeoutMillisecondsArgumentDescription, DefaultBrowserCommandTimeoutMilliseconds.ToString(CultureInfo.InvariantCulture), required: false)
+                    ]))
+            .WithCommand(
                 WaitForBrowserUrlCommandName,
                 BrowserCommandStrings.WaitForBrowserUrlName,
                 async context =>
@@ -675,6 +728,53 @@ public static class BrowserLogsBuilderExtensions
         Task RefreshBrowserLogsResourceAsync(ResourceNotificationService notifications) =>
             notifications.PublishUpdateAsync(browserLogsResource, snapshot => snapshot);
 
+        static Task<string> ExecuteUnifiedWaitAsync(
+            IBrowserLogsSessionManager sessionManager,
+            string resourceName,
+            string? selector,
+            string? text,
+            string? urlContains,
+            string? url,
+            string match,
+            string? loadState,
+            string? elementState,
+            string? function,
+            int timeoutMilliseconds,
+            CancellationToken cancellationToken)
+        {
+            if (!string.IsNullOrWhiteSpace(function))
+            {
+                return sessionManager.WaitForFunctionAsync(resourceName, function, timeoutMilliseconds, cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(loadState))
+            {
+                return sessionManager.WaitForLoadStateAsync(resourceName, loadState, timeoutMilliseconds, cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(urlContains))
+            {
+                return sessionManager.WaitForUrlAsync(resourceName, urlContains, "contains", timeoutMilliseconds, cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                return sessionManager.WaitForUrlAsync(resourceName, url, match, timeoutMilliseconds, cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(elementState))
+            {
+                if (string.IsNullOrWhiteSpace(selector))
+                {
+                    throw new InvalidOperationException("Browser command argument 'selector' is required when 'elementState' is specified.");
+                }
+
+                return sessionManager.WaitForElementStateAsync(resourceName, selector, elementState, timeoutMilliseconds, cancellationToken);
+            }
+
+            return sessionManager.WaitForAsync(resourceName, selector, text, timeoutMilliseconds, cancellationToken);
+        }
+
         static ImmutableArray<ResourcePropertySnapshot> CreateInitialProperties(string resourceName, BrowserConfiguration configuration)
         {
             List<ResourcePropertySnapshot> properties =
@@ -800,7 +900,7 @@ public static class BrowserLogsBuilderExtensions
         };
     }
 
-    private static InteractionInput CreateChoiceArgument(string name, string label, string description, string value, bool required, IReadOnlyList<string> options)
+    private static InteractionInput CreateChoiceArgument(string name, string label, string description, string? value, bool required, IReadOnlyList<string> options)
     {
         return new InteractionInput
         {

@@ -412,6 +412,17 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<string> WaitForFunctionAsync(string resourceName, string function, int timeoutMilliseconds, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(function);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "wait for function", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateWaitForFunctionExpression(function, timeoutMilliseconds),
+            CreateEvaluationTimeout(timeoutMilliseconds),
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken)
     {
         var activeSession = await GetActiveSessionAsync(resourceName, "close", cancellationToken).ConfigureAwait(false);

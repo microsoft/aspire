@@ -494,6 +494,7 @@ const stateMatched = () => {
   switch (state) {
     case 'domcontentloaded':
       return document.readyState === 'interactive' || document.readyState === 'complete';
+    case 'complete':
     case 'load':
       return document.readyState === 'complete';
     case 'networkidle': {
@@ -582,6 +583,38 @@ while (Date.now() - startedAt < timeoutMilliseconds) {
 }
 
 throw new Error(`Timed out after ${timeoutMilliseconds} ms waiting for selector '${selector}' to become '${state}'.`);
+""");
+    }
+
+    public static string CreateWaitForFunctionExpression(string function, int timeoutMilliseconds)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const functionBody = {{JsonLiteral(function)}};
+const timeoutMilliseconds = {{timeoutMilliseconds}};
+const evaluatePredicate = async () => {
+  let result = Function(`"use strict"; return (${functionBody});`)();
+  if (typeof result === 'function') {
+    result = result();
+  }
+
+  return Boolean(await Promise.resolve(result));
+};
+const startedAt = Date.now();
+while (Date.now() - startedAt < timeoutMilliseconds) {
+  if (await evaluatePredicate()) {
+    return {
+      action: 'wait-for-function',
+      url: location.href,
+      function: functionBody,
+      elapsedMilliseconds: Date.now() - startedAt
+    };
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+
+throw new Error(`Timed out after ${timeoutMilliseconds} ms waiting for function '${functionBody}'.`);
 """);
     }
 

@@ -37,6 +37,8 @@ internal interface IBrowserLogsSessionManager
 
     Task<string> WaitForElementStateAsync(string resourceName, string selector, string state, int timeoutMilliseconds, CancellationToken cancellationToken);
 
+    Task<string> WaitForFunctionAsync(string resourceName, string function, int timeoutMilliseconds, CancellationToken cancellationToken);
+
     Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken);
 }
 

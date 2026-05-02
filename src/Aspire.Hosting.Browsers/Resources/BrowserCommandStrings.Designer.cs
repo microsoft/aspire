@@ -80,6 +80,9 @@ internal static class BrowserCommandStrings
     internal static string WaitForBrowserDescription => GetString(nameof(WaitForBrowserDescription));
     internal static string WaitForBrowserName => GetString(nameof(WaitForBrowserName));
     internal static string WaitForBrowserSucceeded => GetString(nameof(WaitForBrowserSucceeded));
+    internal static string WaitBrowserDescription => GetString(nameof(WaitBrowserDescription));
+    internal static string WaitBrowserName => GetString(nameof(WaitBrowserName));
+    internal static string WaitBrowserSucceeded => GetString(nameof(WaitBrowserSucceeded));
     internal static string WaitForBrowserUrlDescription => GetString(nameof(WaitForBrowserUrlDescription));
     internal static string WaitForBrowserUrlName => GetString(nameof(WaitForBrowserUrlName));
     internal static string WaitForBrowserUrlSucceeded => GetString(nameof(WaitForBrowserUrlSucceeded));
@@ -102,6 +105,8 @@ internal static class BrowserCommandStrings
     internal static string KeyArgumentDescription => GetString(nameof(KeyArgumentDescription));
     internal static string TextArgumentLabel => GetString(nameof(TextArgumentLabel));
     internal static string TextArgumentDescription => GetString(nameof(TextArgumentDescription));
+    internal static string UrlContainsArgumentLabel => GetString(nameof(UrlContainsArgumentLabel));
+    internal static string UrlContainsArgumentDescription => GetString(nameof(UrlContainsArgumentDescription));
     internal static string DeltaYArgumentLabel => GetString(nameof(DeltaYArgumentLabel));
     internal static string DeltaYArgumentDescription => GetString(nameof(DeltaYArgumentDescription));
     internal static string DeltaXArgumentLabel => GetString(nameof(DeltaXArgumentLabel));
@@ -112,8 +117,12 @@ internal static class BrowserCommandStrings
     internal static string MatchArgumentLabel => GetString(nameof(MatchArgumentLabel));
     internal static string MatchArgumentDescription => GetString(nameof(MatchArgumentDescription));
     internal static string StateArgumentLabel => GetString(nameof(StateArgumentLabel));
+    internal static string LoadStateArgumentLabel => GetString(nameof(LoadStateArgumentLabel));
     internal static string LoadStateArgumentDescription => GetString(nameof(LoadStateArgumentDescription));
+    internal static string ElementStateArgumentLabel => GetString(nameof(ElementStateArgumentLabel));
     internal static string ElementStateArgumentDescription => GetString(nameof(ElementStateArgumentDescription));
+    internal static string FunctionArgumentLabel => GetString(nameof(FunctionArgumentLabel));
+    internal static string FunctionArgumentDescription => GetString(nameof(FunctionArgumentDescription));
     internal static string TimeoutMillisecondsArgumentLabel => GetString(nameof(TimeoutMillisecondsArgumentLabel));
     internal static string TimeoutMillisecondsArgumentDescription => GetString(nameof(TimeoutMillisecondsArgumentDescription));
     internal static string MaxElementsArgumentLabel => GetString(nameof(MaxElementsArgumentLabel));

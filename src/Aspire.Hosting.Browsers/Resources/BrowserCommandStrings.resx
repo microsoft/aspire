@@ -215,6 +215,15 @@
   <data name="WaitForBrowserSucceeded" xml:space="preserve">
     <value>Browser wait condition was met.</value>
   </data>
+  <data name="WaitBrowserDescription" xml:space="preserve">
+    <value>Wait until a browser condition is met. Supports selectors, text, URL matches, load states, element states, and JavaScript predicates.</value>
+  </data>
+  <data name="WaitBrowserName" xml:space="preserve">
+    <value>Wait</value>
+  </data>
+  <data name="WaitBrowserSucceeded" xml:space="preserve">
+    <value>Browser wait condition was met.</value>
+  </data>
   <data name="WaitForBrowserUrlDescription" xml:space="preserve">
     <value>Wait until the active tracked browser page URL matches the expected value.</value>
   </data>
@@ -281,6 +290,12 @@
   <data name="TextArgumentDescription" xml:space="preserve">
     <value>Visible page text to wait for.</value>
   </data>
+  <data name="UrlContainsArgumentLabel" xml:space="preserve">
+    <value>URL contains</value>
+  </data>
+  <data name="UrlContainsArgumentDescription" xml:space="preserve">
+    <value>URL fragment to wait for in the active browser page.</value>
+  </data>
   <data name="DeltaYArgumentLabel" xml:space="preserve">
     <value>Delta Y</value>
   </data>
@@ -311,11 +326,23 @@
   <data name="StateArgumentLabel" xml:space="preserve">
     <value>State</value>
   </data>
+  <data name="LoadStateArgumentLabel" xml:space="preserve">
+    <value>Load state</value>
+  </data>
   <data name="LoadStateArgumentDescription" xml:space="preserve">
-    <value>Page load state to wait for: domcontentloaded, load, or networkidle.</value>
+    <value>Page load state to wait for: domcontentloaded, load, complete, or networkidle.</value>
+  </data>
+  <data name="ElementStateArgumentLabel" xml:space="preserve">
+    <value>Element state</value>
   </data>
   <data name="ElementStateArgumentDescription" xml:space="preserve">
     <value>Element state to wait for: attached, detached, visible, hidden, enabled, disabled, checked, or unchecked.</value>
+  </data>
+  <data name="FunctionArgumentLabel" xml:space="preserve">
+    <value>Function</value>
+  </data>
+  <data name="FunctionArgumentDescription" xml:space="preserve">
+    <value>JavaScript expression or zero-argument function to evaluate until it returns a truthy value.</value>
   </data>
   <data name="TimeoutMillisecondsArgumentLabel" xml:space="preserve">
     <value>Timeout (milliseconds)</value>

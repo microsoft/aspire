@@ -84,6 +84,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var scrollCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ScrollBrowserCommandName);
         Assert.Contains(scrollCommand.ArgumentInputs!, input => input.Name == "deltaY" && input.InputType == InputType.Number && !input.Required);
         Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserCommandName);
+        var waitCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitCommandName);
+        Assert.Contains(waitCommand.ArgumentInputs!, input => input.Name == "urlContains" && input.InputType == InputType.Text && !input.Required);
+        Assert.Contains(waitCommand.ArgumentInputs!, input => input.Name == "loadState" && input.InputType == InputType.Choice && input.Value is null);
+        Assert.Contains(waitCommand.ArgumentInputs!, input => input.Name == "function" && input.InputType == InputType.Text && !input.Required);
         var waitUrlCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserUrlCommandName);
         Assert.Contains(waitUrlCommand.ArgumentInputs!, input => input.Name == "match" && input.InputType == InputType.Choice && input.Value == "contains");
         var waitLoadStateCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserLoadStateCommandName);
@@ -855,6 +859,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserUrlCommandName, """{"url":"/orders","match":"contains","timeoutMilliseconds":3000}""");
         await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserLoadStateCommandName, """{"state":"networkidle","timeoutMilliseconds":3000}""");
         await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserElementStateCommandName, """{"selector":"#submit","state":"enabled","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitCommandName, """{"urlContains":"/dashboard","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitCommandName, """{"function":"window.__appReady === true","timeoutMilliseconds":3000}""");
 
         Assert.Equal(
             [
@@ -865,7 +871,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 "ScrollAsync:web-browser-logs:#panel:10:400",
                 "WaitForUrlAsync:web-browser-logs:/orders:contains:3000",
                 "WaitForLoadStateAsync:web-browser-logs:networkidle:3000",
-                "WaitForElementStateAsync:web-browser-logs:#submit:enabled:3000"
+                "WaitForElementStateAsync:web-browser-logs:#submit:enabled:3000",
+                "WaitForUrlAsync:web-browser-logs:/dashboard:contains:3000",
+                "WaitForFunctionAsync:web-browser-logs:window.__appReady === true:3000"
             ],
             sessionManager.BrowserCommandCalls);
 
@@ -1936,6 +1944,12 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         {
             BrowserCommandCalls.Add($"{nameof(WaitForElementStateAsync)}:{resourceName}:{selector}:{state}:{timeoutMilliseconds}");
             return Task.FromResult("""{"action":"wait-for-element-state"}""");
+        }
+
+        public Task<string> WaitForFunctionAsync(string resourceName, string function, int timeoutMilliseconds, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(WaitForFunctionAsync)}:{resourceName}:{function}:{timeoutMilliseconds}");
+            return Task.FromResult("""{"action":"wait-for-function"}""");
         }
 
         public Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken)

@@ -212,6 +212,11 @@
         <target state="new">Element state to wait for: attached, detached, visible, hidden, enabled, disabled, checked, or unchecked.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ElementStateArgumentLabel">
+        <source>Element state</source>
+        <target state="new">Element state</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FillBrowserDescription">
         <source>Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</source>
         <target state="new">Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</target>
@@ -240,6 +245,16 @@
       <trans-unit id="FocusBrowserElementSucceeded">
         <source>Focused browser element.</source>
         <target state="new">Focused browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FunctionArgumentDescription">
+        <source>JavaScript expression or zero-argument function to evaluate until it returns a truthy value.</source>
+        <target state="new">JavaScript expression or zero-argument function to evaluate until it returns a truthy value.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FunctionArgumentLabel">
+        <source>Function</source>
+        <target state="new">Function</target>
         <note />
       </trans-unit>
       <trans-unit id="HoverBrowserElementDescription">
@@ -283,8 +298,13 @@
         <note />
       </trans-unit>
       <trans-unit id="LoadStateArgumentDescription">
-        <source>Page load state to wait for: domcontentloaded, load, or networkidle.</source>
-        <target state="new">Page load state to wait for: domcontentloaded, load, or networkidle.</target>
+        <source>Page load state to wait for: domcontentloaded, load, complete, or networkidle.</source>
+        <target state="new">Page load state to wait for: domcontentloaded, load, complete, or networkidle.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LoadStateArgumentLabel">
+        <source>Load state</source>
+        <target state="new">Load state</target>
         <note />
       </trans-unit>
       <trans-unit id="MatchArgumentDescription">
@@ -457,6 +477,16 @@
         <target state="new">URL</target>
         <note />
       </trans-unit>
+      <trans-unit id="UrlContainsArgumentDescription">
+        <source>URL fragment to wait for in the active browser page.</source>
+        <target state="new">URL fragment to wait for in the active browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UrlContainsArgumentLabel">
+        <source>URL contains</source>
+        <target state="new">URL contains</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ValueArgumentDescription">
         <source>Text value to assign to the target field.</source>
         <target state="new">Text value to assign to the target field.</target>
@@ -465,6 +495,21 @@
       <trans-unit id="ValueArgumentLabel">
         <source>Value</source>
         <target state="new">Value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitBrowserDescription">
+        <source>Wait until a browser condition is met. Supports selectors, text, URL matches, load states, element states, and JavaScript predicates.</source>
+        <target state="new">Wait until a browser condition is met. Supports selectors, text, URL matches, load states, element states, and JavaScript predicates.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitBrowserName">
+        <source>Wait</source>
+        <target state="new">Wait</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitBrowserSucceeded">
+        <source>Browser wait condition was met.</source>
+        <target state="new">Browser wait condition was met.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForBrowserDescription">
