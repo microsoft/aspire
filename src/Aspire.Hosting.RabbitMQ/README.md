@@ -111,6 +111,14 @@ Plugins are automatically enabled when child resources require them:
 | `AddVirtualHost("name")` (non-`/`) | `rabbitmq_management` |
 | `AddShovel(...)` | `rabbitmq_management`, `rabbitmq_shovel`, `rabbitmq_shovel_management` |
 
+## Health checks
+
+Every RabbitMQ child resource registers its own health check. The Aspire dashboard shows each resource's status independently, and `WaitFor(resource)` blocks until that specific resource is healthy — meaning it was provisioned successfully and a live broker probe confirms it still exists.
+
+Failures are isolated: if one queue fails to declare, only that queue's health check reports `Unhealthy`. Sibling queues, exchanges, and shovels are unaffected. The only cascade is a vhost-creation failure, which marks every child in that vhost as `Unhealthy`, because nothing can exist without the vhost.
+
+Bindings are owned by the source exchange. If a binding fails, the exchange is `Unhealthy`; the destination queue is not affected.
+
 ## Connection Properties
 
 When you reference a RabbitMQ resource using `WithReference`, the following connection properties are made available to the consuming project:
