@@ -16,7 +16,11 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class CandidateAppHostDisplayInfo
 {
-    public required string AppHostPath { get; init; }
+    public required string RelativePath { get; init; }
+
+    public required string Path { get; init; }
+
+    public required string Language { get; init; }
 }
 
 [JsonSerializable(typeof(List<CandidateAppHostDisplayInfo>))]
@@ -67,8 +71,13 @@ internal sealed class LsCommand : BaseCommand
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
         var format = parseResult.GetValue(s_formatOption);
-        var appHosts = await _projectLocator.FindAppHostProjectFilesAsync(_executionContext.WorkingDirectory, cancellationToken).ConfigureAwait(false);
-        var appHostInfos = appHosts.Select(a => new CandidateAppHostDisplayInfo { AppHostPath = a.FullName }).ToList();
+        var appHosts = await _projectLocator.FindAppHostProjectsAsync(_executionContext.WorkingDirectory, cancellationToken).ConfigureAwait(false);
+        var appHostInfos = appHosts.Select(a => new CandidateAppHostDisplayInfo
+        {
+            RelativePath = System.IO.Path.GetRelativePath(_executionContext.WorkingDirectory.FullName, a.AppHostFile.FullName),
+            Path = a.AppHostFile.FullName,
+            Language = a.Language
+        }).ToList();
 
         if (format == OutputFormat.Json)
         {
@@ -89,14 +98,17 @@ internal sealed class LsCommand : BaseCommand
 
     private void DisplayTable(List<CandidateAppHostDisplayInfo> appHosts)
     {
-        var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
-
         var table = new Table();
+        table.AddBoldColumn(SharedCommandStrings.HeaderRelativePath);
         table.AddBoldColumn(SharedCommandStrings.HeaderPath);
+        table.AddBoldColumn(SharedCommandStrings.HeaderLanguage);
 
         foreach (var appHost in appHosts)
         {
-            table.AddRow(Markup.Escape(shortPaths[appHost.AppHostPath]));
+            table.AddRow(
+                Markup.Escape(appHost.RelativePath),
+                Markup.Escape(appHost.Path),
+                Markup.Escape(appHost.Language));
         }
 
         _interactionService.DisplayRenderable(table);

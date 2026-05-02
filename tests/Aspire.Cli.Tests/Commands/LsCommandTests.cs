@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -84,10 +85,10 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectFilesAsyncCallback = (_, _) => Task.FromResult(new List<FileInfo>
+            FindAppHostProjectsAsyncCallback = (_, _) => Task.FromResult(new List<AppHostProjectCandidate>
             {
-                new(appHostPath1),
-                new(appHostPath2)
+                new(new FileInfo(appHostPath1), KnownLanguageId.CSharp),
+                new(new FileInfo(appHostPath2), KnownLanguageId.TypeScript)
             })
         };
 
@@ -110,8 +111,18 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(appHosts);
 
         Assert.Collection(appHosts,
-            first => Assert.Equal(appHostPath1, first.AppHostPath),
-            second => Assert.Equal(appHostPath2, second.AppHostPath));
+            first =>
+            {
+                Assert.Equal(Path.Combine("App1", "App1.AppHost.csproj"), first.RelativePath);
+                Assert.Equal(appHostPath1, first.Path);
+                Assert.Equal(KnownLanguageId.CSharp, first.Language);
+            },
+            second =>
+            {
+                Assert.Equal(Path.Combine("App2", "App2.AppHost.csproj"), second.RelativePath);
+                Assert.Equal(appHostPath2, second.Path);
+                Assert.Equal(KnownLanguageId.TypeScript, second.Language);
+            });
     }
 
     [Fact]

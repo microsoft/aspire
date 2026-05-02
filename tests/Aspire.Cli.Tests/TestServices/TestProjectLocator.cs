@@ -14,7 +14,25 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<CancellationToken, Task<FileInfo?>>? GetAppHostFromSettingsAsyncCallback { get; set; }
 
+    public Func<DirectoryInfo, CancellationToken, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsAsyncCallback { get; set; }
+
     public Func<DirectoryInfo, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
+
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken)
+    {
+        if (FindAppHostProjectsAsyncCallback != null)
+        {
+            return await FindAppHostProjectsAsyncCallback(searchDirectory, cancellationToken);
+        }
+
+        if (FindAppHostProjectFilesAsyncCallback != null)
+        {
+            var appHostFiles = await FindAppHostProjectFilesAsyncCallback(searchDirectory, cancellationToken);
+            return appHostFiles.Select(f => new AppHostProjectCandidate(f, KnownLanguageId.CSharp)).ToList();
+        }
+
+        return [];
+    }
 
     public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken)
     {

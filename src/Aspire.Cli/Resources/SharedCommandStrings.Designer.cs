@@ -111,6 +111,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string HeaderRelativePath {
+            get {
+                return ResourceManager.GetString("HeaderRelativePath", resourceCulture);
+            }
+        }
+
+        internal static string HeaderLanguage {
+            get {
+                return ResourceManager.GetString("HeaderLanguage", resourceCulture);
+            }
+        }
+
         internal static string IsolatedOptionDescription {
             get {
                 return ResourceManager.GetString("IsolatedOptionDescription", resourceCulture);

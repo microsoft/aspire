@@ -22,9 +22,19 @@
         <target state="new">Output format for detached AppHost results</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderLanguage">
+        <source>Language</source>
+        <target state="new">Language</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderPath">
         <source>Path</source>
         <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderRelativePath">
+        <source>Relative Path</source>
+        <target state="new">Relative Path</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedOptionDescription">

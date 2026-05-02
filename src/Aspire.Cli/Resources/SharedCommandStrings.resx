@@ -151,6 +151,12 @@
   <data name="HeaderPath" xml:space="preserve">
     <value>Path</value>
   </data>
+  <data name="HeaderRelativePath" xml:space="preserve">
+    <value>Relative Path</value>
+  </data>
+  <data name="HeaderLanguage" xml:space="preserve">
+    <value>Language</value>
+  </data>
   <data name="IsolatedOptionDescription" xml:space="preserve">
     <value>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</value>
   </data>
