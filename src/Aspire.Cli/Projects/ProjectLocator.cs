@@ -24,7 +24,7 @@ internal interface IProjectLocator
     Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken) => Task.FromResult<List<AppHostProjectCandidate>>([]);
 
     /// <summary>
-    /// Finds all candidate AppHost project files in the specified search directory.
+    /// Finds all candidate AppHost project files in the specified search directory, without language metadata.
     /// </summary>
     Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken) => Task.FromResult<List<FileInfo>>([]);
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
