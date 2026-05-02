@@ -477,6 +477,7 @@ public class Program
         builder.Services.AddTransient<StopCommand>();
         builder.Services.AddTransient<StartCommand>();
         builder.Services.AddTransient<WaitCommand>();
+        builder.Services.AddTransient<LsCommand>();
         builder.Services.AddTransient<ResourceCommand>();
         builder.Services.AddTransient<PsCommand>();
         builder.Services.AddTransient<DescribeCommand>();

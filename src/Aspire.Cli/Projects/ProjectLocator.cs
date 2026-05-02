@@ -18,6 +18,7 @@ namespace Aspire.Cli.Projects;
 
 internal interface IProjectLocator
 {
+    Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken) => Task.FromResult<List<FileInfo>>([]);
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
     Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken);
 
@@ -41,17 +42,29 @@ internal sealed class ProjectLocator(
     AspireCliTelemetry telemetry) : IProjectLocator
 {
 
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken)
+    {
+        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, cancellationToken);
+        var candidates = allCandidates.BuildableAppHost.Concat(allCandidates.UnbuildableSuspectedAppHostProjects).ToList();
+        candidates.Sort((x, y) => x.FullName.CompareTo(y.FullName));
+        return candidates;
+    }
+
     public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(string searchDirectory, CancellationToken cancellationToken)
     {
-        var allCandidates = await FindAppHostProjectFilesAsync(new DirectoryInfo(searchDirectory), stopAfterMultipleBuildableAppHosts: false, cancellationToken);
-        return [..allCandidates.BuildableAppHost, ..allCandidates.UnbuildableSuspectedAppHostProjects];
+        return await FindAppHostProjectFilesAsync(new DirectoryInfo(searchDirectory), cancellationToken);
     }
 
     private async Task<(List<FileInfo> BuildableAppHost, List<FileInfo> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, CancellationToken cancellationToken)
     {
+        return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, cancellationToken);
+    }
+
+    private async Task<(List<FileInfo> BuildableAppHost, List<FileInfo> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, CancellationToken cancellationToken)
+    {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        return await interactionService.ShowStatusAsync(InteractionServiceStrings.FindingAppHosts, async () =>
+        async Task<(List<FileInfo> BuildableAppHost, List<FileInfo> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostsAsync()
         {
             var appHostProjects = new List<FileInfo>();
             var unbuildableSuspectedAppHostProjects = new List<FileInfo>();
@@ -133,7 +146,10 @@ internal sealed class ProjectLocator(
                     {
                         logger.LogDebug("Found {Language} apphost {CandidateFile}", handler.DisplayName, candidateFile.FullName);
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
-                        interactionService.DisplaySubtleMessage(relativePath);
+                        if (displayProgress)
+                        {
+                            interactionService.DisplaySubtleMessage(relativePath);
+                        }
                         lock (lockObject)
                         {
                             appHostProjects.Add(candidateFile);
@@ -147,14 +163,20 @@ internal sealed class ProjectLocator(
                     else if (validationResult.IsUnsupported)
                     {
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
+                        if (displayProgress)
+                        {
+                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
+                        }
                         logger.LogDebug("Skipping unsupported project {CandidateFile}", candidateFile.FullName);
                         hasUnsupportedProjects = true;
                     }
                     else if (validationResult.IsPossiblyUnbuildable)
                     {
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
+                        if (displayProgress)
+                        {
+                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
+                        }
                         lock (lockObject)
                         {
                             unbuildableSuspectedAppHostProjects.Add(candidateFile);
@@ -176,7 +198,14 @@ internal sealed class ProjectLocator(
             appHostProjects.Sort((x, y) => x.FullName.CompareTo(y.FullName));
 
             return (appHostProjects, unbuildableSuspectedAppHostProjects, hasUnsupportedProjects);
-        });
+        }
+
+        if (displayProgress)
+        {
+            return await interactionService.ShowStatusAsync(InteractionServiceStrings.FindingAppHosts, FindAppHostsAsync);
+        }
+
+        return await FindAppHostsAsync();
     }
 
     /// <inheritdoc />
