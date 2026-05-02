@@ -266,12 +266,11 @@ public static class MongoDBBuilderExtensions
     /// for replica set mode. The keyfile content is derived from the resource name and is stable across
     /// AppHost restarts, making it safe for use with persistent containers.
     /// </para>
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
     /// <param name="builder">The resource builder.</param>
     /// <param name="replicaSetName">The name of the replica set. Defaults to <c>rs0</c>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Uses WithContainerFiles which is not available in polyglot app hosts.")]
+    [AspireExport(Description = "Configures the MongoDB container to start as a single-node replica set")]
     public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string replicaSetName = "rs0")
     {
         ArgumentNullException.ThrowIfNull(builder);

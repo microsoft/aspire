@@ -39,7 +39,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithMongoExpress<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<MongoDB.MongoExpressContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.MongoDBServerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Uses WithContainerFiles which is not available in polyglot app hosts.")]
+        [AspireExport("withReplicaSet", Description = "Configures the MongoDB container to start as a single-node replica set")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithReplicaSet(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string replicaSetName = "rs0") { throw null; }
     }
 }
