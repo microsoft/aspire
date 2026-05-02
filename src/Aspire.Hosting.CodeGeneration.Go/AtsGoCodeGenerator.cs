@@ -1401,6 +1401,28 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             // Legacy untyped callback returning any — preserve return value.
             WriteLine($"{indent}\t\treturn {callExpr}");
         }
+        else if (p.CallbackParameters is { Count: > 0 } callbackParameters && callbackParameters.Any(cp => cp.Type.Category == AtsTypeCategory.Dto))
+        {
+            var argNames = new List<string>(callbackParameters.Count);
+            for (var i = 0; i < callbackParameters.Count; i++)
+            {
+                var argName = $"arg{i}";
+                argNames.Add(argName);
+                var goType = MapTypeRefToGo(callbackParameters[i].Type, false);
+                WriteLine($"{indent}\t\t{argName} := callbackArg[{goType}](args, {i})");
+            }
+
+            WriteLine($"{indent}\t\tcb({string.Join(", ", argNames)})");
+            WriteLine($"{indent}\t\treturn map[string]any{{");
+            for (var i = 0; i < callbackParameters.Count; i++)
+            {
+                if (callbackParameters[i].Type.Category == AtsTypeCategory.Dto)
+                {
+                    WriteLine($"{indent}\t\t\t\"p{i}\": serializeValue({argNames[i]}),");
+                }
+            }
+            WriteLine($"{indent}\t\t}}");
+        }
         else
         {
             WriteLine($"{indent}\t\t{callExpr}");
@@ -1840,8 +1862,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("\t}");
         }
         WriteLine("\tif _, ok := resolved[\"Args\"]; !ok { resolved[\"Args\"] = os.Args[1:] }");
-        WriteLine("\tif _, ok := resolved[\"ProjectDirectory\"]; !ok {");
+        WriteLine("\tif projectDirectory, ok := resolved[\"ProjectDirectory\"].(string); !ok || projectDirectory == \"\" {");
         WriteLine("\t\tif pwd, err := os.Getwd(); err == nil { resolved[\"ProjectDirectory\"] = pwd }");
+        WriteLine("\t}");
+        WriteLine("\tif appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\" {");
+        WriteLine("\t\tif appHostFilePath := os.Getenv(\"ASPIRE_APPHOST_FILEPATH\"); appHostFilePath != \"\" { resolved[\"AppHostFilePath\"] = appHostFilePath }");
+        WriteLine("\t}");
+        WriteLine("\tif dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\" {");
+        WriteLine("\t\tdelete(resolved, \"DashboardApplicationName\")");
         WriteLine("\t}");
         WriteLine();
         WriteLine($"\tresult, err := c.invokeCapability(context.Background(), \"{AtsConstants.CreateBuilderCapability}\", map[string]any{{\"argsOrOptions\": resolved}})");

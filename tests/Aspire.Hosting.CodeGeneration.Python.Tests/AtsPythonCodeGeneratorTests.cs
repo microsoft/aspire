@@ -267,6 +267,19 @@ public class AtsPythonCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_CreateBuilderDefaultsAppHostFilePathFromEnvironment()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains("app_host_file_path: str | None = None", aspirePy);
+        Assert.Contains("effective_options['AppHostFilePath'] = app_host_file_path", aspirePy);
+        Assert.Contains("app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')", aspirePy);
+    }
+
+    [Fact]
     public void GeneratedCode_UsesTypeHints()
     {
         // Verify that the generated Python code uses type hints

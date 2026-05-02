@@ -527,7 +527,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
             var dtoName = _dtoNames[dto.TypeId];
             WriteLine($"/** {dto.Name} DTO. */");
-            WriteLine($"class {dtoName} {{");
+            WriteLine($"class {dtoName} implements JsonSerializable {{");
             
             // Fields
             foreach (var property in dto.Properties)

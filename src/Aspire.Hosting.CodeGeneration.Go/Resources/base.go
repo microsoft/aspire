@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -712,9 +713,69 @@ func decodeAs[T any](raw any) (T, error) {
 	}
 	var out T
 	if err := json.Unmarshal(bytes, &out); err != nil {
+		if decoded, ok := decodeStructFields[T](raw); ok {
+			return decoded, nil
+		}
 		return zero, err
 	}
 	return out, nil
+}
+
+func decodeStructFields[T any](raw any) (T, bool) {
+	var zero T
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return zero, false
+	}
+
+	targetType := reflect.TypeOf((*T)(nil)).Elem()
+	isPointer := targetType.Kind() == reflect.Pointer
+	if isPointer {
+		targetType = targetType.Elem()
+	}
+	if targetType.Kind() != reflect.Struct {
+		return zero, false
+	}
+
+	targetValue := reflect.New(targetType)
+	structValue := targetValue.Elem()
+	for i := 0; i < targetType.NumField(); i++ {
+		fieldInfo := targetType.Field(i)
+		fieldValue := structValue.Field(i)
+		if !fieldValue.CanSet() {
+			continue
+		}
+
+		fieldName := fieldInfo.Name
+		if tag := fieldInfo.Tag.Get("json"); tag != "" {
+			name, _, _ := strings.Cut(tag, ",")
+			if name == "-" {
+				continue
+			}
+			if name != "" {
+				fieldName = name
+			}
+		}
+
+		rawFieldValue, ok := rawMap[fieldName]
+		if !ok {
+			continue
+		}
+
+		bytes, err := json.Marshal(rawFieldValue)
+		if err != nil {
+			continue
+		}
+		if err := json.Unmarshal(bytes, fieldValue.Addr().Interface()); err != nil {
+			continue
+		}
+	}
+
+	if isPointer {
+		return targetValue.Interface().(T), true
+	}
+
+	return structValue.Interface().(T), true
 }
 
 // ── deepUpdate ───────────────────────────────────────────────────────────────

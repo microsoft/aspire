@@ -10471,6 +10471,7 @@ def create_builder(
     *,
     args: typing.Iterable[str] | None = None,
     project_directory: str | None = None,
+    app_host_file_path: str | None = None,
     container_registry_override: str | None = None,
     disable_dashboard: bool | None = None,
     dashboard_application_name: str | None = None,
@@ -10489,6 +10490,8 @@ def create_builder(
             passed to the Aspire command line (arguments specified after '--'). Specifying them here will override that default.
         project_directory (str): The directory containing the AppHost project file. By default, this will  use the ASPIRE_PROJECT_DIRECTORY
             environment variable if set, otherwise it will use the current working directory.
+        app_host_file_path (str): The path to the AppHost source file. By default, this will use the ASPIRE_APPHOST_FILEPATH
+            environment variable if set.
         container_registry_override (str): When containers are used, use this value to override the container registry.
         disable_dashboard (bool): Determines whether the dashboard is disabled.
         dashboard_application_name (str): The application name to display in the dashboard.
@@ -10518,6 +10521,12 @@ def create_builder(
         effective_options['ProjectDirectory'] = project_directory
     elif not effective_options.get('ProjectDirectory'):
         effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+    if app_host_file_path is not None:
+        effective_options['AppHostFilePath'] = app_host_file_path
+    elif not effective_options.get('AppHostFilePath'):
+        app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
+        if app_host_file_path:
+            effective_options['AppHostFilePath'] = app_host_file_path
     if container_registry_override is not None:
         effective_options['ContainerRegistryOverride'] = container_registry_override
     if disable_dashboard is not None:

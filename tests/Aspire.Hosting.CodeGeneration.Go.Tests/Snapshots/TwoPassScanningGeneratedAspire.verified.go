@@ -2429,8 +2429,11 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlForEndp
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -4047,8 +4050,11 @@ func (s *cSharpAppResource) WithUrlForEndpoint(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -5384,8 +5390,11 @@ func (s *containerRegistryResource) WithUrlForEndpoint(endpointName string, call
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -7082,8 +7091,11 @@ func (s *containerResource) WithUrlForEndpoint(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -10060,8 +10072,11 @@ func (s *dotnetToolResource) WithUrlForEndpoint(endpointName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -12488,8 +12503,11 @@ func (s *executableResource) WithUrlForEndpoint(endpointName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -13640,8 +13658,11 @@ func (s *externalServiceResource) WithUrlForEndpoint(endpointName string, callba
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -14869,8 +14890,11 @@ func (s *parameterResource) WithUrlForEndpoint(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -17027,8 +17051,11 @@ func (s *projectResource) WithUrlForEndpoint(endpointName string, callback func(
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -20108,8 +20135,11 @@ func (s *testDatabaseResource) WithUrlForEndpoint(endpointName string, callback 
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -22282,8 +22312,11 @@ func (s *testRedisResource) WithUrlForEndpoint(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -23926,8 +23959,14 @@ func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuil
 		for k, v := range merged.ToMap() { resolved[k] = v }
 	}
 	if _, ok := resolved["Args"]; !ok { resolved["Args"] = os.Args[1:] }
-	if _, ok := resolved["ProjectDirectory"]; !ok {
+	if projectDirectory, ok := resolved["ProjectDirectory"].(string); !ok || projectDirectory == "" {
 		if pwd, err := os.Getwd(); err == nil { resolved["ProjectDirectory"] = pwd }
+	}
+	if appHostFilePath, ok := resolved["AppHostFilePath"].(string); !ok || appHostFilePath == "" {
+		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["AppHostFilePath"] = appHostFilePath }
+	}
+	if dashboardApplicationName, ok := resolved["DashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
+		delete(resolved, "DashboardApplicationName")
 	}
 
 	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})

@@ -1,4 +1,4 @@
-// ===== Aspire.java =====
+﻿// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -360,7 +360,7 @@ public class AspireClient {
     private void handleServerRequest(Map<String, Object> request) throws IOException {
         String method = (String) request.get("method");
         Object idObj = request.get("id");
-        Map<String, Object> params = (Map<String, Object>) request.get("params");
+        Object params = request.get("params");
 
         debug("Received server request: " + method);
 
@@ -369,8 +369,8 @@ public class AspireClient {
 
         try {
             if ("invokeCallback".equals(method)) {
-                String callbackId = (String) params.get("callbackId");
-                List<Object> args = (List<Object>) params.get("args");
+                String callbackId = getCallbackId(params);
+                List<Object> args = getCallbackArgs(params);
                 
                 Function<Object[], Object> callback = callbacks.get(callbackId);
                 if (callback != null) {
@@ -382,7 +382,7 @@ public class AspireClient {
                     error = createError(-32601, "Callback not found: " + callbackId);
                 }
             } else if ("cancel".equals(method)) {
-                String cancellationId = (String) params.get("cancellationId");
+                String cancellationId = getCancellationId(params);
                 Consumer<Void> handler = cancellations.get(cancellationId);
                 if (handler != null) {
                     handler.accept(null);
@@ -406,6 +406,60 @@ public class AspireClient {
         }
         
         sendMessage(response);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String getCallbackId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return (String) list.get(0);
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return (String) map.get("callbackId");
+        }
+
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> getCallbackArgs(Object params) {
+        Object args = null;
+        if (params instanceof List<?> list && list.size() > 1) {
+            args = list.get(1);
+        } else if (params instanceof Map<?, ?> map) {
+            args = map.get("args");
+        }
+
+        if (args instanceof Map<?, ?> map) {
+            List<Object> positionalArgs = new ArrayList<>();
+            for (var i = 0; ; i++) {
+                var key = "p" + i;
+                if (map.containsKey(key)) {
+                    positionalArgs.add(map.get(key));
+                } else {
+                    break;
+                }
+            }
+            return positionalArgs;
+        }
+
+        if (args instanceof List<?> list) {
+            return (List<Object>) list;
+        }
+
+        return args == null ? List.of() : List.of(args);
+    }
+
+    private String getCancellationId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return (String) list.get(0);
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return (String) map.get("cancellationId");
+        }
+
+        return null;
     }
 
     private Map<String, Object> createError(int code, String message) {
@@ -507,6 +561,9 @@ public class AspireClient {
         }
         if (value instanceof AspireUnion union) {
             return serializeValue(union.getValue());
+        }
+        if (value instanceof JsonSerializable jsonSerializable) {
+            return jsonSerializable.toMap();
         }
         if (value instanceof Map) {
             @SuppressWarnings("unchecked")
@@ -1324,6 +1381,23 @@ public class ITestVaultResource extends ResourceBuilderBase {
 
 }
 
+// ===== JsonSerializable.java =====
+// JsonSerializable.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+import java.util.function.*;
+
+public interface JsonSerializable {
+    Map<String, Object> toMap();
+}
+
 // ===== ReferenceExpression.java =====
 // ReferenceExpression.java - GENERATED CODE - DO NOT EDIT
 
@@ -1574,7 +1648,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestConfigDto DTO. */
-public class TestConfigDto {
+public class TestConfigDto implements JsonSerializable {
     private String name;
     private double port;
     private boolean enabled;
@@ -2000,7 +2074,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestDeeplyNestedDto DTO. */
-public class TestDeeplyNestedDto {
+public class TestDeeplyNestedDto implements JsonSerializable {
     private AspireDict<String, AspireList<TestConfigDto>> nestedData;
     private AspireDict<String, String>[] metadataArray;
 
@@ -2137,7 +2211,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestNestedDto DTO. */
-public class TestNestedDto {
+public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
     private AspireList<String> tags;
@@ -3292,6 +3366,7 @@ public final class WithOptionalStringOptions {
 .modules/IResourceWithConnectionString.java
 .modules/IResourceWithEnvironment.java
 .modules/ITestVaultResource.java
+.modules/JsonSerializable.java
 .modules/ReferenceExpression.java
 .modules/ResourceBuilderBase.java
 .modules/TestCallbackContext.java

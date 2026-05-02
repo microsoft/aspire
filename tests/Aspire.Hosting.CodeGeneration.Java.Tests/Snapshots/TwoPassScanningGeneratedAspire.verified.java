@@ -7,7 +7,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** AddContainerOptions DTO. */
-public class AddContainerOptions {
+public class AddContainerOptions implements JsonSerializable {
     private String image;
     private String tag;
 
@@ -531,7 +531,7 @@ public class AspireClient {
     private void handleServerRequest(Map<String, Object> request) throws IOException {
         String method = (String) request.get("method");
         Object idObj = request.get("id");
-        Map<String, Object> params = (Map<String, Object>) request.get("params");
+        Object params = request.get("params");
 
         debug("Received server request: " + method);
 
@@ -540,8 +540,8 @@ public class AspireClient {
 
         try {
             if ("invokeCallback".equals(method)) {
-                String callbackId = (String) params.get("callbackId");
-                List<Object> args = (List<Object>) params.get("args");
+                String callbackId = getCallbackId(params);
+                List<Object> args = getCallbackArgs(params);
                 
                 Function<Object[], Object> callback = callbacks.get(callbackId);
                 if (callback != null) {
@@ -553,7 +553,7 @@ public class AspireClient {
                     error = createError(-32601, "Callback not found: " + callbackId);
                 }
             } else if ("cancel".equals(method)) {
-                String cancellationId = (String) params.get("cancellationId");
+                String cancellationId = getCancellationId(params);
                 Consumer<Void> handler = cancellations.get(cancellationId);
                 if (handler != null) {
                     handler.accept(null);
@@ -577,6 +577,60 @@ public class AspireClient {
         }
         
         sendMessage(response);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String getCallbackId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return (String) list.get(0);
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return (String) map.get("callbackId");
+        }
+
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> getCallbackArgs(Object params) {
+        Object args = null;
+        if (params instanceof List<?> list && list.size() > 1) {
+            args = list.get(1);
+        } else if (params instanceof Map<?, ?> map) {
+            args = map.get("args");
+        }
+
+        if (args instanceof Map<?, ?> map) {
+            List<Object> positionalArgs = new ArrayList<>();
+            for (var i = 0; ; i++) {
+                var key = "p" + i;
+                if (map.containsKey(key)) {
+                    positionalArgs.add(map.get(key));
+                } else {
+                    break;
+                }
+            }
+            return positionalArgs;
+        }
+
+        if (args instanceof List<?> list) {
+            return (List<Object>) list;
+        }
+
+        return args == null ? List.of() : List.of(args);
+    }
+
+    private String getCancellationId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return (String) list.get(0);
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return (String) map.get("cancellationId");
+        }
+
+        return null;
     }
 
     private Map<String, Object> createError(int code, String message) {
@@ -678,6 +732,9 @@ public class AspireClient {
         }
         if (value instanceof AspireUnion union) {
             return serializeValue(union.getValue());
+        }
+        if (value instanceof JsonSerializable jsonSerializable) {
+            return jsonSerializable.toMap();
         }
         if (value instanceof Map) {
             @SuppressWarnings("unchecked")
@@ -2937,7 +2994,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** CertificateTrustExecutionConfigurationContext DTO. */
-public class CertificateTrustExecutionConfigurationContext {
+public class CertificateTrustExecutionConfigurationContext implements JsonSerializable {
     private ReferenceExpression certificateBundlePath;
     private ReferenceExpression certificateDirectoriesPath;
     private String rootCertificatesPath;
@@ -2971,7 +3028,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** CertificateTrustExecutionConfigurationExportData DTO. */
-public class CertificateTrustExecutionConfigurationExportData {
+public class CertificateTrustExecutionConfigurationExportData implements JsonSerializable {
     private CertificateTrustScope scope;
     private String[] certificateSubjects;
     private String[] customBundlePaths;
@@ -3132,7 +3189,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** CommandOptions DTO. */
-public class CommandOptions {
+public class CommandOptions implements JsonSerializable {
     private String description;
     private Object parameter;
     private String confirmationMessage;
@@ -3178,7 +3235,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** CommandResultData DTO. */
-public class CommandResultData {
+public class CommandResultData implements JsonSerializable {
     private String value;
     private CommandResultFormat format;
     private boolean displayImmediately;
@@ -5912,7 +5969,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** CreateBuilderOptions DTO. */
-public class CreateBuilderOptions {
+public class CreateBuilderOptions implements JsonSerializable {
     private String[] args;
     private String projectDirectory;
     private String appHostFilePath;
@@ -10021,7 +10078,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** ExecuteCommandResult DTO. */
-public class ExecuteCommandResult {
+public class ExecuteCommandResult implements JsonSerializable {
     private boolean success;
     private boolean canceled;
     private String errorMessage;
@@ -10768,7 +10825,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** GenerateParameterDefault DTO. */
-public class GenerateParameterDefault {
+public class GenerateParameterDefault implements JsonSerializable {
     private double minLength;
     private boolean lower;
     private boolean upper;
@@ -10891,7 +10948,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** HttpCommandExportOptions DTO. */
-public class HttpCommandExportOptions {
+public class HttpCommandExportOptions implements JsonSerializable {
     private String description;
     private String confirmationMessage;
     private String iconName;
@@ -10976,7 +11033,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** HttpsCertificateExecutionConfigurationContext DTO. */
-public class HttpsCertificateExecutionConfigurationContext {
+public class HttpsCertificateExecutionConfigurationContext implements JsonSerializable {
     private ReferenceExpression certificatePath;
     private ReferenceExpression keyPath;
     private ReferenceExpression pfxPath;
@@ -11006,7 +11063,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** HttpsCertificateExecutionConfigurationExportData DTO. */
-public class HttpsCertificateExecutionConfigurationExportData {
+public class HttpsCertificateExecutionConfigurationExportData implements JsonSerializable {
     private String subject;
     private String thumbprint;
     private String keyPathExpression;
@@ -11052,7 +11109,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** HttpsCertificateInfo DTO. */
-public class HttpsCertificateInfo {
+public class HttpsCertificateInfo implements JsonSerializable {
     private String subject;
     private String issuer;
     private String thumbprint;
@@ -12632,6 +12689,23 @@ public class InitializeResourceEvent extends HandleWrapperBase {
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.services", reqArgs);
     }
 
+}
+
+// ===== JsonSerializable.java =====
+// JsonSerializable.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+import java.util.function.*;
+
+public interface JsonSerializable {
+    Map<String, Object> toMap();
 }
 
 // ===== LogFacade.java =====
@@ -15392,7 +15466,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** ReferenceEnvironmentInjectionOptions DTO. */
-public class ReferenceEnvironmentInjectionOptions {
+public class ReferenceEnvironmentInjectionOptions implements JsonSerializable {
     private boolean connectionString;
     private boolean connectionProperties;
     private boolean serviceDiscovery;
@@ -15668,7 +15742,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** ResourceEventDto DTO. */
-public class ResourceEventDto {
+public class ResourceEventDto implements JsonSerializable {
     private String resourceName;
     private String resourceId;
     private String state;
@@ -15907,7 +15981,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** ResourceUrlAnnotation DTO. */
-public class ResourceUrlAnnotation {
+public class ResourceUrlAnnotation implements JsonSerializable {
     private String url;
     private String displayText;
     private EndpointReference endpoint;
@@ -16160,7 +16234,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestConfigDto DTO. */
-public class TestConfigDto {
+public class TestConfigDto implements JsonSerializable {
     private String name;
     private double port;
     private boolean enabled;
@@ -17879,7 +17953,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestDeeplyNestedDto DTO. */
-public class TestDeeplyNestedDto {
+public class TestDeeplyNestedDto implements JsonSerializable {
     private AspireDict<String, AspireList<TestConfigDto>> nestedData;
     private AspireDict<String, String>[] metadataArray;
 
@@ -18016,7 +18090,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestNestedDto DTO. */
-public class TestNestedDto {
+public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
     private AspireList<String> tags;
@@ -22630,6 +22704,7 @@ public final class WithVolumeOptions {
 .modules/IconVariant.java
 .modules/ImagePullPolicy.java
 .modules/InitializeResourceEvent.java
+.modules/JsonSerializable.java
 .modules/LogFacade.java
 .modules/OtlpProtocol.java
 .modules/ParameterResource.java
