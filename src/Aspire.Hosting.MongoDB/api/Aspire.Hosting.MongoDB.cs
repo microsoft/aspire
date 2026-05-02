@@ -76,6 +76,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public EndpointReferenceExpression Host { get { throw null; } }
 
+        public ParameterResource? KeyFileContentParameter { get { throw null; } }
+
         public ParameterResource? PasswordParameter { get { throw null; } }
 
         public EndpointReferenceExpression Port { get { throw null; } }

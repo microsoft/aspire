@@ -60,6 +60,17 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
     public string? ReplicaSetName { get; internal set; }
 
     /// <summary>
+    /// Gets the parameter that contains the contents of the keyfile used for MongoDB replica set internal authentication,
+    /// or <see langword="null"/> if the server is running as a standalone server.
+    /// </summary>
+    /// <remarks>
+    /// The value is generated as a high-entropy secret on first use and persisted to the AppHost's user secrets store
+    /// in run mode, so it remains stable across runs of the same AppHost. In publish mode the parameter is emitted to
+    /// the manifest with a <c>generate</c> directive.
+    /// </remarks>
+    public ParameterResource? KeyFileContentParameter { get; internal set; }
+
+    /// <summary>
     /// Gets a reference to the user name for the MongoDB server.
     /// </summary>
     /// <remarks>

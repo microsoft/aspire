@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
@@ -268,9 +266,10 @@ public static class MongoDBBuilderExtensions
     /// <remarks>
     /// <para>
     /// Enabling replica set mode is required for applications that use MongoDB transactions or change streams.
-    /// A deterministic keyfile is injected into the container to satisfy MongoDB's authentication requirements
-    /// for replica set mode. The keyfile content is derived from the resource name and is stable across
-    /// AppHost restarts, making it safe for use with persistent containers.
+    /// A keyfile is injected into the container to satisfy MongoDB's authentication requirements for replica
+    /// set mode. The keyfile content is generated as a high-entropy secret and persisted to the AppHost's user
+    /// secrets store, so it remains stable across runs (required for persistent containers — changing file
+    /// content would force container recreation).
     /// </para>
     /// </remarks>
     /// <param name="builder">The resource builder.</param>
@@ -289,24 +288,37 @@ public static class MongoDBBuilderExtensions
 
         builder.Resource.ReplicaSetName = replicaSetName;
 
-        // Deterministic keyfile: content is derived from the resource name so it is stable across
-        // AppHost restarts (required for persistent containers — WithContainerFiles triggers container
-        // recreation when file content changes). Content is irrelevant for a single-node replica set
-        // since intra-cluster authentication is never exercised, but the file must exist with mode 0600
-        // and be readable by the mongodb process user (UID 999 in the official image).
-        var keyFileContent = Convert.ToBase64String(
-            SHA256.HashData(Encoding.UTF8.GetBytes($"{builder.Resource.Name}-mongodb-keyfile")));
+        // High-entropy keyfile generated once and persisted to user secrets in run mode (via
+        // CreateGeneratedParameter's UserSecretsParameterDefault wrapping), so it is stable across runs —
+        // important because changing the file content would force the persistent container to be recreated.
+        // The default password alphabet (lower+upper+numeric, no special) is a strict subset of MongoDB's
+        // permitted base64 keyfile alphabet, so the generated value is a valid keyfile.
+        var keyFileParameter = ParameterResourceBuilderExtensions.CreateGeneratedParameter(
+            builder.ApplicationBuilder,
+            $"{builder.Resource.Name}-keyfile-content",
+            secret: true,
+            new GenerateParameterDefault
+            {
+                MinLength = 32,
+                Special = false,
+            });
+
+        builder.Resource.KeyFileContentParameter = keyFileParameter;
 
         return builder
             .WithArgs("--replSet", replicaSetName, "--keyFile", "/tmp/mongodb-keyfile", "--bind_ip_all")
-            .WithContainerFiles("/tmp", [
-                new ContainerFile
-                {
-                    Name = "mongodb-keyfile",
-                    Contents = keyFileContent,
-                    Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
-                }
-            ], defaultOwner: 999, defaultGroup: 999);
+            .WithContainerFiles("/tmp", async (_, ct) =>
+            {
+                var contents = await keyFileParameter.GetValueAsync(ct).ConfigureAwait(false);
+                return [
+                    new ContainerFile
+                    {
+                        Name = "mongodb-keyfile",
+                        Contents = contents,
+                        Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                    }
+                ];
+            }, defaultOwner: 999, defaultGroup: 999);
     }
 
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)

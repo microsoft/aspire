@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -290,32 +288,33 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task WithReplicaSetKeyfileContentIsDeterministic()
+    public async Task WithReplicaSetKeyfileContentIsHighEntropyAndStableForResource()
     {
-        var builder1 = DistributedApplication.CreateBuilder();
-        var mongo1 = builder1.AddMongoDB("mongodb").WithReplicaSet();
-        using var app1 = builder1.Build();
-        var annotation1 = mongo1.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+        using var app = builder.Build();
+        var annotation = mongo.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
             .Single(a => a.DestinationPath == "/tmp");
-        var entries1 = await annotation1.Callback(
-            new() { Model = mongo1.Resource, ServiceProvider = app1.Services },
+
+        var entries1 = await annotation.Callback(
+            new() { Model = mongo.Resource, ServiceProvider = app.Services },
             CancellationToken.None);
         var keyfile1 = Assert.IsType<ContainerFile>(Assert.Single(entries1));
 
-        var builder2 = DistributedApplication.CreateBuilder();
-        var mongo2 = builder2.AddMongoDB("mongodb").WithReplicaSet();
-        using var app2 = builder2.Build();
-        var annotation2 = mongo2.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
-            .Single(a => a.DestinationPath == "/tmp");
-        var entries2 = await annotation2.Callback(
-            new() { Model = mongo2.Resource, ServiceProvider = app2.Services },
+        // Resolving the callback again on the same resource must yield the same content; the parameter
+        // value is generated lazily and cached on the ParameterResource for the lifetime of the AppHost,
+        // and is persisted to user secrets so it stays stable across runs as well.
+        var entries2 = await annotation.Callback(
+            new() { Model = mongo.Resource, ServiceProvider = app.Services },
             CancellationToken.None);
         var keyfile2 = Assert.IsType<ContainerFile>(Assert.Single(entries2));
 
-        var expected = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongodb-mongodb-keyfile")));
         Assert.Equal("mongodb-keyfile", keyfile1.Name);
-        Assert.Equal(expected, keyfile1.Contents);
         Assert.Equal(keyfile1.Contents, keyfile2.Contents);
+        Assert.NotNull(keyfile1.Contents);
+        Assert.True(keyfile1.Contents!.Length >= 32);
+        Assert.NotNull(mongo.Resource.KeyFileContentParameter);
+        Assert.Equal($"{mongo.Resource.Name}-keyfile-content", mongo.Resource.KeyFileContentParameter!.Name);
     }
 
     [Fact]
