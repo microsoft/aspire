@@ -72,7 +72,7 @@ internal static class McpToolHelpers
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && IsDevLocalhost(uri.Host))
         {
-            var port = uri.IsDefaultPort ? string.Empty : $":{uri.Port.ToString(CultureInfo.InvariantCulture)}";
+            var port = uri.IsDefaultPort ? string.Empty : ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
             var pathAndQuery = uri.PathAndQuery == "/" ? string.Empty : uri.PathAndQuery;
             return $"{uri.Scheme}://localhost{port}{pathAndQuery}{uri.Fragment}";
         }
