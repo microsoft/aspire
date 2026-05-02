@@ -75,18 +75,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string CommandArgumentsOptionDescription {
-            get {
-                return ResourceManager.GetString("CommandArgumentsOptionDescription", resourceCulture);
-            }
-        }
-
-        internal static string CommandArgumentsCannotMix {
-            get {
-                return ResourceManager.GetString("CommandArgumentsCannotMix", resourceCulture);
-            }
-        }
-
         internal static string CommandArgumentsJsonInvalid {
             get {
                 return ResourceManager.GetString("CommandArgumentsJsonInvalid", resourceCulture);
