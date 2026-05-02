@@ -18,7 +18,7 @@ public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
 {
     [Theory]
     [InlineData("StarterXunitV2", "xUnit.net", "v2")]
-    [InlineData("Starter.With.1", "xUnit.net", "v3mtp")]
+    [InlineData("Starter & With.1", "xUnit.net", "v3mtp")]
     [InlineData("StarterNUnit", "NUnit", null)]
     [InlineData("StarterMSTest", "MSTest", null)]
     [CaptureWorkspaceOnFailure]
@@ -51,13 +51,15 @@ public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
 
         await auto.AspireNewSubcommandAsync("aspire-starter", projectName, counter, [.. args]);
 
-        var testsDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, $"{projectName}.Tests");
-        var testsProjectPath = Path.Combine(testsDirectory, $"{projectName}.Tests.csproj");
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+        var testsProjectPath = ResolveGeneratedTestsProjectPath(projectRoot);
+        var testsDirectory = Path.GetDirectoryName(testsProjectPath)
+            ?? throw new InvalidOperationException($"Could not determine generated tests directory for {testsProjectPath}.");
 
         Assert.True(Directory.Exists(testsDirectory), $"Expected generated tests directory at {testsDirectory}.");
         Assert.True(File.Exists(testsProjectPath), $"Expected generated tests project at {testsProjectPath}.");
 
-        await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(testsDirectory, workspace)}");
+        await auto.TypeAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(testsDirectory, workspace))}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -97,6 +99,43 @@ public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
         await auto.AspireStartAsync(counter);
 
         await auto.AssertResourcesExistAsync(counter, "webfrontend", "apiservice", "cache");
+
+        var resourceCommandNamePath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, "resource-command-name.txt");
+        var quotedResourceCommandNamePath = AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(resourceCommandNamePath, workspace));
+        CliE2ETestHelpers.RegisterCaptureFile("resource-command-name.txt", resourceCommandNamePath);
+
+        await auto.TypeAsync($"if aspire resource --help >/dev/null 2>&1; then echo resource > {quotedResourceCommandNamePath}; elif aspire command --help >/dev/null 2>&1; then echo command > {quotedResourceCommandNamePath}; else echo none > {quotedResourceCommandNamePath}; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var resourceCommandName = File.ReadAllText(resourceCommandNamePath).Trim();
+        if (resourceCommandName is "resource" or "command")
+        {
+            await auto.TypeAsync($"aspire {resourceCommandName} webfrontend start");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+
+            var webfrontendJsonPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, "webfrontend.json");
+            var containerWebfrontendJsonPath = CliE2ETestHelpers.ToContainerPath(webfrontendJsonPath, workspace);
+            var quotedContainerWebfrontendJsonPath = AspireCliShellCommandHelpers.QuoteBashArg(containerWebfrontendJsonPath);
+            CliE2ETestHelpers.RegisterCaptureFile("webfrontend.json", webfrontendJsonPath);
+
+            await auto.TypeAsync(
+                $"for i in $(seq 1 60); do " +
+                $"aspire describe webfrontend --format json > {quotedContainerWebfrontendJsonPath}; " +
+                $"if grep -q '\"url\"[[:space:]]*:' {quotedContainerWebfrontendJsonPath}; then break; fi; " +
+                $"sleep 2; " +
+                $"done; if ! grep -q '\"url\"[[:space:]]*:' {quotedContainerWebfrontendJsonPath}; then cat {quotedContainerWebfrontendJsonPath}; false; fi");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
+
+            var webUrl = CliE2ETestHelpers.GetFirstLocalhostUrlFromJsonFile(webfrontendJsonPath);
+            await auto.AssertUrlRespondsAsync(webUrl, "redis-webfrontend", counter);
+        }
+        else
+        {
+            output.WriteLine("Skipping Redis webfrontend endpoint check because the installed Aspire CLI does not support resource commands.");
+        }
 
         var apiJsonPath = await auto.CaptureJsonOutputAsync(
             "aspire describe apiservice --format json",
@@ -158,6 +197,17 @@ public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
         }
 
         throw new InvalidOperationException($"Expected an api service URL in {jsonPath}.");
+    }
+
+    private static string ResolveGeneratedTestsProjectPath(string projectRoot)
+    {
+        Assert.True(Directory.Exists(projectRoot), $"Expected generated project directory at {projectRoot}.");
+
+        var candidates = Directory.EnumerateFiles(projectRoot, "*.Tests.csproj", SearchOption.AllDirectories)
+            .OrderBy(static path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        return Assert.Single(candidates);
     }
 
     private static string Quote(string value) => $"\"{value}\"";

@@ -657,6 +657,7 @@ internal static class Hex1bAutomatorTestHelpers
             if (!useRedisCache)
             {
                 await auto.TypeAsync("n");
+                await auto.EnterAsync();
             }
             else
             {

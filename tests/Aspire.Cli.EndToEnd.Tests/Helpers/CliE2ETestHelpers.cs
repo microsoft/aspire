@@ -566,17 +566,80 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
-    /// Extracts the first localhost URL from a JSON file.
+    /// Extracts the first localhost resource endpoint URL from a JSON file.
     /// </summary>
     internal static string GetFirstLocalhostUrlFromJsonFile(string jsonPath)
     {
         return WithJsonFailureDiagnostics("resource JSON", jsonPath, content =>
         {
-            var match = Regex.Match(content, @"https?://localhost:\d+");
+            using var document = JsonDocument.Parse(content);
+            foreach (var resource in EnumerateResources(document.RootElement))
+            {
+                if (!resource.TryGetProperty("urls", out var urls) ||
+                    urls.ValueKind is not JsonValueKind.Array)
+                {
+                    continue;
+                }
 
-            Assert.True(match.Success, $"Expected a localhost URL in {jsonPath}");
-            return match.Value;
+                foreach (var url in urls.EnumerateArray())
+                {
+                    var urlString = GetResourceUrlString(url);
+                    if (urlString is not null &&
+                        Uri.TryCreate(urlString, UriKind.Absolute, out var uri) &&
+                        (uri.Scheme is "http" or "https") &&
+                        string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return urlString;
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"Expected a localhost resource endpoint URL in {jsonPath}");
         });
+    }
+
+    private static IEnumerable<JsonElement> EnumerateResources(JsonElement root)
+    {
+        if (root.ValueKind is JsonValueKind.Object &&
+            root.TryGetProperty("resources", out var resources) &&
+            resources.ValueKind is JsonValueKind.Array)
+        {
+            foreach (var resource in resources.EnumerateArray())
+            {
+                yield return resource;
+            }
+
+            yield break;
+        }
+
+        if (root.ValueKind is JsonValueKind.Array)
+        {
+            foreach (var resource in root.EnumerateArray())
+            {
+                yield return resource;
+            }
+
+            yield break;
+        }
+
+        if (root.ValueKind is JsonValueKind.Object)
+        {
+            yield return root;
+        }
+    }
+
+    private static string? GetResourceUrlString(JsonElement url)
+    {
+        if (url.ValueKind is JsonValueKind.String)
+        {
+            return url.GetString();
+        }
+
+        return url.ValueKind is JsonValueKind.Object &&
+            url.TryGetProperty("url", out var value) &&
+            value.ValueKind is JsonValueKind.String
+            ? value.GetString()
+            : null;
     }
 
     private static bool HasNonEmptyStringOrNumber(JsonElement value)
