@@ -187,6 +187,31 @@
         <target state="new">Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeltaXArgumentDescription">
+        <source>Horizontal scroll distance in CSS pixels. Positive values scroll right and negative values scroll left.</source>
+        <target state="new">Horizontal scroll distance in CSS pixels. Positive values scroll right and negative values scroll left.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeltaXArgumentLabel">
+        <source>Delta X</source>
+        <target state="new">Delta X</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeltaYArgumentDescription">
+        <source>Vertical scroll distance in CSS pixels. Positive values scroll down and negative values scroll up.</source>
+        <target state="new">Vertical scroll distance in CSS pixels. Positive values scroll down and negative values scroll up.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DeltaYArgumentLabel">
+        <source>Delta Y</source>
+        <target state="new">Delta Y</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ElementStateArgumentDescription">
+        <source>Element state to wait for: attached, detached, visible, hidden, enabled, disabled, checked, or unchecked.</source>
+        <target state="new">Element state to wait for: attached, detached, visible, hidden, enabled, disabled, checked, or unchecked.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FillBrowserDescription">
         <source>Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</source>
         <target state="new">Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</target>
@@ -200,6 +225,36 @@
       <trans-unit id="FillBrowserSucceeded">
         <source>Filled browser field.</source>
         <target state="new">Filled browser field.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FocusBrowserElementDescription">
+        <source>Focus an element in the active tracked browser page using a CSS selector.</source>
+        <target state="new">Focus an element in the active tracked browser page using a CSS selector.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FocusBrowserElementName">
+        <source>Focus browser element</source>
+        <target state="new">Focus browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FocusBrowserElementSucceeded">
+        <source>Focused browser element.</source>
+        <target state="new">Focused browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HoverBrowserElementDescription">
+        <source>Move the pointer over an element in the active tracked browser page using a CSS selector.</source>
+        <target state="new">Move the pointer over an element in the active tracked browser page using a CSS selector.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HoverBrowserElementName">
+        <source>Hover browser element</source>
+        <target state="new">Hover browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HoverBrowserElementSucceeded">
+        <source>Hovered browser element.</source>
+        <target state="new">Hovered browser element.</target>
         <note />
       </trans-unit>
       <trans-unit id="InspectBrowserDescription">
@@ -225,6 +280,21 @@
       <trans-unit id="KeyArgumentLabel">
         <source>Key</source>
         <target state="new">Key</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LoadStateArgumentDescription">
+        <source>Page load state to wait for: domcontentloaded, load, or networkidle.</source>
+        <target state="new">Page load state to wait for: domcontentloaded, load, or networkidle.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MatchArgumentDescription">
+        <source>How the current browser URL should be compared with the URL argument.</source>
+        <target state="new">How the current browser URL should be compared with the URL argument.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MatchArgumentLabel">
+        <source>Match</source>
+        <target state="new">Match</target>
         <note />
       </trans-unit>
       <trans-unit id="MaxElementsArgumentDescription">
@@ -287,6 +357,21 @@
         <target state="new">Pressed browser key.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ScrollBrowserDescription">
+        <source>Scroll the active tracked browser page or a selected scrollable element.</source>
+        <target state="new">Scroll the active tracked browser page or a selected scrollable element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScrollBrowserName">
+        <source>Scroll browser</source>
+        <target state="new">Scroll browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScrollBrowserSucceeded">
+        <source>Scrolled browser.</source>
+        <target state="new">Scrolled browser.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectBrowserOptionDescription">
         <source>Select an option in a browser select element by option value or visible text.</source>
         <target state="new">Select an option in a browser select element by option value or visible text.</target>
@@ -317,6 +402,11 @@
         <target state="new">Selector</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateArgumentLabel">
+        <source>State</source>
+        <target state="new">State</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TextArgumentDescription">
         <source>Visible page text to wait for.</source>
         <target state="new">Visible page text to wait for.</target>
@@ -335,6 +425,26 @@
       <trans-unit id="TimeoutMillisecondsArgumentLabel">
         <source>Timeout (milliseconds)</source>
         <target state="new">Timeout (milliseconds)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TypeBrowserTextDescription">
+        <source>Type text into an input, textarea, or editable element in the active tracked browser page.</source>
+        <target state="new">Type text into an input, textarea, or editable element in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TypeBrowserTextName">
+        <source>Type browser text</source>
+        <target state="new">Type browser text</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TypeBrowserTextSucceeded">
+        <source>Typed browser text.</source>
+        <target state="new">Typed browser text.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TypeTextArgumentDescription">
+        <source>Text to type into the target element.</source>
+        <target state="new">Text to type into the target element.</target>
         <note />
       </trans-unit>
       <trans-unit id="UrlArgumentDescription">
@@ -362,6 +472,36 @@
         <target state="new">Wait until a selector is visible, text appears on the page, or both conditions are met.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WaitForBrowserElementStateDescription">
+        <source>Wait until a selected element reaches a state such as visible, hidden, enabled, disabled, checked, or unchecked.</source>
+        <target state="new">Wait until a selected element reaches a state such as visible, hidden, enabled, disabled, checked, or unchecked.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserElementStateName">
+        <source>Wait for browser element state</source>
+        <target state="new">Wait for browser element state</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserElementStateSucceeded">
+        <source>Browser element state wait condition was met.</source>
+        <target state="new">Browser element state wait condition was met.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserLoadStateDescription">
+        <source>Wait until the active tracked browser page reaches a load state.</source>
+        <target state="new">Wait until the active tracked browser page reaches a load state.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserLoadStateName">
+        <source>Wait for browser load state</source>
+        <target state="new">Wait for browser load state</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserLoadStateSucceeded">
+        <source>Browser load state wait condition was met.</source>
+        <target state="new">Browser load state wait condition was met.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WaitForBrowserName">
         <source>Wait for browser page</source>
         <target state="new">Wait for browser page</target>
@@ -370,6 +510,26 @@
       <trans-unit id="WaitForBrowserSucceeded">
         <source>Browser wait condition was met.</source>
         <target state="new">Browser wait condition was met.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserUrlDescription">
+        <source>Wait until the active tracked browser page URL matches the expected value.</source>
+        <target state="new">Wait until the active tracked browser page URL matches the expected value.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserUrlName">
+        <source>Wait for browser URL</source>
+        <target state="new">Wait for browser URL</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserUrlSucceeded">
+        <source>Browser URL wait condition was met.</source>
+        <target state="new">Browser URL wait condition was met.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitUrlArgumentDescription">
+        <source>URL value to wait for. It can be a full URL, URL fragment, or regular expression depending on the match mode.</source>
+        <target state="new">URL value to wait for. It can be a full URL, URL fragment, or regular expression depending on the match mode.</target>
         <note />
       </trans-unit>
     </body>

@@ -76,9 +76,20 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var fillCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FillBrowserCommandName);
         Assert.Contains(fillCommand.ArgumentInputs!, input => input.Name == "value" && input.InputType == InputType.Text && input.Required);
         Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.NavigateBrowserCommandName);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FocusBrowserElementCommandName);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.TypeBrowserTextCommandName);
         Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.PressBrowserKeyCommandName);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.HoverBrowserElementCommandName);
         Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.SelectBrowserOptionCommandName);
+        var scrollCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ScrollBrowserCommandName);
+        Assert.Contains(scrollCommand.ArgumentInputs!, input => input.Name == "deltaY" && input.InputType == InputType.Number && !input.Required);
         Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserCommandName);
+        var waitUrlCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserUrlCommandName);
+        Assert.Contains(waitUrlCommand.ArgumentInputs!, input => input.Name == "match" && input.InputType == InputType.Choice && input.Value == "contains");
+        var waitLoadStateCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserLoadStateCommandName);
+        Assert.Contains(waitLoadStateCommand.ArgumentInputs!, input => input.Name == "state" && input.InputType == InputType.Choice && input.Value == "load");
+        var waitElementStateCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserElementStateCommandName);
+        Assert.Contains(waitElementStateCommand.ArgumentInputs!, input => input.Name == "state" && input.InputType == InputType.Choice && input.Value == "visible");
         Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.CloseTrackedBrowserCommandName);
 
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
@@ -826,15 +837,45 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        using var arguments = JsonDocument.Parse("""{"selector":"#submit"}""");
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ClickBrowserCommandName, arguments.RootElement).DefaultTimeout();
+        var result = await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.ClickBrowserCommandName, """{"selector":"#submit"}""");
 
         Assert.True(result.Success);
-        Assert.Equal("ClickAsync:web-browser-logs:#submit", Assert.Single(sessionManager.BrowserCommandCalls));
         Assert.NotNull(result.Data);
         Assert.Equal(CommandResultFormat.Json, result.Data.Format);
         Assert.True(result.Data.DisplayImmediately);
-        Assert.Equal("click", JsonDocument.Parse(result.Data.Value).RootElement.GetProperty("action").GetString());
+        using (var resultDocument = JsonDocument.Parse(result.Data.Value))
+        {
+            Assert.Equal("click", resultDocument.RootElement.GetProperty("action").GetString());
+        }
+
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.FocusBrowserElementCommandName, """{"selector":"#name"}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.TypeBrowserTextCommandName, """{"selector":"#name","text":"Aspire"}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.HoverBrowserElementCommandName, """{"selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.ScrollBrowserCommandName, """{"selector":"#panel","deltaX":10,"deltaY":400}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserUrlCommandName, """{"url":"/orders","match":"contains","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserLoadStateCommandName, """{"state":"networkidle","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserElementStateCommandName, """{"selector":"#submit","state":"enabled","timeoutMilliseconds":3000}""");
+
+        Assert.Equal(
+            [
+                "ClickAsync:web-browser-logs:#submit",
+                "FocusAsync:web-browser-logs:#name",
+                "TypeAsync:web-browser-logs:#name:Aspire",
+                "HoverAsync:web-browser-logs:#submit",
+                "ScrollAsync:web-browser-logs:#panel:10:400",
+                "WaitForUrlAsync:web-browser-logs:/orders:contains:3000",
+                "WaitForLoadStateAsync:web-browser-logs:networkidle:3000",
+                "WaitForElementStateAsync:web-browser-logs:#submit:enabled:3000"
+            ],
+            sessionManager.BrowserCommandCalls);
+
+        async Task<ExecuteCommandResult> ExecuteBrowserCommandAsync(string commandName, string json)
+        {
+            using var arguments = JsonDocument.Parse(json);
+            var commandResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, commandName, arguments.RootElement).DefaultTimeout();
+            Assert.True(commandResult.Success);
+            return commandResult;
+        }
     }
 
     [Fact]
@@ -1837,10 +1878,28 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             return Task.FromResult("""{"action":"fill"}""");
         }
 
+        public Task<string> FocusAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(FocusAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"focus"}""");
+        }
+
+        public Task<string> TypeAsync(string resourceName, string selector, string text, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(TypeAsync)}:{resourceName}:{selector}:{text}");
+            return Task.FromResult("""{"action":"type"}""");
+        }
+
         public Task<string> PressAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken)
         {
             BrowserCommandCalls.Add($"{nameof(PressAsync)}:{resourceName}:{selector}:{key}");
             return Task.FromResult("""{"action":"press"}""");
+        }
+
+        public Task<string> HoverAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(HoverAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"hover"}""");
         }
 
         public Task<string> SelectAsync(string resourceName, string selector, string value, CancellationToken cancellationToken)
@@ -1849,10 +1908,34 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             return Task.FromResult("""{"action":"select"}""");
         }
 
+        public Task<string> ScrollAsync(string resourceName, string? selector, int deltaX, int deltaY, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(ScrollAsync)}:{resourceName}:{selector}:{deltaX}:{deltaY}");
+            return Task.FromResult("""{"action":"scroll"}""");
+        }
+
         public Task<string> WaitForAsync(string resourceName, string? selector, string? text, int timeoutMilliseconds, CancellationToken cancellationToken)
         {
             BrowserCommandCalls.Add($"{nameof(WaitForAsync)}:{resourceName}:{selector}:{text}:{timeoutMilliseconds}");
             return Task.FromResult("""{"action":"wait-for"}""");
+        }
+
+        public Task<string> WaitForUrlAsync(string resourceName, string url, string match, int timeoutMilliseconds, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(WaitForUrlAsync)}:{resourceName}:{url}:{match}:{timeoutMilliseconds}");
+            return Task.FromResult("""{"action":"wait-for-url"}""");
+        }
+
+        public Task<string> WaitForLoadStateAsync(string resourceName, string state, int timeoutMilliseconds, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(WaitForLoadStateAsync)}:{resourceName}:{state}:{timeoutMilliseconds}");
+            return Task.FromResult("""{"action":"wait-for-load-state"}""");
+        }
+
+        public Task<string> WaitForElementStateAsync(string resourceName, string selector, string state, int timeoutMilliseconds, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(WaitForElementStateAsync)}:{resourceName}:{selector}:{state}:{timeoutMilliseconds}");
+            return Task.FromResult("""{"action":"wait-for-element-state"}""");
         }
 
         public Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken)

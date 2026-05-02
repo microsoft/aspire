@@ -152,6 +152,24 @@
   <data name="FillBrowserSucceeded" xml:space="preserve">
     <value>Filled browser field.</value>
   </data>
+  <data name="FocusBrowserElementDescription" xml:space="preserve">
+    <value>Focus an element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="FocusBrowserElementName" xml:space="preserve">
+    <value>Focus browser element</value>
+  </data>
+  <data name="FocusBrowserElementSucceeded" xml:space="preserve">
+    <value>Focused browser element.</value>
+  </data>
+  <data name="TypeBrowserTextDescription" xml:space="preserve">
+    <value>Type text into an input, textarea, or editable element in the active tracked browser page.</value>
+  </data>
+  <data name="TypeBrowserTextName" xml:space="preserve">
+    <value>Type browser text</value>
+  </data>
+  <data name="TypeBrowserTextSucceeded" xml:space="preserve">
+    <value>Typed browser text.</value>
+  </data>
   <data name="PressBrowserKeyDescription" xml:space="preserve">
     <value>Press a key on a selected or currently focused element in the active tracked browser page.</value>
   </data>
@@ -160,6 +178,15 @@
   </data>
   <data name="PressBrowserKeySucceeded" xml:space="preserve">
     <value>Pressed browser key.</value>
+  </data>
+  <data name="HoverBrowserElementDescription" xml:space="preserve">
+    <value>Move the pointer over an element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="HoverBrowserElementName" xml:space="preserve">
+    <value>Hover browser element</value>
+  </data>
+  <data name="HoverBrowserElementSucceeded" xml:space="preserve">
+    <value>Hovered browser element.</value>
   </data>
   <data name="SelectBrowserOptionDescription" xml:space="preserve">
     <value>Select an option in a browser select element by option value or visible text.</value>
@@ -170,6 +197,15 @@
   <data name="SelectBrowserOptionSucceeded" xml:space="preserve">
     <value>Selected browser option.</value>
   </data>
+  <data name="ScrollBrowserDescription" xml:space="preserve">
+    <value>Scroll the active tracked browser page or a selected scrollable element.</value>
+  </data>
+  <data name="ScrollBrowserName" xml:space="preserve">
+    <value>Scroll browser</value>
+  </data>
+  <data name="ScrollBrowserSucceeded" xml:space="preserve">
+    <value>Scrolled browser.</value>
+  </data>
   <data name="WaitForBrowserDescription" xml:space="preserve">
     <value>Wait until a selector is visible, text appears on the page, or both conditions are met.</value>
   </data>
@@ -178,6 +214,33 @@
   </data>
   <data name="WaitForBrowserSucceeded" xml:space="preserve">
     <value>Browser wait condition was met.</value>
+  </data>
+  <data name="WaitForBrowserUrlDescription" xml:space="preserve">
+    <value>Wait until the active tracked browser page URL matches the expected value.</value>
+  </data>
+  <data name="WaitForBrowserUrlName" xml:space="preserve">
+    <value>Wait for browser URL</value>
+  </data>
+  <data name="WaitForBrowserUrlSucceeded" xml:space="preserve">
+    <value>Browser URL wait condition was met.</value>
+  </data>
+  <data name="WaitForBrowserLoadStateDescription" xml:space="preserve">
+    <value>Wait until the active tracked browser page reaches a load state.</value>
+  </data>
+  <data name="WaitForBrowserLoadStateName" xml:space="preserve">
+    <value>Wait for browser load state</value>
+  </data>
+  <data name="WaitForBrowserLoadStateSucceeded" xml:space="preserve">
+    <value>Browser load state wait condition was met.</value>
+  </data>
+  <data name="WaitForBrowserElementStateDescription" xml:space="preserve">
+    <value>Wait until a selected element reaches a state such as visible, hidden, enabled, disabled, checked, or unchecked.</value>
+  </data>
+  <data name="WaitForBrowserElementStateName" xml:space="preserve">
+    <value>Wait for browser element state</value>
+  </data>
+  <data name="WaitForBrowserElementStateSucceeded" xml:space="preserve">
+    <value>Browser element state wait condition was met.</value>
   </data>
   <data name="CloseTrackedBrowserDescription" xml:space="preserve">
     <value>Close the active tracked browser page for this resource.</value>
@@ -200,6 +263,9 @@
   <data name="ValueArgumentDescription" xml:space="preserve">
     <value>Text value to assign to the target field.</value>
   </data>
+  <data name="TypeTextArgumentDescription" xml:space="preserve">
+    <value>Text to type into the target element.</value>
+  </data>
   <data name="SelectValueArgumentDescription" xml:space="preserve">
     <value>Option value or visible option text to select.</value>
   </data>
@@ -215,11 +281,41 @@
   <data name="TextArgumentDescription" xml:space="preserve">
     <value>Visible page text to wait for.</value>
   </data>
+  <data name="DeltaYArgumentLabel" xml:space="preserve">
+    <value>Delta Y</value>
+  </data>
+  <data name="DeltaYArgumentDescription" xml:space="preserve">
+    <value>Vertical scroll distance in CSS pixels. Positive values scroll down and negative values scroll up.</value>
+  </data>
+  <data name="DeltaXArgumentLabel" xml:space="preserve">
+    <value>Delta X</value>
+  </data>
+  <data name="DeltaXArgumentDescription" xml:space="preserve">
+    <value>Horizontal scroll distance in CSS pixels. Positive values scroll right and negative values scroll left.</value>
+  </data>
   <data name="UrlArgumentLabel" xml:space="preserve">
     <value>URL</value>
   </data>
   <data name="UrlArgumentDescription" xml:space="preserve">
     <value>Absolute URL to navigate to.</value>
+  </data>
+  <data name="WaitUrlArgumentDescription" xml:space="preserve">
+    <value>URL value to wait for. It can be a full URL, URL fragment, or regular expression depending on the match mode.</value>
+  </data>
+  <data name="MatchArgumentLabel" xml:space="preserve">
+    <value>Match</value>
+  </data>
+  <data name="MatchArgumentDescription" xml:space="preserve">
+    <value>How the current browser URL should be compared with the URL argument.</value>
+  </data>
+  <data name="StateArgumentLabel" xml:space="preserve">
+    <value>State</value>
+  </data>
+  <data name="LoadStateArgumentDescription" xml:space="preserve">
+    <value>Page load state to wait for: domcontentloaded, load, or networkidle.</value>
+  </data>
+  <data name="ElementStateArgumentDescription" xml:space="preserve">
+    <value>Element state to wait for: attached, detached, visible, hidden, enabled, disabled, checked, or unchecked.</value>
   </data>
   <data name="TimeoutMillisecondsArgumentLabel" xml:space="preserve">
     <value>Timeout (milliseconds)</value>

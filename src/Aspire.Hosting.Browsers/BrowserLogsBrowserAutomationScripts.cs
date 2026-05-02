@@ -126,11 +126,48 @@ const dispatchInputEvents = element => {
   element.dispatchEvent(new Event('input', { bubbles: true }));
   element.dispatchEvent(new Event('change', { bubbles: true }));
 };
+const dispatchMouseEvent = (element, type, clientX, clientY) => {
+  const eventInit = { bubbles: true, cancelable: true, clientX, clientY, view: window };
+  element.dispatchEvent(new MouseEvent(type, eventInit));
+};
 const focusElement = element => {
   element.scrollIntoView({ block: 'center', inline: 'center' });
   if (typeof element.focus === 'function') {
     element.focus({ preventScroll: true });
   }
+};
+const isEnabled = element => !element.disabled && element.getAttribute('aria-disabled') !== 'true';
+const isChecked = element => {
+  if ('checked' in element) {
+    return Boolean(element.checked);
+  }
+
+  return element.getAttribute('aria-checked') === 'true';
+};
+const appendText = (element, text) => {
+  if (element.isContentEditable) {
+    if (document.queryCommandSupported?.('insertText')) {
+      document.execCommand('insertText', false, text);
+    } else {
+      element.textContent = `${element.textContent ?? ''}${text}`;
+    }
+    dispatchInputEvents(element);
+    return;
+  }
+
+  if (!('value' in element)) {
+    throw new Error(`Element '${preferredSelector(element)}' cannot receive text input.`);
+  }
+
+  const currentValue = String(element.value ?? '');
+  const selectionStart = typeof element.selectionStart === 'number' ? element.selectionStart : currentValue.length;
+  const selectionEnd = typeof element.selectionEnd === 'number' ? element.selectionEnd : selectionStart;
+  setElementValue(element, `${currentValue.slice(0, selectionStart)}${text}${currentValue.slice(selectionEnd)}`);
+  if (typeof element.setSelectionRange === 'function') {
+    const position = selectionStart + text.length;
+    element.setSelectionRange(position, position);
+  }
+  dispatchInputEvents(element);
 };
 """;
 
@@ -205,6 +242,48 @@ return {
 """);
     }
 
+    public static string CreateFocusExpression(string selector)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const element = findElement(selector);
+focusElement(element);
+return {
+  action: 'focus',
+  url: location.href,
+  selector,
+  activeElementSelector: preferredSelector(document.activeElement),
+  element: describeElement(element, 0)
+};
+""");
+    }
+
+    public static string CreateTypeExpression(string selector, string text)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const text = {{JsonLiteral(text)}};
+const element = findElement(selector);
+focusElement(element);
+for (const character of text) {
+  const eventOptions = { key: character, bubbles: true, cancelable: true };
+  element.dispatchEvent(new KeyboardEvent('keydown', eventOptions));
+  element.dispatchEvent(new KeyboardEvent('keypress', eventOptions));
+  appendText(element, character);
+  element.dispatchEvent(new KeyboardEvent('keyup', eventOptions));
+}
+return {
+  action: 'type',
+  url: location.href,
+  selector,
+  text,
+  element: describeElement(element, 0)
+};
+""");
+    }
+
     public static string CreatePressExpression(string? selector, string key)
     {
         return CreateExpression($$"""
@@ -244,6 +323,34 @@ return {
 """);
     }
 
+    public static string CreateHoverExpression(string selector)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const element = findElement(selector);
+element.scrollIntoView({ block: 'center', inline: 'center' });
+const rect = element.getBoundingClientRect();
+const clientX = rect.left + rect.width / 2;
+const clientY = rect.top + rect.height / 2;
+if (globalThis.PointerEvent) {
+  const pointerEventInit = { bubbles: true, cancelable: true, clientX, clientY, pointerType: 'mouse', isPrimary: true };
+  element.dispatchEvent(new PointerEvent('pointerover', pointerEventInit));
+  element.dispatchEvent(new PointerEvent('pointerenter', pointerEventInit));
+  element.dispatchEvent(new PointerEvent('pointermove', pointerEventInit));
+}
+dispatchMouseEvent(element, 'mouseover', clientX, clientY);
+dispatchMouseEvent(element, 'mouseenter', clientX, clientY);
+dispatchMouseEvent(element, 'mousemove', clientX, clientY);
+return {
+  action: 'hover',
+  url: location.href,
+  selector,
+  element: describeElement(element, 0)
+};
+""");
+    }
+
     public static string CreateSelectExpression(string selector, string value)
     {
         return CreateExpression($$"""
@@ -271,6 +378,33 @@ return {
   value: option.value,
   label: normalizeText(option.textContent),
   element: describeElement(element, 0)
+};
+""");
+    }
+
+    public static string CreateScrollExpression(string? selector, int deltaX, int deltaY)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const deltaX = {{deltaX}};
+const deltaY = {{deltaY}};
+const target = selector ? findElement(selector) : window;
+if (target === window) {
+  window.scrollBy({ left: deltaX, top: deltaY, behavior: 'auto' });
+} else {
+  target.scrollBy({ left: deltaX, top: deltaY, behavior: 'auto' });
+}
+return {
+  action: 'scroll',
+  url: location.href,
+  selector,
+  deltaX,
+  deltaY,
+  scroll: target === window
+    ? { x: Math.round(window.scrollX), y: Math.round(window.scrollY) }
+    : { x: Math.round(target.scrollLeft), y: Math.round(target.scrollTop) },
+  element: target === window ? undefined : describeElement(target, 0)
 };
 """);
     }
@@ -306,6 +440,148 @@ while (Date.now() - startedAt < timeoutMilliseconds) {
 }
 
 throw new Error(`Timed out after ${timeoutMilliseconds} ms waiting for ${selector ? `selector '${selector}'` : ''}${selector && text ? ' and ' : ''}${text ? `text '${text}'` : ''}.`);
+""");
+    }
+
+    public static string CreateWaitForUrlExpression(string url, string match, int timeoutMilliseconds)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const expectedUrl = {{JsonLiteral(url)}};
+const match = {{JsonLiteral(match)}};
+const timeoutMilliseconds = {{timeoutMilliseconds}};
+const matchesUrl = value => {
+  switch (match) {
+    case 'exact':
+      return value === expectedUrl;
+    case 'regex':
+      return new RegExp(expectedUrl).test(value);
+    case 'contains':
+      return value.includes(expectedUrl);
+    default:
+      throw new Error(`Unsupported URL match mode '${match}'.`);
+  }
+};
+const startedAt = Date.now();
+while (Date.now() - startedAt < timeoutMilliseconds) {
+  if (matchesUrl(location.href)) {
+    return {
+      action: 'wait-for-url',
+      url: location.href,
+      expectedUrl,
+      match,
+      elapsedMilliseconds: Date.now() - startedAt
+    };
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+
+throw new Error(`Timed out after ${timeoutMilliseconds} ms waiting for URL '${expectedUrl}' (${match}). Current URL: '${location.href}'.`);
+""");
+    }
+
+    public static string CreateWaitForLoadStateExpression(string state, int timeoutMilliseconds)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const state = {{JsonLiteral(state)}};
+const timeoutMilliseconds = {{timeoutMilliseconds}};
+const startedAt = Date.now();
+let stableSince = undefined;
+let lastResourceCount = performance.getEntriesByType('resource').length;
+const stateMatched = () => {
+  switch (state) {
+    case 'domcontentloaded':
+      return document.readyState === 'interactive' || document.readyState === 'complete';
+    case 'load':
+      return document.readyState === 'complete';
+    case 'networkidle': {
+      if (document.readyState !== 'complete') {
+        stableSince = undefined;
+        lastResourceCount = performance.getEntriesByType('resource').length;
+        return false;
+      }
+
+      const resourceCount = performance.getEntriesByType('resource').length;
+      if (resourceCount !== lastResourceCount) {
+        lastResourceCount = resourceCount;
+        stableSince = undefined;
+        return false;
+      }
+
+      stableSince ??= Date.now();
+      return Date.now() - stableSince >= 500;
+    }
+    default:
+      throw new Error(`Unsupported load state '${state}'.`);
+  }
+};
+while (Date.now() - startedAt < timeoutMilliseconds) {
+  if (stateMatched()) {
+    return {
+      action: 'wait-for-load-state',
+      url: location.href,
+      state,
+      readyState: document.readyState,
+      elapsedMilliseconds: Date.now() - startedAt
+    };
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+
+throw new Error(`Timed out after ${timeoutMilliseconds} ms waiting for load state '${state}'. Current readyState: '${document.readyState}'.`);
+""");
+    }
+
+    public static string CreateWaitForElementStateExpression(string selector, string state, int timeoutMilliseconds)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const state = {{JsonLiteral(state)}};
+const timeoutMilliseconds = {{timeoutMilliseconds}};
+const elementMatchesState = element => {
+  switch (state) {
+    case 'attached':
+      return Boolean(element);
+    case 'detached':
+      return !element;
+    case 'visible':
+      return Boolean(element) && isVisible(element);
+    case 'hidden':
+      return !element || !isVisible(element);
+    case 'enabled':
+      return Boolean(element) && isEnabled(element);
+    case 'disabled':
+      return Boolean(element) && !isEnabled(element);
+    case 'checked':
+      return Boolean(element) && isChecked(element);
+    case 'unchecked':
+      return Boolean(element) && !isChecked(element);
+    default:
+      throw new Error(`Unsupported element state '${state}'.`);
+  }
+};
+const startedAt = Date.now();
+while (Date.now() - startedAt < timeoutMilliseconds) {
+  const element = document.querySelector(selector);
+  if (elementMatchesState(element)) {
+    return {
+      action: 'wait-for-element-state',
+      url: location.href,
+      selector,
+      state,
+      elapsedMilliseconds: Date.now() - startedAt,
+      element: element ? describeElement(element, 0) : undefined
+    };
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 100));
+}
+
+throw new Error(`Timed out after ${timeoutMilliseconds} ms waiting for selector '${selector}' to become '${state}'.`);
 """);
     }
 

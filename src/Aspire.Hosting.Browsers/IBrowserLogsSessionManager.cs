@@ -17,11 +17,25 @@ internal interface IBrowserLogsSessionManager
 
     Task<string> FillAsync(string resourceName, string selector, string value, CancellationToken cancellationToken);
 
+    Task<string> FocusAsync(string resourceName, string selector, CancellationToken cancellationToken);
+
+    Task<string> TypeAsync(string resourceName, string selector, string text, CancellationToken cancellationToken);
+
     Task<string> PressAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken);
+
+    Task<string> HoverAsync(string resourceName, string selector, CancellationToken cancellationToken);
 
     Task<string> SelectAsync(string resourceName, string selector, string value, CancellationToken cancellationToken);
 
+    Task<string> ScrollAsync(string resourceName, string? selector, int deltaX, int deltaY, CancellationToken cancellationToken);
+
     Task<string> WaitForAsync(string resourceName, string? selector, string? text, int timeoutMilliseconds, CancellationToken cancellationToken);
+
+    Task<string> WaitForUrlAsync(string resourceName, string url, string match, int timeoutMilliseconds, CancellationToken cancellationToken);
+
+    Task<string> WaitForLoadStateAsync(string resourceName, string state, int timeoutMilliseconds, CancellationToken cancellationToken);
+
+    Task<string> WaitForElementStateAsync(string resourceName, string selector, string state, int timeoutMilliseconds, CancellationToken cancellationToken);
 
     Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken);
 }
