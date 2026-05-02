@@ -205,7 +205,7 @@ internal static class TelemetryCommandHelpers
             var loginToken = McpToolHelpers.ExtractLoginToken(dashboardUrl);
 
             // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
-            dashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+            dashboardUrl = McpToolHelpers.NormalizeDashboardUrl(McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl);
 
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
@@ -282,10 +282,16 @@ internal static class TelemetryCommandHelpers
             return new DashboardApiResult(true, connection, null, null, null, 0);
         }
 
+        var apiBaseUrl = McpToolHelpers.NormalizeDashboardUrl(dashboardInfo.ApiBaseUrl);
+
         // Extract dashboard base URL (without /login path) for hyperlinks
         var extractedDashboardUrl = ExtractDashboardBaseUrl(dashboardInfo.DashboardUrls?.FirstOrDefault());
+        if (extractedDashboardUrl is not null)
+        {
+            extractedDashboardUrl = McpToolHelpers.NormalizeDashboardUrl(extractedDashboardUrl);
+        }
 
-        return new DashboardApiResult(true, connection, dashboardInfo.ApiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
+        return new DashboardApiResult(true, connection, apiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
     }
 
     /// <summary>
