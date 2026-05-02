@@ -69,9 +69,21 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string CommandArgumentsJsonOptionDescription {
+        internal static string CommandArgumentsArgumentDescription {
             get {
-                return ResourceManager.GetString("CommandArgumentsJsonOptionDescription", resourceCulture);
+                return ResourceManager.GetString("CommandArgumentsArgumentDescription", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsOptionDescription {
+            get {
+                return ResourceManager.GetString("CommandArgumentsOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsCannotMix {
+            get {
+                return ResourceManager.GetString("CommandArgumentsCannotMix", resourceCulture);
             }
         }
 
@@ -84,6 +96,60 @@ namespace Aspire.Cli.Resources {
         internal static string CommandArgumentsJsonInvalidObject {
             get {
                 return ResourceManager.GetString("CommandArgumentsJsonInvalidObject", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsNoMetadata {
+            get {
+                return ResourceManager.GetString("CommandArgumentsNoMetadata", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsTooMany {
+            get {
+                return ResourceManager.GetString("CommandArgumentsTooMany", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsMissingRequired {
+            get {
+                return ResourceManager.GetString("CommandArgumentsMissingRequired", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsInvalidNamed {
+            get {
+                return ResourceManager.GetString("CommandArgumentsInvalidNamed", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsUnknownNamed {
+            get {
+                return ResourceManager.GetString("CommandArgumentsUnknownNamed", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsInvalidBoolean {
+            get {
+                return ResourceManager.GetString("CommandArgumentsInvalidBoolean", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsInvalidNumber {
+            get {
+                return ResourceManager.GetString("CommandArgumentsInvalidNumber", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsInvalidChoice {
+            get {
+                return ResourceManager.GetString("CommandArgumentsInvalidChoice", resourceCulture);
+            }
+        }
+
+        internal static string CommandArgumentsInvalidTextLength {
+            get {
+                return ResourceManager.GetString("CommandArgumentsInvalidTextLength", resourceCulture);
             }
         }
 

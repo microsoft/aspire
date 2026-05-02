@@ -70,13 +70,46 @@
   <data name="CommandNameArgumentDescription" xml:space="preserve">
     <value>The name of the command to execute (e.g. start, stop, restart)</value>
   </data>
-  <data name="CommandArgumentsJsonOptionDescription" xml:space="preserve">
+  <data name="CommandArgumentsArgumentDescription" xml:space="preserve">
+    <value>Arguments passed to the resource command. Values are mapped to command argument inputs in order; use name=value for named values.</value>
+  </data>
+  <data name="CommandArgumentsOptionDescription" xml:space="preserve">
     <value>JSON object containing invocation arguments to pass to the resource command</value>
+  </data>
+  <data name="CommandArgumentsCannotMix" xml:space="preserve">
+    <value>Specify command arguments either as positional arguments or with --arguments, not both.</value>
   </data>
   <data name="CommandArgumentsJsonInvalid" xml:space="preserve">
     <value>Invalid command arguments JSON: {0}</value>
   </data>
   <data name="CommandArgumentsJsonInvalidObject" xml:space="preserve">
     <value>Invalid command arguments JSON: expected a JSON object.</value>
+  </data>
+  <data name="CommandArgumentsNoMetadata" xml:space="preserve">
+    <value>Command '{0}' on resource '{1}' does not describe argument inputs. Pass a JSON object with --arguments.</value>
+  </data>
+  <data name="CommandArgumentsTooMany" xml:space="preserve">
+    <value>Too many command arguments for '{0}'. Expected at most {1}: {2}.</value>
+  </data>
+  <data name="CommandArgumentsMissingRequired" xml:space="preserve">
+    <value>Missing required command argument '{0}'.</value>
+  </data>
+  <data name="CommandArgumentsInvalidNamed" xml:space="preserve">
+    <value>Invalid command argument '{0}'. Use name=value for named command arguments.</value>
+  </data>
+  <data name="CommandArgumentsUnknownNamed" xml:space="preserve">
+    <value>Unknown command argument '{0}'. Expected one of: {1}.</value>
+  </data>
+  <data name="CommandArgumentsInvalidBoolean" xml:space="preserve">
+    <value>Invalid value '{0}' for boolean command argument '{1}'. Expected true or false.</value>
+  </data>
+  <data name="CommandArgumentsInvalidNumber" xml:space="preserve">
+    <value>Invalid value '{0}' for numeric command argument '{1}'.</value>
+  </data>
+  <data name="CommandArgumentsInvalidChoice" xml:space="preserve">
+    <value>Invalid value '{0}' for command argument '{1}'. Expected one of: {2}.</value>
+  </data>
+  <data name="CommandArgumentsInvalidTextLength" xml:space="preserve">
+    <value>Invalid value for command argument '{0}'. Maximum length is {1}.</value>
   </data>
 </root>
