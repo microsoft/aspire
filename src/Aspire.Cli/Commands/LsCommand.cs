@@ -43,7 +43,7 @@ internal sealed class LsCommand : BaseCommand
 
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
-        Description = PsCommandStrings.JsonOptionDescription
+        Description = SharedCommandStrings.LsFormatOptionDescription
     };
 
     public LsCommand(
@@ -53,7 +53,7 @@ internal sealed class LsCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry)
-        : base("ls", "List candidate AppHosts", features, updateNotifier, executionContext, interactionService, telemetry)
+        : base("ls", SharedCommandStrings.LsCommandDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
         _projectLocator = projectLocator;
@@ -77,7 +77,7 @@ internal sealed class LsCommand : BaseCommand
         }
         else if (appHostInfos.Count == 0)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Information, "No candidate AppHosts found.");
+            _interactionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.LsNoCandidateAppHostsFound);
         }
         else
         {
@@ -92,7 +92,7 @@ internal sealed class LsCommand : BaseCommand
         var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
 
         var table = new Table();
-        table.AddBoldColumn(PsCommandStrings.HeaderPath);
+        table.AddBoldColumn(SharedCommandStrings.HeaderPath);
 
         foreach (var appHost in appHosts)
         {

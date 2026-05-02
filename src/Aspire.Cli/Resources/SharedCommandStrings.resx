@@ -139,6 +139,18 @@
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format for detached AppHost results</value>
   </data>
+  <data name="LsCommandDescription" xml:space="preserve">
+    <value>List candidate AppHosts</value>
+  </data>
+  <data name="LsFormatOptionDescription" xml:space="preserve">
+    <value>Output format (Table or Json)</value>
+  </data>
+  <data name="LsNoCandidateAppHostsFound" xml:space="preserve">
+    <value>No candidate AppHosts found.</value>
+  </data>
+  <data name="HeaderPath" xml:space="preserve">
+    <value>Path</value>
+  </data>
   <data name="IsolatedOptionDescription" xml:space="preserve">
     <value>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</value>
   </data>
