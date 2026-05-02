@@ -2,16 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.RabbitMQ.Provisioning;
 
-namespace Aspire.Hosting.RabbitMQ;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// A resource that represents a RabbitMQ queue.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, QueueName = {QueueName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQDestination, Provisioning.IRabbitMQProvisionable
+public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQDestination, IRabbitMQProvisionable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQQueueResource"/> class.
@@ -77,10 +77,10 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
             new("QueueName", ReferenceExpression.Create($"{QueueName}")),
         ]);
 
-    Task Provisioning.IRabbitMQProvisionable.ApplyAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
 
-    internal async Task ApplyAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         var args = new Dictionary<string, object?>(Arguments);
         if (QueueType != RabbitMQQueueType.Classic)

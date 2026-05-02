@@ -2,16 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.RabbitMQ.Provisioning;
 
-namespace Aspire.Hosting.RabbitMQ;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// A resource that represents a RabbitMQ virtual host.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, VirtualHostName = {VirtualHostName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitMQServerResource>, IResourceWithConnectionString, Provisioning.IRabbitMQProvisionable
+public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitMQServerResource>, IResourceWithConnectionString, IRabbitMQProvisionable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQVirtualHostResource"/> class.
@@ -68,10 +68,10 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
 
     internal TaskCompletionSource TopologyReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    Task Provisioning.IRabbitMQProvisionable.ApplyAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
 
-    internal async Task ApplyAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         if (VirtualHostName != "/")
         {

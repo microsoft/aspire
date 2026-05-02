@@ -2,16 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.RabbitMQ.Provisioning;
 
-namespace Aspire.Hosting.RabbitMQ;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// A resource that represents a RabbitMQ exchange.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ExchangeName = {ExchangeName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQDestination, Provisioning.IRabbitMQProvisionable
+public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQDestination, IRabbitMQProvisionable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQExchangeResource"/> class.
@@ -74,10 +74,10 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
             new("ExchangeName", ReferenceExpression.Create($"{ExchangeName}")),
         ]);
 
-    Task Provisioning.IRabbitMQProvisionable.ApplyAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
 
-    internal async Task ApplyAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         var typeString = ExchangeType.ToString().ToLowerInvariant();
 
@@ -91,7 +91,7 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
             cancellationToken).ConfigureAwait(false);
     }
 
-    internal async Task ApplyBindingsAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    internal async Task ApplyBindingsAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         foreach (var binding in Bindings)
         {
