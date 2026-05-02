@@ -52,6 +52,28 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task DockerfileContainerBuildSpecIncludesPlatform()
+    {
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath);
+
+        var kubernetesService = new TestKubernetesService();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Build);
+        Assert.Equal("linux/amd64", container.Spec.Build!.Platform);
+    }
+
+    [Fact]
     public async Task ResourceStarted_ProjectHasReplicas_EventRaisedOnce()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions

@@ -4,16 +4,19 @@
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
+#pragma warning disable ASPIREPIPELINES003
 
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
@@ -783,6 +786,16 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 Args = dcpBuildArgs,
                 Secrets = dcpBuildSecrets
             };
+
+            var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
+                serviceProvider,
+                NullLogger.Instance,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (buildOptionsContext.TargetPlatform is { } targetPlatform)
+            {
+                dcpContainerResource.Spec.Build.Platform = targetPlatform.ToRuntimePlatformString();
+            }
         }
     }
 
