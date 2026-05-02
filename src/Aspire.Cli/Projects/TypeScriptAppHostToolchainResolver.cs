@@ -171,7 +171,7 @@ internal static class TypeScriptAppHostToolchainResolver
                 TypeScriptAppHostToolchain.Bun => new CommandSpec
                 {
                     Command = "bun",
-                    Args = ["x", "tsc", "--noEmit", "-p", tsConfigFileName]
+                    Args = ["run", "tsc", "--noEmit", "-p", tsConfigFileName]
                 },
                 TypeScriptAppHostToolchain.Yarn => new CommandSpec
                 {
@@ -227,7 +227,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"bun x tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
+                    "--exec", $"bun run tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
                 ]
             },
             TypeScriptAppHostToolchain.Yarn => new CommandSpec
