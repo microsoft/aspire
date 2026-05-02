@@ -70,6 +70,14 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
     /// </summary>
     public int? SrcDeleteAfter { get; set; }
 
+    /// <summary>
+    /// Completed when this shovel has been created on the broker.
+    /// Faulted if creation failed.
+    /// </summary>
+    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
+
     Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
 
@@ -116,5 +124,13 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
             ShovelName,
             new RabbitMQShovelDefinition { Value = def },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var state = await client.GetShovelStateAsync(Parent.VirtualHostName, ShovelName, cancellationToken).ConfigureAwait(false);
+        return state == "running"
+            ? RabbitMQProbeResult.Healthy
+            : RabbitMQProbeResult.Unhealthy($"Shovel '{ShovelName}' is in state '{state ?? "unknown"}'.");
     }
 }

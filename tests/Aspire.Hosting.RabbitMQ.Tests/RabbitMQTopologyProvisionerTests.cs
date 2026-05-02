@@ -29,7 +29,10 @@ public class RabbitMQTopologyProvisionerTests
 
         await RabbitMQTopologyProvisioner.ProvisionTopologyAsync(server.Resource, app.Services, default);
 
-        Assert.True(vhost.Resource.TopologyReady.Task.IsCompletedSuccessfully);
+        Assert.True(vhost.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
+        Assert.True(queue.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
+        Assert.True(exchange.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
+        Assert.True(shovel.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
 
         // CreateVirtualHostAsync must be first
         Assert.Equal("CreateVirtualHostAsync(myvhost)", fakeClient.Calls[0]);
@@ -51,20 +54,82 @@ public class RabbitMQTopologyProvisionerTests
     }
 
     [Fact]
-    public async Task ProvisionTopologyAsync_SetsExceptionOnTopologyReady_WhenProvisioningFails()
+    public async Task ProvisionTopologyAsync_VhostFails_FaultsVhostAndAllChildren()
     {
         var builder = DistributedApplication.CreateBuilder();
         var server = builder.AddRabbitMQ("rabbit");
         var vhost = server.AddVirtualHost("myvhost");
+        var queue = vhost.AddQueue("myqueue");
+        var exchange = vhost.AddExchange("myexchange");
 
         var fakeClient = new FailingFakeRabbitMQProvisioningClient();
         builder.Services.AddKeyedSingleton<IRabbitMQProvisioningClient>(server.Resource.Name, fakeClient);
 
         using var app = builder.Build();
 
-        await Assert.ThrowsAsync<DistributedApplicationException>(() => RabbitMQTopologyProvisioner.ProvisionTopologyAsync(server.Resource, app.Services, default));
+        // Provisioner no longer throws — it captures failures into TCSs
+        await RabbitMQTopologyProvisioner.ProvisionTopologyAsync(server.Resource, app.Services, default);
 
-        Assert.True(vhost.Resource.TopologyReady.Task.IsFaulted);
+        Assert.True(vhost.Resource.ProvisioningComplete.Task.IsFaulted);
+        Assert.True(queue.Resource.ProvisioningComplete.Task.IsFaulted);
+        Assert.True(exchange.Resource.ProvisioningComplete.Task.IsFaulted);
+
+        // All children should carry the same vhost exception
+        var vhostEx = vhost.Resource.ProvisioningComplete.Task.Exception!.InnerException!;
+        var queueEx = queue.Resource.ProvisioningComplete.Task.Exception!.InnerException!;
+        Assert.Equal(vhostEx.Message, queueEx.Message);
     }
 
+    [Fact]
+    public async Task ProvisionTopologyAsync_QueueBFails_OnlyQueueBTCSFaulted()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var server = builder.AddRabbitMQ("rabbit")
+            .WithEndpoint(RabbitMQServerResource.PrimaryEndpointName, e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5672));
+        var vhost = server.AddVirtualHost("myvhost");
+        var queueA = vhost.AddQueue("queueA");
+        var queueB = vhost.AddQueue("queueB");
+
+        var fakeClient = new FakeRabbitMQProvisioningClient();
+        fakeClient.FailQueueNames.Add("queueB");
+        builder.Services.AddKeyedSingleton<IRabbitMQProvisioningClient>(server.Resource.Name, fakeClient);
+
+        using var app = builder.Build();
+
+        await RabbitMQTopologyProvisioner.ProvisionTopologyAsync(server.Resource, app.Services, default);
+
+        // Queue A succeeded
+        Assert.True(queueA.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
+        // Queue B failed
+        Assert.True(queueB.Resource.ProvisioningComplete.Task.IsFaulted);
+        // Vhost itself succeeded
+        Assert.True(vhost.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task ProvisionTopologyAsync_BindingFails_OnlyExchangeTCSFaulted_DestQueueUnaffected()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var server = builder.AddRabbitMQ("rabbit")
+            .WithEndpoint(RabbitMQServerResource.PrimaryEndpointName, e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5672));
+        var vhost = server.AddVirtualHost("myvhost");
+        var exchange = vhost.AddExchange("myexchange");
+        var queue = vhost.AddQueue("myqueue");
+        exchange.WithBinding(queue, "key");
+
+        var fakeClient = new FakeRabbitMQProvisioningClient();
+        fakeClient.FailBindingSourceExchangeNames.Add("myexchange");
+        builder.Services.AddKeyedSingleton<IRabbitMQProvisioningClient>(server.Resource.Name, fakeClient);
+
+        using var app = builder.Build();
+
+        await RabbitMQTopologyProvisioner.ProvisionTopologyAsync(server.Resource, app.Services, default);
+
+        // Exchange is faulted (binding failed)
+        Assert.True(exchange.Resource.ProvisioningComplete.Task.IsFaulted);
+        // Destination queue is unaffected — it declared successfully
+        Assert.True(queue.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
+        // Vhost itself succeeded
+        Assert.True(vhost.Resource.ProvisioningComplete.Task.IsCompletedSuccessfully);
+    }
 }

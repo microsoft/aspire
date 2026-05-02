@@ -31,6 +31,19 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         return _channels[vhost].Item1;
     }
 
+    public async Task<bool> CanConnectAsync(string vhost, CancellationToken ct)
+    {
+        try
+        {
+            await GetOrCreateConnectionAsync(vhost, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     internal async ValueTask<IChannel> GetOrCreateChannelAsync(string vhost, CancellationToken ct)
     {
         if (_channels.TryGetValue(vhost, out var existing) && existing.Item2.IsOpen)

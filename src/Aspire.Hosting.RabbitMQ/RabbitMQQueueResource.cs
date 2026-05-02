@@ -77,6 +77,14 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
             new("QueueName", ReferenceExpression.Create($"{QueueName}")),
         ]);
 
+    /// <summary>
+    /// Completed when this queue has been declared on the broker.
+    /// Faulted if declaration failed.
+    /// </summary>
+    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
+
     Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
 
@@ -96,5 +104,13 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
             AutoDelete,
             args.Count > 0 ? args : null,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var exists = await client.QueueExistsAsync(Parent.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
+        return exists
+            ? RabbitMQProbeResult.Healthy
+            : RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
 }

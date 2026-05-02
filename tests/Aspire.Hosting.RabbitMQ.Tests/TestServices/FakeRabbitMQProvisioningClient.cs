@@ -10,46 +10,94 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
 {
     public List<string> Calls { get; } = new();
 
+    /// <summary>
+    /// When set, <see cref="DeclareQueueAsync"/> throws for queues whose name is in this set.
+    /// Used to simulate per-entity failures without affecting siblings.
+    /// </summary>
+    public HashSet<string> FailQueueNames { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// When set, <see cref="DeclareExchangeAsync"/> throws for exchanges whose name is in this set.
+    /// </summary>
+    public HashSet<string> FailExchangeNames { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// When set, <see cref="BindQueueAsync"/> and <see cref="BindExchangeAsync"/> throw for
+    /// source exchanges whose name is in this set.
+    /// </summary>
+    public HashSet<string> FailBindingSourceExchangeNames { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Controls the return value of <see cref="CanConnectAsync"/>. Defaults to <see langword="true"/>.
+    /// </summary>
+    public bool CanConnect { get; set; } = true;
+
     public ValueTask<IConnection> GetOrCreateConnectionAsync(string vhost, CancellationToken ct)
     {
         Calls.Add($"GetOrCreateConnectionAsync({vhost})");
         return ValueTask.FromResult<IConnection>(null!);
     }
 
+    public Task<bool> CanConnectAsync(string vhost, CancellationToken ct)
+    {
+        Calls.Add($"CanConnectAsync({vhost})");
+        return Task.FromResult(CanConnect);
+    }
+
     public Task DeclareExchangeAsync(string vhost, string name, string type, bool durable, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct)
     {
         Calls.Add($"DeclareExchangeAsync({vhost}, {name}, {type}, {durable}, {autoDelete})");
+        if (FailExchangeNames.Contains(name))
+        {
+            throw new DistributedApplicationException($"Simulated failure declaring exchange '{name}'.");
+        }
+
         return Task.CompletedTask;
     }
 
     public Task DeclareQueueAsync(string vhost, string name, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct)
     {
         Calls.Add($"DeclareQueueAsync({vhost}, {name}, {durable}, {exclusive}, {autoDelete})");
+        if (FailQueueNames.Contains(name))
+        {
+            throw new DistributedApplicationException($"Simulated failure declaring queue '{name}'.");
+        }
+
         return Task.CompletedTask;
     }
 
     public Task BindQueueAsync(string vhost, string sourceExchange, string queue, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
     {
         Calls.Add($"BindQueueAsync({vhost}, {sourceExchange}, {queue}, {routingKey})");
+        if (FailBindingSourceExchangeNames.Contains(sourceExchange))
+        {
+            throw new DistributedApplicationException($"Simulated failure binding queue '{queue}' to exchange '{sourceExchange}'.");
+        }
+
         return Task.CompletedTask;
     }
 
     public Task BindExchangeAsync(string vhost, string sourceExchange, string destExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
     {
         Calls.Add($"BindExchangeAsync({vhost}, {sourceExchange}, {destExchange}, {routingKey})");
+        if (FailBindingSourceExchangeNames.Contains(sourceExchange))
+        {
+            throw new DistributedApplicationException($"Simulated failure binding exchange '{destExchange}' to exchange '{sourceExchange}'.");
+        }
+
         return Task.CompletedTask;
     }
 
     public Task<bool> QueueExistsAsync(string vhost, string name, CancellationToken ct)
     {
         Calls.Add($"QueueExistsAsync({vhost}, {name})");
-        return Task.FromResult(true);
+        return Task.FromResult(!FailQueueNames.Contains(name));
     }
 
     public Task<bool> ExchangeExistsAsync(string vhost, string name, CancellationToken ct)
     {
         Calls.Add($"ExchangeExistsAsync({vhost}, {name})");
-        return Task.FromResult(true);
+        return Task.FromResult(!FailExchangeNames.Contains(name));
     }
 
     public Task CreateVirtualHostAsync(string vhost, CancellationToken ct)

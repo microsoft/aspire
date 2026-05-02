@@ -6,9 +6,14 @@ using RabbitMQ.Client;
 
 namespace Aspire.Hosting.RabbitMQ.Tests.TestServices;
 
+/// <summary>
+/// A provisioning client that always throws on <see cref="CreateVirtualHostAsync"/>,
+/// simulating a vhost-level failure that should cascade to all children.
+/// </summary>
 internal sealed class FailingFakeRabbitMQProvisioningClient : IRabbitMQProvisioningClient
 {
     public ValueTask<IConnection> GetOrCreateConnectionAsync(string vhost, CancellationToken ct) => throw new NotImplementedException();
+    public Task<bool> CanConnectAsync(string vhost, CancellationToken ct) => Task.FromResult(false);
     public Task DeclareExchangeAsync(string vhost, string name, string type, bool durable, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct) => throw new NotImplementedException();
     public Task DeclareQueueAsync(string vhost, string name, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct) => throw new NotImplementedException();
     public Task BindQueueAsync(string vhost, string sourceExchange, string queue, string routingKey, IDictionary<string, object?>? args, CancellationToken ct) => throw new NotImplementedException();

@@ -66,7 +66,13 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     internal List<RabbitMQExchangeResource> Exchanges { get; } = [];
     internal List<RabbitMQShovelResource> Shovels { get; } = [];
 
-    internal TaskCompletionSource TopologyReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>
+    /// Completed when this virtual host (and its full topology) has been provisioned.
+    /// Faulted if provisioning failed for this vhost.
+    /// </summary>
+    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
 
     Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
@@ -77,5 +83,13 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
         {
             await client.CreateVirtualHostAsync(VirtualHostName, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var connected = await client.CanConnectAsync(VirtualHostName, cancellationToken).ConfigureAwait(false);
+        return connected
+            ? RabbitMQProbeResult.Healthy
+            : RabbitMQProbeResult.Unhealthy($"Cannot connect to virtual host '{VirtualHostName}'.");
     }
 }

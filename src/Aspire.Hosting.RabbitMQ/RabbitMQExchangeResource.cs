@@ -74,6 +74,14 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
             new("ExchangeName", ReferenceExpression.Create($"{ExchangeName}")),
         ]);
 
+    /// <summary>
+    /// Completed when this exchange has been declared AND all its bindings applied.
+    /// Faulted if declaration or any binding failed.
+    /// </summary>
+    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
+
     Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
 
@@ -116,5 +124,13 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
                     cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var exists = await client.ExchangeExistsAsync(Parent.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+        return exists
+            ? RabbitMQProbeResult.Healthy
+            : RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
 }

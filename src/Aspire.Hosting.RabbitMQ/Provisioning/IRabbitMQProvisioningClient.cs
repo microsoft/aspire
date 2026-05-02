@@ -9,6 +9,7 @@ internal interface IRabbitMQProvisioningClient : IAsyncDisposable
 {
     // AMQP connection (used by health checks)
     ValueTask<IConnection> GetOrCreateConnectionAsync(string vhost, CancellationToken ct);
+    Task<bool> CanConnectAsync(string vhost, CancellationToken ct);
 
     // AMQP
     Task DeclareExchangeAsync(string vhost, string name, string type, bool durable, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct);

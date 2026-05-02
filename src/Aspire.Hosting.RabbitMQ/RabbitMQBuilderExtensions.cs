@@ -168,25 +168,7 @@ public static class RabbitMQBuilderExtensions
 
         var vhostBuilder = builder.ApplicationBuilder.AddResource(vhost);
 
-        var healthCheckKey = $"{name}_check";
-        var serverNameForVhost = builder.Resource.Name;
-        var vhostResource = vhost;
-        vhostBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
-            healthCheckKey,
-            sp =>
-            {
-                var client = (RabbitMQProvisioningClient)sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverNameForVhost);
-                return new RabbitMQEntityHealthCheck(async ct =>
-                {
-                    await vhostResource.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
-                    await client.GetOrCreateConnectionAsync(vhostName, ct).ConfigureAwait(false);
-                    return HealthCheckResult.Healthy();
-                });
-            },
-            failureStatus: null,
-            tags: null));
-
-        return vhostBuilder.WithHealthCheck(healthCheckKey);
+        return vhostBuilder.WithProvisionableHealthCheck(builder.Resource.Name);
     }
 
     internal static RabbitMQVirtualHostResource GetOrAddDefaultVirtualHost(this IResourceBuilder<RabbitMQServerResource> server)
@@ -230,27 +212,7 @@ public static class RabbitMQBuilderExtensions
 
         var queueBuilder = builder.ApplicationBuilder.AddResource(queue);
 
-        var healthCheckKey = $"{name}_check";
-        var serverName = builder.Resource.Parent.Name;
-        var vhostResource = builder.Resource;
-        queueBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
-            healthCheckKey,
-            sp =>
-            {
-                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName);
-                return new RabbitMQEntityHealthCheck(async ct =>
-                {
-                    await vhostResource.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
-                    var exists = await client.QueueExistsAsync(vhostResource.VirtualHostName, qName, ct).ConfigureAwait(false);
-                    return exists
-                        ? HealthCheckResult.Healthy()
-                        : HealthCheckResult.Unhealthy($"Queue '{qName}' does not exist.");
-                });
-            },
-            failureStatus: null,
-            tags: null));
-
-        return queueBuilder.WithHealthCheck(healthCheckKey);
+        return queueBuilder.WithProvisionableHealthCheck(builder.Resource.Parent.Name);
     }
 
     /// <summary>
@@ -303,27 +265,7 @@ public static class RabbitMQBuilderExtensions
 
         var exchangeBuilder = builder.ApplicationBuilder.AddResource(exchange);
 
-        var healthCheckKey = $"{name}_check";
-        var serverName2 = builder.Resource.Parent.Name;
-        var vhostResource2 = builder.Resource;
-        exchangeBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
-            healthCheckKey,
-            sp =>
-            {
-                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName2);
-                return new RabbitMQEntityHealthCheck(async ct =>
-                {
-                    await vhostResource2.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
-                    var exists = await client.ExchangeExistsAsync(vhostResource2.VirtualHostName, exName, ct).ConfigureAwait(false);
-                    return exists
-                        ? HealthCheckResult.Healthy()
-                        : HealthCheckResult.Unhealthy($"Exchange '{exName}' does not exist.");
-                });
-            },
-            failureStatus: null,
-            tags: null));
-
-        return exchangeBuilder.WithHealthCheck(healthCheckKey);
+        return exchangeBuilder.WithProvisionableHealthCheck(builder.Resource.Parent.Name);
     }
 
     /// <summary>
@@ -470,27 +412,7 @@ public static class RabbitMQBuilderExtensions
             .WithRelationship(source.Resource, "Source")
             .WithRelationship(destination.Resource, "Destination");
 
-        var healthCheckKey = $"{name}_check";
-        var serverName3 = vhost.Resource.Parent.Name;
-        var vhostResource3 = vhost.Resource;
-        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
-            healthCheckKey,
-            sp =>
-            {
-                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName3);
-                return new RabbitMQEntityHealthCheck(async ct =>
-                {
-                    await vhostResource3.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
-                    var state = await client.GetShovelStateAsync(vhostResource3.VirtualHostName, wireName, ct).ConfigureAwait(false);
-                    return state == "running"
-                        ? HealthCheckResult.Healthy()
-                        : HealthCheckResult.Unhealthy($"Shovel '{wireName}' is in state '{state}'.");
-                });
-            },
-            failureStatus: null,
-            tags: null));
-
-        return builder.WithHealthCheck(healthCheckKey);
+        return builder.WithProvisionableHealthCheck(vhost.Resource.Parent.Name);
     }
 
     /// <summary>
@@ -686,6 +608,32 @@ public static class RabbitMQBuilderExtensions
         throw new DistributedApplicationException($"Cannot configure the RabbitMQ resource '{builder.Resource.Name}' to enable the management plugin as it uses an unrecognized container image registry, name, or tag.");
     }
 
+    /// <summary>
+    /// Registers a <see cref="RabbitMQProvisionableHealthCheck"/> for the given resource and wires it
+    /// up via <see cref="ResourceBuilderExtensions.WithHealthCheck{T}"/>.
+    /// All RabbitMQ child resources (vhost, queue, exchange, shovel) use this single helper.
+    /// </summary>
+    private static IResourceBuilder<T> WithProvisionableHealthCheck<T>(
+        this IResourceBuilder<T> builder,
+        string serverName)
+        where T : Resource, IRabbitMQProvisionable
+    {
+        var resource = builder.Resource;
+        var healthCheckKey = $"{resource.Name}_check";
+
+        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
+            healthCheckKey,
+            sp =>
+            {
+                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName);
+                return new RabbitMQProvisionableHealthCheck(resource, client);
+            },
+            failureStatus: null,
+            tags: null));
+
+        return builder.WithHealthCheck(healthCheckKey);
+    }
+
     private static bool IsVersion(string tag)
     {
         // Must not be empty or null
@@ -744,21 +692,4 @@ public static class RabbitMQBuilderExtensions
 
         return builder;
     }
-}
-
-/// <summary>
-/// A lightweight <see cref="IHealthCheck"/> that delegates to a caller-supplied async function.
-/// Used internally to implement per-entity (queue / exchange / shovel) health checks.
-/// </summary>
-file sealed class RabbitMQEntityHealthCheck : IHealthCheck
-{
-    private readonly Func<CancellationToken, Task<HealthCheckResult>> _check;
-
-    public RabbitMQEntityHealthCheck(Func<CancellationToken, Task<HealthCheckResult>> check)
-    {
-        _check = check;
-    }
-
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
-        => _check(cancellationToken);
 }
