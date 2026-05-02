@@ -338,9 +338,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Start the apphost - the runner will signal the backchannel when ready
         try
         {
-            // We've already built above (in the CLI, or by the extension). For non-watch runs we
-            // pass noBuild=true so dotnet run doesn't rebuild. For watch we leave it enabled so
-            // dotnet watch can manage its own incremental builds and hot reload.
+            // The app host may already have been built above (in the CLI, or by the extension).
+            // For non-watch runs we pass noBuild=true so dotnet run doesn't rebuild. For watch runs
+            // we leave builds enabled unless the user explicitly requested --no-build, so dotnet watch
+            // can perform its own build/incremental build and hot reload even if an up-front build
+            // already happened earlier in this method.
             // noRestore: only relevant when noBuild is false (since --no-build implies --no-restore)
             var noBuild = !watch || context.NoBuild;
             return await _runner.RunAsync(
