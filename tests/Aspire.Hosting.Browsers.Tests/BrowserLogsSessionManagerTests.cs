@@ -666,7 +666,7 @@ public class BrowserLogsSessionManagerTests
             string sessionId,
             Uri url,
             BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

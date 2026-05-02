@@ -1,11 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Buffers;
 using System.Globalization;
-using System.Text;
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -14,11 +10,6 @@ namespace Aspire.Hosting;
 // redirects, timing, and console formatting without needing a live browser.
 internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogger)
 {
-    private static readonly JsonWriterOptions s_structuredValueWriterOptions = new()
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
-
     private readonly string _sessionId = sessionId;
     private readonly ILogger _resourceLogger = resourceLogger;
     // Network request information arrives as several independent CDP events. A live page can redirect, fail, or serve
@@ -28,140 +19,124 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
     public void HandleEvent(BrowserLogsCdpProtocolEvent protocolEvent)
     {
-        switch (protocolEvent)
+        if (BrowserLogsCdpEventMapper.TryMap(protocolEvent) is { } diagnosticEvent)
         {
-            case BrowserLogsConsoleApiCalledEvent consoleApiCalledEvent:
-                LogConsoleMessage(consoleApiCalledEvent.Parameters);
+            HandleEvent(diagnosticEvent);
+        }
+    }
+
+    public void HandleEvent(BrowserDiagnosticEvent diagnosticEvent)
+    {
+        switch (diagnosticEvent)
+        {
+            case BrowserConsoleDiagnosticEvent consoleEvent:
+                LogConsoleMessage(consoleEvent);
                 break;
-            case BrowserLogsExceptionThrownEvent exceptionThrownEvent:
-                LogUnhandledException(exceptionThrownEvent.Parameters);
+            case BrowserExceptionDiagnosticEvent exceptionEvent:
+                LogUnhandledException(exceptionEvent);
                 break;
-            case BrowserLogsLogEntryAddedEvent logEntryAddedEvent:
-                LogEntryAdded(logEntryAddedEvent.Parameters);
+            case BrowserLogEntryDiagnosticEvent logEntryEvent:
+                LogEntryAdded(logEntryEvent);
                 break;
-            case BrowserLogsRequestWillBeSentEvent requestWillBeSentEvent:
-                TrackRequestStarted(requestWillBeSentEvent.Parameters);
+            case BrowserNetworkRequestStartedDiagnosticEvent requestStartedEvent:
+                TrackRequestStarted(requestStartedEvent);
                 break;
-            case BrowserLogsResponseReceivedEvent responseReceivedEvent:
-                TrackResponseReceived(responseReceivedEvent.Parameters);
+            case BrowserNetworkResponseReceivedDiagnosticEvent responseReceivedEvent:
+                TrackResponseReceived(responseReceivedEvent);
                 break;
-            case BrowserLogsLoadingFinishedEvent loadingFinishedEvent:
-                TrackRequestCompleted(loadingFinishedEvent.Parameters);
+            case BrowserNetworkRequestCompletedDiagnosticEvent requestCompletedEvent:
+                TrackRequestCompleted(requestCompletedEvent);
                 break;
-            case BrowserLogsLoadingFailedEvent loadingFailedEvent:
-                TrackRequestFailed(loadingFailedEvent.Parameters);
+            case BrowserNetworkRequestFailedDiagnosticEvent requestFailedEvent:
+                TrackRequestFailed(requestFailedEvent);
                 break;
         }
     }
 
-    private void LogConsoleMessage(BrowserLogsRuntimeConsoleApiCalledParameters parameters)
+    private void LogConsoleMessage(BrowserConsoleDiagnosticEvent consoleEvent)
     {
-        var level = parameters.Type ?? "log";
-        var message = parameters.Args is { Length: > 0 }
-            ? string.Join(" ", parameters.Args.Select(FormatRemoteObject).Where(static value => !string.IsNullOrEmpty(value)))
-            : string.Empty;
-
-        WriteLog(MapConsoleLevel(level), $"[console.{level}] {message}".TrimEnd());
+        WriteLog(MapConsoleLevel(consoleEvent.Level), $"[console.{consoleEvent.Level}] {consoleEvent.Message}".TrimEnd());
     }
 
-    private void LogUnhandledException(BrowserLogsExceptionThrownParameters parameters)
+    private void LogUnhandledException(BrowserExceptionDiagnosticEvent exceptionEvent)
     {
-        var exceptionDetails = parameters.ExceptionDetails;
-        if (exceptionDetails is null)
-        {
-            return;
-        }
-
-        var message = exceptionDetails.Exception?.Description
-            ?? exceptionDetails.Text
-            ?? "Unhandled browser exception";
-
-        var location = GetLocationSuffix(exceptionDetails);
-        WriteLog(LogLevel.Error, $"[exception] {message}{location}");
+        var location = exceptionEvent.Location is null ? string.Empty : GetLocationSuffix(exceptionEvent.Location);
+        WriteLog(LogLevel.Error, $"[exception] {exceptionEvent.Message}{location}");
     }
 
-    private void LogEntryAdded(BrowserLogsLogEntryAddedParameters parameters)
+    private void LogEntryAdded(BrowserLogEntryDiagnosticEvent logEntryEvent)
     {
-        var entry = parameters.Entry;
-        if (entry is null)
+        var location = logEntryEvent.Location is null ? string.Empty : GetLocationSuffix(logEntryEvent.Location);
+        WriteLog(MapLogEntryLevel(logEntryEvent.Level), $"[log.{logEntryEvent.Level}] {logEntryEvent.Text}{location}".TrimEnd());
+    }
+
+    private void TrackRequestStarted(BrowserNetworkRequestStartedDiagnosticEvent requestStartedEvent)
+    {
+        if (requestStartedEvent.RequestId is not { Length: > 0 } requestId)
         {
             return;
         }
 
-        var level = entry.Level ?? "info";
-        var text = entry.Text ?? string.Empty;
-        var location = GetLocationSuffix(entry);
-
-        WriteLog(MapLogEntryLevel(level), $"[log.{level}] {text}{location}".TrimEnd());
-    }
-
-    private void TrackRequestStarted(BrowserLogsRequestWillBeSentParameters parameters)
-    {
-        if (parameters.RequestId is not { Length: > 0 } requestId || parameters.Request is not { } request)
-        {
-            return;
-        }
-
-        var url = request.Url;
-        var method = request.Method;
+        var url = requestStartedEvent.Url;
+        var method = requestStartedEvent.Method;
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(method))
         {
             return;
         }
 
-        if (parameters.RedirectResponse is not null &&
+        if (requestStartedEvent.RedirectResponse is not null &&
             _networkRequests.Remove(requestId, out var redirectedRequest))
         {
             // CDP reuses the same request id when a redirect starts the next hop, so emit the completed hop before
             // overwriting it with the redirected request state.
-            UpdateResponse(redirectedRequest, parameters.RedirectResponse);
-            LogCompletedRequest(redirectedRequest, parameters.Timestamp, encodedDataLength: null, redirectUrl: url);
+            UpdateResponse(redirectedRequest, requestStartedEvent.RedirectResponse);
+            LogCompletedRequest(redirectedRequest, requestStartedEvent.Timestamp, encodedDataLength: null, redirectUrl: url);
         }
 
         _networkRequests[requestId] = new BrowserNetworkRequestState
         {
             Method = method,
-            ResourceType = NormalizeResourceType(parameters.Type),
-            StartTimestamp = parameters.Timestamp,
+            ResourceType = NormalizeResourceType(requestStartedEvent.ResourceType),
+            StartTimestamp = requestStartedEvent.Timestamp,
             Url = url
         };
     }
 
-    private void TrackResponseReceived(BrowserLogsResponseReceivedParameters parameters)
+    private void TrackResponseReceived(BrowserNetworkResponseReceivedDiagnosticEvent responseReceivedEvent)
     {
-        if (parameters.RequestId is not { Length: > 0 } requestId ||
+        if (responseReceivedEvent.RequestId is not { Length: > 0 } requestId ||
             !_networkRequests.TryGetValue(requestId, out var request))
         {
             return;
         }
 
-        if (parameters.Response is not null)
+        if (responseReceivedEvent.Response is not null)
         {
             // Cache and service-worker flags are only available on the response event, while the duration and encoded
             // byte count arrive later on loadingFinished.
-            UpdateResponse(request, parameters.Response);
+            UpdateResponse(request, responseReceivedEvent.Response);
         }
 
-        if (parameters.Type is { Length: > 0 } resourceType)
+        if (responseReceivedEvent.ResourceType is { Length: > 0 } resourceType)
         {
             request.ResourceType = NormalizeResourceType(resourceType);
         }
     }
 
-    private void TrackRequestCompleted(BrowserLogsLoadingFinishedParameters parameters)
+    private void TrackRequestCompleted(BrowserNetworkRequestCompletedDiagnosticEvent requestCompletedEvent)
     {
-        if (parameters.RequestId is not { Length: > 0 } requestId ||
+        if (requestCompletedEvent.RequestId is not { Length: > 0 } requestId ||
             !_networkRequests.Remove(requestId, out var request))
         {
             return;
         }
 
-        LogCompletedRequest(request, parameters.Timestamp, parameters.EncodedDataLength, redirectUrl: null);
+        LogCompletedRequest(request, requestCompletedEvent.Timestamp, requestCompletedEvent.EncodedDataLength, redirectUrl: null);
     }
 
-    private void TrackRequestFailed(BrowserLogsLoadingFailedParameters parameters)
+    private void TrackRequestFailed(BrowserNetworkRequestFailedDiagnosticEvent requestFailedEvent)
     {
-        if (parameters.RequestId is not { Length: > 0 } requestId ||
+        if (requestFailedEvent.RequestId is not { Length: > 0 } requestId ||
             !_networkRequests.Remove(requestId, out var request))
         {
             return;
@@ -169,22 +144,22 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
         var details = new List<string>();
 
-        if (FormatDuration(request.StartTimestamp, parameters.Timestamp) is { Length: > 0 } duration)
+        if (FormatDuration(request.StartTimestamp, requestFailedEvent.Timestamp) is { Length: > 0 } duration)
         {
             details.Add(duration);
         }
 
-        if (parameters.Canceled == true)
+        if (requestFailedEvent.Canceled == true)
         {
             details.Add("canceled");
         }
 
-        if (!string.IsNullOrEmpty(parameters.BlockedReason))
+        if (!string.IsNullOrEmpty(requestFailedEvent.BlockedReason))
         {
-            details.Add($"blocked={parameters.BlockedReason}");
+            details.Add($"blocked={requestFailedEvent.BlockedReason}");
         }
 
-        WriteLog(LogLevel.Warning, $"[network.{request.ResourceType}] {request.Method} {request.Url} failed: {parameters.ErrorText ?? "Request failed"}{FormatDetails(details)}");
+        WriteLog(LogLevel.Warning, $"[network.{request.ResourceType}] {request.Method} {request.Url} failed: {requestFailedEvent.ErrorText ?? "Request failed"}{FormatDetails(details)}");
     }
 
     private void LogCompletedRequest(BrowserNetworkRequestState request, double? completedTimestamp, double? encodedDataLength, string? redirectUrl)
@@ -227,7 +202,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         WriteLog(LogLevel.Information, $"[network.{request.ResourceType}] {request.Method} {request.Url}{statusText}{FormatDetails(details)}");
     }
 
-    private static void UpdateResponse(BrowserNetworkRequestState request, BrowserLogsResponse response)
+    private static void UpdateResponse(BrowserNetworkRequestState request, BrowserNetworkResponseDetails response)
     {
         request.Url = response.Url ?? request.Url;
         request.StatusCode = response.Status;
@@ -296,78 +271,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         _ => LogLevel.Information
     };
 
-    private static string FormatRemoteObject(BrowserLogsCdpProtocolRemoteObject remoteObject)
-    {
-        // Console arguments can arrive either as pre-rendered descriptions or as structured values that need stable
-        // formatting for logs and tests.
-        if (remoteObject.Value is BrowserLogsCdpProtocolValue value)
-        {
-            return value switch
-            {
-                BrowserLogsCdpProtocolStringValue stringValue => stringValue.Value,
-                BrowserLogsCdpProtocolNullValue => "null",
-                BrowserLogsCdpProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
-                BrowserLogsCdpProtocolNumberValue numberValue => numberValue.RawValue,
-                _ => FormatStructuredValue(value)
-            };
-        }
-
-        if (!string.IsNullOrEmpty(remoteObject.UnserializableValue))
-        {
-            return remoteObject.UnserializableValue;
-        }
-
-        return remoteObject.Description ?? string.Empty;
-    }
-
-    private static string FormatStructuredValue(BrowserLogsCdpProtocolValue value)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer, s_structuredValueWriterOptions);
-        WriteStructuredValue(writer, value);
-        writer.Flush();
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
-    }
-
-    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserLogsCdpProtocolValue value)
-    {
-        switch (value)
-        {
-            case BrowserLogsCdpProtocolArrayValue arrayValue:
-                writer.WriteStartArray();
-                foreach (var item in arrayValue.Items)
-                {
-                    WriteStructuredValue(writer, item);
-                }
-
-                writer.WriteEndArray();
-                break;
-            case BrowserLogsCdpProtocolBooleanValue booleanValue:
-                writer.WriteBooleanValue(booleanValue.Value);
-                break;
-            case BrowserLogsCdpProtocolNullValue:
-                writer.WriteNullValue();
-                break;
-            case BrowserLogsCdpProtocolNumberValue numberValue:
-                writer.WriteRawValue(numberValue.RawValue, skipInputValidation: false);
-                break;
-            case BrowserLogsCdpProtocolObjectValue objectValue:
-                writer.WriteStartObject();
-                foreach (var (propertyName, propertyValue) in objectValue.Properties)
-                {
-                    writer.WritePropertyName(propertyName);
-                    WriteStructuredValue(writer, propertyValue);
-                }
-
-                writer.WriteEndObject();
-                break;
-            case BrowserLogsCdpProtocolStringValue stringValue:
-                writer.WriteStringValue(stringValue.Value);
-                break;
-        }
-    }
-
-    private static string GetLocationSuffix(BrowserLogsSourceLocation details)
+    private static string GetLocationSuffix(BrowserDiagnosticSourceLocation details)
     {
         var url = details.Url;
         if (string.IsNullOrEmpty(url))

@@ -51,19 +51,7 @@ public class BrowserLogsRunningSessionTests
                     TimeProvider.System,
                     CancellationToken.None).GetAwaiter().GetResult();
 
-                host!.PageSession!.RaiseEventAsync(new BrowserLogsConsoleApiCalledEvent(
-                    SessionId: "target-session-1",
-                    new BrowserLogsRuntimeConsoleApiCalledParameters
-                    {
-                        Type = "log",
-                        Args =
-                        [
-                            new BrowserLogsCdpProtocolRemoteObject
-                            {
-                                Value = new BrowserLogsCdpProtocolStringValue("hello from tracked browser")
-                            }
-                        ]
-                    })).AsTask().GetAwaiter().GetResult();
+                host!.PageSession!.RaiseEventAsync(new BrowserConsoleDiagnosticEvent("log", "hello from tracked browser")).AsTask().GetAwaiter().GetResult();
             });
 
             Assert.NotNull(session);
@@ -130,7 +118,7 @@ public class BrowserLogsRunningSessionTests
             string sessionId,
             Uri url,
             BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
             CancellationToken cancellationToken)
         {
             PageSession = new TestBrowserPageSession(sessionId, url, eventHandler);
@@ -148,7 +136,7 @@ public class BrowserLogsRunningSessionTests
     private sealed class TestBrowserPageSession(
         string sessionId,
         Uri url,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler) : IBrowserPageSession
+        Func<BrowserDiagnosticEvent, ValueTask> eventHandler) : IBrowserPageSession
     {
         private readonly TaskCompletionSource<BrowserPageSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -169,9 +157,9 @@ public class BrowserLogsRunningSessionTests
             return Task.FromResult(new BrowserLogsCaptureScreenshotResult { Data = Convert.ToBase64String([0x89, 0x50, 0x4e, 0x47]) });
         }
 
-        public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
+        public ValueTask RaiseEventAsync(BrowserDiagnosticEvent diagnosticEvent)
         {
-            return eventHandler(protocolEvent);
+            return eventHandler(diagnosticEvent);
         }
 
         public void Complete(BrowserPageSessionResult result)

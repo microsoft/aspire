@@ -47,7 +47,7 @@ internal abstract class BrowserHost(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
         return CreatePageSessionCoreAsync(sessionId, url, connectionDiagnostics, eventHandler, cancellationToken);
@@ -59,7 +59,7 @@ internal abstract class BrowserHost(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
         return await BrowserPageSession.StartAsync(

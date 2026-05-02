@@ -43,14 +43,16 @@ internal interface IBrowserLogsRunningSessionFactory
 
 internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory, IAsyncDisposable
 {
-    private readonly BrowserHostRegistry _browserHostRegistry;
+    private readonly BrowserHostRegistry _chromiumHostRegistry;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
+    private readonly SafariWebDriverHostProvider _safariHostProvider;
     private readonly TimeProvider _timeProvider;
 
     public BrowserLogsRunningSessionFactory(ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
     {
-        _browserHostRegistry = new BrowserHostRegistry(logger, timeProvider);
+        _chromiumHostRegistry = new BrowserHostRegistry(logger, timeProvider);
         _logger = logger;
+        _safariHostProvider = new SafariWebDriverHostProvider(logger, timeProvider);
         _timeProvider = timeProvider;
     }
 
@@ -62,19 +64,27 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
         ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
+        var hostProvider = BrowserLogsBrowserResolver.ResolveFamily(configuration.Browser) == BrowserLogsBrowserFamily.Safari
+            ? (IBrowserHostProvider)_safariHostProvider
+            : _chromiumHostRegistry;
+
         return await BrowserLogsRunningSession.StartAsync(
             configuration,
             resourceName,
             sessionId,
             url,
-            _browserHostRegistry,
+            hostProvider,
             resourceLogger,
             _logger,
             _timeProvider,
             cancellationToken).ConfigureAwait(false);
     }
 
-    public ValueTask DisposeAsync() => _browserHostRegistry.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await _chromiumHostRegistry.DisposeAsync().ConfigureAwait(false);
+        await _safariHostProvider.DisposeAsync().ConfigureAwait(false);
+    }
 }
 
 // Owns one tracked browser page session. The browser host may be shared with other sessions; this type keeps the
@@ -83,7 +93,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 {
     private readonly BrowserEventLogger _eventLogger;
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
-    private readonly BrowserHostRegistry _browserHostRegistry;
+    private readonly IBrowserHostProvider _browserHostProvider;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly ILogger _resourceLogger;
     private readonly string _resourceName;
@@ -109,14 +119,14 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         string resourceName,
         string sessionId,
         Uri url,
-        BrowserHostRegistry browserHostRegistry,
+        IBrowserHostProvider browserHostProvider,
         ILogger resourceLogger,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider)
     {
         _eventLogger = new BrowserEventLogger(sessionId, resourceLogger);
         _connectionDiagnostics = new BrowserConnectionDiagnosticsLogger(sessionId, resourceLogger);
-        _browserHostRegistry = browserHostRegistry;
+        _browserHostProvider = browserHostProvider;
         _logger = logger;
         _resourceLogger = resourceLogger;
         _resourceName = resourceName;
@@ -147,13 +157,13 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         string resourceName,
         string sessionId,
         Uri url,
-        BrowserHostRegistry browserHostRegistry,
+        IBrowserHostProvider browserHostProvider,
         ILogger resourceLogger,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var session = new BrowserLogsRunningSession(configuration, resourceName, sessionId, url, browserHostRegistry, resourceLogger, logger, timeProvider);
+        var session = new BrowserLogsRunningSession(configuration, resourceName, sessionId, url, browserHostProvider, resourceLogger, logger, timeProvider);
 
         try
         {
@@ -219,7 +229,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
         try
         {
-            _browserHostLease = await _browserHostRegistry.AcquireAsync(_configuration, cancellationToken).ConfigureAwait(false);
+            _browserHostLease = await _browserHostProvider.AcquireAsync(_configuration, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

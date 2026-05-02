@@ -27,7 +27,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     private readonly TaskCompletionSource<BrowserPageSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
     private readonly BrowserLogsCdpConnectionFactory _connectionFactory;
-    private readonly Func<BrowserLogsCdpProtocolEvent, ValueTask> _eventHandler;
+    private readonly Func<BrowserDiagnosticEvent, ValueTask> _eventHandler;
     private readonly IBrowserHost _host;
     // Serializes every operation that replaces, disposes, or sends a command through the current CDP connection.
     // Without this, screenshot capture can read a live connection reference while reconnect/dispose tears down that
@@ -52,7 +52,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         BrowserLogsCdpConnectionFactory connectionFactory,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget)
@@ -125,11 +125,11 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     }
 
     public static async Task<BrowserPageSession> StartAsync(
-        IBrowserHost host,
+        BrowserHost host,
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget,
@@ -154,7 +154,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         BrowserLogsCdpConnectionFactory connectionFactory,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget,
@@ -443,9 +443,10 @@ internal sealed class BrowserPageSession : IBrowserPageSession
             return;
         }
 
-        if (string.Equals(protocolEvent.SessionId, _targetSessionId, StringComparison.Ordinal))
+        if (string.Equals(protocolEvent.SessionId, _targetSessionId, StringComparison.Ordinal) &&
+            BrowserLogsCdpEventMapper.TryMap(protocolEvent) is { } diagnosticEvent)
         {
-            await _eventHandler(protocolEvent).ConfigureAwait(false);
+            await _eventHandler(diagnosticEvent).ConfigureAwait(false);
         }
     }
 

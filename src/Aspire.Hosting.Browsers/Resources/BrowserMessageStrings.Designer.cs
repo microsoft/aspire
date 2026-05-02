@@ -20,6 +20,10 @@ internal static class BrowserMessageStrings
     internal static string BrowserLogsProfileRequiresSharedUserDataMode => GetString(nameof(BrowserLogsProfileRequiresSharedUserDataMode));
     internal static string BrowserLogsInvalidUserDataModeConfiguration => GetString(nameof(BrowserLogsInvalidUserDataModeConfiguration));
     internal static string BrowserLogsUnableToLocateBrowser => GetString(nameof(BrowserLogsUnableToLocateBrowser));
+    internal static string BrowserLogsUnableToLocateSafariDriver => GetString(nameof(BrowserLogsUnableToLocateSafariDriver));
+    internal static string BrowserLogsSafariProfileNotSupported => GetString(nameof(BrowserLogsSafariProfileNotSupported));
+    internal static string BrowserLogsSafariBiDiNotSupported => GetString(nameof(BrowserLogsSafariBiDiNotSupported));
+    internal static string BrowserLogsSafariWebDriverSessionFailed => GetString(nameof(BrowserLogsSafariWebDriverSessionFailed));
     internal static string BrowserLogsAppHostPathShaNotAvailable => GetString(nameof(BrowserLogsAppHostPathShaNotAvailable));
     internal static string BrowserLogsUserDataDirectoryNotFound => GetString(nameof(BrowserLogsUserDataDirectoryNotFound));
     internal static string BrowserLogsTrackedBrowserProfileConflict => GetString(nameof(BrowserLogsTrackedBrowserProfileConflict));

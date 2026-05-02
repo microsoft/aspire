@@ -30,8 +30,24 @@
     <comment>{0} is the configured user data mode value, {1} is the user data mode configuration key, {2} and {3} are valid user data mode values</comment>
   </data>
   <data name="BrowserLogsUnableToLocateBrowser" xml:space="preserve">
-    <value>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</value>
+    <value>Unable to locate browser '{0}'. Specify an installed Chromium-based browser, Safari browser, or an explicit executable path.</value>
     <comment>{0} is the configured browser name or executable path</comment>
+  </data>
+  <data name="BrowserLogsUnableToLocateSafariDriver" xml:space="preserve">
+    <value>Unable to locate Safari WebDriver executable for browser '{0}'. Expected Safari's driver at '{1}', Safari Technology Preview's driver at '{2}', or an explicit safaridriver path.</value>
+    <comment>{0} is the configured Safari browser name or driver path, {1} is the stable Safari safaridriver path, {2} is the Safari Technology Preview safaridriver path</comment>
+  </data>
+  <data name="BrowserLogsSafariProfileNotSupported" xml:space="preserve">
+    <value>Safari tracked browser sessions do not support explicit browser profiles. Remove the '{0}' value '{1}' or use a Chromium-based tracked browser.</value>
+    <comment>{0} is the profile configuration key, {1} is the configured profile value</comment>
+  </data>
+  <data name="BrowserLogsSafariBiDiNotSupported" xml:space="preserve">
+    <value>Safari tracked browser sessions require WebDriver BiDi support from safaridriver. The WebDriver session for '{0}' did not return a webSocketUrl capability. Enable Safari WebDriver support with 'safaridriver --enable' and use a Safari or Safari Technology Preview version that supports WebDriver BiDi.</value>
+    <comment>{0} is the Safari WebDriver executable path</comment>
+  </data>
+  <data name="BrowserLogsSafariWebDriverSessionFailed" xml:space="preserve">
+    <value>Unable to create a Safari WebDriver session through '{0}'. Enable Safari WebDriver support with 'safaridriver --enable' and ensure Safari allows remote automation.</value>
+    <comment>{0} is the Safari WebDriver executable path</comment>
   </data>
   <data name="BrowserLogsAppHostPathShaNotAvailable" xml:space="preserve">
     <value>Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</value>

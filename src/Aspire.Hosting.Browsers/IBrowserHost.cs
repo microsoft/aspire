@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.Extensions.Logging;
-
 namespace Aspire.Hosting;
+
+internal interface IBrowserHostProvider : IAsyncDisposable
+{
+    Task<BrowserHostLease> AcquireAsync(BrowserConfiguration configuration, CancellationToken cancellationToken);
+}
 
 // A browser instance/process boundary that one or more tracked log sessions can share. A host either owns the
 // browser process (Owned) or is connected to a browser someone else launched (Adopted). This distinction drives
@@ -29,21 +32,14 @@ internal interface IBrowserHost : IAsyncDisposable
     // termination because sessions can reconnect and reattach to their targets.
     Task Termination { get; }
 
-    // Opens a browser-level CDP connection for a page session. WebSocket-backed hosts create a new connection per
-    // session; pipe-backed hosts return a shared/multiplexed connection over the private CDP pipe owned by this AppHost.
-    Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        ILogger<BrowserLogsSessionManager> logger,
-        CancellationToken cancellationToken);
-
     // Creates a page/tab owned by one tracked browser-log session. The returned session owns only that page target;
-    // disposing it must never close the browser process. Host implementations hide CDP event fanout and recovery
-    // so callers cannot accidentally share a page target or call Browser.close on an adopted browser.
+    // disposing it must never close an adopted browser process. Host implementations hide protocol event fanout and
+    // recovery so callers cannot accidentally share a page target or call Browser.close on an adopted browser.
     Task<IBrowserPageSession> CreatePageSessionAsync(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken);
 }
 

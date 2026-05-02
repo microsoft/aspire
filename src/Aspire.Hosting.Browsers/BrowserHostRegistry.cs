@@ -13,7 +13,7 @@ namespace Aspire.Hosting;
 // Coordinates host sharing for all tracked browser sessions in an AppHost. The registry is the only component that
 // decides whether a request reuses an in-process host, adopts a previously launched debug-enabled browser, or starts a
 // new owned browser, and it centralizes reference counting for those choices.
-internal sealed class BrowserHostRegistry : IAsyncDisposable
+internal sealed class BrowserHostRegistry : IBrowserHostProvider
 {
     private readonly BrowserEndpointDiscovery _endpointDiscovery;
     private readonly Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory> _createUserDataDirectory;

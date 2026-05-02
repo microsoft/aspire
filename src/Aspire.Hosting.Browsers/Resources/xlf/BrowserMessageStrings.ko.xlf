@@ -57,15 +57,35 @@
         <target state="new">Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</target>
         <note>{0} is the Aspire resource name</note>
       </trans-unit>
+      <trans-unit id="BrowserLogsSafariBiDiNotSupported">
+        <source>Safari tracked browser sessions require WebDriver BiDi support from safaridriver. The WebDriver session for '{0}' did not return a webSocketUrl capability. Enable Safari WebDriver support with 'safaridriver --enable' and use a Safari or Safari Technology Preview version that supports WebDriver BiDi.</source>
+        <target state="new">Safari tracked browser sessions require WebDriver BiDi support from safaridriver. The WebDriver session for '{0}' did not return a webSocketUrl capability. Enable Safari WebDriver support with 'safaridriver --enable' and use a Safari or Safari Technology Preview version that supports WebDriver BiDi.</target>
+        <note>{0} is the Safari WebDriver executable path</note>
+      </trans-unit>
+      <trans-unit id="BrowserLogsSafariProfileNotSupported">
+        <source>Safari tracked browser sessions do not support explicit browser profiles. Remove the '{0}' value '{1}' or use a Chromium-based tracked browser.</source>
+        <target state="new">Safari tracked browser sessions do not support explicit browser profiles. Remove the '{0}' value '{1}' or use a Chromium-based tracked browser.</target>
+        <note>{0} is the profile configuration key, {1} is the configured profile value</note>
+      </trans-unit>
+      <trans-unit id="BrowserLogsSafariWebDriverSessionFailed">
+        <source>Unable to create a Safari WebDriver session through '{0}'. Enable Safari WebDriver support with 'safaridriver --enable' and ensure Safari allows remote automation.</source>
+        <target state="new">Unable to create a Safari WebDriver session through '{0}'. Enable Safari WebDriver support with 'safaridriver --enable' and ensure Safari allows remote automation.</target>
+        <note>{0} is the Safari WebDriver executable path</note>
+      </trans-unit>
       <trans-unit id="BrowserLogsTrackedBrowserProfileConflict">
         <source>A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</source>
         <target state="new">A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</target>
         <note>{0} is the browser user data directory path, {1} is the profile used by the running browser, {2} is the requested profile</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUnableToLocateBrowser">
-        <source>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</source>
-        <target state="new">Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</target>
+        <source>Unable to locate browser '{0}'. Specify an installed Chromium-based browser, Safari browser, or an explicit executable path.</source>
+        <target state="new">Unable to locate browser '{0}'. Specify an installed Chromium-based browser, Safari browser, or an explicit executable path.</target>
         <note>{0} is the configured browser name or executable path</note>
+      </trans-unit>
+      <trans-unit id="BrowserLogsUnableToLocateSafariDriver">
+        <source>Unable to locate Safari WebDriver executable for browser '{0}'. Expected Safari's driver at '{1}', Safari Technology Preview's driver at '{2}', or an explicit safaridriver path.</source>
+        <target state="new">Unable to locate Safari WebDriver executable for browser '{0}'. Expected Safari's driver at '{1}', Safari Technology Preview's driver at '{2}', or an explicit safaridriver path.</target>
+        <note>{0} is the configured Safari browser name or driver path, {1} is the stable Safari safaridriver path, {2} is the Safari Technology Preview safaridriver path</note>
       </trans-unit>
       <trans-unit id="BrowserLogsUnableToReadProfileMetadata">
         <source>Unable to read Chromium profile metadata from '{0}' while resolving browser profile '{1}'.</source>

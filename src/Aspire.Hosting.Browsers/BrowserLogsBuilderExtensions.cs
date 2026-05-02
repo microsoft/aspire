@@ -59,12 +59,14 @@ public static class BrowserLogsBuilderExtensions
     /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise prefers an installed <c>"msedge"</c> browser in shared user data
     /// mode, an installed <c>"chrome"</c> browser in isolated user data mode, and finally falls back to <c>"chrome"</c>.
     /// Supported values include logical
-    /// browser names such as <c>"msedge"</c> and <c>"chrome"</c>, or an explicit browser executable path.
+    /// browser names such as <c>"msedge"</c>, <c>"chrome"</c>, <c>"safari"</c>, and
+    /// <c>"safari-technology-preview"</c>, or an explicit browser or driver executable path.
     /// </param>
     /// <param name="profile">
     /// Optional Chromium profile name or directory name to use. Only valid when the effective user data mode
     /// is <see cref="BrowserUserDataMode.Shared"/>. When not specified, the tracked browser uses the
-    /// configured value from <c>Aspire:Hosting:BrowserLogs</c> if present.
+    /// configured value from <c>Aspire:Hosting:BrowserLogs</c> if present. Safari tracked browser sessions do not
+    /// support explicit profile selection.
     /// </param>
     /// <param name="userDataMode">
     /// Optional <see cref="BrowserUserDataMode"/> that selects whether the tracked browser launches against
@@ -84,8 +86,10 @@ public static class BrowserLogsBuilderExtensions
     /// resource's console log stream, and can capture screenshots as command artifacts.
     /// </para>
     /// <para>
-    /// The tracked browser session uses the <a href="https://chromedevtools.github.io/devtools-protocol/">Chrome DevTools
-    /// Protocol (CDP)</a> to subscribe to browser runtime, log, page, and network events.
+    /// Chromium-based tracked browser sessions use the
+    /// <a href="https://chromedevtools.github.io/devtools-protocol/">Chrome DevTools Protocol (CDP)</a> to subscribe to
+    /// browser runtime, log, page, and network events. Safari tracked browser sessions use WebDriver BiDi when the
+    /// installed <c>safaridriver</c> supports the <c>webSocketUrl</c> capability.
     /// </para>
     /// <para>
     /// The parent resource must expose at least one HTTP or HTTPS endpoint. HTTPS endpoints are preferred over HTTP

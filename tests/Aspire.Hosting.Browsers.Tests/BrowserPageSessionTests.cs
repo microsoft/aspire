@@ -47,7 +47,7 @@ public class BrowserPageSessionTests
                 new BrowserLogsTargetInfo { TargetId = "startup-target", Type = "page", Url = "about:blank", Attached = false }
             ]
         };
-        var routedEvents = new List<BrowserLogsCdpProtocolEvent>();
+        var routedEvents = new List<BrowserDiagnosticEvent>();
 
         var session = await BrowserPageSession.StartAsync(
             host,
@@ -55,9 +55,9 @@ public class BrowserPageSessionTests
             new Uri("https://localhost:5001/"),
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
             CreateConnectionFactory(connection),
-            protocolEvent =>
+            diagnosticEvent =>
             {
-                routedEvents.Add(protocolEvent);
+                routedEvents.Add(diagnosticEvent);
                 return ValueTask.CompletedTask;
             },
             NullLogger<BrowserLogsSessionManager>.Instance,
@@ -83,8 +83,8 @@ public class BrowserPageSessionTests
         await connection.RaiseEventAsync(unrelatedEvent);
         await connection.RaiseEventAsync(routedEvent);
 
-        var capturedEvent = Assert.Single(routedEvents);
-        Assert.Same(routedEvent, capturedEvent);
+        var capturedEvent = Assert.IsType<BrowserConsoleDiagnosticEvent>(Assert.Single(routedEvents));
+        Assert.Equal("log", capturedEvent.Level);
 
         await connection.RaiseEventAsync(new BrowserLogsTargetDestroyedEvent(
             SessionId: null,
@@ -212,7 +212,7 @@ public class BrowserPageSessionTests
         {
             AttachSessionId = "target-session-2"
         };
-        var routedEvents = new List<BrowserLogsCdpProtocolEvent>();
+        var routedEvents = new List<BrowserDiagnosticEvent>();
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 4, 26, 0, 0, 0, TimeSpan.Zero));
 
         var session = await BrowserPageSession.StartAsync(
@@ -221,9 +221,9 @@ public class BrowserPageSessionTests
             new Uri("https://localhost:5001/"),
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
             CreateConnectionFactory(firstConnection, secondConnection),
-            protocolEvent =>
+            diagnosticEvent =>
             {
-                routedEvents.Add(protocolEvent);
+                routedEvents.Add(diagnosticEvent);
                 return ValueTask.CompletedTask;
             },
             NullLogger<BrowserLogsSessionManager>.Instance,
@@ -253,7 +253,8 @@ public class BrowserPageSessionTests
         var routedEvent = new BrowserLogsConsoleApiCalledEvent("target-session-2", new BrowserLogsRuntimeConsoleApiCalledParameters { Type = "log" });
         await secondConnection.RaiseEventAsync(routedEvent);
 
-        Assert.Same(routedEvent, Assert.Single(routedEvents));
+        var capturedEvent = Assert.IsType<BrowserConsoleDiagnosticEvent>(Assert.Single(routedEvents));
+        Assert.Equal("log", capturedEvent.Level);
 
         await secondConnection.RaiseEventAsync(new BrowserLogsTargetDestroyedEvent(
             SessionId: null,
@@ -307,7 +308,7 @@ public class BrowserPageSessionTests
             string sessionId,
             Uri url,
             BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            Func<BrowserDiagnosticEvent, ValueTask> eventHandler,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
