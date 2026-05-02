@@ -216,4 +216,75 @@ internal sealed class ResourceCommandJson
     /// The description of the command.
     /// </summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// The inputs that describe the invocation arguments accepted by the command.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceCommandArgumentJson[]? ArgumentInputs { get; set; }
+}
+
+/// <summary>
+/// Represents a command invocation argument input in JSON format.
+/// </summary>
+internal sealed class ResourceCommandArgumentJson
+{
+    /// <summary>
+    /// The argument name.
+    /// </summary>
+    public required string Name { get; set; }
+
+    /// <summary>
+    /// The display label.
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// The argument description.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Whether the description should be rendered as Markdown.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool EnableDescriptionMarkdown { get; set; }
+
+    /// <summary>
+    /// The input type.
+    /// </summary>
+    public required string InputType { get; set; }
+
+    /// <summary>
+    /// Whether the argument is required.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Required { get; set; }
+
+    /// <summary>
+    /// The placeholder text.
+    /// </summary>
+    public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// Choice options keyed by submitted value.
+    /// </summary>
+    public Dictionary<string, string>? Options { get; set; }
+
+    /// <summary>
+    /// Whether custom choices are allowed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AllowCustomChoice { get; set; }
+
+    /// <summary>
+    /// Whether the argument input is disabled.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// The maximum length for text inputs.
+    /// </summary>
+    public int? MaxLength { get; set; }
 }

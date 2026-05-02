@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -33,6 +34,10 @@ internal sealed class ResourceCommand : BaseCommand
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
+    private static readonly Option<string?> s_argumentsJsonOption = new("--args-json")
+    {
+        Description = ResourceCommandStrings.CommandArgumentsJsonOptionDescription
+    };
 
     /// <summary>
     /// Well-known commands with their display metadata.
@@ -63,6 +68,7 @@ internal sealed class ResourceCommand : BaseCommand
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_commandArgument);
         Options.Add(s_appHostOption);
+        Options.Add(s_argumentsJsonOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -70,6 +76,12 @@ internal sealed class ResourceCommand : BaseCommand
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var commandArguments = ParseArguments(parseResult.GetValue(s_argumentsJsonOption));
+        if (commandArguments.ParseError is { } parseError)
+        {
+            _interactionService.DisplayError(parseError);
+            return ExitCodeConstants.InvalidCommand;
+        }
 
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
@@ -95,6 +107,7 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.ProgressVerb,
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
+                commandArguments.Arguments,
                 cancellationToken);
         }
 
@@ -104,6 +117,31 @@ internal sealed class ResourceCommand : BaseCommand
             _logger,
             resourceName,
             commandName,
+            commandArguments.Arguments,
             cancellationToken);
+    }
+
+    private static (JsonElement? Arguments, string? ParseError) ParseArguments(string? argumentsJson)
+    {
+        if (string.IsNullOrWhiteSpace(argumentsJson))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
+            using var document = JsonDocument.Parse(argumentsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return (null, ResourceCommandStrings.CommandArgumentsJsonInvalidObject);
+            }
+
+            return (document.RootElement.Clone(), null);
+        }
+        catch (JsonException ex)
+        {
+            return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsJsonInvalid, ex.Message));
+        }
     }
 }

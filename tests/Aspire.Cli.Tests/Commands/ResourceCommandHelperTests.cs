@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -40,7 +41,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "generate-token",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.NotNull(capturedRawText);
@@ -68,7 +70,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "start",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.False(displayRawTextCalled);
@@ -103,7 +106,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "validate-config",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.NotEqual(0, exitCode);
         Assert.NotNull(capturedRawText);
@@ -137,10 +141,39 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "my-command",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         // Status messages should be routed to stderr
         Assert.Equal(ConsoleOutput.Error, interactionService.Console);
+    }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WithArguments_PassesArgumentsToBackchannel()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+
+        var interactionService = new TestInteractionService();
+
+        // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
+        using var document = JsonDocument.Parse("""{ "selector": "#submit" }""");
+        var arguments = document.RootElement.Clone();
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "myResource",
+            "click",
+            arguments,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(connection.ExecuteResourceCommandArguments);
+        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments.Value.GetProperty("selector").GetString());
     }
 }

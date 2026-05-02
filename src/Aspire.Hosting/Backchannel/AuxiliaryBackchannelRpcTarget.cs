@@ -247,7 +247,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentNullException.ThrowIfNull(request);
 
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
-        var result = await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, cancellationToken).ConfigureAwait(false);
+        var result = await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, request.Arguments, cancellationToken).ConfigureAwait(false);
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var resolvedMessage = result.Message ?? result.ErrorMessage;
@@ -738,6 +738,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 Name = c.Name,
                 DisplayName = c.DisplayName,
                 Description = c.DisplayDescription,
+                ArgumentInputs = c.ArgumentInputs?.Select(i => new ResourceSnapshotCommandArgument
+                {
+                    Name = i.Name,
+                    Label = i.Label,
+                    Description = i.Description,
+                    EnableDescriptionMarkdown = i.EnableDescriptionMarkdown,
+                    InputType = i.InputType.ToString(),
+                    Required = i.Required,
+                    Placeholder = i.Placeholder,
+                    Options = i.Options?.ToDictionary(),
+                    AllowCustomChoice = i.AllowCustomChoice,
+                    Disabled = i.Disabled,
+                    MaxLength = i.MaxLength
+                }).ToArray() ?? [],
                 State = c.State.ToString()
             })
             .ToArray();

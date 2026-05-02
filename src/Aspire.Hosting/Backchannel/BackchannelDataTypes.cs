@@ -265,6 +265,11 @@ internal sealed class ExecuteResourceCommandRequest
     /// Gets the command name (e.g., "start", "stop", "restart").
     /// </summary>
     public required string CommandName { get; init; }
+
+    /// <summary>
+    /// Gets optional invocation arguments to pass to the resource command.
+    /// </summary>
+    public JsonElement? Arguments { get; init; }
 }
 
 /// <summary>
@@ -895,9 +900,75 @@ internal sealed class ResourceSnapshotCommand
     public string? Description { get; init; }
 
     /// <summary>
+    /// Gets the inputs that describe the invocation arguments accepted by the command.
+    /// </summary>
+    public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];
+
+    /// <summary>
     /// Gets the state of the command (e.g., "Enabled", "Disabled", "Hidden").
     /// </summary>
     public required string State { get; init; }
+}
+
+/// <summary>
+/// Represents an invocation argument accepted by a resource command.
+/// </summary>
+internal sealed class ResourceSnapshotCommandArgument
+{
+    /// <summary>
+    /// Gets the argument name.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the display label.
+    /// </summary>
+    public string? Label { get; init; }
+
+    /// <summary>
+    /// Gets the argument description.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the description should be rendered as Markdown.
+    /// </summary>
+    public bool EnableDescriptionMarkdown { get; init; }
+
+    /// <summary>
+    /// Gets the input type.
+    /// </summary>
+    public required string InputType { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the argument is required.
+    /// </summary>
+    public bool Required { get; init; }
+
+    /// <summary>
+    /// Gets the placeholder text.
+    /// </summary>
+    public string? Placeholder { get; init; }
+
+    /// <summary>
+    /// Gets choice options keyed by submitted value.
+    /// </summary>
+    public Dictionary<string, string>? Options { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether custom choices are allowed.
+    /// </summary>
+    public bool AllowCustomChoice { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the argument input is disabled.
+    /// </summary>
+    public bool Disabled { get; init; }
+
+    /// <summary>
+    /// Gets the maximum length for text inputs.
+    /// </summary>
+    public int? MaxLength { get; init; }
 }
 
 /// <summary>

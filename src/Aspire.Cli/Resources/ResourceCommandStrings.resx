@@ -70,4 +70,13 @@
   <data name="CommandNameArgumentDescription" xml:space="preserve">
     <value>The name of the command to execute (e.g. start, stop, restart)</value>
   </data>
+  <data name="CommandArgumentsJsonOptionDescription" xml:space="preserve">
+    <value>JSON object containing invocation arguments to pass to the resource command</value>
+  </data>
+  <data name="CommandArgumentsJsonInvalid" xml:space="preserve">
+    <value>Invalid command arguments JSON: {0}</value>
+  </data>
+  <data name="CommandArgumentsJsonInvalidObject" xml:space="preserve">
+    <value>Invalid command arguments JSON: expected a JSON object.</value>
+  </data>
 </root>

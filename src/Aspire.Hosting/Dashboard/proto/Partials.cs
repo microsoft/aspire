@@ -97,7 +97,14 @@ partial class Resource
 
         foreach (var command in snapshot.Commands)
         {
-            resource.Commands.Add(new ResourceCommand { Name = command.Name, DisplayName = command.DisplayName, DisplayDescription = command.DisplayDescription ?? string.Empty, Parameter = ResourceSnapshot.ConvertToValue(command.Parameter), ConfirmationMessage = command.ConfirmationMessage ?? string.Empty, IconName = command.IconName ?? string.Empty, IconVariant = MapIconVariant(command.IconVariant), IsHighlighted = command.IsHighlighted, State = MapCommandState(command.State) });
+#pragma warning disable CS0612, CS0618 // Parameter is obsolete but still flowed for compatibility.
+            var resourceCommand = new ResourceCommand { Name = command.Name, DisplayName = command.DisplayName, DisplayDescription = command.DisplayDescription ?? string.Empty, Parameter = ResourceSnapshot.ConvertToValue(command.Parameter), ConfirmationMessage = command.ConfirmationMessage ?? string.Empty, IconName = command.IconName ?? string.Empty, IconVariant = MapIconVariant(command.IconVariant), IsHighlighted = command.IsHighlighted, State = MapCommandState(command.State) };
+#pragma warning restore CS0612, CS0618
+            if (command.ArgumentInputs is { Count: > 0 } argumentInputs)
+            {
+                resourceCommand.ArgumentInputs.AddRange(argumentInputs.Select(input => Aspire.Hosting.Dashboard.DashboardService.CreateInteractionInputDto(input)));
+            }
+            resource.Commands.Add(resourceCommand);
         }
 
         foreach (var report in snapshot.HealthReports)
