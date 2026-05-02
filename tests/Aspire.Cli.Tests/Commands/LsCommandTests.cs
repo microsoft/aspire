@@ -107,7 +107,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
         var jsonOutput = string.Join(string.Empty, textWriter.Logs);
-        var candidateAppHosts = JsonSerializer.Deserialize(jsonOutput, LsCommandJsonContext.RelaxedEscaping.ListCandidateAppHostDisplayInfo);
+        var candidateAppHosts = JsonSerializer.Deserialize(jsonOutput, JsonSourceGenerationContext.RelaxedEscaping.ListCandidateAppHostDisplayInfo);
         Assert.NotNull(candidateAppHosts);
 
         Assert.Collection(candidateAppHosts,

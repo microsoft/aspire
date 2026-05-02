@@ -3,7 +3,6 @@
 
 using System.CommandLine;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -13,29 +12,6 @@ using Aspire.Cli.Utils;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
-
-internal sealed class CandidateAppHostDisplayInfo
-{
-    public required string RelativePath { get; init; }
-
-    public required string Path { get; init; }
-
-    public required string Language { get; init; }
-}
-
-[JsonSerializable(typeof(List<CandidateAppHostDisplayInfo>))]
-[JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class LsCommandJsonContext : JsonSerializerContext
-{
-    private static LsCommandJsonContext? s_relaxedEscaping;
-
-    public static LsCommandJsonContext RelaxedEscaping => s_relaxedEscaping ??= new(new JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    });
-}
 
 internal sealed class LsCommand : BaseCommand
 {
@@ -81,7 +57,7 @@ internal sealed class LsCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            var json = JsonSerializer.Serialize(appHostInfos, LsCommandJsonContext.RelaxedEscaping.ListCandidateAppHostDisplayInfo);
+            var json = JsonSerializer.Serialize(appHostInfos, JsonSourceGenerationContext.RelaxedEscaping.ListCandidateAppHostDisplayInfo);
             _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else if (appHostInfos.Count == 0)
@@ -113,4 +89,13 @@ internal sealed class LsCommand : BaseCommand
 
         _interactionService.DisplayRenderable(table);
     }
+}
+
+internal sealed class CandidateAppHostDisplayInfo
+{
+    public required string RelativePath { get; init; }
+
+    public required string Path { get; init; }
+
+    public required string Language { get; init; }
 }
