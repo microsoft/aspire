@@ -144,6 +144,7 @@ internal static class TypeScriptAppHostToolchainResolver
             DetectionPatterns = baseRuntimeSpec.DetectionPatterns,
             Initialize = baseRuntimeSpec.Initialize,
             InstallDependencies = CreateInstallCommand(toolchain),
+            PreExecute = CreatePreExecuteCommands(toolchain, tsConfigFileName),
             Execute = CreateExecuteCommand(toolchain, tsConfigFileName),
             WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
             PublishExecute = baseRuntimeSpec.PublishExecute,
@@ -159,6 +160,32 @@ internal static class TypeScriptAppHostToolchainResolver
             Command = GetCommandName(toolchain),
             Args = ["install"]
         };
+    }
+
+    private static CommandSpec[] CreatePreExecuteCommands(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
+    {
+        return
+        [
+            toolchain switch
+            {
+                TypeScriptAppHostToolchain.Bun => new CommandSpec
+                {
+                    Command = "bun",
+                    Args = ["x", "tsc", "--noEmit", "-p", tsConfigFileName]
+                },
+                TypeScriptAppHostToolchain.Yarn => new CommandSpec
+                {
+                    Command = "yarn",
+                    Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
+                },
+                TypeScriptAppHostToolchain.Pnpm => new CommandSpec
+                {
+                    Command = "pnpm",
+                    Args = ["exec", "tsc", "--noEmit", "-p", tsConfigFileName]
+                },
+                _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+            }
+        ];
     }
 
     private static CommandSpec CreateExecuteCommand(TypeScriptAppHostToolchain toolchain, string tsConfigFileName)
@@ -191,7 +218,17 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Bun => new CommandSpec
             {
                 Command = "bun",
-                Args = ["--watch", "run", "{appHostFile}"]
+                Args =
+                [
+                    "x",
+                    "nodemon",
+                    "--signal", "SIGTERM",
+                    "--watch", ".",
+                    "--ext", "ts",
+                    "--ignore", "node_modules/",
+                    "--ignore", ".modules/",
+                    "--exec", $"bun x tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
+                ]
             },
             TypeScriptAppHostToolchain.Yarn => new CommandSpec
             {
@@ -205,7 +242,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"yarn exec tsx --tsconfig {tsConfigFileName} {{appHostFile}}"
+                    "--exec", $"yarn exec tsc --noEmit -p {tsConfigFileName} && yarn exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             TypeScriptAppHostToolchain.Pnpm => new CommandSpec
@@ -220,7 +257,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"pnpm exec tsx --tsconfig {tsConfigFileName} {{appHostFile}}"
+                    "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
