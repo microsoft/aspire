@@ -21,11 +21,17 @@ internal interface IProjectLocator
     /// <summary>
     /// Finds all candidate AppHost projects in the specified search directory.
     /// </summary>
+    /// <param name="searchDirectory">The directory to search recursively.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
     Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken) => Task.FromResult<List<AppHostProjectCandidate>>([]);
 
     /// <summary>
     /// Finds all candidate AppHost project files in the specified search directory, without language metadata.
     /// </summary>
+    /// <param name="searchDirectory">The directory to search recursively.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
     Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken) => Task.FromResult<List<FileInfo>>([]);
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
     Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken);
@@ -53,11 +59,11 @@ internal sealed class ProjectLocator(
 {
 
     /// <summary>
-    /// Finds all candidate AppHost project files in the specified search directory.
+    /// Finds all candidate AppHost projects in the specified search directory with language metadata.
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
+    /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
     public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken)
     {
         var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, cancellationToken);

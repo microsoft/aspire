@@ -25,12 +25,6 @@ internal sealed class TestProjectLocator : IProjectLocator
             return await FindAppHostProjectsAsyncCallback(searchDirectory, cancellationToken);
         }
 
-        if (FindAppHostProjectFilesAsyncCallback != null)
-        {
-            var appHostFiles = await FindAppHostProjectFilesAsyncCallback(searchDirectory, cancellationToken);
-            return appHostFiles.Select(f => new AppHostProjectCandidate(f, KnownLanguageId.CSharp)).ToList();
-        }
-
         return [];
     }
 
