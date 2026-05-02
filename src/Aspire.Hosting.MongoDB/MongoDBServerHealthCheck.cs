@@ -16,12 +16,17 @@ internal sealed class MongoDBServerHealthCheck(MongoDBServerResource resource, F
     {
         try
         {
-            var connectionString = connectionStringFactory() ?? throw new InvalidOperationException("Connection string is unavailable");
-            _client ??= new MongoClient(connectionString);
+            var client = _client;
+            if (client is null)
+            {
+                var connectionString = connectionStringFactory() ?? throw new InvalidOperationException("Connection string is unavailable");
+                var newClient = new MongoClient(connectionString);
+                client = Interlocked.CompareExchange(ref _client, newClient, null) ?? newClient;
+            }
 
             if (resource.ReplicaSetName is { } replicaSetName)
             {
-                var admin = _client.GetDatabase("admin");
+                var admin = client.GetDatabase("admin");
                 var helloCmd = new BsonDocument("hello", 1);
                 var hello = await admin.RunCommandAsync<BsonDocument>(helloCmd, ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
 
@@ -65,7 +70,7 @@ internal sealed class MongoDBServerHealthCheck(MongoDBServerResource resource, F
             }
             else
             {
-                await _client.ListDatabaseNamesAsync(cancellationToken).ConfigureAwait(false);
+                using var cursor = await client.ListDatabaseNamesAsync(cancellationToken).ConfigureAwait(false);
                 return HealthCheckResult.Healthy();
             }
         }
