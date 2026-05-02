@@ -26,7 +26,7 @@ ARG UBUNTU_APT_MIRROR=
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
 RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
-      apt-get update -qq && \
+      apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
       apt-get install -y --no-install-recommends clang zlib1g-dev && \
       rm -rf /var/lib/apt/lists/*; \
     fi
@@ -58,13 +58,13 @@ ARG UBUNTU_APT_MIRROR=
 # Install Docker CLI plus the buildx/compose plugins used by publish and deploy flows.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
-RUN apt-get update -qq && \
+RUN apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
     apt-get install -y --no-install-recommends gpg docker.io docker-buildx docker-compose-v2 unzip && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list && \
-    apt-get update -qq && \
+    apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
     apt-get install -y --no-install-recommends gh && \
     rm -rf /var/lib/apt/lists/*
 
@@ -78,14 +78,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python and uv (needed for Python templates).
-RUN apt-get update -qq && \
+RUN apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
     apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
 # Install Java (needed for Java AppHost tests).
-RUN apt-get update -qq && \
+RUN apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
     apt-get install -y --no-install-recommends openjdk-21-jdk && \
     rm -rf /var/lib/apt/lists/*
 
