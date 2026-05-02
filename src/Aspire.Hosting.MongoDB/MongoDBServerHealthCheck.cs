@@ -11,7 +11,6 @@ namespace Aspire.Hosting.MongoDB;
 internal sealed class MongoDBServerHealthCheck(MongoDBServerResource resource, Func<string?> connectionStringFactory) : IHealthCheck
 {
     private IMongoClient? _client;
-    private int _replicaSetInitiated; // 0 = not yet initiated, 1 = initiated
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
@@ -23,44 +22,42 @@ internal sealed class MongoDBServerHealthCheck(MongoDBServerResource resource, F
             if (resource.ReplicaSetName is { } replicaSetName)
             {
                 var admin = _client.GetDatabase("admin");
+                var helloCmd = new BsonDocument("hello", 1);
+                var hello = await admin.RunCommandAsync<BsonDocument>(helloCmd, ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
 
-                if (Interlocked.CompareExchange(ref _replicaSetInitiated, 1, 0) == 0)
+                // The server is the source of truth for replica set state. A node started with
+                // --replSet that has not had replSetInitiate run reports no `setName` in `hello`;
+                // the same is true after a container is recreated and its prior config is gone.
+                if (!hello.Contains("setName"))
                 {
-                    try
+                    var targetPort = resource.PrimaryEndpoint.TargetPort ?? 27017;
+                    var initCmd = new BsonDocument
                     {
-                        var targetPort = resource.PrimaryEndpoint.TargetPort ?? 27017;
-                        var initCmd = new BsonDocument
+                        ["replSetInitiate"] = new BsonDocument
                         {
-                            ["replSetInitiate"] = new BsonDocument
+                            ["_id"] = replicaSetName,
+                            ["members"] = new BsonArray
                             {
-                                ["_id"] = replicaSetName,
-                                ["members"] = new BsonArray
+                                new BsonDocument
                                 {
-                                    new BsonDocument
-                                    {
-                                        ["_id"] = 0,
-                                        ["host"] = $"{resource.Name}:{targetPort}"
-                                    }
+                                    ["_id"] = 0,
+                                    ["host"] = $"{resource.Name}:{targetPort}"
                                 }
                             }
-                        };
+                        }
+                    };
 
+                    try
+                    {
                         await admin.RunCommandAsync<BsonDocument>(initCmd, ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
                     }
                     catch (MongoCommandException ex) when (ex.Code == 23) // AlreadyInitialized
                     {
-                        // Replica set already initiated — this is expected on restart or re-check.
+                        // Race with a concurrent tick that already initiated; safe to ignore.
                     }
-                    catch
-                    {
-                        // Unexpected failure: reset the flag so the next health check retries initiation.
-                        Interlocked.Exchange(ref _replicaSetInitiated, 0);
-                        throw;
-                    }
-                }
 
-                var helloCmd = new BsonDocument("hello", 1);
-                var hello = await admin.RunCommandAsync<BsonDocument>(helloCmd, ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
+                    return HealthCheckResult.Unhealthy("Replica set initiation issued; awaiting primary election.");
+                }
 
                 return hello.GetValue("isWritablePrimary", false).AsBoolean
                     ? HealthCheckResult.Healthy()

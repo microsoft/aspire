@@ -469,6 +469,10 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
         // Verify that transactions work — this requires a replica set.
         await pipeline.ExecuteAsync(async token =>
         {
+            // Reset state at the start of each attempt so a transient failure after a successful
+            // commit on a prior attempt cannot leak documents into the next retry's count.
+            await mongoDatabase.DropCollectionAsync(CollectionName, token);
+
             using var session = await client.StartSessionAsync(cancellationToken: token);
             session.StartTransaction();
 

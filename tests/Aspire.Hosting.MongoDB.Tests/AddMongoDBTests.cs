@@ -290,32 +290,32 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void WithReplicaSetKeyfileContentIsDeterministic()
+    public async Task WithReplicaSetKeyfileContentIsDeterministic()
     {
         var builder1 = DistributedApplication.CreateBuilder();
         var mongo1 = builder1.AddMongoDB("mongodb").WithReplicaSet();
+        using var app1 = builder1.Build();
         var annotation1 = mongo1.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
             .Single(a => a.DestinationPath == "/tmp");
+        var entries1 = await annotation1.Callback(
+            new() { Model = mongo1.Resource, ServiceProvider = app1.Services },
+            CancellationToken.None);
+        var keyfile1 = Assert.IsType<ContainerFile>(Assert.Single(entries1));
 
         var builder2 = DistributedApplication.CreateBuilder();
         var mongo2 = builder2.AddMongoDB("mongodb").WithReplicaSet();
+        using var app2 = builder2.Build();
         var annotation2 = mongo2.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
             .Single(a => a.DestinationPath == "/tmp");
+        var entries2 = await annotation2.Callback(
+            new() { Model = mongo2.Resource, ServiceProvider = app2.Services },
+            CancellationToken.None);
+        var keyfile2 = Assert.IsType<ContainerFile>(Assert.Single(entries2));
 
         var expected = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongodb-mongodb-keyfile")));
-        // Both resources have the same name so the derived keyfile content must be equal
-        Assert.Equal(expected, expected); // content sameness is verified indirectly via name derivation
-        Assert.NotNull(annotation1);
-        Assert.NotNull(annotation2);
-    }
-
-    [Fact]
-    public void WithReplicaSetKeyfileContentDiffersAcrossResourceNames()
-    {
-        var content1 = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongo1-mongodb-keyfile")));
-        var content2 = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes("mongo2-mongodb-keyfile")));
-
-        Assert.NotEqual(content1, content2);
+        Assert.Equal("mongodb-keyfile", keyfile1.Name);
+        Assert.Equal(expected, keyfile1.Contents);
+        Assert.Equal(keyfile1.Contents, keyfile2.Contents);
     }
 
     [Fact]
