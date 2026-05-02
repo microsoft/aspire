@@ -96,6 +96,58 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         }
     }
 
+    public async Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+            var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+            var targetSessionId = _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
+
+            using var navigateCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+            await connection.NavigateAsync(targetSessionId, url, navigateCts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
+    public async Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expression);
+
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+            var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+            var targetSessionId = _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
+
+            using var evaluateCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+            var result = await connection.EvaluateAsync(targetSessionId, expression, timeout, evaluateCts.Token).ConfigureAwait(false);
+
+            return result.Result?.Value switch
+            {
+                BrowserLogsCdpProtocolStringValue stringValue => stringValue.Value,
+                BrowserLogsCdpProtocolNullValue => "null",
+                null => throw new InvalidOperationException("Tracked browser script evaluation returned no value."),
+                _ => throw new InvalidOperationException("Tracked browser script evaluation did not return JSON text.")
+            };
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
     internal static BrowserPageSessionResult? TryGetPageCompletion(BrowserLogsCdpProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
     {
         return protocolEvent switch

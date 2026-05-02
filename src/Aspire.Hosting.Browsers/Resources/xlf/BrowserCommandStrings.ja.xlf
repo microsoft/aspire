@@ -12,6 +12,36 @@
         <target state="new">Capture screenshot</target>
         <note />
       </trans-unit>
+      <trans-unit id="ClickBrowserDescription">
+        <source>Click an element in the active tracked browser page using a CSS selector.</source>
+        <target state="new">Click an element in the active tracked browser page using a CSS selector.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ClickBrowserName">
+        <source>Click browser element</source>
+        <target state="new">Click browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ClickBrowserSucceeded">
+        <source>Clicked browser element.</source>
+        <target state="new">Clicked browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CloseTrackedBrowserDescription">
+        <source>Close the active tracked browser page for this resource.</source>
+        <target state="new">Close the active tracked browser page for this resource.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CloseTrackedBrowserName">
+        <source>Close tracked browser</source>
+        <target state="new">Close tracked browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CloseTrackedBrowserSucceeded">
+        <source>Closed tracked browser page.</source>
+        <target state="new">Closed tracked browser page.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserApplied">
         <source>Applied tracked browser settings for {0}.</source>
         <target state="new">Applied tracked browser settings for {0}.</target>
@@ -157,6 +187,81 @@
         <target state="new">Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FillBrowserDescription">
+        <source>Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</source>
+        <target state="new">Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FillBrowserName">
+        <source>Fill browser field</source>
+        <target state="new">Fill browser field</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FillBrowserSucceeded">
+        <source>Filled browser field.</source>
+        <target state="new">Filled browser field.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InspectBrowserDescription">
+        <source>Return a JSON snapshot of the active tracked browser page, including URL, title, visible text, and actionable elements with selectors.</source>
+        <target state="new">Return a JSON snapshot of the active tracked browser page, including URL, title, visible text, and actionable elements with selectors.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InspectBrowserName">
+        <source>Inspect browser page</source>
+        <target state="new">Inspect browser page</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InspectBrowserSucceeded">
+        <source>Captured browser page snapshot.</source>
+        <target state="new">Captured browser page snapshot.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeyArgumentDescription">
+        <source>Keyboard key to press, such as Enter, Escape, Tab, or a single character.</source>
+        <target state="new">Keyboard key to press, such as Enter, Escape, Tab, or a single character.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeyArgumentLabel">
+        <source>Key</source>
+        <target state="new">Key</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MaxElementsArgumentDescription">
+        <source>Maximum number of actionable elements to include in the page snapshot.</source>
+        <target state="new">Maximum number of actionable elements to include in the page snapshot.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MaxElementsArgumentLabel">
+        <source>Maximum elements</source>
+        <target state="new">Maximum elements</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MaxTextLengthArgumentDescription">
+        <source>Maximum number of visible page text characters to include in the page snapshot.</source>
+        <target state="new">Maximum number of visible page text characters to include in the page snapshot.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MaxTextLengthArgumentLabel">
+        <source>Maximum text length</source>
+        <target state="new">Maximum text length</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavigateBrowserDescription">
+        <source>Navigate the active tracked browser page to an absolute URL.</source>
+        <target state="new">Navigate the active tracked browser page to an absolute URL.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavigateBrowserName">
+        <source>Navigate browser</source>
+        <target state="new">Navigate browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavigateBrowserSucceeded">
+        <source>Navigated browser page.</source>
+        <target state="new">Navigated browser page.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OpenTrackedBrowserDescription">
         <source>Open the app in a tracked browser session and stream browser logs to this resource.</source>
         <target state="new">Open the app in a tracked browser session and stream browser logs to this resource.</target>
@@ -165,6 +270,106 @@
       <trans-unit id="OpenTrackedBrowserName">
         <source>Open tracked browser</source>
         <target state="new">Open tracked browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PressBrowserKeyDescription">
+        <source>Press a key on a selected or currently focused element in the active tracked browser page.</source>
+        <target state="new">Press a key on a selected or currently focused element in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PressBrowserKeyName">
+        <source>Press browser key</source>
+        <target state="new">Press browser key</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PressBrowserKeySucceeded">
+        <source>Pressed browser key.</source>
+        <target state="new">Pressed browser key.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectBrowserOptionDescription">
+        <source>Select an option in a browser select element by option value or visible text.</source>
+        <target state="new">Select an option in a browser select element by option value or visible text.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectBrowserOptionName">
+        <source>Select browser option</source>
+        <target state="new">Select browser option</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectBrowserOptionSucceeded">
+        <source>Selected browser option.</source>
+        <target state="new">Selected browser option.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectValueArgumentDescription">
+        <source>Option value or visible option text to select.</source>
+        <target state="new">Option value or visible option text to select.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectorArgumentDescription">
+        <source>CSS selector for the target element. Use selectors returned by Inspect browser page when possible.</source>
+        <target state="new">CSS selector for the target element. Use selectors returned by Inspect browser page when possible.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectorArgumentLabel">
+        <source>Selector</source>
+        <target state="new">Selector</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TextArgumentDescription">
+        <source>Visible page text to wait for.</source>
+        <target state="new">Visible page text to wait for.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TextArgumentLabel">
+        <source>Text</source>
+        <target state="new">Text</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutMillisecondsArgumentDescription">
+        <source>Maximum time to wait before the browser command fails.</source>
+        <target state="new">Maximum time to wait before the browser command fails.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TimeoutMillisecondsArgumentLabel">
+        <source>Timeout (milliseconds)</source>
+        <target state="new">Timeout (milliseconds)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UrlArgumentDescription">
+        <source>Absolute URL to navigate to.</source>
+        <target state="new">Absolute URL to navigate to.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UrlArgumentLabel">
+        <source>URL</source>
+        <target state="new">URL</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ValueArgumentDescription">
+        <source>Text value to assign to the target field.</source>
+        <target state="new">Text value to assign to the target field.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ValueArgumentLabel">
+        <source>Value</source>
+        <target state="new">Value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserDescription">
+        <source>Wait until a selector is visible, text appears on the page, or both conditions are met.</source>
+        <target state="new">Wait until a selector is visible, text appears on the page, or both conditions are met.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserName">
+        <source>Wait for browser page</source>
+        <target state="new">Wait for browser page</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitForBrowserSucceeded">
+        <source>Browser wait condition was met.</source>
+        <target state="new">Browser wait condition was met.</target>
         <note />
       </trans-unit>
     </body>

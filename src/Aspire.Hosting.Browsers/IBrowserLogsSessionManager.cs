@@ -8,6 +8,22 @@ internal interface IBrowserLogsSessionManager
     Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken);
 
     Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, CancellationToken cancellationToken);
+
+    Task<string> GetPageSnapshotAsync(string resourceName, int maxElements, int maxTextLength, CancellationToken cancellationToken);
+
+    Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken);
+
+    Task<string> ClickAsync(string resourceName, string selector, CancellationToken cancellationToken);
+
+    Task<string> FillAsync(string resourceName, string selector, string value, CancellationToken cancellationToken);
+
+    Task<string> PressAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken);
+
+    Task<string> SelectAsync(string resourceName, string selector, string value, CancellationToken cancellationToken);
+
+    Task<string> WaitForAsync(string resourceName, string? selector, string? text, int timeoutMilliseconds, CancellationToken cancellationToken);
+
+    Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken);
 }
 
 internal sealed record BrowserLogsScreenshotCaptureResult(

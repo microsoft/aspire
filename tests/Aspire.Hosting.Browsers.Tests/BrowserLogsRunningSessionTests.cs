@@ -169,6 +169,16 @@ public class BrowserLogsRunningSessionTests
             return Task.FromResult(new BrowserLogsCaptureScreenshotResult { Data = Convert.ToBase64String([0x89, 0x50, 0x4e, 0x47]) });
         }
 
+        public Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"action":"evaluate"}""");
+        }
+
         public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
         {
             return eventHandler(protocolEvent);

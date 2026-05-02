@@ -116,4 +116,127 @@
   <data name="CaptureScreenshotName" xml:space="preserve">
     <value>Capture screenshot</value>
   </data>
+  <data name="InspectBrowserDescription" xml:space="preserve">
+    <value>Return a JSON snapshot of the active tracked browser page, including URL, title, visible text, and actionable elements with selectors.</value>
+  </data>
+  <data name="InspectBrowserName" xml:space="preserve">
+    <value>Inspect browser page</value>
+  </data>
+  <data name="InspectBrowserSucceeded" xml:space="preserve">
+    <value>Captured browser page snapshot.</value>
+  </data>
+  <data name="NavigateBrowserDescription" xml:space="preserve">
+    <value>Navigate the active tracked browser page to an absolute URL.</value>
+  </data>
+  <data name="NavigateBrowserName" xml:space="preserve">
+    <value>Navigate browser</value>
+  </data>
+  <data name="NavigateBrowserSucceeded" xml:space="preserve">
+    <value>Navigated browser page.</value>
+  </data>
+  <data name="ClickBrowserDescription" xml:space="preserve">
+    <value>Click an element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="ClickBrowserName" xml:space="preserve">
+    <value>Click browser element</value>
+  </data>
+  <data name="ClickBrowserSucceeded" xml:space="preserve">
+    <value>Clicked browser element.</value>
+  </data>
+  <data name="FillBrowserDescription" xml:space="preserve">
+    <value>Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="FillBrowserName" xml:space="preserve">
+    <value>Fill browser field</value>
+  </data>
+  <data name="FillBrowserSucceeded" xml:space="preserve">
+    <value>Filled browser field.</value>
+  </data>
+  <data name="PressBrowserKeyDescription" xml:space="preserve">
+    <value>Press a key on a selected or currently focused element in the active tracked browser page.</value>
+  </data>
+  <data name="PressBrowserKeyName" xml:space="preserve">
+    <value>Press browser key</value>
+  </data>
+  <data name="PressBrowserKeySucceeded" xml:space="preserve">
+    <value>Pressed browser key.</value>
+  </data>
+  <data name="SelectBrowserOptionDescription" xml:space="preserve">
+    <value>Select an option in a browser select element by option value or visible text.</value>
+  </data>
+  <data name="SelectBrowserOptionName" xml:space="preserve">
+    <value>Select browser option</value>
+  </data>
+  <data name="SelectBrowserOptionSucceeded" xml:space="preserve">
+    <value>Selected browser option.</value>
+  </data>
+  <data name="WaitForBrowserDescription" xml:space="preserve">
+    <value>Wait until a selector is visible, text appears on the page, or both conditions are met.</value>
+  </data>
+  <data name="WaitForBrowserName" xml:space="preserve">
+    <value>Wait for browser page</value>
+  </data>
+  <data name="WaitForBrowserSucceeded" xml:space="preserve">
+    <value>Browser wait condition was met.</value>
+  </data>
+  <data name="CloseTrackedBrowserDescription" xml:space="preserve">
+    <value>Close the active tracked browser page for this resource.</value>
+  </data>
+  <data name="CloseTrackedBrowserName" xml:space="preserve">
+    <value>Close tracked browser</value>
+  </data>
+  <data name="CloseTrackedBrowserSucceeded" xml:space="preserve">
+    <value>Closed tracked browser page.</value>
+  </data>
+  <data name="SelectorArgumentLabel" xml:space="preserve">
+    <value>Selector</value>
+  </data>
+  <data name="SelectorArgumentDescription" xml:space="preserve">
+    <value>CSS selector for the target element. Use selectors returned by Inspect browser page when possible.</value>
+  </data>
+  <data name="ValueArgumentLabel" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="ValueArgumentDescription" xml:space="preserve">
+    <value>Text value to assign to the target field.</value>
+  </data>
+  <data name="SelectValueArgumentDescription" xml:space="preserve">
+    <value>Option value or visible option text to select.</value>
+  </data>
+  <data name="KeyArgumentLabel" xml:space="preserve">
+    <value>Key</value>
+  </data>
+  <data name="KeyArgumentDescription" xml:space="preserve">
+    <value>Keyboard key to press, such as Enter, Escape, Tab, or a single character.</value>
+  </data>
+  <data name="TextArgumentLabel" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="TextArgumentDescription" xml:space="preserve">
+    <value>Visible page text to wait for.</value>
+  </data>
+  <data name="UrlArgumentLabel" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="UrlArgumentDescription" xml:space="preserve">
+    <value>Absolute URL to navigate to.</value>
+  </data>
+  <data name="TimeoutMillisecondsArgumentLabel" xml:space="preserve">
+    <value>Timeout (milliseconds)</value>
+  </data>
+  <data name="TimeoutMillisecondsArgumentDescription" xml:space="preserve">
+    <value>Maximum time to wait before the browser command fails.</value>
+  </data>
+  <data name="MaxElementsArgumentLabel" xml:space="preserve">
+    <value>Maximum elements</value>
+  </data>
+  <data name="MaxElementsArgumentDescription" xml:space="preserve">
+    <value>Maximum number of actionable elements to include in the page snapshot.</value>
+  </data>
+  <data name="MaxTextLengthArgumentLabel" xml:space="preserve">
+    <value>Maximum text length</value>
+  </data>
+  <data name="MaxTextLengthArgumentDescription" xml:space="preserve">
+    <value>Maximum number of visible page text characters to include in the page snapshot.</value>
+  </data>
 </root>

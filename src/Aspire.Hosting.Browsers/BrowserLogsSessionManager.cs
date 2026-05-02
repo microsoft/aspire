@@ -249,6 +249,108 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         }
     }
 
+    public async Task<string> GetPageSnapshotAsync(string resourceName, int maxElements, int maxTextLength, CancellationToken cancellationToken)
+    {
+        var activeSession = await GetActiveSessionAsync(resourceName, "inspect", cancellationToken).ConfigureAwait(false);
+        var expression = BrowserLogsBrowserAutomationScripts.CreateSnapshotExpression(maxElements, maxTextLength);
+        return await activeSession.Session.EvaluateJsonAsync(expression, timeout: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(url);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "navigate", cancellationToken).ConfigureAwait(false);
+        await activeSession.Session.NavigateAsync(url, cancellationToken).ConfigureAwait(false);
+        await UpdateActiveSessionTargetUrlAsync(resource, resourceName, activeSession.SessionId, url, cancellationToken).ConfigureAwait(false);
+
+        return JsonSerializer.Serialize(
+            new BrowserLogsNavigateCommandResult(
+                activeSession.SessionId,
+                activeSession.Browser,
+                activeSession.TargetId,
+                url.ToString()),
+            s_browserSessionPropertyJsonOptions);
+    }
+
+    public async Task<string> ClickAsync(string resourceName, string selector, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "click", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateClickExpression(selector),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> FillAsync(string resourceName, string selector, string value, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+        ArgumentNullException.ThrowIfNull(value);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "fill", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateFillExpression(selector, value),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> PressAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "press keys", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreatePressExpression(selector, key),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> SelectAsync(string resourceName, string selector, string value, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+        ArgumentNullException.ThrowIfNull(value);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "select", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateSelectExpression(selector, value),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> WaitForAsync(string resourceName, string? selector, string? text, int timeoutMilliseconds, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(selector) && string.IsNullOrWhiteSpace(text))
+        {
+            throw new ArgumentException("Provide a selector, text, or both when waiting in the browser.");
+        }
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "wait", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateWaitForExpression(selector, text, timeoutMilliseconds),
+            CreateEvaluationTimeout(timeoutMilliseconds),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        var activeSession = await GetActiveSessionAsync(resourceName, "close", cancellationToken).ConfigureAwait(false);
+        await activeSession.Session.StopAsync(cancellationToken).ConfigureAwait(false);
+
+        return JsonSerializer.Serialize(
+            new BrowserLogsCloseBrowserCommandResult(
+                activeSession.SessionId,
+                activeSession.Browser,
+                activeSession.BrowserExecutable,
+                activeSession.BrowserHostOwnership,
+                activeSession.ProcessId,
+                activeSession.TargetId,
+                activeSession.TargetUrl.ToString()),
+            s_browserSessionPropertyJsonOptions);
+    }
+
     public async ValueTask DisposeAsync()
     {
         Interlocked.Exchange(ref _disposing, 1);
@@ -510,6 +612,71 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         return properties;
     }
 
+    private async Task<ActiveBrowserSession> GetActiveSessionAsync(string resourceName, string action, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposing) != 0, this);
+
+        var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
+        await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposing) != 0, this);
+
+            var activeSession = SelectActiveSession(resourceState);
+            return activeSession ?? throw new InvalidOperationException($"No active tracked browser session is available to {action}.");
+        }
+        finally
+        {
+            resourceState.Lock.Release();
+        }
+    }
+
+    private async Task UpdateActiveSessionTargetUrlAsync(BrowserLogsResource resource, string resourceName, string sessionId, Uri targetUrl, CancellationToken cancellationToken)
+    {
+        var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
+        await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            if (resourceState.ActiveSessions.TryGetValue(sessionId, out var activeSession))
+            {
+                resourceState.ActiveSessions[sessionId] = activeSession with { TargetUrl = targetUrl };
+                resourceState.LastTargetUrl = targetUrl.ToString();
+
+                await PublishResourceSnapshotAsync(
+                    resource,
+                    resourceName,
+                    resourceState,
+                    stateText: KnownResourceStates.Running,
+                    stateStyle: KnownResourceStateStyles.Success,
+                    pendingSession: null,
+                    stopTimeStamp: null,
+                    exitCode: null).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            resourceState.Lock.Release();
+        }
+    }
+
+    private static ActiveBrowserSession? SelectActiveSession(ResourceSessionState resourceState)
+    {
+        return resourceState.LastSessionId is { } lastSessionId &&
+            resourceState.ActiveSessions.TryGetValue(lastSessionId, out var lastSession)
+                ? lastSession
+                : resourceState.ActiveSessions.Count == 0
+                    ? null
+                    : resourceState.ActiveSessions.Values.MaxBy(static session => session.StartedAt);
+    }
+
+    private static TimeSpan CreateEvaluationTimeout(int timeoutMilliseconds)
+    {
+        return TimeSpan.FromMilliseconds(timeoutMilliseconds + 5_000);
+    }
+
     private static DateTime? GetStartTimeStamp(ResourceSessionState resourceState, DateTime? fallbackStartTimeStamp)
     {
         if (resourceState.ActiveSessions.Count > 0)
@@ -622,6 +789,21 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string CdpEndpoint,
         string? PageCdpEndpoint,
         string TargetId);
+
+    private sealed record BrowserLogsNavigateCommandResult(
+        string SessionId,
+        string Browser,
+        string TargetId,
+        string TargetUrl);
+
+    private sealed record BrowserLogsCloseBrowserCommandResult(
+        string SessionId,
+        string Browser,
+        string BrowserExecutable,
+        string BrowserHostOwnership,
+        int? ProcessId,
+        string TargetId,
+        string TargetUrl);
 
     private static string FormatDebugEndpoint(Uri? browserDebugEndpoint) =>
         browserDebugEndpoint?.ToString() ?? "pipe";

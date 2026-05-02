@@ -42,7 +42,20 @@ public static class BrowserLogsBuilderExtensions
     internal const string LastSessionPropertyName = "Last session";
     internal const string OpenTrackedBrowserCommandName = "open-tracked-browser";
     internal const string ConfigureTrackedBrowserCommandName = "configure-tracked-browser";
+    internal const string InspectBrowserCommandName = "inspect-browser";
+    internal const string NavigateBrowserCommandName = "navigate-browser";
+    internal const string ClickBrowserCommandName = "click-browser";
+    internal const string FillBrowserCommandName = "fill-browser";
+    internal const string PressBrowserKeyCommandName = "press-browser-key";
+    internal const string SelectBrowserOptionCommandName = "select-browser-option";
+    internal const string WaitForBrowserCommandName = "wait-for-browser";
     internal const string CaptureScreenshotCommandName = "capture-screenshot";
+    internal const string CloseTrackedBrowserCommandName = "close-tracked-browser";
+    private const int DefaultSnapshotMaxElements = 80;
+    private const int DefaultSnapshotMaxTextLength = 8_000;
+    private const int DefaultBrowserCommandTimeoutMilliseconds = 10_000;
+    private const int MinimumBrowserCommandTimeoutMilliseconds = 100;
+    private const int MaximumBrowserCommandTimeoutMilliseconds = 60_000;
     private static readonly JsonSerializerOptions s_commandResultJsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -224,6 +237,180 @@ public static class BrowserLogsBuilderExtensions
                     }
                 })
             .WithCommand(
+                InspectBrowserCommandName,
+                BrowserCommandStrings.InspectBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var maxElements = GetOptionalIntegerArgument(context.Arguments, "maxElements", DefaultSnapshotMaxElements, 1, 500);
+                        var maxTextLength = GetOptionalIntegerArgument(context.Arguments, "maxTextLength", DefaultSnapshotMaxTextLength, 100, 50_000);
+                        var resultJson = await sessionManager.GetPageSnapshotAsync(context.ResourceName, maxElements, maxTextLength, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.InspectBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.InspectBrowserDescription,
+                    "DocumentSearch",
+                    [
+                        CreateNumberArgument("maxElements", BrowserCommandStrings.MaxElementsArgumentLabel, BrowserCommandStrings.MaxElementsArgumentDescription, DefaultSnapshotMaxElements.ToString(CultureInfo.InvariantCulture), required: false),
+                        CreateNumberArgument("maxTextLength", BrowserCommandStrings.MaxTextLengthArgumentLabel, BrowserCommandStrings.MaxTextLengthArgumentDescription, DefaultSnapshotMaxTextLength.ToString(CultureInfo.InvariantCulture), required: false)
+                    ]))
+            .WithCommand(
+                NavigateBrowserCommandName,
+                BrowserCommandStrings.NavigateBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var urlText = GetRequiredStringArgument(context.Arguments, "url");
+                        if (!Uri.TryCreate(urlText, UriKind.Absolute, out var url))
+                        {
+                            throw new InvalidOperationException("The browser navigation URL must be an absolute URI.");
+                        }
+
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.NavigateAsync(browserLogsResource, context.ResourceName, url, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.NavigateBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.NavigateBrowserDescription,
+                    "Navigation",
+                    [CreateTextArgument("url", BrowserCommandStrings.UrlArgumentLabel, BrowserCommandStrings.UrlArgumentDescription, required: true, placeholder: "https://example.com/")]))
+            .WithCommand(
+                ClickBrowserCommandName,
+                BrowserCommandStrings.ClickBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.ClickAsync(context.ResourceName, selector, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.ClickBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.ClickBrowserDescription,
+                    "CursorClick",
+                    [CreateSelectorArgument()]))
+            .WithCommand(
+                FillBrowserCommandName,
+                BrowserCommandStrings.FillBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var value = GetRequiredStringArgument(context.Arguments, "value", allowEmpty: true);
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.FillAsync(context.ResourceName, selector, value, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.FillBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.FillBrowserDescription,
+                    "TextEdit",
+                    [
+                        CreateSelectorArgument(),
+                        CreateTextArgument("value", BrowserCommandStrings.ValueArgumentLabel, BrowserCommandStrings.ValueArgumentDescription, required: true)
+                    ]))
+            .WithCommand(
+                PressBrowserKeyCommandName,
+                BrowserCommandStrings.PressBrowserKeyName,
+                async context =>
+                {
+                    try
+                    {
+                        var selector = GetOptionalStringArgument(context.Arguments, "selector");
+                        var key = GetRequiredStringArgument(context.Arguments, "key");
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.PressAsync(context.ResourceName, selector, key, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.PressBrowserKeySucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.PressBrowserKeyDescription,
+                    "Keyboard",
+                    [
+                        CreateTextArgument("key", BrowserCommandStrings.KeyArgumentLabel, BrowserCommandStrings.KeyArgumentDescription, required: true, placeholder: "Enter"),
+                        CreateSelectorArgument(required: false)
+                    ]))
+            .WithCommand(
+                SelectBrowserOptionCommandName,
+                BrowserCommandStrings.SelectBrowserOptionName,
+                async context =>
+                {
+                    try
+                    {
+                        var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var value = GetRequiredStringArgument(context.Arguments, "value", allowEmpty: true);
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.SelectAsync(context.ResourceName, selector, value, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.SelectBrowserOptionSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.SelectBrowserOptionDescription,
+                    "CheckboxChecked",
+                    [
+                        CreateSelectorArgument(),
+                        CreateTextArgument("value", BrowserCommandStrings.ValueArgumentLabel, BrowserCommandStrings.SelectValueArgumentDescription, required: true)
+                    ]))
+            .WithCommand(
+                WaitForBrowserCommandName,
+                BrowserCommandStrings.WaitForBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var selector = GetOptionalStringArgument(context.Arguments, "selector");
+                        var text = GetOptionalStringArgument(context.Arguments, "text");
+                        var timeoutMilliseconds = GetOptionalIntegerArgument(context.Arguments, "timeoutMilliseconds", DefaultBrowserCommandTimeoutMilliseconds, MinimumBrowserCommandTimeoutMilliseconds, MaximumBrowserCommandTimeoutMilliseconds);
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.WaitForAsync(context.ResourceName, selector, text, timeoutMilliseconds, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.WaitForBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.WaitForBrowserDescription,
+                    "Timer",
+                    [
+                        CreateSelectorArgument(required: false),
+                        CreateTextArgument("text", BrowserCommandStrings.TextArgumentLabel, BrowserCommandStrings.TextArgumentDescription, required: false),
+                        CreateNumberArgument("timeoutMilliseconds", BrowserCommandStrings.TimeoutMillisecondsArgumentLabel, BrowserCommandStrings.TimeoutMillisecondsArgumentDescription, DefaultBrowserCommandTimeoutMilliseconds.ToString(CultureInfo.InvariantCulture), required: false)
+                    ]))
+            .WithCommand(
                 CaptureScreenshotCommandName,
                 BrowserCommandStrings.CaptureScreenshotName,
                 async context =>
@@ -274,6 +461,29 @@ public static class BrowserLogsBuilderExtensions
                             ? ResourceCommandState.Enabled
                             : ResourceCommandState.Disabled;
                     }
+                })
+            .WithCommand(
+                CloseTrackedBrowserCommandName,
+                BrowserCommandStrings.CloseTrackedBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.CloseActiveSessionAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.CloseTrackedBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                new CommandOptions
+                {
+                    Description = BrowserCommandStrings.CloseTrackedBrowserDescription,
+                    IconName = "Dismiss",
+                    IconVariant = IconVariant.Regular,
+                    UpdateState = BrowserSessionCommandState
                 });
 
         builder.OnBeforeResourceStarted((_, @event, _) => RefreshBrowserLogsResourceAsync(@event.Services.GetRequiredService<ResourceNotificationService>()))
@@ -340,6 +550,159 @@ public static class BrowserLogsBuilderExtensions
                 ArgumentException.ThrowIfNullOrWhiteSpace(value, paramName);
             }
         }
+    }
+
+    private static CommandOptions CreateBrowserCommandOptions(string description, string iconName, IReadOnlyList<InteractionInput> argumentInputs)
+    {
+        return new CommandOptions
+        {
+            Description = description,
+            IconName = iconName,
+            IconVariant = IconVariant.Regular,
+            ArgumentInputs = argumentInputs,
+            UpdateState = BrowserSessionCommandState
+        };
+    }
+
+    private static ResourceCommandState BrowserSessionCommandState(UpdateCommandStateContext context)
+    {
+        return context.ResourceSnapshot.State?.Text == KnownResourceStates.Running
+            ? ResourceCommandState.Enabled
+            : ResourceCommandState.Disabled;
+    }
+
+    private static ExecuteCommandResult BrowserJsonCommandSuccess(string message, string resultJson)
+    {
+        return CommandResults.Success(
+            message,
+            new CommandResultData
+            {
+                Value = resultJson,
+                Format = CommandResultFormat.Json,
+                DisplayImmediately = true
+            });
+    }
+
+    private static InteractionInput CreateSelectorArgument(bool required = true)
+    {
+        return CreateTextArgument(
+            "selector",
+            BrowserCommandStrings.SelectorArgumentLabel,
+            BrowserCommandStrings.SelectorArgumentDescription,
+            required,
+            placeholder: "#submit");
+    }
+
+    private static InteractionInput CreateTextArgument(string name, string label, string description, bool required, string? placeholder = null)
+    {
+        return new InteractionInput
+        {
+            Name = name,
+            Label = label,
+            Description = description,
+            InputType = InputType.Text,
+            Required = required,
+            Placeholder = placeholder,
+            MaxLength = 50_000
+        };
+    }
+
+    private static InteractionInput CreateNumberArgument(string name, string label, string description, string value, bool required)
+    {
+        return new InteractionInput
+        {
+            Name = name,
+            Label = label,
+            Description = description,
+            InputType = InputType.Number,
+            Required = required,
+            Value = value
+        };
+    }
+
+    private static string GetRequiredStringArgument(JsonElement? arguments, string name, bool allowEmpty = false)
+    {
+        if (!TryGetStringArgument(arguments, name, out var value) || (!allowEmpty && string.IsNullOrWhiteSpace(value)))
+        {
+            throw new InvalidOperationException($"Browser command argument '{name}' is required.");
+        }
+
+        return value ?? string.Empty;
+    }
+
+    private static string? GetOptionalStringArgument(JsonElement? arguments, string name)
+    {
+        if (!TryGetStringArgument(arguments, name, out var value))
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static bool TryGetStringArgument(JsonElement? arguments, string name, out string? result)
+    {
+        if (!TryGetArgumentObject(arguments, out var argumentObject) || !argumentObject.TryGetProperty(name, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            result = null;
+            return false;
+        }
+
+        if (value.ValueKind != JsonValueKind.String)
+        {
+            throw new InvalidOperationException($"Browser command argument '{name}' must be a string.");
+        }
+
+        result = value.GetString();
+        return true;
+    }
+
+    private static int GetOptionalIntegerArgument(JsonElement? arguments, string name, int defaultValue, int minimum, int maximum)
+    {
+        if (!TryGetArgumentObject(arguments, out var argumentObject) || !argumentObject.TryGetProperty(name, out var value) || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return defaultValue;
+        }
+
+        int result;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+        {
+            result = number;
+        }
+        else if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var stringNumber))
+        {
+            result = stringNumber;
+        }
+        else
+        {
+            throw new InvalidOperationException($"Browser command argument '{name}' must be an integer.");
+        }
+
+        if (result < minimum || result > maximum)
+        {
+            throw new InvalidOperationException($"Browser command argument '{name}' must be between {minimum} and {maximum}.");
+        }
+
+        return result;
+    }
+
+    private static bool TryGetArgumentObject(JsonElement? arguments, out JsonElement argumentObject)
+    {
+        // Browser command arguments are JSON objects shaped like:
+        // { "selector": "...", "value": "...", "timeoutMilliseconds": 10000 }
+        if (arguments is not { } value || value.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+        {
+            argumentObject = default;
+            return false;
+        }
+
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException("Browser command arguments must be a JSON object.");
+        }
+
+        argumentObject = value;
+        return true;
     }
 
     private sealed record BrowserLogsScreenshotCommandResult(

@@ -44,6 +44,7 @@ internal static class BrowserLogsCdpProtocol
     internal const string PageNavigateMethod = "Page.navigate";
     internal const string RuntimeConsoleApiCalledMethod = "Runtime.consoleAPICalled";
     internal const string RuntimeEnableMethod = "Runtime.enable";
+    internal const string RuntimeEvaluateMethod = "Runtime.evaluate";
     internal const string RuntimeExceptionThrownMethod = "Runtime.exceptionThrown";
     internal const string TargetAttachToTargetMethod = "Target.attachToTarget";
     internal const string TargetCloseTargetMethod = "Target.closeTarget";
@@ -208,6 +209,22 @@ internal static class BrowserLogsCdpProtocol
         return result;
     }
 
+    internal static BrowserLogsRuntimeEvaluateResult ParseRuntimeEvaluateResponse(ReadOnlySpan<byte> framePayload)
+    {
+        // Expected Runtime.evaluate response shape:
+        // { "id": 1, "result": { "result": { "type": "string", "value": "{...}" }, "exceptionDetails": { ... } } }
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsRuntimeEvaluateResponseEnvelope);
+        ThrowIfProtocolError(envelope.Error);
+
+        var result = envelope.Result ?? throw new InvalidOperationException("Tracked browser script evaluation did not return a result payload.");
+        if (result.ExceptionDetails is { } exceptionDetails)
+        {
+            throw new InvalidOperationException(FormatRuntimeException(exceptionDetails));
+        }
+
+        return result;
+    }
+
     internal static string DescribeFrame(ReadOnlySpan<byte> framePayload, int maxLength = 512)
     {
         var text = Encoding.UTF8.GetString(framePayload);
@@ -320,6 +337,22 @@ internal static class BrowserLogsCdpProtocol
         }
 
         throw new InvalidOperationException(message);
+    }
+
+    private static string FormatRuntimeException(BrowserLogsExceptionDetails exceptionDetails)
+    {
+        var message = !string.IsNullOrWhiteSpace(exceptionDetails.Exception?.Description)
+            ? exceptionDetails.Exception.Description
+            : !string.IsNullOrWhiteSpace(exceptionDetails.Text)
+                ? exceptionDetails.Text
+                : "Tracked browser script evaluation failed.";
+
+        if (exceptionDetails.Url is { Length: > 0 } url)
+        {
+            return $"{message} ({url}:{exceptionDetails.LineNumber ?? 0}:{exceptionDetails.ColumnNumber ?? 0}).";
+        }
+
+        return message;
     }
 }
 
@@ -435,6 +468,27 @@ internal sealed class BrowserLogsCaptureScreenshotResult
 {
     [JsonPropertyName("data")]
     public string? Data { get; init; }
+}
+
+internal sealed class BrowserLogsRuntimeEvaluateResponseEnvelope
+{
+    [JsonPropertyName("error")]
+    public BrowserLogsCdpProtocolError? Error { get; init; }
+
+    [JsonPropertyName("id")]
+    public long Id { get; init; }
+
+    [JsonPropertyName("result")]
+    public BrowserLogsRuntimeEvaluateResult? Result { get; init; }
+}
+
+internal sealed class BrowserLogsRuntimeEvaluateResult
+{
+    [JsonPropertyName("exceptionDetails")]
+    public BrowserLogsExceptionDetails? ExceptionDetails { get; init; }
+
+    [JsonPropertyName("result")]
+    public BrowserLogsCdpProtocolRemoteObject? Result { get; init; }
 }
 
 internal interface IBrowserLogsEventEnvelope<out TParameters>
@@ -945,6 +999,7 @@ internal sealed class BrowserLogsCdpProtocolValueJsonConverter : JsonConverter<B
 [JsonSerializable(typeof(BrowserLogsLogEntryAddedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsRequestWillBeSentEnvelope))]
 [JsonSerializable(typeof(BrowserLogsResponseReceivedEnvelope))]
+[JsonSerializable(typeof(BrowserLogsRuntimeEvaluateResponseEnvelope))]
 [JsonSerializable(typeof(BrowserLogsTargetCrashedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsTargetDestroyedEnvelope))]
 internal sealed partial class BrowserLogsCdpProtocolJsonContext : JsonSerializerContext;

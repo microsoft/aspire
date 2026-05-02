@@ -28,6 +28,8 @@ internal interface IBrowserLogsCdpConnection : IAsyncDisposable
     Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken);
 
     Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken);
+
+    Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken);
 }
 
 // Owns one browser-level CDP transport. Protocol parsing stays in BrowserLogsCdpProtocol, while page lifecycle and
@@ -196,6 +198,25 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
             writer => writer.WriteString("url", url.ToString()),
             BrowserLogsCdpProtocol.ParseCommandAckResponse,
             cancellationToken);
+    }
+
+    public Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expression);
+
+        return SendCommandAsync(
+            BrowserLogsCdpProtocol.RuntimeEvaluateMethod,
+            sessionId,
+            writer =>
+            {
+                writer.WriteString("expression", expression);
+                writer.WriteBoolean("awaitPromise", true);
+                writer.WriteBoolean("returnByValue", true);
+                writer.WriteBoolean("userGesture", true);
+            },
+            BrowserLogsCdpProtocol.ParseRuntimeEvaluateResponse,
+            cancellationToken,
+            timeout);
     }
 
     public async ValueTask DisposeAsync()

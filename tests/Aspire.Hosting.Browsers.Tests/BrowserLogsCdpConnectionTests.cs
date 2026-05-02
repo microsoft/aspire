@@ -147,6 +147,49 @@ public class BrowserLogsCdpConnectionTests
     }
 
     [Fact]
+    public async Task EvaluateAsync_SendsRuntimeEvaluateForTargetSession()
+    {
+        await using var pair = InMemoryWebSocketPair.Create();
+        var connector = new ConnectedClientWebSocketConnector(pair.ClientSocket);
+        await using var connection = await BrowserLogsCdpConnection.ConnectAsync(
+            new Uri("ws://127.0.0.1/devtools/browser/test"),
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            CancellationToken.None,
+            () => connector);
+
+        var evaluateTask = connection.EvaluateAsync("target-session-1", "1 + 1", timeout: null, CancellationToken.None);
+
+        var command = await ReceiveCommandAsync(pair.ServerSocket).DefaultTimeout();
+        Assert.Equal(BrowserLogsCdpProtocol.RuntimeEvaluateMethod, command.Method);
+        Assert.Equal("target-session-1", command.SessionId);
+        Assert.Equal("1 + 1", command.Expression);
+        Assert.True(command.AwaitPromise);
+        Assert.True(command.ReturnByValue);
+        Assert.True(command.UserGesture);
+
+        await SendTextAsync(
+            pair.ServerSocket,
+            $$"""
+            {
+              "id": {{command.Id}},
+              "result": {
+                "result": {
+                  "type": "string",
+                  "value": "{\"value\":2}"
+                }
+              }
+            }
+            """).DefaultTimeout();
+
+        var result = await evaluateTask.DefaultTimeout();
+        var value = Assert.IsType<BrowserLogsCdpProtocolStringValue>(result.Result?.Value);
+        Assert.Equal("""{"value":2}""", value.Value);
+
+        await pair.ServerSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None).DefaultTimeout();
+    }
+
+    [Fact]
     public async Task CreateWithPipeTransport_UsesNullDelimitedFrames()
     {
         var appToBrowser = new Pipe();
@@ -327,8 +370,20 @@ public class BrowserLogsCdpConnectionTests
         var fromSurface = parameters?.TryGetProperty("fromSurface", out var fromSurfaceElement) == true
             ? fromSurfaceElement.GetBoolean()
             : (bool?)null;
+        var expression = parameters?.TryGetProperty("expression", out var expressionElement) == true
+            ? expressionElement.GetString()
+            : null;
+        var awaitPromise = parameters?.TryGetProperty("awaitPromise", out var awaitPromiseElement) == true
+            ? awaitPromiseElement.GetBoolean()
+            : (bool?)null;
+        var returnByValue = parameters?.TryGetProperty("returnByValue", out var returnByValueElement) == true
+            ? returnByValueElement.GetBoolean()
+            : (bool?)null;
+        var userGesture = parameters?.TryGetProperty("userGesture", out var userGestureElement) == true
+            ? userGestureElement.GetBoolean()
+            : (bool?)null;
 
-        return new ReceivedCommand(id, method, sessionId, targetId, url, format, fromSurface);
+        return new ReceivedCommand(id, method, sessionId, targetId, url, format, fromSurface, expression, awaitPromise, returnByValue, userGesture);
     }
 
     private static BrowserLogsConsoleApiCalledEvent CreateConsoleEvent(string sessionId)
@@ -401,7 +456,18 @@ public class BrowserLogsCdpConnectionTests
         await stream.FlushAsync();
     }
 
-    private sealed record ReceivedCommand(long Id, string Method, string? SessionId, string? TargetId, string? Url, string? Format, bool? FromSurface);
+    private sealed record ReceivedCommand(
+        long Id,
+        string Method,
+        string? SessionId,
+        string? TargetId,
+        string? Url,
+        string? Format,
+        bool? FromSurface,
+        string? Expression,
+        bool? AwaitPromise,
+        bool? ReturnByValue,
+        bool? UserGesture);
 
     private sealed class FakeSharedCdpConnection(Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler) : IBrowserLogsCdpConnection
     {
@@ -462,6 +528,17 @@ public class BrowserLogsCdpConnectionTests
         public Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
         {
             return Task.FromResult(BrowserLogsCommandAck.Instance);
+        }
+
+        public Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new BrowserLogsRuntimeEvaluateResult
+            {
+                Result = new BrowserLogsCdpProtocolRemoteObject
+                {
+                    Value = new BrowserLogsCdpProtocolStringValue("""{"action":"evaluate"}""")
+                }
+            });
         }
 
         public ValueTask DisposeAsync()

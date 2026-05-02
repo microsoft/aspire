@@ -58,6 +58,10 @@ internal interface IBrowserPageSession : IAsyncDisposable
     Task<BrowserPageSessionResult> Completion { get; }
 
     Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken);
+
+    Task NavigateAsync(Uri url, CancellationToken cancellationToken);
+
+    Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken);
 }
 
 // Normalized page-session completion signal consumed by BrowserLogsRunningSession so manager state is independent of

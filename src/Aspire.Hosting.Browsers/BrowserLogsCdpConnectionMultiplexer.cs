@@ -188,6 +188,12 @@ internal sealed class BrowserLogsCdpConnectionMultiplexer : IAsyncDisposable
             return owner._innerConnection.NavigateAsync(sessionId, url, cancellationToken);
         }
 
+        public Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            ThrowIfDisposed();
+            return owner._innerConnection.EvaluateAsync(sessionId, expression, timeout, cancellationToken);
+        }
+
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0)

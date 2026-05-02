@@ -27,6 +27,10 @@ internal interface IBrowserLogsRunningSession
 
     Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken);
 
+    Task NavigateAsync(Uri url, CancellationToken cancellationToken);
+
+    Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken);
+
     Task StopAsync(CancellationToken cancellationToken);
 }
 
@@ -188,6 +192,18 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         {
             throw new InvalidOperationException("Tracked browser screenshot capture returned invalid image data.", ex);
         }
+    }
+
+    public async Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        await pageSession.NavigateAsync(url, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        return await pageSession.EvaluateJsonAsync(expression, timeout, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

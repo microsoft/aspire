@@ -66,6 +66,20 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var screenshotCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.CaptureScreenshotCommandName);
         Assert.Equal(BrowserCommandStrings.CaptureScreenshotName, screenshotCommand.DisplayName);
         Assert.Equal(BrowserCommandStrings.CaptureScreenshotDescription, screenshotCommand.DisplayDescription);
+        var inspectCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.InspectBrowserCommandName);
+        Assert.Equal(BrowserCommandStrings.InspectBrowserName, inspectCommand.DisplayName);
+        Assert.Contains(inspectCommand.ArgumentInputs!, input => input.Name == "maxElements" && input.InputType == InputType.Number && input.Required == false);
+        var clickCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ClickBrowserCommandName);
+        var selectorArgument = Assert.Single(clickCommand.ArgumentInputs!, input => input.Name == "selector");
+        Assert.Equal(InputType.Text, selectorArgument.InputType);
+        Assert.True(selectorArgument.Required);
+        var fillCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FillBrowserCommandName);
+        Assert.Contains(fillCommand.ArgumentInputs!, input => input.Name == "value" && input.InputType == InputType.Text && input.Required);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.NavigateBrowserCommandName);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.PressBrowserKeyCommandName);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.SelectBrowserOptionCommandName);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserCommandName);
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.CloseTrackedBrowserCommandName);
 
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Equal(BrowserLogsBuilderExtensions.BrowserResourceType, snapshot.ResourceType);
@@ -787,6 +801,40 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.EndsWith("screenshot.png", document.RootElement.GetProperty("path").GetString(), StringComparison.Ordinal);
         Assert.Equal("image/png", document.RootElement.GetProperty("mimeType").GetString());
         Assert.Equal(1234, document.RootElement.GetProperty("sizeBytes").GetInt32());
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_BrowserCommandsForwardArgumentsAndReturnJson()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionManager = new FakeBrowserLogsSessionManager();
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sessionManager);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        using var arguments = JsonDocument.Parse("""{"selector":"#submit"}""");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ClickBrowserCommandName, arguments.RootElement).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal("ClickAsync:web-browser-logs:#submit", Assert.Single(sessionManager.BrowserCommandCalls));
+        Assert.NotNull(result.Data);
+        Assert.Equal(CommandResultFormat.Json, result.Data.Format);
+        Assert.True(result.Data.DisplayImmediately);
+        Assert.Equal("click", JsonDocument.Parse(result.Data.Value).RootElement.GetProperty("action").GetString());
     }
 
     [Fact]
@@ -1735,6 +1783,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public List<string> CaptureScreenshotCalls { get; } = [];
 
+        public List<string> BrowserCommandCalls { get; } = [];
+
         public BrowserLogsScreenshotCaptureResult ScreenshotResult { get; set; } = new(
             "session-0001",
             "chrome",
@@ -1761,6 +1811,54 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         {
             CaptureScreenshotCalls.Add(resourceName);
             return Task.FromResult(ScreenshotResult);
+        }
+
+        public Task<string> GetPageSnapshotAsync(string resourceName, int maxElements, int maxTextLength, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(GetPageSnapshotAsync)}:{resourceName}:{maxElements}:{maxTextLength}");
+            return Task.FromResult("""{"action":"snapshot"}""");
+        }
+
+        public Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(NavigateAsync)}:{resourceName}:{url}");
+            return Task.FromResult("""{"action":"navigate"}""");
+        }
+
+        public Task<string> ClickAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(ClickAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"click"}""");
+        }
+
+        public Task<string> FillAsync(string resourceName, string selector, string value, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(FillAsync)}:{resourceName}:{selector}:{value}");
+            return Task.FromResult("""{"action":"fill"}""");
+        }
+
+        public Task<string> PressAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(PressAsync)}:{resourceName}:{selector}:{key}");
+            return Task.FromResult("""{"action":"press"}""");
+        }
+
+        public Task<string> SelectAsync(string resourceName, string selector, string value, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(SelectAsync)}:{resourceName}:{selector}:{value}");
+            return Task.FromResult("""{"action":"select"}""");
+        }
+
+        public Task<string> WaitForAsync(string resourceName, string? selector, string? text, int timeoutMilliseconds, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(WaitForAsync)}:{resourceName}:{selector}:{text}:{timeoutMilliseconds}");
+            return Task.FromResult("""{"action":"wait-for"}""");
+        }
+
+        public Task<string> CloseActiveSessionAsync(string resourceName, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(CloseActiveSessionAsync)}:{resourceName}");
+            return Task.FromResult("""{"action":"close"}""");
         }
     }
 
@@ -1860,6 +1958,16 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         public Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(ScreenshotBytes);
+        }
+
+        public Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"action":"evaluate"}""");
         }
 
         public async Task CompleteAsync(int exitCode, Exception? error = null)

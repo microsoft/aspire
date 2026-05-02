@@ -387,6 +387,18 @@ public class BrowserPageSessionTests
             return Task.FromResult(BrowserLogsCommandAck.Instance);
         }
 
+        public Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            Calls.Add($"Evaluate:{sessionId}:{expression}");
+            return Task.FromResult(new BrowserLogsRuntimeEvaluateResult
+            {
+                Result = new BrowserLogsCdpProtocolRemoteObject
+                {
+                    Value = new BrowserLogsCdpProtocolStringValue("""{"action":"evaluate"}""")
+                }
+            });
+        }
+
         public async Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
         {
             Calls.Add($"CaptureScreenshot:{sessionId}");
