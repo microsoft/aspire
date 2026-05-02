@@ -3,17 +3,16 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RabbitMQ.Provisioning;
 
-namespace Aspire.Hosting.RabbitMQ;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// A resource that represents a RabbitMQ shovel.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ShovelName = {ShovelName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, Provisioning.IRabbitMQProvisionable
+public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IRabbitMQProvisionable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQShovelResource"/> class.
@@ -71,13 +70,15 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
     /// </summary>
     public int? SrcDeleteAfter { get; set; }
 
-    Task Provisioning.IRabbitMQProvisionable.ApplyAsync(Provisioning.IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
         => ApplyAsync(client, cancellationToken);
 
     internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var srcUri = await Source.GetUri().GetValueAsync(cancellationToken).ConfigureAwait(false);
-        var destUri = await Destination.GetUri().GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var srcUriExpr = Source.GetUri();
+        var srcUri = srcUriExpr is not null ? await srcUriExpr.GetValueAsync(cancellationToken).ConfigureAwait(false) : null;
+        var destUriExpr = Destination.GetUri();
+        var destUri = destUriExpr is not null ? await destUriExpr.GetValueAsync(cancellationToken).ConfigureAwait(false) : null;
 
         if (srcUri is null)
         {
