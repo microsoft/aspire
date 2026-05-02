@@ -78,6 +78,13 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
         ]);
 
     /// <summary>
+    /// Gets the policies that apply to this queue (populated by <c>BeforeStartEvent</c> handlers registered by <c>AddPolicy</c>).
+    /// </summary>
+    internal List<RabbitMQPolicyResource> AppliedPolicies { get; } = [];
+
+    IEnumerable<IRabbitMQProvisionable> IRabbitMQProvisionable.HealthDependencies => AppliedPolicies;
+
+    /// <summary>
     /// Completed when this queue has been declared on the broker.
     /// Faulted if declaration failed.
     /// </summary>

@@ -442,6 +442,132 @@ public static class RabbitMQBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a policy to a RabbitMQ virtual host.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Policies are applied to queues and/or exchanges whose names match <paramref name="pattern"/>.
+    /// They configure runtime behaviour such as message TTL, dead-letter routing, and queue length limits.
+    /// </para>
+    /// <para>
+    /// Policy-to-entity matching is resolved lazily at application start (via <c>BeforeStartEvent</c>),
+    /// so the order in which <c>AddPolicy</c> and <c>AddQueue</c>/<c>AddExchange</c> are called does not matter.
+    /// </para>
+    /// <para>
+    /// Policies require the management plugin. Call <see cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource})"/>
+    /// on the server, or add a non-default virtual host (which enables it automatically).
+    /// </para>
+    /// </remarks>
+    /// <param name="builder">The RabbitMQ virtual host resource builder.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="pattern">The regex pattern that determines which queues and/or exchanges the policy applies to.</param>
+    /// <param name="applyTo">Which entity types the policy applies to. Defaults to <see cref="RabbitMQPolicyApplyTo.All"/>.</param>
+    /// <param name="policyName">The name of the policy in RabbitMQ. If not provided, defaults to the resource name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Adds a policy to a RabbitMQ virtual host")]
+    public static IResourceBuilder<RabbitMQPolicyResource> AddPolicy(
+        this IResourceBuilder<RabbitMQVirtualHostResource> builder,
+        [ResourceName] string name,
+        string pattern,
+        RabbitMQPolicyApplyTo applyTo = RabbitMQPolicyApplyTo.All,
+        string? policyName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(pattern);
+
+        var wireName = policyName ?? name;
+        if (builder.Resource.Policies.Any(p => p.PolicyName == wireName))
+        {
+            throw new DistributedApplicationException($"A policy with the name '{wireName}' already exists in virtual host '{builder.Resource.VirtualHostName}'.");
+        }
+
+        var policy = new RabbitMQPolicyResource(name, wireName, pattern, builder.Resource) { ApplyTo = applyTo };
+        builder.Resource.Policies.Add(policy);
+
+        var policyBuilder = builder.ApplicationBuilder.AddResource(policy);
+
+        // Resolve which queues and exchanges this policy applies to at model-freeze time (BeforeStartEvent).
+        // Using BeforeStartEvent (not AddPolicy call time) ensures that entities added after the policy are also matched.
+        builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, ct) =>
+        {
+            ResolveAndApplyPolicyMatches(policy, builder.Resource, policyBuilder);
+            return Task.CompletedTask;
+        });
+
+        // Policies do not get a health check of their own — their ProvisioningComplete TCS is awaited
+        // by matching queues/exchanges via IRabbitMQProvisionable.HealthDependencies.
+        return policyBuilder;
+    }
+
+    /// <summary>
+    /// Resolves which queues and exchanges in <paramref name="vhost"/> match <paramref name="policy"/>
+    /// and wires up the <see cref="RabbitMQQueueResource.AppliedPolicies"/> /
+    /// <see cref="RabbitMQExchangeResource.AppliedPolicies"/> lists and dashboard relationships.
+    /// Called from the <c>BeforeStartEvent</c> handler and exposed internally for testing.
+    /// </summary>
+    internal static void ResolveAndApplyPolicyMatches(
+        RabbitMQPolicyResource policy,
+        RabbitMQVirtualHostResource vhost,
+        IResourceBuilder<RabbitMQPolicyResource> policyBuilder)
+    {
+        foreach (var queue in vhost.Queues)
+        {
+            if (policy.AppliesTo(queue.QueueName, RabbitMQDestinationKind.Queue))
+            {
+                queue.AppliedPolicies.Add(policy);
+                policyBuilder.WithRelationship(queue, "Policy");
+            }
+        }
+
+        foreach (var exchange in vhost.Exchanges)
+        {
+            if (policy.AppliesTo(exchange.ExchangeName, RabbitMQDestinationKind.Exchange))
+            {
+                exchange.AppliedPolicies.Add(policy);
+                policyBuilder.WithRelationship(exchange, "Policy");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a policy to the default '/' virtual host of a RabbitMQ server.
+    /// </summary>
+    /// <param name="server">The RabbitMQ server resource builder.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="pattern">The regex pattern that determines which queues and/or exchanges the policy applies to.</param>
+    /// <param name="applyTo">Which entity types the policy applies to. Defaults to <see cref="RabbitMQPolicyApplyTo.All"/>.</param>
+    /// <param name="policyName">The name of the policy in RabbitMQ. If not provided, defaults to the resource name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("addPolicyOnServer", MethodName = "addPolicy", Description = "Adds a policy to the default '/' virtual host")]
+    public static IResourceBuilder<RabbitMQPolicyResource> AddPolicy(
+        this IResourceBuilder<RabbitMQServerResource> server,
+        [ResourceName] string name,
+        string pattern,
+        RabbitMQPolicyApplyTo applyTo = RabbitMQPolicyApplyTo.All,
+        string? policyName = null)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        var vhost = server.ApplicationBuilder.CreateResourceBuilder(server.GetOrAddDefaultVirtualHost());
+        return vhost.AddPolicy(name, pattern, applyTo, policyName);
+    }
+
+    /// <summary>
+    /// Configures properties of a RabbitMQ policy.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="configure">The configuration action.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withPolicyProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<RabbitMQPolicyResource> WithProperties(this IResourceBuilder<RabbitMQPolicyResource> builder, Action<RabbitMQPolicyResource> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(builder.Resource);
+        return builder;
+    }
+
+    /// <summary>
     /// Enables a RabbitMQ plugin.
     /// </summary>
     /// <param name="builder">The RabbitMQ server resource builder.</param>

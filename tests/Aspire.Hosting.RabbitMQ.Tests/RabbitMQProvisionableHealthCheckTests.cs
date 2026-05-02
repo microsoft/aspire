@@ -273,6 +273,7 @@ public class RabbitMQProvisionableHealthCheckTests
         public Task<bool> ExchangeExistsAsync(string vhost, string name, CancellationToken ct) => Task.FromResult(true);
         public Task CreateVirtualHostAsync(string vhost, CancellationToken ct) => Task.CompletedTask;
         public Task PutShovelAsync(string vhost, string name, RabbitMQShovelDefinition def, CancellationToken ct) => Task.CompletedTask;
+        public Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct) => Task.CompletedTask;
         public ValueTask DisposeAsync() => default;
     }
 }

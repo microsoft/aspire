@@ -28,6 +28,11 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
     public HashSet<string> FailBindingSourceExchangeNames { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// When set, <see cref="PutPolicyAsync"/> throws for policies whose name is in this set.
+    /// </summary>
+    public HashSet<string> FailPolicyNames { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Controls the return value of <see cref="CanConnectAsync"/>. Defaults to <see langword="true"/>.
     /// </summary>
     public bool CanConnect { get; set; } = true;
@@ -116,6 +121,17 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
     {
         Calls.Add($"GetShovelStateAsync({vhost}, {name})");
         return Task.FromResult<string?>("running");
+    }
+
+    public Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct)
+    {
+        Calls.Add($"PutPolicyAsync({vhost}, {name}, {def.Pattern}, {def.ApplyTo})");
+        if (FailPolicyNames.Contains(name))
+        {
+            throw new DistributedApplicationException($"Simulated failure applying policy '{name}'.");
+        }
+
+        return Task.CompletedTask;
     }
 
     public ValueTask DisposeAsync()

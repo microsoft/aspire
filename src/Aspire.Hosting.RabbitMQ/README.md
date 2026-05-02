@@ -77,6 +77,33 @@ builder.AddProject<Projects.BillingWorker>("worker")
        .WaitFor(billingInbox);
 ```
 
+### Policies
+
+Policies apply server-side configuration (TTL, dead-lettering, queue length limits, HA) to queues and/or exchanges whose names match a regex pattern. Call `AddPolicy` **after** all queues and exchanges have been added so the pattern can be matched at model-freeze time.
+
+```csharp
+var rmq   = builder.AddRabbitMQ("rmq");
+var vhost = rmq.AddVirtualHost("orders");
+
+var dlx    = vhost.AddExchange("dlx");
+var orders = vhost.AddQueue("orders");
+var dead   = vhost.AddQueue("orders-dead");
+
+// Apply TTL + dead-letter policy to all queues matching "^orders"
+vhost.AddPolicy("orders-policy", "^orders", RabbitMQPolicyApplyTo.Queues)
+     .WithProperties(p =>
+     {
+         p.Definition["message-ttl"]          = 60_000;
+         p.Definition["dead-letter-exchange"] = "dlx";
+     });
+
+// WaitFor(orders) blocks until the queue AND its policy are applied
+builder.AddProject<Projects.OrdersWorker>("worker")
+       .WaitFor(orders);
+```
+
+If a policy fails to apply, every queue or exchange whose name matched the pattern reports `Unhealthy` — preventing dependents from starting against a mis-configured entity.
+
 ### Queue and exchange properties
 
 ```csharp

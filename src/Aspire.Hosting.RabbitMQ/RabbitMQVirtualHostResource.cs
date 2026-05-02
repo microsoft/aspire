@@ -65,6 +65,7 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     internal List<RabbitMQQueueResource> Queues { get; } = [];
     internal List<RabbitMQExchangeResource> Exchanges { get; } = [];
     internal List<RabbitMQShovelResource> Shovels { get; } = [];
+    internal List<RabbitMQPolicyResource> Policies { get; } = [];
 
     /// <summary>
     /// Completed when this virtual host (and its full topology) has been provisioned.

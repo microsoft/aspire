@@ -23,4 +23,5 @@ internal interface IRabbitMQProvisioningClient : IAsyncDisposable
     Task CreateVirtualHostAsync(string vhost, CancellationToken ct);
     Task PutShovelAsync(string vhost, string name, RabbitMQShovelDefinition def, CancellationToken ct);
     Task<string?> GetShovelStateAsync(string vhost, string name, CancellationToken ct);
+    Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct);
 }

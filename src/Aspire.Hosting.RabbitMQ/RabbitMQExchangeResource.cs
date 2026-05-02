@@ -60,6 +60,13 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
 
     internal List<RabbitMQBinding> Bindings { get; } = [];
 
+    /// <summary>
+    /// Gets the policies that apply to this exchange (populated by <c>BeforeStartEvent</c> handlers registered by <c>AddPolicy</c>).
+    /// </summary>
+    internal List<RabbitMQPolicyResource> AppliedPolicies { get; } = [];
+
+    IEnumerable<IRabbitMQProvisionable> IRabbitMQProvisionable.HealthDependencies => AppliedPolicies;
+
     string IRabbitMQDestination.EntityName => ExchangeName;
     RabbitMQVirtualHostResource IRabbitMQDestination.VirtualHost => Parent;
     RabbitMQDestinationKind IRabbitMQDestination.Kind => RabbitMQDestinationKind.Exchange;

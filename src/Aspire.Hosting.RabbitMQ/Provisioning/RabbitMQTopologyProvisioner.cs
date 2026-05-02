@@ -39,6 +39,11 @@ internal sealed class RabbitMQTopologyProvisioner
             // Vhost creation failed — fault the vhost TCS and cascade to all children,
             // since nothing can exist without the vhost.
             vhost.ProvisioningComplete.TrySetException(ex);
+            foreach (var p in vhost.Policies)
+            {
+                p.ProvisioningComplete.TrySetException(ex);
+            }
+
             foreach (var q in vhost.Queues)
             {
                 q.ProvisioningComplete.TrySetException(ex);
@@ -57,6 +62,11 @@ internal sealed class RabbitMQTopologyProvisioner
             logger.LogError(ex, "Failed to create virtual host '{VirtualHost}'.", vhost.VirtualHostName);
             return;
         }
+
+        // Phase 1.5: apply policies before declaring entities so they take effect at declaration time.
+        // Each failure is captured into the policy's own TCS; we do not short-circuit siblings.
+        var policyTasks = vhost.Policies.Select(p => ApplyAndSignalAsync(p, client, logger, cancellationToken));
+        await Task.WhenAll(policyTasks).ConfigureAwait(false);
 
         // Phase 2: declare exchanges and queues in parallel (independent of each other).
         // Exchanges are NOT signalled here — they wait until bindings are applied in phase 3.

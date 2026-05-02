@@ -232,6 +232,20 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         }
     }
 
+    public async Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct)
+    {
+        var http = await GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var response = await http.PutAsJsonAsync($"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, cancellationToken: ct).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+        }
+        catch (Exception ex)
+        {
+            throw new DistributedApplicationException($"Failed to apply policy '{name}' on vhost '{vhost}': {ex.Message}", ex);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _gate.WaitAsync().ConfigureAwait(false);

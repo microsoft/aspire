@@ -23,5 +23,6 @@ internal sealed class FailingFakeRabbitMQProvisioningClient : IRabbitMQProvision
     public Task CreateVirtualHostAsync(string vhost, CancellationToken ct) => throw new DistributedApplicationException("Failed to create virtual host");
     public Task PutShovelAsync(string vhost, string name, RabbitMQShovelDefinition def, CancellationToken ct) => throw new NotImplementedException();
     public Task<string?> GetShovelStateAsync(string vhost, string name, CancellationToken ct) => throw new NotImplementedException();
+    public Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct) => throw new NotImplementedException();
     public ValueTask DisposeAsync() => default;
 }
