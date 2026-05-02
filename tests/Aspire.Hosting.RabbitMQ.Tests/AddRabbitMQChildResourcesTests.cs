@@ -283,4 +283,19 @@ public class AddRabbitMQChildResourcesTests
         var ex = Assert.Throws<DistributedApplicationException>(() => vhost.AddShovel("myshovel", queue1, queue2));
         Assert.Contains("myshovel", ex.Message);
     }
+
+    [Fact]
+    public void AddShovel_WithCustomShovelName_UsesWireName()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var server = builder.AddRabbitMQ("rabbit");
+        var vhost = server.AddVirtualHost("myvhost");
+        var queue1 = vhost.AddQueue("queue1");
+        var queue2 = vhost.AddQueue("queue2");
+
+        var shovel = vhost.AddShovel("myshovel", queue1, queue2, shovelName: "custom-shovel");
+
+        Assert.Equal("myshovel", shovel.Resource.Name);
+        Assert.Equal("custom-shovel", shovel.Resource.ShovelName);
+    }
 }

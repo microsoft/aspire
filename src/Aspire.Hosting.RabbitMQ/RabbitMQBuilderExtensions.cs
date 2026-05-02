@@ -430,13 +430,15 @@ public static class RabbitMQBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="source">The source resource builder.</param>
     /// <param name="destination">The destination resource builder.</param>
+    /// <param name="shovelName">The name of the shovel in RabbitMQ. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport(Description = "Adds a shovel to a RabbitMQ virtual host")]
     public static IResourceBuilder<RabbitMQShovelResource> AddShovel<TSrc, TDest>(
         this IResourceBuilder<RabbitMQVirtualHostResource> vhost,
         [ResourceName] string name,
         IResourceBuilder<TSrc> source,
-        IResourceBuilder<TDest> destination)
+        IResourceBuilder<TDest> destination,
+        string? shovelName = null)
         where TSrc : Resource, IRabbitMQDestination
         where TDest : Resource, IRabbitMQDestination
     {
@@ -444,9 +446,11 @@ public static class RabbitMQBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(destination);
-        if (vhost.Resource.Shovels.Any(s => s.ShovelName == name))
+
+        var wireName = shovelName ?? name;
+        if (vhost.Resource.Shovels.Any(s => s.ShovelName == wireName))
         {
-            throw new DistributedApplicationException($"A shovel with the name '{name}' already exists in virtual host '{vhost.Resource.VirtualHostName}'.");
+            throw new DistributedApplicationException($"A shovel with the name '{wireName}' already exists in virtual host '{vhost.Resource.VirtualHostName}'.");
         }
 
         if (source.Resource.VirtualHost != vhost.Resource)
@@ -454,7 +458,7 @@ public static class RabbitMQBuilderExtensions
             throw new DistributedApplicationException($"Cannot add shovel '{name}' to virtual host '{vhost.Resource.Name}' because the source destination '{source.Resource.Name}' is in a different virtual host.");
         }
 
-        var shovel = new RabbitMQShovelResource(name, name, vhost.Resource, new RabbitMQShovelEndpoint(source.Resource), new RabbitMQShovelEndpoint(destination.Resource));
+        var shovel = new RabbitMQShovelResource(name, wireName, vhost.Resource, new RabbitMQShovelEndpoint(source.Resource), new RabbitMQShovelEndpoint(destination.Resource));
         vhost.Resource.Shovels.Add(shovel);
 
         var server = vhost.ApplicationBuilder.CreateResourceBuilder(vhost.Resource.Parent);
@@ -477,10 +481,10 @@ public static class RabbitMQBuilderExtensions
                 return new RabbitMQEntityHealthCheck(async ct =>
                 {
                     await vhostResource3.TopologyReady.Task.WaitAsync(ct).ConfigureAwait(false);
-                    var state = await client.GetShovelStateAsync(vhostResource3.VirtualHostName, name, ct).ConfigureAwait(false);
+                    var state = await client.GetShovelStateAsync(vhostResource3.VirtualHostName, wireName, ct).ConfigureAwait(false);
                     return state == "running"
                         ? HealthCheckResult.Healthy()
-                        : HealthCheckResult.Unhealthy($"Shovel '{name}' is in state '{state}'.");
+                        : HealthCheckResult.Unhealthy($"Shovel '{wireName}' is in state '{state}'.");
                 });
             },
             failureStatus: null,
@@ -498,19 +502,21 @@ public static class RabbitMQBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="source">The source resource builder.</param>
     /// <param name="destination">The destination resource builder.</param>
+    /// <param name="shovelName">The name of the shovel in RabbitMQ. If not provided, defaults to the resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("addShovelOnServer", MethodName = "addShovel", Description = "Adds a shovel to the default '/' virtual host")]
     public static IResourceBuilder<RabbitMQShovelResource> AddShovel<TSrc, TDest>(
         this IResourceBuilder<RabbitMQServerResource> server,
         [ResourceName] string name,
         IResourceBuilder<TSrc> source,
-        IResourceBuilder<TDest> destination)
+        IResourceBuilder<TDest> destination,
+        string? shovelName = null)
         where TSrc : Resource, IRabbitMQDestination
         where TDest : Resource, IRabbitMQDestination
     {
         ArgumentNullException.ThrowIfNull(server);
         var vhost = server.ApplicationBuilder.CreateResourceBuilder(server.GetOrAddDefaultVirtualHost());
-        return vhost.AddShovel(name, source, destination);
+        return vhost.AddShovel(name, source, destination, shovelName);
     }
 
     /// <summary>
