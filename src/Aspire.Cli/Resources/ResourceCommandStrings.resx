@@ -73,12 +73,6 @@
   <data name="CommandArgumentsArgumentDescription" xml:space="preserve">
     <value>Arguments passed to the resource command. Values are mapped to command argument inputs in order; use name=value for named values.</value>
   </data>
-  <data name="CommandArgumentsOptionDescription" xml:space="preserve">
-    <value>JSON object containing invocation arguments to pass to the resource command</value>
-  </data>
-  <data name="CommandArgumentsCannotMix" xml:space="preserve">
-    <value>Specify command arguments either as positional arguments or with --arguments, not both.</value>
-  </data>
   <data name="CommandArgumentsJsonInvalid" xml:space="preserve">
     <value>Invalid command arguments JSON: {0}</value>
   </data>
@@ -86,7 +80,7 @@
     <value>Invalid command arguments JSON: expected a JSON object.</value>
   </data>
   <data name="CommandArgumentsNoMetadata" xml:space="preserve">
-    <value>Command '{0}' on resource '{1}' does not describe argument inputs. Pass a JSON object with --arguments.</value>
+    <value>Command '{0}' on resource '{1}' does not describe argument inputs. Pass a single JSON object argument instead.</value>
   </data>
   <data name="CommandArgumentsTooMany" xml:space="preserve">
     <value>Too many command arguments for '{0}'. Expected at most {1}: {2}.</value>

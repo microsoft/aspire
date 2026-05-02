@@ -125,48 +125,6 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResourceCommand_AcceptsArgumentsJsonOption()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("""resource myresource my-command --args-json "{\"selector\":\"#submit\"}" --help""");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-    }
-
-    [Fact]
-    public async Task ResourceCommand_AcceptsArgumentsOption()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("""resource myresource my-command --arguments "{\"selector\":\"#submit\"}" --help""");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-    }
-
-    [Fact]
-    public async Task ResourceCommand_RejectsNonObjectArgumentsJson()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("""resource myresource my-command --arguments "[]" """);
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
-    }
-
-    [Fact]
     public async Task ResourceCommand_ForwardsPositionalArgumentsFromCommandInputs()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -229,6 +187,34 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_ForwardsJsonObjectArgument()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["resource", "web-browser-logs", "click-browser", """{"selector":"#submit"}"""]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(backchannel.ExecuteResourceCommandArguments);
+        Assert.Equal("#submit", backchannel.ExecuteResourceCommandArguments.Value.GetProperty("selector").GetString());
+    }
+
+    [Fact]
     public async Task ResourceCommand_ForwardsPositionalArgumentContainingEquals()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -257,18 +243,30 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResourceCommand_RejectsMixedArgumentsSources()
+    public async Task ResourceCommand_RejectsInvalidJsonObjectArgument()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("""resource myresource my-command extra --arguments "{}" """);
+        var result = command.Parse(["resource", "web-browser-logs", "click-browser", "{not-json}"]);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Null(backchannel.ExecuteResourceCommandArguments);
     }
 
     [Fact]

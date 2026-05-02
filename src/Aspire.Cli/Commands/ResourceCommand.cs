@@ -41,7 +41,6 @@ internal sealed class ResourceCommand : BaseCommand
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
-    private static readonly OptionWithLegacy<string?> s_argumentsOption = new("--arguments", "--args-json", ResourceCommandStrings.CommandArgumentsOptionDescription);
 
     /// <summary>
     /// Well-known commands with their display metadata.
@@ -73,7 +72,6 @@ internal sealed class ResourceCommand : BaseCommand
         Arguments.Add(s_commandArgument);
         Arguments.Add(s_commandArgumentsArgument);
         Options.Add(s_appHostOption);
-        Options.Add(s_argumentsOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -82,18 +80,6 @@ internal sealed class ResourceCommand : BaseCommand
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var capturedArguments = parseResult.GetValue(s_commandArgumentsArgument) ?? [];
-        var optionArguments = ParseArguments(parseResult.GetValue(s_argumentsOption));
-        if (optionArguments.ParseError is { } parseError)
-        {
-            _interactionService.DisplayError(parseError);
-            return ExitCodeConstants.InvalidCommand;
-        }
-
-        if (optionArguments.Arguments is not null && capturedArguments.Length > 0)
-        {
-            _interactionService.DisplayError(ResourceCommandStrings.CommandArgumentsCannotMix);
-            return ExitCodeConstants.InvalidCommand;
-        }
 
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
@@ -107,21 +93,23 @@ internal sealed class ResourceCommand : BaseCommand
             return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
         }
 
-        var commandArguments = optionArguments;
-        if (commandArguments.Arguments is null && capturedArguments.Length > 0)
+        JsonElement? commandArguments = null;
+        if (capturedArguments.Length > 0)
         {
-            commandArguments = await CreateArgumentsFromCapturedArgumentsAsync(
+            var parsedArguments = await CreateArgumentsFromCapturedArgumentsAsync(
                 result.Connection!,
                 resourceName,
                 commandName,
                 capturedArguments,
                 cancellationToken).ConfigureAwait(false);
 
-            if (commandArguments.ParseError is { } capturedArgumentsError)
+            if (parsedArguments.ParseError is { } capturedArgumentsError)
             {
                 _interactionService.DisplayError(capturedArgumentsError);
                 return ExitCodeConstants.InvalidCommand;
             }
+
+            commandArguments = parsedArguments.Arguments;
         }
 
         // Map well-known friendly names (start/stop/restart) to their display metadata
@@ -136,7 +124,7 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.ProgressVerb,
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
-                commandArguments.Arguments,
+                commandArguments,
                 cancellationToken);
         }
 
@@ -146,7 +134,7 @@ internal sealed class ResourceCommand : BaseCommand
             _logger,
             resourceName,
             commandName,
-            commandArguments.Arguments,
+            commandArguments,
             cancellationToken);
     }
 

@@ -7,11 +7,6 @@
         <target state="new">Arguments passed to the resource command. Values are mapped to command argument inputs in order; use name=value for named values.</target>
         <note />
       </trans-unit>
-      <trans-unit id="CommandArgumentsCannotMix">
-        <source>Specify command arguments either as positional arguments or with --arguments, not both.</source>
-        <target state="new">Specify command arguments either as positional arguments or with --arguments, not both.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="CommandArgumentsInvalidBoolean">
         <source>Invalid value '{0}' for boolean command argument '{1}'. Expected true or false.</source>
         <target state="new">Invalid value '{0}' for boolean command argument '{1}'. Expected true or false.</target>
@@ -53,13 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="CommandArgumentsNoMetadata">
-        <source>Command '{0}' on resource '{1}' does not describe argument inputs. Pass a JSON object with --arguments.</source>
-        <target state="new">Command '{0}' on resource '{1}' does not describe argument inputs. Pass a JSON object with --arguments.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="CommandArgumentsOptionDescription">
-        <source>JSON object containing invocation arguments to pass to the resource command</source>
-        <target state="new">JSON object containing invocation arguments to pass to the resource command</target>
+        <source>Command '{0}' on resource '{1}' does not describe argument inputs. Pass a single JSON object argument instead.</source>
+        <target state="new">Command '{0}' on resource '{1}' does not describe argument inputs. Pass a single JSON object argument instead.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandArgumentsTooMany">
