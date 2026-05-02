@@ -179,11 +179,14 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.NotNull(runtimeSpec.InstallDependencies);
         Assert.Equal("bun", runtimeSpec.InstallDependencies?.Command);
         Assert.Equal(["install"], runtimeSpec.InstallDependencies!.Args);
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("bun", preExecute.Command);
+        Assert.Equal(["x", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
         Assert.Equal("bun", runtimeSpec.Execute.Command);
         Assert.Equal(["run", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.NotNull(runtimeSpec.WatchExecute);
         Assert.Equal("bun", runtimeSpec.WatchExecute?.Command);
-        Assert.Equal(["--watch", "run", "{appHostFile}"], runtimeSpec.WatchExecute!.Args);
+        Assert.Contains("bun x tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\"", runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
     }
 
@@ -194,10 +197,29 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Yarn);
 
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("yarn", preExecute.Command);
+        Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
         Assert.Equal("yarn", runtimeSpec.Execute.Command);
         Assert.Equal(["exec", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("yarn", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains("yarn exec tsx --tsconfig tsconfig.apphost.json {appHostFile}", runtimeSpec.WatchExecute?.Args ?? []);
+        Assert.Contains("yarn exec tsc --noEmit -p tsconfig.apphost.json && yarn exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+    }
+
+    [Fact]
+    public void ApplyToRuntimeSpec_WhenPnpmSelected_UsesPnpmTypeCheckCommands()
+    {
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Pnpm);
+
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("pnpm", preExecute.Command);
+        Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
+        Assert.Equal("pnpm", runtimeSpec.Execute.Command);
+        Assert.Equal(["exec", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal("pnpm", runtimeSpec.WatchExecute?.Command);
+        Assert.Contains("pnpm exec tsc --noEmit -p tsconfig.apphost.json && pnpm exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()
@@ -213,6 +235,14 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 Command = "npm",
                 Args = ["install"]
             },
+            PreExecute =
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"]
+                }
+            ],
             Execute = new CommandSpec
             {
                 Command = "npx",
