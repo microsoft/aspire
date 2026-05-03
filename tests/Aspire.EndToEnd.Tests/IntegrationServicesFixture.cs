@@ -38,7 +38,7 @@ public sealed class IntegrationServicesFixture : IAsyncLifetime
     {
         _diagnosticMessageSink = diagnosticMessageSink;
         _testOutput = new TestOutputWrapper(messageSink: _diagnosticMessageSink);
-        BuildEnvironment = new();
+        BuildEnvironment = new(useSystemDotNet: true);
         if (TestsRunningOutsideOfRepo)
         {
             BuildEnvironment.EnvVars["TestsRunningOutsideOfRepo"] = "true";

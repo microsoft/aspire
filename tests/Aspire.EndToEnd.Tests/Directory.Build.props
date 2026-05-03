@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup Condition="'$(BaseOutputPath)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true' and '$(PrepareForHelix)' != 'true' ">
+    <BaseOutputPath>$([MSBuild]::NormalizeDirectory($([System.IO.Path]::GetTempPath()), $([System.IO.Path]::GetRandomFileName())))</BaseOutputPath>
+  </PropertyGroup>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+</Project>
