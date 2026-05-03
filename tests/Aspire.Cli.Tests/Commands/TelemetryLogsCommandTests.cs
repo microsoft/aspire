@@ -4,6 +4,8 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -32,6 +34,118 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task TelemetryLogsCommand_WithDevLocalhostDashboardApiUrl_UsesLocalhost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var requestedHosts = new List<string>();
+        var resourcesJson = JsonSerializer.Serialize(
+            new ResourceInfoJson[] { new() { Name = "redis", InstanceId = null } },
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+
+        var resourceLogs = new OtlpResourceLogsJson[]
+        {
+            new()
+            {
+                Resource = TelemetryTestHelper.CreateOtlpResource("redis", null),
+                ScopeLogs =
+                [
+                    new OtlpScopeLogsJson
+                    {
+                        LogRecords =
+                        [
+                            new OtlpLogRecordJson
+                            {
+                                TimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime),
+                                SeverityNumber = 9,
+                                SeverityText = "Information",
+                                Body = new OtlpAnyValueJson { StringValue = "Ready to accept connections" },
+                                Attributes =
+                                [
+                                    new OtlpKeyValueJson { Key = "aspire.log_id", Value = new OtlpAnyValueJson { StringValue = "7" } }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        var logsResponse = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceLogs = resourceLogs },
+            TotalCount = 1,
+            ReturnedCount = 1
+        };
+        var logsJson = JsonSerializer.Serialize(logsResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            DashboardInfoResponse = new GetDashboardInfoResponse
+            {
+                ApiBaseUrl = "https://nextapp1.dev.localhost:64876",
+                ApiToken = "test-token",
+                DashboardUrls = ["https://nextapp1.dev.localhost:64876/login?t=test"],
+                IsHealthy = true
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            requestedHosts.Add(request.RequestUri!.Host);
+
+            return request.RequestUri.AbsolutePath switch
+            {
+                "/api/telemetry/resources" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(resourcesJson, System.Text.Encoding.UTF8, "application/json")
+                },
+                "/api/telemetry/logs" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(logsJson, System.Text.Encoding.UTF8, "application/json")
+                },
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            };
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel logs --format json -n 5");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.All(requestedHosts, host => Assert.Equal("localhost", host));
+
+        var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
+        var items = JsonNode.Parse(jsonLine)!.AsArray();
+        Assert.Single(items);
+
+        var item = items[0]!;
+        Assert.Equal("Ready to accept connections", item["message"]!.GetValue<string>());
+        Assert.Equal("redis", item["resourceName"]!.GetValue<string>());
+
+        var dashboardUrl = item["dashboardUrl"]!.GetValue<string>();
+        Assert.Equal("https://nextapp1.dev.localhost:64876/structuredlogs?logEntryId=7", dashboardUrl);
     }
 
     [Theory]

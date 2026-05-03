@@ -18,6 +18,18 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
     [CaptureWorkspaceOnFailure]
     public async Task DashboardRunWithOtelTracesReturnsNoTraces()
     {
+        await DashboardRunWithOtelTracesReturnsNoTracesCore("http://localhost:18888");
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DashboardRunWithOtelTracesReturnsNoTraces_DevLocalhost()
+    {
+        await DashboardRunWithOtelTracesReturnsNoTracesCore("http://dashboard.dev.localhost:18888");
+    }
+
+    private async Task DashboardRunWithOtelTracesReturnsNoTracesCore(string dashboardUrl)
+    {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
@@ -36,8 +48,8 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         // Store the dashboard log path inside the workspace so it gets captured on failure
         var dashboardLogPath = $"/workspace/{workspace.WorkspaceRoot.Name}/dashboard.log";
 
-        // Start the dashboard in the background with anonymous access and telemetry API enabled
-        await auto.TypeAsync($"aspire dashboard run --allow-anonymous --enable-api > {dashboardLogPath} 2>&1 &");
+        // Start the dashboard in the background
+        await auto.TypeAsync($"aspire dashboard run --dashboard-url {dashboardUrl} > {dashboardLogPath} 2>&1 &");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -68,7 +80,7 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Run aspire otel traces against the standalone dashboard
-        await auto.TypeAsync("aspire otel traces --dashboard-url http://localhost:18888");
+        await auto.TypeAsync($"aspire otel traces --dashboard-url {dashboardUrl}");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("No traces found", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
