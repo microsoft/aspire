@@ -104,16 +104,17 @@ internal static class ResourceSnapshotMapper
 
         // Only include enabled commands
         var commands = snapshot.Commands
-            .Where(c => string.Equals(c.State, "Enabled", StringComparison.OrdinalIgnoreCase))
+            .Where(c => string.Equals(c.State, "Enabled", StringComparison.OrdinalIgnoreCase) && IsCommandVisibleToApi(c.Visibility))
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
                  c => c.Name,
-                 c => new ResourceCommandJson
-                 {
-                     Description = c.Description,
-                     ArgumentInputs = c.ArgumentInputs.Length > 0
-                         ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
-                         : null
+                  c => new ResourceCommandJson
+                  {
+                      Description = c.Description,
+                      Visibility = IsDefaultCommandVisibility(c.Visibility) ? null : c.Visibility,
+                      ArgumentInputs = c.ArgumentInputs.Length > 0
+                          ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
+                          : null
                  });
 
         // Get source information using the shared ResourceSourceViewModel
@@ -149,6 +150,16 @@ internal static class ResourceSnapshotMapper
             Relationships = relationships.ToArray(),
             Commands = commands
         };
+
+        static bool IsDefaultCommandVisibility(string visibility)
+        {
+            return string.Equals(visibility, "Dashboard, Api", StringComparison.OrdinalIgnoreCase);
+        }
+
+        static bool IsCommandVisibleToApi(string visibility)
+        {
+            return visibility.Split(',').Any(static value => string.Equals(value.Trim(), "Api", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)

@@ -39,6 +39,18 @@ public class CommandOptions
     public IReadOnlyList<InteractionInput>? ArgumentInputs { get; set; }
 
     /// <summary>
+    /// Gets or sets where the command is visible to users and clients.
+    /// </summary>
+    /// <remarks>
+    /// Dashboard clients use the <see cref="ResourceCommandVisibility.Dashboard"/> flag when displaying commands, and API
+    /// clients use the <see cref="ResourceCommandVisibility.Api"/> flag when discovering commands. Visibility controls
+    /// discovery and display, not authorization. Use <see cref="ResourceCommandVisibility.Api"/> without
+    /// <see cref="ResourceCommandVisibility.Dashboard"/> for headless or agent-oriented commands that should not be displayed
+    /// in the dashboard UI.
+    /// </remarks>
+    public ResourceCommandVisibility Visibility { get; set; } = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api;
+
+    /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
     /// and the confirmation message before starting the command.
     /// </summary>

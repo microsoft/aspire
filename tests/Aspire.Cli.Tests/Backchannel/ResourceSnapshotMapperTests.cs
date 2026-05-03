@@ -28,6 +28,7 @@ public class ResourceSnapshotMapperTests
                     Name = "stop",
                     State = "Enabled",
                     Description = "Stop",
+                    Visibility = "Api",
                     ArgumentInputs =
                     [
                         new ResourceSnapshotCommandArgument
@@ -46,7 +47,8 @@ public class ResourceSnapshotMapperTests
                         }
                     ]
                 },
-                new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" }
+                new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" },
+                new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "Dashboard only", Visibility = "Dashboard" }
             ],
             EnvironmentVariables =
             [
@@ -68,6 +70,7 @@ public class ResourceSnapshotMapperTests
         // Only enabled commands should be included
         var command = Assert.Single(result.Commands!);
         Assert.Equal("stop", command.Key);
+        Assert.Equal("Api", command.Value.Visibility);
         var argumentInput = Assert.Single(command.Value.ArgumentInputs!);
         Assert.Equal("selector", argumentInput.Name);
         Assert.Equal("Selector", argumentInput.Label);

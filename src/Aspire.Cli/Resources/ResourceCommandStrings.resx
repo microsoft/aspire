@@ -88,6 +88,9 @@
   <data name="CommandArgumentsMissingRequired" xml:space="preserve">
     <value>Missing required command argument '{0}'.</value>
   </data>
+  <data name="CommandArgumentsDuplicate" xml:space="preserve">
+    <value>Duplicate command argument '{0}'.</value>
+  </data>
   <data name="CommandArgumentsInvalidNamed" xml:space="preserve">
     <value>Invalid command argument '{0}'. Use name=value for named command arguments.</value>
   </data>

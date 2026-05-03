@@ -29,7 +29,8 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         string? confirmationMessage,
         string? iconName,
         IconVariant? iconVariant,
-        bool isHighlighted)
+        bool isHighlighted,
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -49,6 +50,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         IconName = iconName;
         IconVariant = iconVariant;
         IsHighlighted = isHighlighted;
+        Visibility = visibility;
     }
 
     /// <summary>
@@ -116,6 +118,11 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// A flag indicating whether the command is highlighted in the UI.
     /// </summary>
     public bool IsHighlighted { get; }
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public ResourceCommandVisibility Visibility { get; }
 }
 
 /// <summary>

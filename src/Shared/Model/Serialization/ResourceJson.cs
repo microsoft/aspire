@@ -218,6 +218,12 @@ internal sealed class ResourceCommandJson
     public string? Description { get; set; }
 
     /// <summary>
+    /// Where the command is visible. Omitted when the command uses the default dashboard and API visibility.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Visibility { get; set; }
+
+    /// <summary>
     /// The inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

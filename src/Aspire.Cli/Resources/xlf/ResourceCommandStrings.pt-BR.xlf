@@ -7,6 +7,11 @@
         <target state="new">Arguments passed to the resource command. Values are mapped to command argument inputs in order; use name=value for named values.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CommandArgumentsDuplicate">
+        <source>Duplicate command argument '{0}'.</source>
+        <target state="new">Duplicate command argument '{0}'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandArgumentsInvalidBoolean">
         <source>Invalid value '{0}' for boolean command argument '{1}'. Expected true or false.</source>
         <target state="new">Invalid value '{0}' for boolean command argument '{1}'. Expected true or false.</target>

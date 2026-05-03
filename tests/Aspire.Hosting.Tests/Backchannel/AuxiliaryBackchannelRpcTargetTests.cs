@@ -225,7 +225,8 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                             Disabled = true,
                             MaxLength = 128
                         }
-                    ]
+                    ],
+                    Visibility = ResourceCommandVisibility.Api
                 },
                 new ResourceCommandSnapshot("stop", ResourceCommandState.Disabled, "Stop", "Stop the resource", null, null, null, null, false),
                 new ResourceCommandSnapshot("restart", ResourceCommandState.Hidden, "Restart", null, null, null, null, null, true)
@@ -302,6 +303,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("#submit", argumentInput.Placeholder);
         Assert.True(argumentInput.Disabled);
         Assert.Equal(128, argumentInput.MaxLength);
+        Assert.Equal(nameof(ResourceCommandVisibility.Api), startCommand.Visibility);
         Assert.Contains(snapshot.Commands, c => c.Name == "stop" && c.DisplayName == "Stop" && c.Description == "Stop the resource" && c.State == "Disabled");
         Assert.Contains(snapshot.Commands, c => c.Name == "restart" && c.DisplayName == "Restart" && c.Description == null && c.State == "Hidden");
 

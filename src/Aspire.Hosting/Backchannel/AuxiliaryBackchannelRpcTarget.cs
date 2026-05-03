@@ -752,6 +752,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                     Disabled = i.Disabled,
                     MaxLength = i.MaxLength
                 }).ToArray() ?? [],
+                Visibility = c.Visibility.ToString(),
                 State = c.State.ToString()
             })
             .ToArray();
