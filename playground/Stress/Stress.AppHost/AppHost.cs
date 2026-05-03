@@ -101,17 +101,21 @@ serviceBuilder.WithCommand(
     displayName: "Echo command arguments",
     executeCommand: (c) =>
     {
-        if (c.Arguments is null)
+        if (c.Arguments is not { } arguments)
         {
             return Task.FromResult(CommandResults.Failure("No command arguments were supplied."));
         }
 
-        var arguments = c.Arguments.Value;
+        if (string.IsNullOrWhiteSpace(arguments.GetString("message")) || string.IsNullOrWhiteSpace(arguments.GetString("count")))
+        {
+            return Task.FromResult(CommandResults.Failure("The message and count arguments are required."));
+        }
+
         var response = new
         {
-            Message = arguments.GetProperty("message").GetString(),
-            Count = arguments.GetProperty("count").GetDouble(),
-            Urgent = arguments.TryGetProperty("urgent", out var urgent) && urgent.GetBoolean()
+            Message = arguments.GetString("message"),
+            Count = arguments.GetDouble("count"),
+            Urgent = arguments.GetString("urgent") is { } urgent && bool.Parse(urgent)
         };
 
         return Task.FromResult(CreateJsonSuccess("Echoed command arguments.", response));
@@ -151,7 +155,7 @@ serviceBuilder.WithCommand(
     displayName: "Echo arguments",
     executeCommand: c =>
     {
-        var arguments = ReadCommandArguments<EchoCommandArguments>(c.Arguments);
+        var arguments = ReadEchoCommandArguments(c.Arguments);
         if (string.IsNullOrWhiteSpace(arguments.Message))
         {
             return Task.FromResult(CommandResults.Failure("The message argument is required."));
@@ -236,7 +240,7 @@ serviceBuilder.WithCommand(
     displayName: "Validate arguments",
     executeCommand: c =>
     {
-        var arguments = ReadCommandArguments<ValidateCommandArguments>(c.Arguments);
+        var arguments = ReadValidateCommandArguments(c.Arguments);
         if (string.IsNullOrWhiteSpace(arguments.Target))
         {
             return Task.FromResult(CommandResults.Failure("The target argument is required."));
@@ -312,21 +316,21 @@ serviceBuilder.WithCommand(
     displayName: "Argument stress test",
     executeCommand: c =>
     {
-        if (c.Arguments is null)
+        if (c.Arguments is not { } arguments)
         {
             return Task.FromResult(CommandResults.Failure("No command arguments were supplied."));
         }
 
-        var properties = c.Arguments.Value.EnumerateObject().ToArray();
+        var inputsWithValues = arguments.Where(i => i.Value is not null).ToArray();
         var payload = new
         {
-            PropertyCount = properties.Length,
-            StringCharacters = properties
-                .Where(p => p.Value.ValueKind == JsonValueKind.String)
-                .Sum(p => p.Value.GetString()?.Length ?? 0),
-            NumberCount = properties.Count(p => p.Value.ValueKind == JsonValueKind.Number),
-            BooleanCount = properties.Count(p => p.Value.ValueKind is JsonValueKind.True or JsonValueKind.False),
-            PropertyNames = properties.Select(p => p.Name).ToArray()
+            PropertyCount = inputsWithValues.Length,
+            StringCharacters = inputsWithValues
+                .Where(i => i.InputType is InputType.Text or InputType.SecretText or InputType.Choice)
+                .Sum(i => i.Value?.Length ?? 0),
+            NumberCount = inputsWithValues.Count(i => i.InputType == InputType.Number),
+            BooleanCount = inputsWithValues.Count(i => i.InputType == InputType.Boolean),
+            PropertyNames = inputsWithValues.Select(i => i.Name).ToArray()
         };
 
         return Task.FromResult(CreateJsonSuccess("Summarized command arguments.", payload, displayImmediately: true));
@@ -543,11 +547,37 @@ static string SerializeCommandPayload(object payload)
     return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
 }
 
-static T ReadCommandArguments<T>(JsonElement? arguments) where T : new()
+static EchoCommandArguments ReadEchoCommandArguments(InteractionInputCollection? arguments)
 {
-    return arguments is null
-        ? new T()
-        : JsonSerializer.Deserialize<T>(arguments.Value.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new T();
+    if (arguments is null)
+    {
+        return new EchoCommandArguments();
+    }
+
+    return new EchoCommandArguments
+    {
+        Message = arguments.GetString("message"),
+        Repeat = arguments.GetInt32("repeat"),
+        Shout = arguments.GetBoolean("shout"),
+        Flavor = arguments.GetString("flavor") ?? "vanilla",
+        Secret = arguments.GetString("secret")
+    };
+}
+
+static ValidateCommandArguments ReadValidateCommandArguments(InteractionInputCollection? arguments)
+{
+    if (arguments is null)
+    {
+        return new ValidateCommandArguments();
+    }
+
+    return new ValidateCommandArguments
+    {
+        Target = arguments.GetString("target"),
+        Mode = arguments.GetString("mode") ?? "success",
+        TimeoutSeconds = arguments.GetInt32("timeoutSeconds"),
+        RequireHealthy = arguments.GetBoolean("requireHealthy")
+    };
 }
 
 static IReadOnlyList<InteractionInput> CreateArgumentStressInputs(int fieldCount)

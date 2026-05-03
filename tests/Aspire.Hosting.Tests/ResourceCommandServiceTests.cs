@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
 
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
@@ -452,11 +453,11 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ExecuteCommandAsync_WithArguments_PassesArgumentsToCommand()
+    public async Task ExecuteCommandAsync_WithArgumentCollection_PassesArgumentsToCommand()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        JsonElement? capturedArguments = null;
+        InteractionInputCollection? capturedArguments = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
                 displayName: "My command",
@@ -464,11 +465,39 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 {
                     capturedArguments = e.Arguments;
                     return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    ArgumentInputs =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        },
+                        new InteractionInput
+                        {
+                            Name = "clickCount",
+                            InputType = InputType.Number
+                        }
+                    ]
                 });
 
-        // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
-        using var document = JsonDocument.Parse("""{ "selector": "#submit", "clickCount": 2 }""");
-        var arguments = document.RootElement.Clone();
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "selector",
+                InputType = InputType.Text,
+                Value = "#submit"
+            },
+            new InteractionInput
+            {
+                Name = "clickCount",
+                InputType = InputType.Number,
+                Value = "2"
+            }
+        ]);
 
         var app = builder.Build();
         await app.StartAsync();
@@ -477,8 +506,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(result.Success);
         Assert.NotNull(capturedArguments);
-        Assert.Equal("#submit", capturedArguments.Value.GetProperty("selector").GetString());
-        Assert.Equal(2, capturedArguments.Value.GetProperty("clickCount").GetInt32());
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
     }
 
     [Fact]
@@ -594,3 +623,5 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
     }
 }
+
+#pragma warning restore ASPIREINTERACTION001

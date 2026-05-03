@@ -2,9 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
-using System.Text.Json;
+using System.Globalization;
 using Aspire.DashboardService.Proto.V1;
-using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
@@ -365,7 +364,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, message, value) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, ConvertArgumentValue(request.Arguments), context.CancellationToken).ConfigureAwait(false);
+        var (result, message, value) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, ConvertArgumentValues(request.Arguments), context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
@@ -405,24 +404,43 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         return response;
     }
 
-    private static JsonElement? ConvertArgumentValue(Value? value)
+    private static IReadOnlyDictionary<string, string?>? ConvertArgumentValues(Value? value)
     {
         if (value is null)
         {
             return null;
         }
 
-        // ResourceCommandRequest arguments are encoded as a google.protobuf.Value in the dashboard gRPC protocol:
+        // ResourceCommandRequest arguments are encoded as an object-valued google.protobuf.Value in the dashboard gRPC protocol:
         // {
         //   "command_name": "click",
         //   "resource_name": "web-browser-logs",
         //   "arguments": { "selector": "#submit" }
         // }
-        //
-        // Convert through the protobuf JSON formatter so command callbacks receive the same System.Text.Json shape
-        // as CLI and auxiliary-backchannel callers.
-        using var document = JsonDocument.Parse(JsonFormatter.Default.Format(value));
-        return document.RootElement.Clone();
+        if (value.KindCase != Value.KindOneofCase.StructValue)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Resource command arguments must be an object."));
+        }
+
+        var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
+        foreach (var field in value.StructValue.Fields)
+        {
+            values[field.Key] = ConvertArgumentValue(field.Key, field.Value);
+        }
+
+        return values;
+    }
+
+    private static string? ConvertArgumentValue(string name, Value value)
+    {
+        return value.KindCase switch
+        {
+            Value.KindOneofCase.StringValue => value.StringValue,
+            Value.KindOneofCase.NumberValue => value.NumberValue.ToString("R", CultureInfo.InvariantCulture),
+            Value.KindOneofCase.BoolValue => value.BoolValue ? "true" : "false",
+            Value.KindOneofCase.NullValue => null,
+            _ => throw new RpcException(new Status(StatusCode.InvalidArgument, $"Resource command argument '{name}' must be a string, number, boolean, or null."))
+        };
     }
 
     private async Task ExecuteAsync(Func<CancellationToken, Task> execute, ServerCallContext serverCallContext)

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.Dashboard;
@@ -253,7 +252,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
         var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
 
-        JsonElement? capturedArguments = null;
+        InteractionInputCollection? capturedArguments = null;
         var testResource = new TestResource("test-resource");
         using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
         var builder = applicationBuilder.AddResource(testResource);
@@ -267,7 +266,20 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             },
             commandOptions: new()
             {
-                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                ArgumentInputs =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    },
+                    new InteractionInput
+                    {
+                        Name = "clickCount",
+                        InputType = InputType.Number
+                    }
+                ]
             });
 
         await resourceNotificationService.PublishUpdateAsync(testResource, s =>
@@ -294,8 +306,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(ResourceCommandResponseKind.Succeeded, response.Kind);
         Assert.NotNull(capturedArguments);
-        Assert.Equal("#submit", capturedArguments.Value.GetProperty("selector").GetString());
-        Assert.Equal(2, capturedArguments.Value.GetProperty("clickCount").GetInt32());
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
     }
 
     [Theory]

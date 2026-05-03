@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -111,7 +110,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Each input name maps to a property in the JSON object supplied to <see cref="ExecuteCommandContext.Arguments"/>.
+    /// Each input name maps to a value in <see cref="ExecuteCommandContext.Arguments"/> when the command is executed.
     /// </para>
     /// </remarks>
     public IReadOnlyList<InteractionInput>? ArgumentInputs { get; }
@@ -346,15 +345,17 @@ public sealed class ExecuteCommandContext
     public required ILogger Logger { get; init; }
 
     /// <summary>
-    /// Optional invocation arguments supplied by the client when the command is executed.
+    /// Gets the invocation arguments supplied by the client when the command is executed.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// These arguments are distinct from <see cref="ResourceCommandAnnotation.Parameter"/>, which is static command metadata
-    /// published to clients with the resource snapshot. Invocation arguments are supplied for a single command execution.
+    /// The collection contains the inputs described by <see cref="ResourceCommandAnnotation.ArgumentInputs"/> with their
+    /// submitted values populated. The dashboard, CLI, and API all use the same input metadata to collect values before the
+    /// command callback is invoked.
     /// </para>
     /// </remarks>
-    public JsonElement? Arguments { get; init; }
+    public InteractionInputCollection? Arguments { get; init; }
+
 }
 
 #pragma warning restore ASPIREINTERACTION001

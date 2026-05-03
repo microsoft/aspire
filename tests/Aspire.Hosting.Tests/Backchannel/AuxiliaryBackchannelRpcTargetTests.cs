@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.Json;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -313,7 +314,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(snapshot.Properties.TryGetValue("ConnectionString", out var sensitiveValue));
         Assert.Null(sensitiveValue);
 
-        await app.StopAsync().DefaultTimeout();
+        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
     }
 
     [Fact]
@@ -350,7 +351,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.True(response.Success);
 
-        await app.StopAsync().DefaultTimeout();
+        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
     }
 
     [Fact]
@@ -798,6 +799,71 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(result.DashboardHealthy);
         Assert.Equal("http://localhost:18888", result.BaseUrlWithLoginToken);
         Assert.Null(result.CodespacesUrlWithLoginToken);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_MapsJsonArgumentsToInteractionInputs()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                ArgumentInputs =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    },
+                    new InteractionInput
+                    {
+                        Name = "clickCount",
+                        InputType = InputType.Number
+                    },
+                    new InteractionInput
+                    {
+                        Name = "snapshotAfter",
+                        InputType = InputType.Boolean
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "click",
+            Arguments = JsonSerializer.SerializeToElement(new
+            {
+                selector = "#submit",
+                clickCount = 2,
+                snapshotAfter = true
+            })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
+        Assert.True(capturedArguments.GetBoolean("snapshotAfter"));
+
+        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
     }
 
     [Fact]

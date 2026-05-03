@@ -31,9 +31,9 @@ public class CommandOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Each input name maps to a property in the JSON object supplied to <see cref="ExecuteCommandContext.Arguments"/>.
+    /// Each input name maps to a value in <see cref="ExecuteCommandContext.Arguments"/> when the command is executed.
     /// Dashboard clients can render these inputs before invoking the command, while non-interactive clients can use the
-    /// metadata to construct the same JSON object directly.
+    /// metadata to supply the same values directly.
     /// </para>
     /// </remarks>
     public IReadOnlyList<InteractionInput>? ArgumentInputs { get; set; }
