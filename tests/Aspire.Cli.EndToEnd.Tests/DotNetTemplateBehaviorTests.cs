@@ -35,7 +35,7 @@ public sealed class DotNetTemplateLocalhostTldTests(ITestOutputHelper output)
     public async Task LocalhostTldGeneratesDnsCompliantHostnames(string templateName, string projectName, string expectedHostname, bool useBootstrapInstall)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -74,7 +74,7 @@ public sealed class DotNetSingleFileAppHostTemplateTests(ITestOutputHelper outpu
     public async Task SingleFileAppHostTemplateBuildsAndStarts()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -114,7 +114,7 @@ public sealed class DotNetTemplateTransportTests(ITestOutputHelper output)
     public async Task NoHttpsTemplateRequiresAllowUnsecuredTransport()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -168,7 +168,7 @@ public sealed class DotNetTemplateTargetFrameworkTests(ITestOutputHelper output)
     public async Task DotNetTemplateCreatesSupportedTargetFrameworksAndOlderSdkRejectsNewerTarget()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -232,7 +232,7 @@ public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper out
     public async Task DotNetTemplateWithExplicitSdkReferenceBuildsAndStarts(bool includeAspireHostingAppHostPackageReference)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -276,7 +276,7 @@ public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper out
     public async Task DotNetAppHostTemplateBuildsWithAppHostPackageVersionOverride(string version)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -320,7 +320,7 @@ public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper out
     public async Task DotNetTemplateWithCentralPackageManagementBuildsAndStarts()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
