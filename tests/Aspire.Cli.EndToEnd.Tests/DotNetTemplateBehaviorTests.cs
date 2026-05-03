@@ -161,6 +161,68 @@ public sealed class DotNetTemplateTransportTests(ITestOutputHelper output)
     }
 }
 
+public sealed class DotNetTemplateTargetFrameworkTests(ITestOutputHelper output)
+{
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DotNetTemplateCreatesSupportedTargetFrameworksAndOlderSdkRejectsNewerTarget()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await DotNetTemplateBehaviorTestHelpers.CreateTemplateBootstrapAsync(auto, counter);
+
+        var projectRoots = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["net8.0"] = await DotNetTemplateBehaviorTestHelpers.CreateDotNetTemplateInBootstrapAsync(auto, counter, workspace, "aspire", "EmptyNet8", ["-f", "net8.0"]),
+            ["net10.0"] = await DotNetTemplateBehaviorTestHelpers.CreateDotNetTemplateInBootstrapAsync(auto, counter, workspace, "aspire", "EmptyNet10", ["-f", "net10.0"])
+        };
+
+        foreach (var (targetFramework, projectRoot) in projectRoots)
+        {
+            DotNetTemplateBehaviorTestHelpers.AssertGeneratedProjectsTargetFramework(projectRoot, targetFramework);
+
+            await auto.TypeAsync($"dotnet build {AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(projectRoot, workspace))}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+        }
+
+        await auto.TypeAsync(
+            "if [ ! -x /tmp/dotnet8/dotnet ]; then " +
+            "curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && " +
+            "bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /tmp/dotnet8 --no-path; " +
+            "fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(5));
+
+        var olderSdkBuildLogPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, "dotnet8-net10-build.log");
+        var quotedOlderSdkBuildLogPath = AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(olderSdkBuildLogPath, workspace));
+        CliE2ETestHelpers.RegisterCaptureFile("dotnet8-net10-build.log", olderSdkBuildLogPath);
+
+        await auto.TypeAsync(
+            $"DOTNET_MULTILEVEL_LOOKUP=0 /tmp/dotnet8/dotnet build {AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(projectRoots["net10.0"], workspace))} > {quotedOlderSdkBuildLogPath} 2>&1");
+        await auto.EnterAsync();
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        Assert.Contains("The current .NET SDK does not support targeting .NET 10.0", File.ReadAllText(olderSdkBuildLogPath), StringComparison.Ordinal);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+}
+
 public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper output)
 {
     [Theory]
@@ -441,6 +503,28 @@ internal static partial class DotNetTemplateBehaviorTestHelpers
         }
 
         Assert.True(foundDevLocalhost, $"Expected a .dev.localhost URL in {settingsPath}.");
+    }
+
+    internal static void AssertGeneratedProjectsTargetFramework(string projectRoot, string expectedTargetFramework)
+    {
+        Assert.True(Directory.Exists(projectRoot), $"Expected project root at {projectRoot}.");
+
+        var projectFiles = Directory.EnumerateFiles(projectRoot, "*.csproj", SearchOption.AllDirectories)
+            .OrderBy(static path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(projectFiles);
+
+        foreach (var projectFile in projectFiles)
+        {
+            var document = XDocument.Load(projectFile);
+            var targetFrameworks = document.Descendants()
+                .Where(static element => element.Name.LocalName is "TargetFramework" or "TargetFrameworks")
+                .SelectMany(static element => element.Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .ToArray();
+
+            Assert.Contains(expectedTargetFramework, targetFrameworks);
+        }
     }
 
     private static string FindGeneratedAppHostSettingsPath(string projectRoot, string templateName)
