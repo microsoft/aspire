@@ -48,8 +48,8 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         // Store the dashboard log path inside the workspace so it gets captured on failure
         var dashboardLogPath = $"/workspace/{workspace.WorkspaceRoot.Name}/dashboard.log";
 
-        // Start the dashboard in the background with anonymous access and the specified frontend URL
-        await auto.TypeAsync($"aspire dashboard run --frontend-url {frontendUrl} --allow-anonymous > {dashboardLogPath} 2>&1 &");
+        // Start the dashboard in the background with the specified frontend URL
+        await auto.TypeAsync($"aspire dashboard run --frontend-url {frontendUrl} > {dashboardLogPath} 2>&1 &");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -73,10 +73,10 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Extract the dashboard URL from the aspire dashboard run output.
-        // The output contains "Now listening on: http://..." when the dashboard is ready.
+        // Extract the dashboard login URL (with token) from the aspire dashboard run output.
+        // The dashboard outputs: "Login to the dashboard at http://host:port/login?t=xxx ."
         // For the dev.localhost variant, the CLI normalizes *.localhost to localhost for HTTP requests.
-        await auto.TypeAsync("OTEL_DASHBOARD_URL=$(grep -m1 'Now listening on:' " + dashboardLogPath + " | grep -oE 'https?://[^ ]+')");
+        await auto.TypeAsync("OTEL_DASHBOARD_URL=$(grep -oE 'https?://[^ ]+/login\\?t=[^ ]+' " + dashboardLogPath + " | head -1 | sed 's/ \\.$//')");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
