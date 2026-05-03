@@ -348,7 +348,12 @@ switch (property) {
     if (!selector) {
       throw new Error("The 'count' property requires a selector.");
     }
-    value = /^e([1-9]\d*)$/.test(selector) ? 1 : document.querySelectorAll(selector).length;
+    if (/^e([1-9]\d*)$/.test(selector)) {
+      findElement(selector);
+      value = 1;
+    } else {
+      value = document.querySelectorAll(selector).length;
+    }
     break;
   case 'box':
     if (!element) {
