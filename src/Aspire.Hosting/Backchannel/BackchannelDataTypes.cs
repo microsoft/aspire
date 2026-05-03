@@ -905,6 +905,11 @@ internal sealed class ResourceSnapshotCommand
     public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];
 
     /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public string Visibility { get; init; } = "Dashboard, Api";
+
+    /// <summary>
     /// Gets the state of the command (e.g., "Enabled", "Disabled", "Hidden").
     /// </summary>
     public required string State { get; init; }

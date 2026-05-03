@@ -105,6 +105,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string CommandArgumentsDuplicate {
+            get {
+                return ResourceManager.GetString("CommandArgumentsDuplicate", resourceCulture);
+            }
+        }
+
         internal static string CommandArgumentsInvalidNamed {
             get {
                 return ResourceManager.GetString("CommandArgumentsInvalidNamed", resourceCulture);

@@ -301,6 +301,11 @@ public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState S
     /// </summary>
     public IReadOnlyList<InteractionInput>? ArgumentInputs { get; init; }
 #pragma warning restore ASPIREINTERACTION001
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public ResourceCommandVisibility Visibility { get; init; } = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api;
 }
 
 /// <summary>
@@ -336,6 +341,28 @@ public enum ResourceCommandState
     /// Command is hidden.
     /// </summary>
     Hidden
+}
+
+/// <summary>
+/// Describes where a resource command is visible.
+/// </summary>
+[Flags]
+public enum ResourceCommandVisibility
+{
+    /// <summary>
+    /// The command is not visible to any clients.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// The command is displayed in the dashboard.
+    /// </summary>
+    Dashboard = 1 << 0,
+
+    /// <summary>
+    /// The command is exposed through resource command API discovery.
+    /// </summary>
+    Api = 1 << 1
 }
 
 /// <summary>

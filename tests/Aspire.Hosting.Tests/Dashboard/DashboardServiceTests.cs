@@ -180,6 +180,15 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
                 IsHighlighted = true
             });
 #pragma warning restore CS0618
+        builder.WithCommand(
+            name: "HeadlessName",
+            displayName: "Headless display name",
+            executeCommand: c => Task.FromResult(CommandResults.Success()),
+            commandOptions: new()
+            {
+                UpdateState = c => Aspire.Hosting.ApplicationModel.ResourceCommandState.Enabled,
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api
+            });
 
         logger.LogInformation("Publishing resource.");
         await resourceNotificationService.PublishUpdateAsync(testResource, s =>
@@ -190,7 +199,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         logger.LogInformation("Waiting for the resource with a command. Required so added resource is always in the service's initial data collection");
         await dashboardServiceData.WaitForResourceAsync(testResource.Name, r =>
         {
-            return r.Commands.Length == 1;
+            return r.Commands.Length == 2;
         }).DefaultTimeout();
 
         var cts = new CancellationTokenSource();
@@ -231,6 +240,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("Icon name!", commandData.IconName);
         Assert.Equal(DashboardService.Proto.V1.IconVariant.Filled, commandData.IconVariant);
         Assert.True(commandData.IsHighlighted);
+        Assert.DoesNotContain(resourceData.Commands, command => command.Name == "HeadlessName");
 
         await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
     }
@@ -254,6 +264,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             {
                 capturedArguments = c.Arguments;
                 return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new()
+            {
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api
             });
 
         await resourceNotificationService.PublishUpdateAsync(testResource, s =>

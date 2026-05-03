@@ -154,13 +154,18 @@ internal sealed class ResourceCommand : BaseCommand
         var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
         var resolvedResources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
         var resource = resolvedResources.Count > 0 ? resolvedResources[0] : null;
-        var command = resource?.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName));
+        var command = resource?.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName) && IsCommandVisibleToApi(c.Visibility));
         if (command?.ArgumentInputs.Length is not > 0)
         {
             return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsNoMetadata, commandName, resourceName));
         }
 
         return CreateArgumentsFromInputs(commandName, command.ArgumentInputs, capturedArguments);
+
+        static bool IsCommandVisibleToApi(string visibility)
+        {
+            return visibility.Split(',').Any(static value => string.Equals(value.Trim(), "Api", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private static (JsonElement? Arguments, string? ParseError) CreateArgumentsFromInputs(
@@ -169,12 +174,6 @@ internal sealed class ResourceCommand : BaseCommand
         string[] capturedArguments)
     {
         var inputsByName = inputs.ToDictionary(i => i.Name, StringComparers.InteractionInputName);
-        var hasNamedArguments = capturedArguments.Any(argument => TryGetNamedArgument(argument, inputsByName, out _, out _));
-        if (hasNamedArguments)
-        {
-            return CreateArgumentsFromNamedInputs(inputs, inputsByName, capturedArguments);
-        }
-
         if (capturedArguments.Length > inputs.Length)
         {
             return (null, string.Format(
@@ -189,69 +188,60 @@ internal sealed class ResourceCommand : BaseCommand
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
-            for (var i = 0; i < capturedArguments.Length; i++)
-            {
-                var input = inputs[i];
-                if (WriteArgumentValue(writer, input, capturedArguments[i]) is { } error)
-                {
-                    return (null, error);
-                }
-            }
-
-            writer.WriteEndObject();
-        }
-
-        var providedInputs = inputs.Take(capturedArguments.Length).Select(i => i.Name).ToHashSet(StringComparers.InteractionInputName);
-        if (FindMissingRequiredInput(inputs, providedInputs) is { } missingRequiredInput)
-        {
-            return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsMissingRequired, missingRequiredInput.Name));
-        }
-
-        return ParseArgumentsObject(stream);
-    }
-
-    private static (JsonElement? Arguments, string? ParseError) CreateArgumentsFromNamedInputs(
-        ResourceSnapshotCommandArgument[] inputs,
-        Dictionary<string, ResourceSnapshotCommandArgument> inputsByName,
-        string[] capturedArguments)
-    {
-        var providedInputs = new HashSet<string>(StringComparers.InteractionInputName);
-
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-        {
-            writer.WriteStartObject();
+            var positionalIndex = 0;
+            var providedInputs = new HashSet<string>(StringComparers.InteractionInputName);
             foreach (var capturedArgument in capturedArguments)
             {
-                if (!TryGetNamedArgument(capturedArgument, inputsByName, out var input, out var value))
+                ResourceSnapshotCommandArgument input;
+                string value;
+                if (TryGetNamedArgument(capturedArgument, inputsByName, out var namedInput, out var namedValue))
                 {
-                    var separatorIndex = capturedArgument.IndexOf('=');
-                    if (separatorIndex <= 0)
+                    input = namedInput;
+                    value = namedValue;
+                }
+                else
+                {
+                    if (GetNamedArgumentError(capturedArgument, inputs) is { } namedArgumentError)
                     {
-                        return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsInvalidNamed, capturedArgument));
+                        return (null, namedArgumentError);
                     }
 
-                    return (null, string.Format(
-                        CultureInfo.CurrentCulture,
-                        ResourceCommandStrings.CommandArgumentsUnknownNamed,
-                        capturedArgument[..separatorIndex],
-                        string.Join(", ", inputs.Select(i => i.Name))));
+                    while (positionalIndex < inputs.Length && providedInputs.Contains(inputs[positionalIndex].Name))
+                    {
+                        positionalIndex++;
+                    }
+
+                    if (positionalIndex >= inputs.Length)
+                    {
+                        return (null, string.Format(
+                            CultureInfo.CurrentCulture,
+                            ResourceCommandStrings.CommandArgumentsTooMany,
+                            commandName,
+                            inputs.Length,
+                            string.Join(", ", inputs.Select(i => i.Name))));
+                    }
+
+                    input = inputs[positionalIndex++];
+                    value = capturedArgument;
+                }
+
+                if (!providedInputs.Add(input.Name))
+                {
+                    return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsDuplicate, input.Name));
                 }
 
                 if (WriteArgumentValue(writer, input, value) is { } error)
                 {
                     return (null, error);
                 }
-
-                providedInputs.Add(input.Name);
             }
 
             writer.WriteEndObject();
-        }
 
-        if (FindMissingRequiredInput(inputs, providedInputs) is { } missingRequiredInput)
-        {
-            return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsMissingRequired, missingRequiredInput.Name));
+            if (FindMissingRequiredInput(inputs, providedInputs) is { } missingRequiredInput)
+            {
+                return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsMissingRequired, missingRequiredInput.Name));
+            }
         }
 
         return ParseArgumentsObject(stream);
@@ -278,6 +268,45 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         value = argument[(separatorIndex + 1)..];
+        return true;
+    }
+
+    private static string? GetNamedArgumentError(string argument, ResourceSnapshotCommandArgument[] inputs)
+    {
+        var separatorIndex = argument.IndexOf('=');
+        if (separatorIndex <= 0)
+        {
+            return null;
+        }
+
+        var name = argument[..separatorIndex];
+        if (!IsLikelyNamedArgumentName(name))
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            ResourceCommandStrings.CommandArgumentsUnknownNamed,
+            name,
+            string.Join(", ", inputs.Select(i => i.Name)));
+    }
+
+    private static bool IsLikelyNamedArgumentName(string value)
+    {
+        if (!char.IsAsciiLetter(value[0]) && value[0] is not '_')
+        {
+            return false;
+        }
+
+        foreach (var c in value[1..])
+        {
+            if (!char.IsAsciiLetterOrDigit(c) && c is not '_' and not '-')
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
