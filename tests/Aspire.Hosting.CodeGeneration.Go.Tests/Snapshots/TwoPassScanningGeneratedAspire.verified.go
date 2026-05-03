@@ -138,6 +138,15 @@ const (
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
 )
 
+// ResourceCommandVisibility represents ResourceCommandVisibility.
+type ResourceCommandVisibility string
+
+const (
+	ResourceCommandVisibilityNone ResourceCommandVisibility = "None"
+	ResourceCommandVisibilityDashboard ResourceCommandVisibility = "Dashboard"
+	ResourceCommandVisibilityApi ResourceCommandVisibility = "Api"
+)
+
 // HttpCommandResultMode represents HttpCommandResultMode.
 type HttpCommandResultMode string
 
@@ -346,6 +355,8 @@ func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
 type CommandOptions struct {
 	Description string `json:"Description,omitempty"`
 	Parameter any `json:"Parameter,omitempty"`
+	ArgumentInputs []any `json:"ArgumentInputs,omitempty"`
+	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
 	IconVariant IconVariant `json:"IconVariant,omitempty"`
@@ -358,6 +369,8 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Description"] = serializeValue(d.Description)
 	if d.Parameter != nil { m["Parameter"] = serializeValue(d.Parameter) }
+	if d.ArgumentInputs != nil { m["ArgumentInputs"] = serializeValue(d.ArgumentInputs) }
+	m["Visibility"] = serializeValue(d.Visibility)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)
 	m["IconVariant"] = serializeValue(d.IconVariant)

@@ -340,7 +340,7 @@ public class AtsCapabilityScannerTests
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
-        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(CommandOptions.Parameter));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == "Parameter");
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.HttpClientName));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.PrepareRequest));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.Method));

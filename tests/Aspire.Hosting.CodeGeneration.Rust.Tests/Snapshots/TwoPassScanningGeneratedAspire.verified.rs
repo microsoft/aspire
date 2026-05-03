@@ -315,6 +315,28 @@ impl std::fmt::Display for EndpointProperty {
     }
 }
 
+/// ResourceCommandVisibility
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResourceCommandVisibility {
+    #[default]
+    #[serde(rename = "None")]
+    None,
+    #[serde(rename = "Dashboard")]
+    Dashboard,
+    #[serde(rename = "Api")]
+    Api,
+}
+
+impl std::fmt::Display for ResourceCommandVisibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Dashboard => write!(f, "Dashboard"),
+            Self::Api => write!(f, "Api"),
+        }
+    }
+}
+
 /// HttpCommandResultMode
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HttpCommandResultMode {
@@ -646,6 +668,10 @@ pub struct CommandOptions {
     pub description: String,
     #[serde(rename = "Parameter")]
     pub parameter: Value,
+    #[serde(rename = "ArgumentInputs")]
+    pub argument_inputs: Vec<Value>,
+    #[serde(rename = "Visibility")]
+    pub visibility: ResourceCommandVisibility,
     #[serde(rename = "ConfirmationMessage")]
     pub confirmation_message: String,
     #[serde(rename = "IconName")]
@@ -663,6 +689,8 @@ impl CommandOptions {
         let mut map = HashMap::new();
         map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
         map.insert("Parameter".to_string(), serde_json::to_value(&self.parameter).unwrap_or(Value::Null));
+        map.insert("ArgumentInputs".to_string(), serde_json::to_value(&self.argument_inputs).unwrap_or(Value::Null));
+        map.insert("Visibility".to_string(), serde_json::to_value(&self.visibility).unwrap_or(Value::Null));
         map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
         map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));
         map.insert("IconVariant".to_string(), serde_json::to_value(&self.icon_variant).unwrap_or(Value::Null));

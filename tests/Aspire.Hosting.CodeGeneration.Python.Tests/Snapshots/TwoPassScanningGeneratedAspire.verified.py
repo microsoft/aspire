@@ -1517,6 +1517,8 @@ ProbeType = typing.Literal["Startup", "Readiness", "Liveness"]
 
 ProtocolType = typing.Literal["IP", "IPv6HopByHopOptions", "Unspecified", "Icmp", "Igmp", "Ggp", "IPv4", "Tcp", "Pup", "Udp", "Idp", "IPv6", "IPv6RoutingHeader", "IPv6FragmentHeader", "IPSecEncapsulatingSecurityPayload", "IPSecAuthenticationHeader", "IcmpV6", "IPv6NoNextHeader", "IPv6DestinationOptions", "ND", "Raw", "Ipx", "Spx", "SpxII", "Unknown"]
 
+ResourceCommandVisibility = typing.Literal["None", "Dashboard", "Api"]
+
 TestPersistenceMode = typing.Literal["None", "Volume", "Bind"]
 
 TestResourceStatus = typing.Literal["Pending", "Running", "Stopped", "Failed"]
@@ -1714,6 +1716,8 @@ class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=F
 class CommandOptions(typing.TypedDict, total=False):
     Description: str
     Parameter: typing.Any
+    ArgumentInputs: typing.Iterable[typing.Any]
+    Visibility: ResourceCommandVisibility
     ConfirmationMessage: str
     IconName: str
     IconVariant: IconVariant

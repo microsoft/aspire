@@ -394,6 +394,13 @@ export enum ProtocolType {
     Unknown = "Unknown",
 }
 
+/** Enum type for ResourceCommandVisibility */
+export enum ResourceCommandVisibility {
+    None = "None",
+    Dashboard = "Dashboard",
+    Api = "Api",
+}
+
 /** Enum type for TestPersistenceMode */
 export enum TestPersistenceMode {
     None = "None",
@@ -450,6 +457,8 @@ export interface CertificateTrustExecutionConfigurationExportData {
 export interface CommandOptions {
     description?: string;
     parameter?: any;
+    argumentInputs?: any[];
+    visibility?: ResourceCommandVisibility;
     confirmationMessage?: string;
     iconName?: string;
     iconVariant?: IconVariant;
