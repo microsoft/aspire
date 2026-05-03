@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to exercise resource command arguments.
 
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
@@ -94,6 +95,61 @@ serviceBuilder.WithCommand(
     {
         IconName = "CloudDatabase",
         IsHighlighted = true
+    });
+serviceBuilder.WithCommand(
+    name: "echo-command-arguments",
+    displayName: "Echo command arguments",
+    executeCommand: (c) =>
+    {
+        if (c.Arguments is null)
+        {
+            return Task.FromResult(CommandResults.Failure("No command arguments were supplied."));
+        }
+
+        var arguments = c.Arguments.Value;
+        var response = new
+        {
+            Message = arguments.GetProperty("message").GetString(),
+            Count = arguments.GetProperty("count").GetDouble(),
+            Urgent = arguments.GetProperty("urgent").GetBoolean()
+        };
+        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
+
+        return Task.FromResult(CommandResults.Success("Echoed command arguments.", new CommandResultData
+        {
+            Value = json,
+            Format = CommandResultFormat.Json
+        }));
+    },
+    commandOptions: new CommandOptions
+    {
+        Description = "Echoes invocation arguments supplied by CLI and API clients.",
+        IconName = "Send",
+        Visibility = ResourceCommandVisibility.Api,
+        ArgumentInputs =
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                Label = "Message",
+                InputType = InputType.Text,
+                Required = true,
+                Placeholder = "Hello"
+            },
+            new InteractionInput
+            {
+                Name = "count",
+                Label = "Count",
+                InputType = InputType.Number,
+                Required = true
+            },
+            new InteractionInput
+            {
+                Name = "urgent",
+                Label = "Urgent",
+                InputType = InputType.Boolean
+            }
+        ]
     });
 
 serviceBuilder.WithHttpEndpoint(5180, name: $"http");
