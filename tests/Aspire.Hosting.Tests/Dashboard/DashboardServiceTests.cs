@@ -161,7 +161,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
                 UpdateState = c => Aspire.Hosting.ApplicationModel.ResourceCommandState.Enabled,
                 Description = "Display description!",
                 Parameter = new[] { "One", "Two" },
-                ArgumentInputs =
+                Arguments =
                 [
                     new Aspire.Hosting.InteractionInput
                     {
@@ -267,7 +267,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             commandOptions: new()
             {
                 Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
-                ArgumentInputs =
+                Arguments =
                 [
                     new InteractionInput
                     {

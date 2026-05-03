@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -668,8 +668,8 @@ pub struct CommandOptions {
     pub description: String,
     #[serde(rename = "Parameter")]
     pub parameter: Value,
-    #[serde(rename = "ArgumentInputs")]
-    pub argument_inputs: Vec<Value>,
+    #[serde(rename = "Arguments")]
+    pub arguments: Vec<Value>,
     #[serde(rename = "Visibility")]
     pub visibility: ResourceCommandVisibility,
     #[serde(rename = "ConfirmationMessage")]
@@ -689,7 +689,7 @@ impl CommandOptions {
         let mut map = HashMap::new();
         map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
         map.insert("Parameter".to_string(), serde_json::to_value(&self.parameter).unwrap_or(Value::Null));
-        map.insert("ArgumentInputs".to_string(), serde_json::to_value(&self.argument_inputs).unwrap_or(Value::Null));
+        map.insert("Arguments".to_string(), serde_json::to_value(&self.arguments).unwrap_or(Value::Null));
         map.insert("Visibility".to_string(), serde_json::to_value(&self.visibility).unwrap_or(Value::Null));
         map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
         map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));

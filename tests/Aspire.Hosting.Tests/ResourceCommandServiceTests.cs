@@ -468,7 +468,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 },
                 commandOptions: new CommandOptions
                 {
-                    ArgumentInputs =
+                    Arguments =
                     [
                         new InteractionInput
                         {

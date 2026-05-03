@@ -166,7 +166,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Contains(result, r => r.Name == "myresource-def456");
         Assert.All(result.Where(r => r.Name.StartsWith("myresource-")), r => Assert.Equal("myresource", r.DisplayName));
 
-        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             Commands = [
                 new ResourceCommandSnapshot("start", ResourceCommandState.Enabled, "Start", "Start the resource", null, null, null, null, false)
                 {
-                    ArgumentInputs =
+                    Arguments =
                     [
                         new InteractionInput
                         {
@@ -314,7 +314,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(snapshot.Properties.TryGetValue("ConnectionString", out var sensitiveValue));
         Assert.Null(sensitiveValue);
 
-        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -351,7 +351,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.True(response.Success);
 
-        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -818,7 +818,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             },
             commandOptions: new CommandOptions
             {
-                ArgumentInputs =
+                Arguments =
                 [
                     new InteractionInput
                     {
@@ -863,7 +863,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
         Assert.True(capturedArguments.GetBoolean("snapshotAfter"));
 
-        await app.StopAsync().DefaultTimeout(TimeSpan.FromSeconds(30));
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]

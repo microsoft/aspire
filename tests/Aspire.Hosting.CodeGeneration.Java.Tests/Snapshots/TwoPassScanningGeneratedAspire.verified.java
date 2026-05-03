@@ -3135,7 +3135,7 @@ import java.util.function.*;
 public class CommandOptions {
     private String description;
     private Object parameter;
-    private Object[] argumentInputs;
+    private Object[] arguments;
     private ResourceCommandVisibility visibility;
     private String confirmationMessage;
     private String iconName;
@@ -3147,8 +3147,8 @@ public class CommandOptions {
     public void setDescription(String value) { this.description = value; }
     public Object getParameter() { return parameter; }
     public void setParameter(Object value) { this.parameter = value; }
-    public Object[] getArgumentInputs() { return argumentInputs; }
-    public void setArgumentInputs(Object[] value) { this.argumentInputs = value; }
+    public Object[] getArguments() { return arguments; }
+    public void setArguments(Object[] value) { this.arguments = value; }
     public ResourceCommandVisibility getVisibility() { return visibility; }
     public void setVisibility(ResourceCommandVisibility value) { this.visibility = value; }
     public String getConfirmationMessage() { return confirmationMessage; }
@@ -3166,7 +3166,7 @@ public class CommandOptions {
         Map<String, Object> map = new HashMap<>();
         map.put("Description", AspireClient.serializeValue(description));
         map.put("Parameter", AspireClient.serializeValue(parameter));
-        map.put("ArgumentInputs", AspireClient.serializeValue(argumentInputs));
+        map.put("Arguments", AspireClient.serializeValue(arguments));
         map.put("Visibility", AspireClient.serializeValue(visibility));
         map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
         map.put("IconName", AspireClient.serializeValue(iconName));

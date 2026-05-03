@@ -293,13 +293,13 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
 /// <param name="IconVariant">The icon variant.</param>
 /// <param name="IsHighlighted">A flag indicating whether the command is highlighted in the UI.</param>
 [DebuggerDisplay(null, Name = "{Name}")]
-public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, [property: Obsolete("Use ArgumentInputs to describe invocation arguments.")] object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted)
+public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, [property: Obsolete("Use Arguments to describe invocation arguments.")] object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted)
 {
 #pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
     /// <summary>
-    /// Gets the inputs used to describe the invocation arguments accepted by the command.
+    /// Gets the invocation arguments accepted by the command.
     /// </summary>
-    public IReadOnlyList<InteractionInput>? ArgumentInputs { get; init; }
+    public IReadOnlyList<InteractionInput>? Arguments { get; init; }
 #pragma warning restore ASPIREINTERACTION001
 
     /// <summary>

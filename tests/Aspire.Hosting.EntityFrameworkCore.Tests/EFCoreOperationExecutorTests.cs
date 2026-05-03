@@ -188,7 +188,7 @@ public class EFCoreOperationExecutorTests
             executeCommand,
             displayDescription: null,
             parameter: null,
-            argumentInputs: null,
+            arguments: null,
             confirmationMessage: null,
             iconName: null,
             iconVariant: null,

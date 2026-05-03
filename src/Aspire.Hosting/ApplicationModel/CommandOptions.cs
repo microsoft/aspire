@@ -23,11 +23,11 @@ public class CommandOptions
     /// Obsolete optional parameter that configures the command in some way.
     /// Clients must return any value provided by the server when invoking the command.
     /// </summary>
-    [Obsolete("Use ArgumentInputs to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
+    [Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
     public object? Parameter { get; set; }
 
     /// <summary>
-    /// Gets or sets the inputs used to describe the invocation arguments accepted by the command.
+    /// Gets or sets the invocation arguments accepted by the command.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -36,7 +36,7 @@ public class CommandOptions
     /// metadata to supply the same values directly.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<InteractionInput>? ArgumentInputs { get; set; }
+    public IReadOnlyList<InteractionInput>? Arguments { get; set; }
 
     /// <summary>
     /// Gets or sets where the command is visible to users and clients.

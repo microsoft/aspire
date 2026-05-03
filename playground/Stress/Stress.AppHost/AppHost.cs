@@ -125,7 +125,7 @@ serviceBuilder.WithCommand(
         Description = "Common API-only command that accepts required text and number arguments plus an optional boolean.",
         IconName = "Send",
         Visibility = ResourceCommandVisibility.Api,
-        ArgumentInputs =
+        Arguments =
         [
             new InteractionInput
             {
@@ -182,7 +182,7 @@ serviceBuilder.WithCommand(
     {
         Description = "Common dashboard/API command with text, number, boolean, choice, and secret argument inputs.",
         IconName = "Code",
-        ArgumentInputs =
+        Arguments =
         [
             new InteractionInput
             {
@@ -267,7 +267,7 @@ serviceBuilder.WithCommand(
     {
         Description = "Less common validation command with failure results, required inputs, defaults, and choice validation.",
         IconName = "CheckmarkCircle",
-        ArgumentInputs =
+        Arguments =
         [
             new InteractionInput
             {
@@ -340,7 +340,7 @@ serviceBuilder.WithCommand(
         Description = "Minor dashboard/API stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
         IconName = "TableLightning",
         Visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api,
-        ArgumentInputs = CreateArgumentStressInputs(fieldCount: 20)
+        Arguments = CreateArgumentStressInputs(fieldCount: 20)
     });
 
 serviceBuilder.WithHttpEndpoint(5180, name: $"http");

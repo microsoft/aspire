@@ -2568,7 +2568,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(executeCommand);
 
         commandOptions ??= CommandOptions.Default;
-        ValidateCommandArgumentInputs(commandOptions.ArgumentInputs);
+        ValidateCommandArguments(commandOptions.Arguments);
 
         // Replace existing annotation with the same name.
         var existingAnnotation = builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == name);
@@ -2578,7 +2578,7 @@ public static class ResourceBuilderExtensions
         }
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.ArgumentInputs, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility));
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility));
 #pragma warning restore CS0618
     }
 
@@ -2644,18 +2644,18 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, argumentInputs: null, confirmationMessage, iconName, iconVariant, isHighlighted));
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, arguments: null, confirmationMessage, iconName, iconVariant, isHighlighted));
     }
 
 #pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.
-    private static void ValidateCommandArgumentInputs(IReadOnlyList<InteractionInput>? argumentInputs)
+    private static void ValidateCommandArguments(IReadOnlyList<InteractionInput>? arguments)
     {
-        if (argumentInputs is null)
+        if (arguments is null)
         {
             return;
         }
 
-        _ = new InteractionInputCollection(argumentInputs);
+        _ = new InteractionInputCollection(arguments);
     }
 #pragma warning restore ASPIREINTERACTION001
 

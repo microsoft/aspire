@@ -1716,7 +1716,7 @@ class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=F
 class CommandOptions(typing.TypedDict, total=False):
     Description: str
     Parameter: typing.Any
-    ArgumentInputs: typing.Iterable[typing.Any]
+    Arguments: typing.Iterable[typing.Any]
     Visibility: ResourceCommandVisibility
     ConfirmationMessage: str
     IconName: str

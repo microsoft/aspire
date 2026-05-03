@@ -781,7 +781,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 Name = c.Name,
                 DisplayName = c.DisplayName,
                 Description = c.DisplayDescription,
-                ArgumentInputs = c.ArgumentInputs?.Select(i => new ResourceSnapshotCommandArgument
+                ArgumentInputs = c.Arguments?.Select(i => new ResourceSnapshotCommandArgument
                 {
                     Name = i.Name,
                     Label = i.Label,

@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -355,7 +355,7 @@ func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
 type CommandOptions struct {
 	Description string `json:"Description,omitempty"`
 	Parameter any `json:"Parameter,omitempty"`
-	ArgumentInputs []any `json:"ArgumentInputs,omitempty"`
+	Arguments []any `json:"Arguments,omitempty"`
 	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
@@ -369,7 +369,7 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Description"] = serializeValue(d.Description)
 	if d.Parameter != nil { m["Parameter"] = serializeValue(d.Parameter) }
-	if d.ArgumentInputs != nil { m["ArgumentInputs"] = serializeValue(d.ArgumentInputs) }
+	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
 	m["Visibility"] = serializeValue(d.Visibility)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)

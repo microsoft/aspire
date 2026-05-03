@@ -28,7 +28,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         string? iconName,
         IconVariant? iconVariant,
         bool isHighlighted)
-        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, argumentInputs: null, confirmationMessage, iconName, iconVariant, isHighlighted)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, arguments: null, confirmationMessage, iconName, iconVariant, isHighlighted)
     {
     }
 
@@ -42,7 +42,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
         string? displayDescription,
         object? parameter,
-        IReadOnlyList<InteractionInput>? argumentInputs,
+        IReadOnlyList<InteractionInput>? arguments,
         string? confirmationMessage,
         string? iconName,
         IconVariant? iconVariant,
@@ -62,7 +62,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
 #pragma warning disable CS0618 // Parameter is obsolete but still stored for compatibility.
         Parameter = parameter;
 #pragma warning restore CS0618
-        ArgumentInputs = argumentInputs;
+        Arguments = arguments;
         ConfirmationMessage = confirmationMessage;
         IconName = iconName;
         IconVariant = iconVariant;
@@ -102,18 +102,18 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// Obsolete optional parameter that configures the command in some way.
     /// Clients must return any value provided by the server when invoking the command.
     /// </summary>
-    [Obsolete("Use ArgumentInputs to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
+    [Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
     public object? Parameter { get; }
 
     /// <summary>
-    /// Gets the inputs used to describe the invocation arguments accepted by the command.
+    /// Gets the invocation arguments accepted by the command.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Each input name maps to a value in <see cref="ExecuteCommandContext.Arguments"/> when the command is executed.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<InteractionInput>? ArgumentInputs { get; }
+    public IReadOnlyList<InteractionInput>? Arguments { get; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -349,7 +349,7 @@ public sealed class ExecuteCommandContext
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The collection contains the inputs described by <see cref="ResourceCommandAnnotation.ArgumentInputs"/> with their
+    /// The collection contains the arguments described by <see cref="ResourceCommandAnnotation.Arguments"/> with their
     /// submitted values populated. The dashboard, CLI, and API all use the same input metadata to collect values before the
     /// command callback is invoked.
     /// </para>

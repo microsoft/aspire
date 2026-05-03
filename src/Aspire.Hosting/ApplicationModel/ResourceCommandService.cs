@@ -183,7 +183,7 @@ public class ResourceCommandService
         var resolvedCommandName = commandName;
         var annotation = ResolveCommandAnnotation(resourceEvent.Resource, ref resolvedCommandName);
 
-        return CreateArguments(annotation?.ArgumentInputs, argumentValues);
+        return CreateArguments(annotation?.Arguments, argumentValues);
     }
 
     internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken)
@@ -260,17 +260,17 @@ public class ResourceCommandService
         return annotation;
     }
 
-    private static InteractionInputCollection? CreateArguments(IReadOnlyList<InteractionInput>? argumentInputs, IReadOnlyDictionary<string, string?>? argumentValues)
+    private static InteractionInputCollection? CreateArguments(IReadOnlyList<InteractionInput>? commandArguments, IReadOnlyDictionary<string, string?>? argumentValues)
     {
-        if (argumentInputs is not { Count: > 0 })
+        if (commandArguments is not { Count: > 0 })
         {
             return null;
         }
 
-        var inputs = new InteractionInput[argumentInputs.Count];
-        for (var i = 0; i < argumentInputs.Count; i++)
+        var inputs = new InteractionInput[commandArguments.Count];
+        for (var i = 0; i < commandArguments.Count; i++)
         {
-            var input = argumentInputs[i];
+            var input = commandArguments[i];
             var value = input.Value;
             if (argumentValues?.TryGetValue(input.Name, out var argumentValue) == true)
             {

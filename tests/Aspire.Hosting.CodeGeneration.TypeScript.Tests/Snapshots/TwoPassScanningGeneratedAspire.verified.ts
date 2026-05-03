@@ -457,7 +457,7 @@ export interface CertificateTrustExecutionConfigurationExportData {
 export interface CommandOptions {
     description?: string;
     parameter?: any;
-    argumentInputs?: any[];
+    arguments?: any[];
     visibility?: ResourceCommandVisibility;
     confirmationMessage?: string;
     iconName?: string;
