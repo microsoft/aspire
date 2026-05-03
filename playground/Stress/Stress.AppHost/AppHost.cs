@@ -111,19 +111,14 @@ serviceBuilder.WithCommand(
         {
             Message = arguments.GetProperty("message").GetString(),
             Count = arguments.GetProperty("count").GetDouble(),
-            Urgent = arguments.GetProperty("urgent").GetBoolean()
+            Urgent = arguments.TryGetProperty("urgent", out var urgent) && urgent.GetBoolean()
         };
-        var json = JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
 
-        return Task.FromResult(CommandResults.Success("Echoed command arguments.", new CommandResultData
-        {
-            Value = json,
-            Format = CommandResultFormat.Json
-        }));
+        return Task.FromResult(CreateJsonSuccess("Echoed command arguments.", response));
     },
     commandOptions: new CommandOptions
     {
-        Description = "Echoes invocation arguments supplied by CLI and API clients.",
+        Description = "Common API-only command that accepts required text and number arguments plus an optional boolean.",
         IconName = "Send",
         Visibility = ResourceCommandVisibility.Api,
         ArgumentInputs =
@@ -150,6 +145,198 @@ serviceBuilder.WithCommand(
                 InputType = InputType.Boolean
             }
         ]
+    });
+serviceBuilder.WithCommand(
+    name: "echo-arguments",
+    displayName: "Echo arguments",
+    executeCommand: c =>
+    {
+        var arguments = ReadCommandArguments<EchoCommandArguments>(c.Arguments);
+        if (string.IsNullOrWhiteSpace(arguments.Message))
+        {
+            return Task.FromResult(CommandResults.Failure("The message argument is required."));
+        }
+        if (arguments.Repeat is < 1 or > 10)
+        {
+            return Task.FromResult(CommandResults.Failure("The repeat argument must be between 1 and 10."));
+        }
+
+        var message = arguments.Shout ? arguments.Message.ToUpperInvariant() : arguments.Message;
+        var payload = new
+        {
+            arguments.Message,
+            arguments.Repeat,
+            arguments.Shout,
+            arguments.Flavor,
+            SecretLength = arguments.Secret?.Length ?? 0,
+            Echoed = Enumerable.Repeat(message, arguments.Repeat).ToArray()
+        };
+
+        return Task.FromResult(CreateJsonSuccess("Echoed command arguments.", payload, displayImmediately: true));
+    },
+    commandOptions: new CommandOptions
+    {
+        Description = "Common dashboard/API command with text, number, boolean, choice, and secret argument inputs.",
+        IconName = "Code",
+        ArgumentInputs =
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                Label = "Message",
+                Description = "Text value to echo.",
+                InputType = InputType.Text,
+                Required = true,
+                Placeholder = "Hello from the Stress playground",
+                MaxLength = 80
+            },
+            new InteractionInput
+            {
+                Name = "repeat",
+                Label = "Repeat",
+                Description = "How many times to echo the message.",
+                InputType = InputType.Number,
+                Value = "1"
+            },
+            new InteractionInput
+            {
+                Name = "shout",
+                Label = "Shout",
+                Description = "Uppercase the echoed message.",
+                InputType = InputType.Boolean,
+                Value = "false"
+            },
+            new InteractionInput
+            {
+                Name = "flavor",
+                Label = "Flavor",
+                Description = "Choice argument used to verify select input rendering.",
+                InputType = InputType.Choice,
+                Value = "vanilla",
+                Options =
+                [
+                    KeyValuePair.Create("vanilla", "Vanilla"),
+                    KeyValuePair.Create("chocolate", "Chocolate"),
+                    KeyValuePair.Create("strawberry", "Strawberry")
+                ]
+            },
+            new InteractionInput
+            {
+                Name = "secret",
+                Label = "Secret",
+                Description = "Secret text input. The command only returns its length.",
+                InputType = InputType.SecretText,
+                Required = false,
+                Placeholder = "Optional secret"
+            }
+        ]
+    });
+serviceBuilder.WithCommand(
+    name: "validate-arguments",
+    displayName: "Validate arguments",
+    executeCommand: c =>
+    {
+        var arguments = ReadCommandArguments<ValidateCommandArguments>(c.Arguments);
+        if (string.IsNullOrWhiteSpace(arguments.Target))
+        {
+            return Task.FromResult(CommandResults.Failure("The target argument is required."));
+        }
+        if (arguments.TimeoutSeconds <= 0)
+        {
+            return Task.FromResult(CommandResults.Failure("The timeoutSeconds argument must be positive."));
+        }
+
+        var payload = new
+        {
+            arguments.Target,
+            arguments.Mode,
+            arguments.TimeoutSeconds,
+            arguments.RequireHealthy,
+            ValidatedAt = DateTimeOffset.UtcNow
+        };
+
+        return arguments.Mode == "fail"
+            ? Task.FromResult(CreateJsonFailure("Argument validation failed.", payload))
+            : Task.FromResult(CreateJsonSuccess("Argument validation passed.", payload));
+    },
+    commandOptions: new CommandOptions
+    {
+        Description = "Less common validation command with failure results, required inputs, defaults, and choice validation.",
+        IconName = "CheckmarkCircle",
+        ArgumentInputs =
+        [
+            new InteractionInput
+            {
+                Name = "target",
+                Label = "Target",
+                Description = "Target resource or subsystem to validate.",
+                InputType = InputType.Text,
+                Required = true,
+                Placeholder = "stress-apiservice",
+                MaxLength = 80
+            },
+            new InteractionInput
+            {
+                Name = "mode",
+                Label = "Mode",
+                Description = "Select success to pass, fail to return a structured failure, or dry-run for a successful validation preview.",
+                InputType = InputType.Choice,
+                Value = "success",
+                Options =
+                [
+                    KeyValuePair.Create("success", "Success"),
+                    KeyValuePair.Create("fail", "Fail"),
+                    KeyValuePair.Create("dry-run", "Dry run")
+                ]
+            },
+            new InteractionInput
+            {
+                Name = "timeoutSeconds",
+                Label = "Timeout seconds",
+                Description = "Positive timeout value to validate.",
+                InputType = InputType.Number,
+                Value = "30"
+            },
+            new InteractionInput
+            {
+                Name = "requireHealthy",
+                Label = "Require healthy",
+                Description = "Boolean argument used to verify checkbox input rendering.",
+                InputType = InputType.Boolean,
+                Value = "true"
+            }
+        ]
+    });
+serviceBuilder.WithCommand(
+    name: "argument-stress-test",
+    displayName: "Argument stress test",
+    executeCommand: c =>
+    {
+        if (c.Arguments is null)
+        {
+            return Task.FromResult(CommandResults.Failure("No command arguments were supplied."));
+        }
+
+        var properties = c.Arguments.Value.EnumerateObject().ToArray();
+        var payload = new
+        {
+            PropertyCount = properties.Length,
+            StringCharacters = properties
+                .Where(p => p.Value.ValueKind == JsonValueKind.String)
+                .Sum(p => p.Value.GetString()?.Length ?? 0),
+            NumberCount = properties.Count(p => p.Value.ValueKind == JsonValueKind.Number),
+            BooleanCount = properties.Count(p => p.Value.ValueKind is JsonValueKind.True or JsonValueKind.False),
+            PropertyNames = properties.Select(p => p.Name).ToArray()
+        };
+
+        return Task.FromResult(CreateJsonSuccess("Summarized command arguments.", payload));
+    },
+    commandOptions: new CommandOptions
+    {
+        Description = "Minor stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
+        IconName = "TableLightning",
+        Visibility = ResourceCommandVisibility.Api,
+        ArgumentInputs = CreateArgumentStressInputs(fieldCount: 20)
     });
 
 serviceBuilder.WithHttpEndpoint(5180, name: $"http");
@@ -336,6 +523,84 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
 
 builder.Build().Run();
 
+static ExecuteCommandResult CreateJsonSuccess(string message, object payload, bool displayImmediately = false)
+{
+    return CommandResults.Success(message, new CommandResultData
+    {
+        Value = SerializeCommandPayload(payload),
+        Format = CommandResultFormat.Json,
+        DisplayImmediately = displayImmediately
+    });
+}
+
+static ExecuteCommandResult CreateJsonFailure(string message, object payload)
+{
+    return CommandResults.Failure(message, SerializeCommandPayload(payload), CommandResultFormat.Json);
+}
+
+static string SerializeCommandPayload(object payload)
+{
+    return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+}
+
+static T ReadCommandArguments<T>(JsonElement? arguments) where T : new()
+{
+    return arguments is null
+        ? new T()
+        : JsonSerializer.Deserialize<T>(arguments.Value.GetRawText(), new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new T();
+}
+
+static IReadOnlyList<InteractionInput> CreateArgumentStressInputs(int fieldCount)
+{
+    var inputs = new List<InteractionInput>
+    {
+        new()
+        {
+            Name = "runId",
+            Label = "Run ID",
+            Description = "Identifier for this stress command invocation.",
+            InputType = InputType.Text,
+            Required = true,
+            Placeholder = "stress-001",
+            MaxLength = 64
+        },
+        new()
+        {
+            Name = "iterations",
+            Label = "Iterations",
+            Description = "Number input used to verify numeric payload handling.",
+            InputType = InputType.Number,
+            Required = true,
+            Value = "5"
+        },
+        new()
+        {
+            Name = "enabled",
+            Label = "Enabled",
+            Description = "Boolean input used to verify boolean payload handling.",
+            InputType = InputType.Boolean,
+            Required = true,
+            Value = "true"
+        }
+    };
+
+    for (var i = 1; i <= fieldCount; i++)
+    {
+        inputs.Add(new()
+        {
+            Name = $"item{i:00}",
+            Label = $"Item {i:00}",
+            Description = "Generated text input used by the command argument stress test.",
+            InputType = InputType.Text,
+            Required = i <= 3,
+            Placeholder = $"value-{i:00}",
+            MaxLength = 64
+        });
+    }
+
+    return inputs;
+}
+
 static async Task ExecuteCommandForAllResourcesAsync(IServiceProvider serviceProvider, string commandName, CancellationToken cancellationToken)
 {
     var commandService = serviceProvider.GetRequiredService<ResourceCommandService>();
@@ -352,4 +617,28 @@ static async Task ExecuteCommandForAllResourcesAsync(IServiceProvider servicePro
         commandTasks.Add(commandService.ExecuteCommandAsync(r, commandName, cancellationToken));
     }
     await Task.WhenAll(commandTasks).ConfigureAwait(false);
+}
+
+file sealed class EchoCommandArguments
+{
+    public string? Message { get; set; }
+
+    public int Repeat { get; set; } = 1;
+
+    public bool Shout { get; set; }
+
+    public string Flavor { get; set; } = "vanilla";
+
+    public string? Secret { get; set; }
+}
+
+file sealed class ValidateCommandArguments
+{
+    public string? Target { get; set; }
+
+    public string Mode { get; set; } = "success";
+
+    public int TimeoutSeconds { get; set; } = 30;
+
+    public bool RequireHealthy { get; set; } = true;
 }
