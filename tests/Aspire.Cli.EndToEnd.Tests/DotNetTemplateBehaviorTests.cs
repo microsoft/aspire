@@ -192,27 +192,30 @@ public sealed class DotNetTemplateTargetFrameworkTests(ITestOutputHelper output)
         {
             DotNetTemplateBehaviorTestHelpers.AssertGeneratedProjectsTargetFramework(projectRoot, targetFramework);
 
-            await auto.TypeAsync($"dotnet build {AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(projectRoot, workspace))}");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+            await auto.CaptureCommandOutputAsync(
+                $"dotnet build {AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(projectRoot, workspace))}",
+                workspace,
+                counter,
+                $"dotnet-build-{targetFramework}.log",
+                TimeSpan.FromMinutes(4));
         }
 
-        await auto.TypeAsync(
+        await auto.CaptureCommandOutputAsync(
             "if [ ! -x /tmp/dotnet8/dotnet ]; then " +
             "curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && " +
             "bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /tmp/dotnet8 --no-path; " +
-            "fi");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(5));
+            "fi",
+            workspace,
+            counter,
+            "dotnet8-install.log",
+            TimeSpan.FromMinutes(5));
 
-        var olderSdkBuildLogPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, "dotnet8-net10-build.log");
-        var quotedOlderSdkBuildLogPath = AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(olderSdkBuildLogPath, workspace));
-        CliE2ETestHelpers.RegisterCaptureFile("dotnet8-net10-build.log", olderSdkBuildLogPath);
-
-        await auto.TypeAsync(
-            $"DOTNET_MULTILEVEL_LOOKUP=0 /tmp/dotnet8/dotnet build {AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(projectRoots["net10.0"], workspace))} > {quotedOlderSdkBuildLogPath} 2>&1");
-        await auto.EnterAsync();
-        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(2));
+        var olderSdkBuildLogPath = await auto.CaptureFailingCommandOutputAsync(
+            $"DOTNET_MULTILEVEL_LOOKUP=0 /tmp/dotnet8/dotnet build {AspireCliShellCommandHelpers.QuoteBashArg(CliE2ETestHelpers.ToContainerPath(projectRoots["net10.0"], workspace))}",
+            workspace,
+            counter,
+            "dotnet8-net10-build.log",
+            TimeSpan.FromMinutes(2));
 
         Assert.Contains("The current .NET SDK does not support targeting .NET 10.0", File.ReadAllText(olderSdkBuildLogPath), StringComparison.Ordinal);
 

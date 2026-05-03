@@ -830,12 +830,75 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter,
         string outputFileName)
     {
-        var hostOutputPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, outputFileName);
-        var containerOutputPath = CliE2ETestHelpers.ToContainerPath(hostOutputPath, workspace);
-
-        CliE2ETestHelpers.RegisterCaptureFile(outputFileName, hostOutputPath);
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
 
         await auto.RunCommandAsync($"{command} > {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}", counter);
+        return hostOutputPath;
+    }
+
+    /// <summary>
+    /// Runs a shell command and captures stdout and stderr to a workspace file.
+    /// </summary>
+    internal static async Task<string> CaptureCommandOutputAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter,
+        string outputFileName,
+        TimeSpan? timeout = null)
+    {
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
+
+        await auto.RunCommandFailFastAsync(
+            $"{command} > {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)} 2>&1",
+            counter,
+            timeout ?? TimeSpan.FromSeconds(500));
+
+        return hostOutputPath;
+    }
+
+    /// <summary>
+    /// Runs a shell command expected to fail and captures stdout and stderr to a workspace file.
+    /// </summary>
+    internal static async Task<string> CaptureFailingCommandOutputAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter,
+        string outputFileName,
+        TimeSpan? timeout = null)
+    {
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
+        var expectedCounter = counter.Value;
+        var succeeded = false;
+
+        await auto.TypeAsync($"{command} > {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)} 2>&1");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            var successSearcher = new CellPatternSearcher()
+                .FindPattern(expectedCounter.ToString())
+                .RightText(" OK] $ ");
+            if (successSearcher.Search(snapshot).Count > 0)
+            {
+                succeeded = true;
+                return true;
+            }
+
+            var errorSearcher = new CellPatternSearcher()
+                .FindPattern(expectedCounter.ToString())
+                .RightText(" ERR:");
+
+            return errorSearcher.Search(snapshot).Count > 0;
+        }, timeout: timeout ?? TimeSpan.FromSeconds(500), description: $"expected failing command [{expectedCounter} ERR]");
+
+        counter.Increment();
+
+        if (succeeded)
+        {
+            throw new InvalidOperationException($"Expected command to fail, but it succeeded. Output captured at {hostOutputPath}. Command: {command}");
+        }
+
         return hostOutputPath;
     }
 
@@ -849,10 +912,7 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter,
         string outputFileName)
     {
-        var hostOutputPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, outputFileName);
-        var containerOutputPath = CliE2ETestHelpers.ToContainerPath(hostOutputPath, workspace);
-
-        CliE2ETestHelpers.RegisterCaptureFile(outputFileName, hostOutputPath);
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
 
         await auto.RunCommandAsync(
             $"LOG=$(ls -t {logGlob} 2>/dev/null | head -1) && test -n \"$LOG\" && cp \"$LOG\" {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}",
@@ -894,6 +954,18 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.RunCommandAsync("aspire config set channel local -g", counter);
         await auto.RunCommandAsync("SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g", counter);
+    }
+
+    private static (string HostOutputPath, string ContainerOutputPath) RegisterWorkspaceCaptureFile(
+        TemporaryWorkspace workspace,
+        string outputFileName)
+    {
+        var hostOutputPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, outputFileName);
+        var containerOutputPath = CliE2ETestHelpers.ToContainerPath(hostOutputPath, workspace);
+
+        CliE2ETestHelpers.RegisterCaptureFile(outputFileName, hostOutputPath);
+
+        return (hostOutputPath, containerOutputPath);
     }
 
     private static async Task RunCommandAsync(
