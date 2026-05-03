@@ -580,7 +580,7 @@ internal static class CliE2EAutomatorHelpers
 
         await auto.TypeAsync(
             $"DASHBOARD_URL=$(sed -n " +
-            "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https\\?:\\/\\/localhost:[0-9]*\\).*/\\1/p' " +
+            "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https\\?:\\/\\/[a-z.]*localhost:[0-9]*\\).*/\\1/p' " +
             $"\"{jsonFile}\" | head -1)");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
