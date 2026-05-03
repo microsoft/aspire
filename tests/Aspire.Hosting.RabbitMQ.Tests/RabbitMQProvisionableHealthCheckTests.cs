@@ -5,7 +5,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RabbitMQ.Provisioning;
 using Aspire.Hosting.RabbitMQ.Tests.TestServices;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using RabbitMQ.Client;
 
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
@@ -31,7 +30,7 @@ public class RabbitMQProvisionableHealthCheckTests
     {
         var (_, vhost) = BuildVhost();
         var client = new FakeRabbitMQProvisioningClient();
-        var check = new RabbitMQProvisionableHealthCheck(vhost, client);
+        var check = new RabbitMQProvisionableHealthCheck(vhost, client, Microsoft.Extensions.Logging.Abstractions.NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
 
         vhost.ProvisioningComplete.TrySetException(new DistributedApplicationException("boom"));
 
@@ -68,7 +67,7 @@ public class RabbitMQProvisionableHealthCheckTests
     {
         var (_, vhost) = BuildVhost();
         var client = new FakeRabbitMQProvisioningClient();
-        var check = new RabbitMQProvisionableHealthCheck(vhost, client);
+        var check = new RabbitMQProvisionableHealthCheck(vhost, client, Microsoft.Extensions.Logging.Abstractions.NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
 
         vhost.ProvisioningComplete.TrySetResult();
 
@@ -82,7 +81,7 @@ public class RabbitMQProvisionableHealthCheckTests
     {
         var (_, vhost) = BuildVhost();
         var client = new FakeRabbitMQProvisioningClient { CanConnect = false };
-        var check = new RabbitMQProvisionableHealthCheck(vhost, client);
+        var check = new RabbitMQProvisionableHealthCheck(vhost, client, Microsoft.Extensions.Logging.Abstractions.NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
 
         vhost.ProvisioningComplete.TrySetResult();
 
@@ -263,7 +262,6 @@ public class RabbitMQProvisionableHealthCheckTests
         public Task<string?> GetShovelStateAsync(string vhost, string name, CancellationToken ct)
             => Task.FromResult<string?>(state);
 
-        public ValueTask<IConnection> GetOrCreateConnectionAsync(string vhost, CancellationToken ct) => throw new NotImplementedException();
         public Task<bool> CanConnectAsync(string vhost, CancellationToken ct) => Task.FromResult(false);
         public Task DeclareExchangeAsync(string vhost, string name, string type, bool durable, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct) => Task.CompletedTask;
         public Task DeclareQueueAsync(string vhost, string name, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct) => Task.CompletedTask;
@@ -274,6 +272,7 @@ public class RabbitMQProvisionableHealthCheckTests
         public Task CreateVirtualHostAsync(string vhost, CancellationToken ct) => Task.CompletedTask;
         public Task PutShovelAsync(string vhost, string name, RabbitMQShovelDefinition def, CancellationToken ct) => Task.CompletedTask;
         public Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct) => Task.CompletedTask;
+        public Task<bool> PolicyExistsAsync(string vhost, string name, CancellationToken ct) => Task.FromResult(true);
         public ValueTask DisposeAsync() => default;
     }
 }

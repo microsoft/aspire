@@ -44,12 +44,13 @@ public class RabbitMQPluginTests
     }
 
     [Fact]
-    public async Task WithPlugin_GeneratesEnabledPluginsFile()
+    public async Task WithPlugin_GeneratesEnabledPluginsFile_ContainingOnlyRequestedPlugins()
     {
         var builder = DistributedApplication.CreateBuilder();
         var server = builder.AddRabbitMQ("rabbit");
 
-        server.WithPlugin(RabbitMQPlugin.Prometheus);
+        // Use WithPlugin directly (not AddShovel, which transitively enables management)
+        server.WithPlugin(RabbitMQPlugin.Shovel);
         server.WithPlugin("my_custom_plugin");
 
         var containerFiles = server.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>();
@@ -70,16 +71,47 @@ public class RabbitMQPluginTests
         var content = file.Contents;
         Assert.NotNull(content);
 
-        // Should contain defaults + custom
+        // Should contain exactly the requested plugins — no hard-coded extras
+        Assert.Contains("rabbitmq_shovel", content);
+        Assert.Contains("my_custom_plugin", content);
+        Assert.DoesNotContain("rabbitmq_management_agent", content);
+        Assert.DoesNotContain("rabbitmq_web_dispatch", content);
+        Assert.DoesNotContain("rabbitmq_prometheus", content);
+
+        // Should be formatted as an Erlang list
+        Assert.StartsWith("[", content);
+        Assert.EndsWith("].", content);
+    }
+
+    [Fact]
+    public async Task WithManagementPlugin_ThenWithPlugin_IncludesManagementPluginsInFile()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var server = builder.AddRabbitMQ("rabbit").WithManagementPlugin();
+
+        server.WithPlugin("my_custom_plugin");
+
+        var containerFiles = server.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>();
+        var annotation = Assert.Single(containerFiles);
+
+        var context = new ContainerFileSystemCallbackContext
+        {
+            ServiceProvider = new ServiceCollection().BuildServiceProvider(),
+            Model = server.Resource
+        };
+        var items = await annotation.Callback(context, default);
+
+        var file = Assert.Single(items) as ContainerFile;
+        Assert.NotNull(file);
+        var content = file.Contents;
+        Assert.NotNull(content);
+
+        // Management plugin annotations are added explicitly by WithManagementPlugin
         Assert.Contains("rabbitmq_management", content);
         Assert.Contains("rabbitmq_management_agent", content);
         Assert.Contains("rabbitmq_web_dispatch", content);
         Assert.Contains("rabbitmq_prometheus", content);
         Assert.Contains("my_custom_plugin", content);
-
-        // Should be formatted as an Erlang list
-        Assert.StartsWith("[", content);
-        Assert.EndsWith("].", content);
     }
 
     [Fact]

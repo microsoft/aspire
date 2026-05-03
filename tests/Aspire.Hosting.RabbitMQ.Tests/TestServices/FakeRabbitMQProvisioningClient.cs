@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.RabbitMQ.Provisioning;
-using RabbitMQ.Client;
 
 namespace Aspire.Hosting.RabbitMQ.Tests.TestServices;
 
@@ -36,12 +35,6 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
     /// Controls the return value of <see cref="CanConnectAsync"/>. Defaults to <see langword="true"/>.
     /// </summary>
     public bool CanConnect { get; set; } = true;
-
-    public ValueTask<IConnection> GetOrCreateConnectionAsync(string vhost, CancellationToken ct)
-    {
-        Calls.Add($"GetOrCreateConnectionAsync({vhost})");
-        return ValueTask.FromResult<IConnection>(null!);
-    }
 
     public Task<bool> CanConnectAsync(string vhost, CancellationToken ct)
     {
@@ -132,6 +125,12 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<bool> PolicyExistsAsync(string vhost, string name, CancellationToken ct)
+    {
+        Calls.Add($"PolicyExistsAsync({vhost}, {name})");
+        return Task.FromResult(!FailPolicyNames.Contains(name));
     }
 
     public ValueTask DisposeAsync()

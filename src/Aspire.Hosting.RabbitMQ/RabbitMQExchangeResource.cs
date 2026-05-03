@@ -67,7 +67,7 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
 
     IEnumerable<IRabbitMQProvisionable> IRabbitMQProvisionable.HealthDependencies => AppliedPolicies;
 
-    string IRabbitMQDestination.EntityName => ExchangeName;
+    string IRabbitMQDestination.ProvisionedName => ExchangeName;
     RabbitMQVirtualHostResource IRabbitMQDestination.VirtualHost => Parent;
     RabbitMQDestinationKind IRabbitMQDestination.Kind => RabbitMQDestinationKind.Exchange;
 
@@ -89,10 +89,7 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
 
     TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
 
-    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-        => ApplyAsync(client, cancellationToken);
-
-    internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         var typeString = ExchangeType.ToString().ToLowerInvariant();
 
@@ -110,26 +107,13 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
     {
         foreach (var binding in Bindings)
         {
-            if (binding.Destination.Kind == RabbitMQDestinationKind.Queue)
-            {
-                await client.BindQueueAsync(
-                    Parent.VirtualHostName,
-                    ExchangeName,
-                    binding.Destination.EntityName,
-                    binding.RoutingKey,
-                    binding.Arguments,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            else if (binding.Destination.Kind == RabbitMQDestinationKind.Exchange)
-            {
-                await client.BindExchangeAsync(
-                    Parent.VirtualHostName,
-                    ExchangeName,
-                    binding.Destination.EntityName,
-                    binding.RoutingKey,
-                    binding.Arguments,
-                    cancellationToken).ConfigureAwait(false);
-            }
+            await binding.Destination.BindAsync(
+                client,
+                Parent.VirtualHostName,
+                ExchangeName,
+                binding.RoutingKey,
+                binding.Arguments,
+                cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -140,4 +124,7 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
             ? RabbitMQProbeResult.Healthy
             : RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
+
+    Task IRabbitMQDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
+        => client.BindExchangeAsync(vhost, sourceExchange, ExchangeName, routingKey, args, ct);
 }

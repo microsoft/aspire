@@ -59,11 +59,15 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
     public RabbitMQQueueType QueueType { get; set; } = RabbitMQQueueType.Classic;
 
     /// <summary>
-    /// Gets the arguments for the queue.
+    /// Gets the arguments for the queue declaration.
+    /// These are the AMQP x-arguments passed to the broker when the queue is declared.
+    /// Use this for per-queue settings such as <c>x-message-ttl</c>, <c>x-max-length</c>,
+    /// or <c>x-dead-letter-exchange</c>. For settings that should apply to multiple queues,
+    /// prefer <c>AddPolicy</c> on the virtual host instead.
     /// </summary>
     public IDictionary<string, object?> Arguments { get; } = new Dictionary<string, object?>();
 
-    string IRabbitMQDestination.EntityName => QueueName;
+    string IRabbitMQDestination.ProvisionedName => QueueName;
     RabbitMQVirtualHostResource IRabbitMQDestination.VirtualHost => Parent;
     RabbitMQDestinationKind IRabbitMQDestination.Kind => RabbitMQDestinationKind.Queue;
 
@@ -92,10 +96,7 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
 
     TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
 
-    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-        => ApplyAsync(client, cancellationToken);
-
-    internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         var args = new Dictionary<string, object?>(Arguments);
         if (QueueType != RabbitMQQueueType.Classic)
@@ -120,4 +121,7 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
             ? RabbitMQProbeResult.Healthy
             : RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
+
+    Task IRabbitMQDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
+        => client.BindQueueAsync(vhost, sourceExchange, QueueName, routingKey, args, ct);
 }

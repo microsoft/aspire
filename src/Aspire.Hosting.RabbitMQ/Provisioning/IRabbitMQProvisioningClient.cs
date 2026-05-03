@@ -1,14 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using RabbitMQ.Client;
-
 namespace Aspire.Hosting.RabbitMQ.Provisioning;
 
 internal interface IRabbitMQProvisioningClient : IAsyncDisposable
 {
-    // AMQP connection (used by health checks)
-    ValueTask<IConnection> GetOrCreateConnectionAsync(string vhost, CancellationToken ct);
     Task<bool> CanConnectAsync(string vhost, CancellationToken ct);
 
     // AMQP
@@ -24,4 +20,5 @@ internal interface IRabbitMQProvisioningClient : IAsyncDisposable
     Task PutShovelAsync(string vhost, string name, RabbitMQShovelDefinition def, CancellationToken ct);
     Task<string?> GetShovelStateAsync(string vhost, string name, CancellationToken ct);
     Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct);
+    Task<bool> PolicyExistsAsync(string vhost, string name, CancellationToken ct);
 }

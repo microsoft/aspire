@@ -105,110 +105,62 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
 
     public async Task DeclareExchangeAsync(string vhost, string name, string type, bool durable, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct)
     {
+        _logger.LogDebug("Declaring exchange '{Exchange}' (type={Type}) on vhost '{Vhost}'.", name, type, vhost);
         var ch = await GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-        try
-        {
-            await ch.ExchangeDeclareAsync(name, type, durable, autoDelete, args, cancellationToken: ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            throw new DistributedApplicationException($"Failed to declare exchange '{name}' on vhost '{vhost}': {ex.Message}", ex);
-        }
+        await AmqpAsync(
+            () => ch.ExchangeDeclareAsync(name, type, durable, autoDelete, args, cancellationToken: ct),
+            $"Failed to declare exchange '{name}' on vhost '{vhost}'").ConfigureAwait(false);
     }
 
     public async Task DeclareQueueAsync(string vhost, string name, bool durable, bool exclusive, bool autoDelete, IDictionary<string, object?>? args, CancellationToken ct)
     {
+        _logger.LogDebug("Declaring queue '{Queue}' on vhost '{Vhost}'.", name, vhost);
         var ch = await GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-        try
-        {
-            await ch.QueueDeclareAsync(name, durable, exclusive, autoDelete, args, cancellationToken: ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            throw new DistributedApplicationException($"Failed to declare queue '{name}' on vhost '{vhost}': {ex.Message}", ex);
-        }
+        await AmqpAsync(
+            () => ch.QueueDeclareAsync(name, durable, exclusive, autoDelete, args, cancellationToken: ct),
+            $"Failed to declare queue '{name}' on vhost '{vhost}'").ConfigureAwait(false);
     }
 
     public async Task BindQueueAsync(string vhost, string sourceExchange, string queue, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
     {
+        _logger.LogDebug("Binding queue '{Queue}' to exchange '{Exchange}' on vhost '{Vhost}'.", queue, sourceExchange, vhost);
         var ch = await GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-        try
-        {
-            await ch.QueueBindAsync(queue, sourceExchange, routingKey, args, cancellationToken: ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            throw new DistributedApplicationException($"Failed to bind queue '{queue}' to exchange '{sourceExchange}' on vhost '{vhost}': {ex.Message}", ex);
-        }
+        await AmqpAsync(
+            () => ch.QueueBindAsync(queue, sourceExchange, routingKey, args, cancellationToken: ct),
+            $"Failed to bind queue '{queue}' to exchange '{sourceExchange}' on vhost '{vhost}'").ConfigureAwait(false);
     }
 
     public async Task BindExchangeAsync(string vhost, string sourceExchange, string destExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
     {
+        _logger.LogDebug("Binding exchange '{Dest}' to exchange '{Source}' on vhost '{Vhost}'.", destExchange, sourceExchange, vhost);
         var ch = await GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-        try
-        {
-            await ch.ExchangeBindAsync(destExchange, sourceExchange, routingKey, args, cancellationToken: ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            throw new DistributedApplicationException($"Failed to bind exchange '{destExchange}' to exchange '{sourceExchange}' on vhost '{vhost}': {ex.Message}", ex);
-        }
+        await AmqpAsync(
+            () => ch.ExchangeBindAsync(destExchange, sourceExchange, routingKey, args, cancellationToken: ct),
+            $"Failed to bind exchange '{destExchange}' to exchange '{sourceExchange}' on vhost '{vhost}'").ConfigureAwait(false);
     }
 
     public async Task<bool> QueueExistsAsync(string vhost, string name, CancellationToken ct)
     {
         var ch = await GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-        try
-        {
-            await ch.QueueDeclarePassiveAsync(name, cancellationToken: ct).ConfigureAwait(false);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return await SafeAmqpAsync(() => ch.QueueDeclarePassiveAsync(name, cancellationToken: ct)).ConfigureAwait(false);
     }
 
     public async Task<bool> ExchangeExistsAsync(string vhost, string name, CancellationToken ct)
     {
         var ch = await GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-        try
-        {
-            await ch.ExchangeDeclarePassiveAsync(name, cancellationToken: ct).ConfigureAwait(false);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return await SafeAmqpAsync(() => ch.ExchangeDeclarePassiveAsync(name, cancellationToken: ct)).ConfigureAwait(false);
     }
 
     public async Task CreateVirtualHostAsync(string vhost, CancellationToken ct)
     {
-        var http = await GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var response = await http.PutAsync($"/api/vhosts/{Uri.EscapeDataString(vhost)}", null, ct).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            throw new DistributedApplicationException($"Failed to create virtual host '{vhost}': {ex.Message}", ex);
-        }
+        _logger.LogDebug("Creating virtual host '{Vhost}'.", vhost);
+        await HttpPutAsync($"/api/vhosts/{Uri.EscapeDataString(vhost)}", (object?)null, $"Failed to create virtual host '{vhost}'", ct).ConfigureAwait(false);
     }
 
     public async Task PutShovelAsync(string vhost, string name, RabbitMQShovelDefinition def, CancellationToken ct)
     {
-        var http = await GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var response = await http.PutAsJsonAsync($"/api/parameters/shovel/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, cancellationToken: ct).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-        }
-        catch (Exception ex)
-        {
-            throw new DistributedApplicationException($"Failed to create shovel '{name}' on vhost '{vhost}': {ex.Message}", ex);
-        }
+        _logger.LogDebug("Creating shovel '{Shovel}' on vhost '{Vhost}'.", name, vhost);
+        await HttpPutAsync($"/api/parameters/shovel/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, $"Failed to create shovel '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
     }
 
     public async Task<string?> GetShovelStateAsync(string vhost, string name, CancellationToken ct)
@@ -234,15 +186,21 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
 
     public async Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct)
     {
+        _logger.LogDebug("Applying policy '{Policy}' on vhost '{Vhost}'.", name, vhost);
+        await HttpPutAsync($"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, $"Failed to apply policy '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool> PolicyExistsAsync(string vhost, string name, CancellationToken ct)
+    {
         var http = await GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            var response = await http.PutAsJsonAsync($"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, cancellationToken: ct).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
+            var response = await http.GetAsync($"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", ct).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
         }
-        catch (Exception ex)
+        catch
         {
-            throw new DistributedApplicationException($"Failed to apply policy '{name}' on vhost '{vhost}': {ex.Message}", ex);
+            return false;
         }
     }
 
@@ -253,10 +211,10 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         {
             foreach (var (_, (conn, ch)) in _channels)
             {
-                try { await ch.CloseAsync().ConfigureAwait(false); } catch { }
-                try { await ch.DisposeAsync().ConfigureAwait(false); } catch { }
-                try { await conn.CloseAsync().ConfigureAwait(false); } catch { }
-                try { await conn.DisposeAsync().ConfigureAwait(false); } catch { }
+                try { await ch.CloseAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogDebug(ex, "Suppressed channel close error during disposal."); }
+                try { await ch.DisposeAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogDebug(ex, "Suppressed channel dispose error during disposal."); }
+                try { await conn.CloseAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogDebug(ex, "Suppressed connection close error during disposal."); }
+                try { await conn.DisposeAsync().ConfigureAwait(false); } catch (Exception ex) { _logger.LogDebug(ex, "Suppressed connection dispose error during disposal."); }
             }
             _channels.Clear();
         }
@@ -266,6 +224,57 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         }
         _http?.Dispose();
         _gate.Dispose();
+    }
+
+    /// <summary>
+    /// Executes an AMQP operation and wraps any exception in a <see cref="DistributedApplicationException"/>.
+    /// </summary>
+    private static async Task AmqpAsync(Func<Task> action, string errorMessage)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Executes an AMQP passive-declare operation and returns <see langword="true"/> if it succeeds,
+    /// <see langword="false"/> if the entity does not exist (any exception is swallowed).
+    /// </summary>
+    private static async Task<bool> SafeAmqpAsync(Func<Task> action)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends an HTTP PUT to the management API and wraps any failure in a <see cref="DistributedApplicationException"/>.
+    /// </summary>
+    private async Task HttpPutAsync<T>(string path, T? body, string errorMessage, CancellationToken ct)
+    {
+        var http = await GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var response = body is null
+                ? await http.PutAsync(path, null, ct).ConfigureAwait(false)
+                : await http.PutAsJsonAsync(path, body, cancellationToken: ct).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+        }
+        catch (Exception ex)
+        {
+            throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
+        }
     }
 
     private sealed class RabbitMQShovelStatus

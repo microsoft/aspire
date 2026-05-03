@@ -157,6 +157,11 @@ public static class RabbitMQBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var vhostName = virtualHostName ?? name;
+        if (builder.Resource.VirtualHosts.Any(v => v.VirtualHostName == vhostName))
+        {
+            throw new DistributedApplicationException($"A virtual host with the name '{vhostName}' already exists on server '{builder.Resource.Name}'.");
+        }
+
         var vhost = new RabbitMQVirtualHostResource(name, vhostName, builder.Resource);
 
         builder.Resource.VirtualHosts.Add(vhost);
@@ -166,20 +171,19 @@ public static class RabbitMQBuilderExtensions
             builder.WithManagementPlugin();
         }
 
-        var vhostBuilder = builder.ApplicationBuilder.AddResource(vhost);
-
-        return vhostBuilder.WithProvisionableHealthCheck(builder.Resource.Name);
+        return builder.ApplicationBuilder.AddResource(vhost)
+            .WithProvisionableHealthCheck(builder.Resource.Name);
     }
 
-    internal static RabbitMQVirtualHostResource GetOrAddDefaultVirtualHost(this IResourceBuilder<RabbitMQServerResource> server)
+    internal static IResourceBuilder<RabbitMQVirtualHostResource> GetOrAddDefaultVirtualHost(this IResourceBuilder<RabbitMQServerResource> server)
     {
         var defaultVhost = server.Resource.VirtualHosts.FirstOrDefault(v => v.VirtualHostName == "/");
-        if (defaultVhost is null)
+        if (defaultVhost is not null)
         {
-            var builder = server.AddVirtualHost($"{server.Resource.Name}-default-vhost", "/");
-            defaultVhost = builder.Resource;
+            return server.ApplicationBuilder.CreateResourceBuilder(defaultVhost);
         }
-        return defaultVhost;
+
+        return server.AddVirtualHost($"{server.Resource.Name}-default-vhost", "/");
     }
 
     /// <summary>
@@ -231,8 +235,7 @@ public static class RabbitMQBuilderExtensions
         RabbitMQQueueType type = RabbitMQQueueType.Classic)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        var vhost = builder.ApplicationBuilder.CreateResourceBuilder(builder.GetOrAddDefaultVirtualHost());
-        return vhost.AddQueue(name, queueName, type);
+        return builder.GetOrAddDefaultVirtualHost().AddQueue(name, queueName, type);
     }
 
     /// <summary>
@@ -284,8 +287,7 @@ public static class RabbitMQBuilderExtensions
         string? exchangeName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        var vhost = builder.ApplicationBuilder.CreateResourceBuilder(builder.GetOrAddDefaultVirtualHost());
-        return vhost.AddExchange(name, type, exchangeName);
+        return builder.GetOrAddDefaultVirtualHost().AddExchange(name, type, exchangeName);
     }
 
     /// <summary>
@@ -296,12 +298,7 @@ public static class RabbitMQBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withQueueProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RabbitMQQueueResource> WithProperties(this IResourceBuilder<RabbitMQQueueResource> builder, Action<RabbitMQQueueResource> configure)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configure);
-        configure(builder.Resource);
-        return builder;
-    }
+        => WithPropertiesCore(builder, configure);
 
     /// <summary>
     /// Configures properties of a RabbitMQ exchange.
@@ -311,12 +308,7 @@ public static class RabbitMQBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withExchangeProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RabbitMQExchangeResource> WithProperties(this IResourceBuilder<RabbitMQExchangeResource> builder, Action<RabbitMQExchangeResource> configure)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configure);
-        configure(builder.Resource);
-        return builder;
-    }
+        => WithPropertiesCore(builder, configure);
 
     /// <summary>
     /// Configures properties of a RabbitMQ shovel.
@@ -326,12 +318,7 @@ public static class RabbitMQBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withShovelProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RabbitMQShovelResource> WithProperties(this IResourceBuilder<RabbitMQShovelResource> builder, Action<RabbitMQShovelResource> configure)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configure);
-        configure(builder.Resource);
-        return builder;
-    }
+        => WithPropertiesCore(builder, configure);
 
     /// <summary>
     /// Adds a binding from an exchange to a destination.
@@ -395,9 +382,14 @@ public static class RabbitMQBuilderExtensions
             throw new DistributedApplicationException($"A shovel with the name '{wireName}' already exists in virtual host '{vhost.Resource.VirtualHostName}'.");
         }
 
-        if (source.Resource.VirtualHost != vhost.Resource)
+        if (source.Resource.VirtualHost.Parent != vhost.Resource.Parent)
         {
-            throw new DistributedApplicationException($"Cannot add shovel '{name}' to virtual host '{vhost.Resource.Name}' because the source destination '{source.Resource.Name}' is in a different virtual host.");
+            throw new DistributedApplicationException($"Cannot add shovel '{name}' because the source destination '{source.Resource.Name}' is on a different RabbitMQ server.");
+        }
+
+        if (destination.Resource.VirtualHost.Parent != vhost.Resource.Parent)
+        {
+            throw new DistributedApplicationException($"Cannot add shovel '{name}' because the destination '{destination.Resource.Name}' is on a different RabbitMQ server.");
         }
 
         var shovel = new RabbitMQShovelResource(name, wireName, vhost.Resource, new RabbitMQShovelEndpoint(source.Resource), new RabbitMQShovelEndpoint(destination.Resource));
@@ -408,11 +400,10 @@ public static class RabbitMQBuilderExtensions
         server.WithPlugin(RabbitMQPlugin.Shovel);
         server.WithPlugin(RabbitMQPlugin.ShovelManagement);
 
-        var builder = vhost.ApplicationBuilder.AddResource(shovel)
+        return vhost.ApplicationBuilder.AddResource(shovel)
             .WithRelationship(source.Resource, "Source")
-            .WithRelationship(destination.Resource, "Destination");
-
-        return builder.WithProvisionableHealthCheck(vhost.Resource.Parent.Name);
+            .WithRelationship(destination.Resource, "Destination")
+            .WithProvisionableHealthCheck(vhost.Resource.Parent.Name);
     }
 
     /// <summary>
@@ -437,8 +428,7 @@ public static class RabbitMQBuilderExtensions
         where TDest : Resource, IRabbitMQDestination
     {
         ArgumentNullException.ThrowIfNull(server);
-        var vhost = server.ApplicationBuilder.CreateResourceBuilder(server.GetOrAddDefaultVirtualHost());
-        return vhost.AddShovel(name, source, destination, shovelName);
+        return server.GetOrAddDefaultVirtualHost().AddShovel(name, source, destination, shovelName);
     }
 
     /// <summary>
@@ -448,10 +438,6 @@ public static class RabbitMQBuilderExtensions
     /// <para>
     /// Policies are applied to queues and/or exchanges whose names match <paramref name="pattern"/>.
     /// They configure runtime behaviour such as message TTL, dead-letter routing, and queue length limits.
-    /// </para>
-    /// <para>
-    /// Policy-to-entity matching is resolved lazily at application start (via <c>BeforeStartEvent</c>),
-    /// so the order in which <c>AddPolicy</c> and <c>AddQueue</c>/<c>AddExchange</c> are called does not matter.
     /// </para>
     /// <para>
     /// Policies require the management plugin. Call <see cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource})"/>
@@ -495,9 +481,7 @@ public static class RabbitMQBuilderExtensions
             return Task.CompletedTask;
         });
 
-        // Policies do not get a health check of their own — their ProvisioningComplete TCS is awaited
-        // by matching queues/exchanges via IRabbitMQProvisionable.HealthDependencies.
-        return policyBuilder;
+        return policyBuilder.WithProvisionableHealthCheck(builder.Resource.Parent.Name);
     }
 
     /// <summary>
@@ -548,8 +532,7 @@ public static class RabbitMQBuilderExtensions
         string? policyName = null)
     {
         ArgumentNullException.ThrowIfNull(server);
-        var vhost = server.ApplicationBuilder.CreateResourceBuilder(server.GetOrAddDefaultVirtualHost());
-        return vhost.AddPolicy(name, pattern, applyTo, policyName);
+        return server.GetOrAddDefaultVirtualHost().AddPolicy(name, pattern, applyTo, policyName);
     }
 
     /// <summary>
@@ -560,12 +543,7 @@ public static class RabbitMQBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withPolicyProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RabbitMQPolicyResource> WithProperties(this IResourceBuilder<RabbitMQPolicyResource> builder, Action<RabbitMQPolicyResource> configure)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configure);
-        configure(builder.Resource);
-        return builder;
-    }
+        => WithPropertiesCore(builder, configure);
 
     /// <summary>
     /// Enables a RabbitMQ plugin.
@@ -621,18 +599,10 @@ public static class RabbitMQBuilderExtensions
             builder.Resource.HasPluginFileCallback = true;
             builder.WithContainerFiles("/etc/rabbitmq", (context, ct) =>
             {
-                var plugins = new HashSet<string>(StringComparer.Ordinal)
-                {
-                    "rabbitmq_management",
-                    "rabbitmq_management_agent",
-                    "rabbitmq_web_dispatch",
-                    "rabbitmq_prometheus"
-                };
-
-                foreach (var annotation in builder.Resource.Annotations.OfType<RabbitMQPluginAnnotation>())
-                {
-                    plugins.Add(annotation.PluginName);
-                }
+                var plugins = builder.Resource.Annotations
+                    .OfType<RabbitMQPluginAnnotation>()
+                    .Select(a => a.PluginName)
+                    .ToHashSet(StringComparer.Ordinal);
 
                 var content = $"[{string.Join(",", plugins)}].";
                 IEnumerable<ContainerFileSystemItem> items =
@@ -728,6 +698,14 @@ public static class RabbitMQBuilderExtensions
         if (handled)
         {
             builder.WithHttpEndpoint(port: port, targetPort: 15672, name: RabbitMQServerResource.ManagementEndpointName);
+
+            // Register the plugins that the management image bundles so that the enabled_plugins file
+            // reflects the full set when WithPlugin is also called.
+            builder.WithPlugin(RabbitMQPlugin.Management);
+            builder.WithPlugin(RabbitMQPlugin.ManagementAgent);
+            builder.WithPlugin("rabbitmq_web_dispatch");
+            builder.WithPlugin(RabbitMQPlugin.Prometheus);
+
             return builder;
         }
 
@@ -752,7 +730,8 @@ public static class RabbitMQBuilderExtensions
             sp =>
             {
                 var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName);
-                return new RabbitMQProvisionableHealthCheck(resource, client);
+                var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<RabbitMQProvisionableHealthCheck>();
+                return new RabbitMQProvisionableHealthCheck(resource, client, logger);
             },
             failureStatus: null,
             tags: null));
@@ -816,6 +795,15 @@ public static class RabbitMQBuilderExtensions
             });
         }
 
+        return builder;
+    }
+
+    private static IResourceBuilder<T> WithPropertiesCore<T>(IResourceBuilder<T> builder, Action<T> configure)
+        where T : Resource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(builder.Resource);
         return builder;
     }
 }

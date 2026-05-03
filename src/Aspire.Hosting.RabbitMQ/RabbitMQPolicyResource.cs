@@ -104,9 +104,6 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
     TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
 
     Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-        => ApplyAsync(client, cancellationToken);
-
-    internal Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         var def = new RabbitMQPolicyDefinition(
             Pattern,
@@ -115,5 +112,13 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
             Priority);
 
         return client.PutPolicyAsync(Parent.VirtualHostName, PolicyName, def, cancellationToken);
+    }
+
+    async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var exists = await client.PolicyExistsAsync(Parent.VirtualHostName, PolicyName, cancellationToken).ConfigureAwait(false);
+        return exists
+            ? RabbitMQProbeResult.Healthy
+            : RabbitMQProbeResult.Unhealthy($"Policy '{PolicyName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
 }

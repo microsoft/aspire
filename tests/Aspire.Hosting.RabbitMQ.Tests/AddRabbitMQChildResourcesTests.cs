@@ -70,9 +70,9 @@ public class AddRabbitMQChildResourcesTests
         var vhost1 = server.GetOrAddDefaultVirtualHost();
         var vhost2 = server.GetOrAddDefaultVirtualHost();
 
-        Assert.Same(vhost1, vhost2);
+        Assert.Same(vhost1.Resource, vhost2.Resource);
         Assert.Single(server.Resource.VirtualHosts);
-        Assert.Equal("/", vhost1.VirtualHostName);
+        Assert.Equal("/", vhost1.Resource.VirtualHostName);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class AddRabbitMQChildResourcesTests
     }
 
     [Fact]
-    public void AddShovel_SourceInDifferentVirtualHost_ThrowsException()
+    public void AddShovel_SourceInDifferentVirtualHostOnSameServer_Succeeds()
     {
         var builder = DistributedApplication.CreateBuilder();
         var server = builder.AddRabbitMQ("rabbit");
@@ -203,8 +203,25 @@ public class AddRabbitMQChildResourcesTests
         var queue1 = vhost1.AddQueue("queue1");
         var queue2 = vhost2.AddQueue("queue2");
 
+        // Cross-vhost shovels on the same broker are allowed
+        var shovel = vhost2.AddShovel("myshovel", queue1, queue2);
+        Assert.NotNull(shovel);
+        Assert.Single(vhost2.Resource.Shovels);
+    }
+
+    [Fact]
+    public void AddShovel_SourceOnDifferentServer_ThrowsException()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var server1 = builder.AddRabbitMQ("rabbit1");
+        var server2 = builder.AddRabbitMQ("rabbit2");
+        var vhost1 = server1.AddVirtualHost("vhost1");
+        var vhost2 = server2.AddVirtualHost("vhost2");
+        var queue1 = vhost1.AddQueue("queue1");
+        var queue2 = vhost2.AddQueue("queue2");
+
         var ex = Assert.Throws<DistributedApplicationException>(() => vhost2.AddShovel("myshovel", queue1, queue2));
-        Assert.Contains("different virtual host", ex.Message);
+        Assert.Contains("different RabbitMQ server", ex.Message);
     }
 
     [Fact]
@@ -297,5 +314,23 @@ public class AddRabbitMQChildResourcesTests
 
         Assert.Equal("myshovel", shovel.Resource.Name);
         Assert.Equal("custom-shovel", shovel.Resource.ShovelName);
+    }
+
+    [Fact]
+    public void WithProperties_Queue_SetsArguments()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var server = builder.AddRabbitMQ("rabbit");
+        var vhost = server.AddVirtualHost("myvhost");
+
+        var queue = vhost.AddQueue("myqueue")
+            .WithProperties(q =>
+            {
+                q.Arguments["x-message-ttl"] = 60_000;
+                q.Arguments["x-max-length"] = 1000;
+            });
+
+        Assert.Equal(60_000, queue.Resource.Arguments["x-message-ttl"]);
+        Assert.Equal(1000, queue.Resource.Arguments["x-max-length"]);
     }
 }

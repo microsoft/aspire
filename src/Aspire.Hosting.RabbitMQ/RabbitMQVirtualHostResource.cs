@@ -68,6 +68,16 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     internal List<RabbitMQPolicyResource> Policies { get; } = [];
 
     /// <summary>
+    /// Enumerates all child provisionable resources in this virtual host
+    /// (policies, queues, exchanges, shovels).
+    /// </summary>
+    internal IEnumerable<IRabbitMQProvisionable> EnumerateChildren()
+        => Policies.Cast<IRabbitMQProvisionable>()
+            .Concat(Queues)
+            .Concat(Exchanges)
+            .Concat(Shovels);
+
+    /// <summary>
     /// Completed when this virtual host (and its full topology) has been provisioned.
     /// Faulted if provisioning failed for this vhost.
     /// </summary>
@@ -75,10 +85,7 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
 
     TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
 
-    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-        => ApplyAsync(client, cancellationToken);
-
-    internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         if (VirtualHostName != "/")
         {

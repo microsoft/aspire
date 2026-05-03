@@ -78,25 +78,20 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
 
     TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
 
-    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-        => ApplyAsync(client, cancellationToken);
-
-    internal async Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var srcUriExpr = Source.GetUri();
-        var srcUri = srcUriExpr is not null ? await srcUriExpr.GetValueAsync(cancellationToken).ConfigureAwait(false) : null;
-        var destUriExpr = Destination.GetUri();
-        var destUri = destUriExpr is not null ? await destUriExpr.GetValueAsync(cancellationToken).ConfigureAwait(false) : null;
+        var state = await client.GetShovelStateAsync(Parent.VirtualHostName, ShovelName, cancellationToken).ConfigureAwait(false);
+        return state == "running"
+            ? RabbitMQProbeResult.Healthy
+            : RabbitMQProbeResult.Unhealthy($"Shovel '{ShovelName}' is in state '{state ?? "unknown"}'.");
+    }
 
-        if (srcUri is null)
-        {
-            throw new DistributedApplicationException($"Could not resolve source URI for shovel '{ShovelName}'.");
-        }
-
-        if (destUri is null)
-        {
-            throw new DistributedApplicationException($"Could not resolve destination URI for shovel '{ShovelName}'.");
-        }
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var srcUri = await Source.GetUri().GetValueAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new DistributedApplicationException($"Could not resolve source URI for shovel '{ShovelName}'.");
+        var destUri = await Destination.GetUri().GetValueAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new DistributedApplicationException($"Could not resolve destination URI for shovel '{ShovelName}'.");
 
         var ackModeString = AckMode switch
         {
@@ -109,11 +104,11 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
         var def = new RabbitMQShovelDefinitionValue
         {
             SrcUri = srcUri,
-            SrcQueue = Source.Kind == RabbitMQDestinationKind.Queue ? Source.Target.EntityName : null,
-            SrcExchange = Source.Kind == RabbitMQDestinationKind.Exchange ? Source.Target.EntityName : null,
+            SrcQueue = Source.Kind == RabbitMQDestinationKind.Queue ? Source.Target.ProvisionedName : null,
+            SrcExchange = Source.Kind == RabbitMQDestinationKind.Exchange ? Source.Target.ProvisionedName : null,
             DestUri = destUri,
-            DestQueue = Destination.Kind == RabbitMQDestinationKind.Queue ? Destination.Target.EntityName : null,
-            DestExchange = Destination.Kind == RabbitMQDestinationKind.Exchange ? Destination.Target.EntityName : null,
+            DestQueue = Destination.Kind == RabbitMQDestinationKind.Queue ? Destination.Target.ProvisionedName : null,
+            DestExchange = Destination.Kind == RabbitMQDestinationKind.Exchange ? Destination.Target.ProvisionedName : null,
             AckMode = ackModeString,
             ReconnectDelay = ReconnectDelay.HasValue ? (int)ReconnectDelay.Value.TotalSeconds : null,
             SrcDeleteAfter = SrcDeleteAfter?.ToString(CultureInfo.InvariantCulture)
@@ -124,13 +119,5 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
             ShovelName,
             new RabbitMQShovelDefinition { Value = def },
             cancellationToken).ConfigureAwait(false);
-    }
-
-    async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-    {
-        var state = await client.GetShovelStateAsync(Parent.VirtualHostName, ShovelName, cancellationToken).ConfigureAwait(false);
-        return state == "running"
-            ? RabbitMQProbeResult.Healthy
-            : RabbitMQProbeResult.Unhealthy($"Shovel '{ShovelName}' is in state '{state ?? "unknown"}'.");
     }
 }

@@ -293,7 +293,7 @@ public class RabbitMQPolicyTests
         Assert.Single(queue.Resource.AppliedPolicies);
 
         // Simulate the health check: queue's own TCS is OK, but dependency (policy) is faulted
-        var check = new RabbitMQProvisionableHealthCheck(queue.Resource, fakeClient);
+        var check = new RabbitMQProvisionableHealthCheck(queue.Resource, fakeClient, Microsoft.Extensions.Logging.Abstractions.NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
         var context = new HealthCheckContext
         {
             Registration = new HealthCheckRegistration("test", _ => null!, null, null)
@@ -328,7 +328,7 @@ public class RabbitMQPolicyTests
         using var app = builder.Build();
         await RabbitMQTopologyProvisioner.ProvisionTopologyAsync(server.Resource, app.Services, default);
 
-        var check = new RabbitMQProvisionableHealthCheck(nonMatchingQueue.Resource, fakeClient);
+        var check = new RabbitMQProvisionableHealthCheck(nonMatchingQueue.Resource, fakeClient, Microsoft.Extensions.Logging.Abstractions.NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
         var context = new HealthCheckContext
         {
             Registration = new HealthCheckRegistration("test", _ => null!, null, null)

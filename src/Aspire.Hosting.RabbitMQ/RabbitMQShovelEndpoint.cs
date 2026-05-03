@@ -27,7 +27,7 @@ public sealed class RabbitMQShovelEndpoint
     /// <summary>
     /// Gets the URI for the shovel endpoint.
     /// </summary>
-    public ReferenceExpression? GetUri() => Target.VirtualHost.ConnectionStringExpression;
+    public ReferenceExpression GetUri() => Target.VirtualHost.ConnectionStringExpression;
 
     /// <summary>
     /// Gets the kind of the shovel endpoint.
