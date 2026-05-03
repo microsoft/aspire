@@ -247,7 +247,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentNullException.ThrowIfNull(request);
 
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
-        var result = await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, request.Arguments, cancellationToken).ConfigureAwait(false);
+        var argumentValues = ConvertArgumentValues(request.Arguments);
+        var arguments = resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, argumentValues);
+        var result = await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false);
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var resolvedMessage = result.Message ?? result.ErrorMessage;
@@ -272,6 +274,47 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 },
                 DisplayImmediately = v.DisplayImmediately
             } : null
+        };
+    }
+
+    private static IReadOnlyDictionary<string, string?>? ConvertArgumentValues(JsonElement? arguments)
+    {
+        if (arguments is null)
+        {
+            return null;
+        }
+
+        // ExecuteResourceCommandRequest arguments are encoded as a JSON object in the auxiliary backchannel protocol:
+        // {
+        //   "resourceName": "web-browser-logs",
+        //   "commandName": "click",
+        //   "arguments": { "selector": "#submit" }
+        // }
+        var objectArguments = arguments.Value;
+        if (objectArguments.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException("Resource command arguments must be a JSON object.");
+        }
+
+        var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
+        foreach (var property in objectArguments.EnumerateObject())
+        {
+            values[property.Name] = ConvertArgumentValue(property.Name, property.Value);
+        }
+
+        return values;
+    }
+
+    private static string? ConvertArgumentValue(string name, JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => null,
+            _ => throw new InvalidOperationException($"Resource command argument '{name}' must be a string, number, boolean, or null.")
         };
     }
 

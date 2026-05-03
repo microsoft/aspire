@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
 
 /// <summary>
 /// A service to execute resource commands.
@@ -79,7 +80,7 @@ public class ResourceCommandService
     /// <param name="arguments">Optional invocation arguments supplied to the command callback.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The <see cref="ExecuteCommandResult" /> indicates command success or failure.</returns>
-    public async Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, JsonElement? arguments, CancellationToken cancellationToken = default)
+    public async Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken = default)
     {
         if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
         {
@@ -109,7 +110,7 @@ public class ResourceCommandService
     /// <param name="arguments">Optional invocation arguments supplied to the command callback.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The <see cref="ExecuteCommandResult" /> indicates command success or failure.</returns>
-    public async Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, JsonElement? arguments, CancellationToken cancellationToken = default)
+    public async Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken = default)
     {
         var names = resource.GetResolvedResourceNames();
         // Single resource for IResource. Return its result directly.
@@ -172,25 +173,26 @@ public class ResourceCommandService
         }
     }
 
-    internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, JsonElement? arguments, CancellationToken cancellationToken)
+    internal InteractionInputCollection? CreateCommandArguments(string resourceId, string commandName, IReadOnlyDictionary<string, string?>? argumentValues)
+    {
+        if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
+        {
+            return null;
+        }
+
+        var resolvedCommandName = commandName;
+        var annotation = ResolveCommandAnnotation(resourceEvent.Resource, ref resolvedCommandName);
+
+        return CreateArguments(annotation?.ArgumentInputs, argumentValues);
+    }
+
+    internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken)
     {
         var logger = _resourceLoggerService.GetLogger(resourceId);
 
         logger.LogInformation("Executing command '{CommandName}'.", commandName);
 
-        var annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == commandName);
-
-        // Backwards compatibility: if the command wasn't found and the caller used a legacy name
-        // (e.g. "resource-start"), fall back to the current name (e.g. "start").
-        if (annotation is null && s_legacyCommandNameMap.TryGetValue(commandName, out var mappedName))
-        {
-            logger.LogDebug("Command '{CommandName}' not found, falling back to '{MappedName}'.", commandName, mappedName);
-            annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == mappedName);
-            if (annotation is not null)
-            {
-                commandName = mappedName;
-            }
-        }
+        var annotation = ResolveCommandAnnotation(resource, ref commandName, logger);
 
         if (annotation != null)
         {
@@ -237,4 +239,70 @@ public class ResourceCommandService
         logger.LogInformation("Command '{CommandName}' not available.", commandName);
         return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
     }
+
+    private static ResourceCommandAnnotation? ResolveCommandAnnotation(IResource resource, ref string commandName, ILogger? logger = null)
+    {
+        var requestedCommandName = commandName;
+        var annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == requestedCommandName);
+
+        // Backwards compatibility: if the command wasn't found and the caller used a legacy name
+        // (e.g. "resource-start"), fall back to the current name (e.g. "start").
+        if (annotation is null && s_legacyCommandNameMap.TryGetValue(commandName, out var mappedName))
+        {
+            logger?.LogDebug("Command '{CommandName}' not found, falling back to '{MappedName}'.", commandName, mappedName);
+            annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == mappedName);
+            if (annotation is not null)
+            {
+                commandName = mappedName;
+            }
+        }
+
+        return annotation;
+    }
+
+    private static InteractionInputCollection? CreateArguments(IReadOnlyList<InteractionInput>? argumentInputs, IReadOnlyDictionary<string, string?>? argumentValues)
+    {
+        if (argumentInputs is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var inputs = new InteractionInput[argumentInputs.Count];
+        for (var i = 0; i < argumentInputs.Count; i++)
+        {
+            var input = argumentInputs[i];
+            var value = input.Value;
+            if (argumentValues?.TryGetValue(input.Name, out var argumentValue) == true)
+            {
+                value = argumentValue;
+            }
+
+            inputs[i] = CloneInput(input, value);
+        }
+
+        return new InteractionInputCollection(inputs);
+    }
+
+    private static InteractionInput CloneInput(InteractionInput input, string? value)
+    {
+        return new InteractionInput
+        {
+            Name = input.Name,
+            Label = input.Label,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            InputType = input.InputType,
+            Required = input.Required,
+            Options = input.Options,
+            DynamicLoading = input.DynamicLoading,
+            Value = value,
+            Placeholder = input.Placeholder,
+            AllowCustomChoice = input.AllowCustomChoice,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength
+        };
+    }
+
 }
+
+#pragma warning restore ASPIREINTERACTION001
