@@ -3,11 +3,13 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -138,33 +140,44 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilHealthyAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        await WaitUntilStateAsync(resource, dependency, waitBehavior, async (resourceLogger, displayName, resourceId, resourceEvent) =>
+        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependency");
+        SetDependencyWaitTags(activity, resource, dependency, WaitType.WaitUntilHealthy, waitBehavior);
+
+        try
         {
-            // If our dependency resource has health check annotations we want to wait until they turn healthy
-            // otherwise we don't care about their health status.
-            if (dependency.TryGetAnnotationsOfType<HealthCheckAnnotation>(out var _))
+            await WaitUntilStateAsync(resource, dependency, waitBehavior, async (resourceLogger, displayName, resourceId, resourceEvent) =>
             {
-                resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to become healthy.", displayName);
-                await WaitForResourceCoreAsync(
+                // If our dependency resource has health check annotations we want to wait until they turn healthy
+                // otherwise we don't care about their health status.
+                if (dependency.TryGetAnnotationsOfType<HealthCheckAnnotation>(out var _))
+                {
+                    resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to become healthy.", displayName);
+                    await WaitForResourceCoreAsync(
+                        dependency.Name,
+                        re => re.ResourceId == resourceId && re.Snapshot.HealthStatus == HealthStatus.Healthy,
+                        $"Resource '{displayName}' failed to become healthy before the operation was cancelled.",
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                // Now wait for the resource ready event to be executed.
+                resourceLogger.LogInformation("Waiting for resource ready to execute for '{ResourceName}'.", displayName);
+                resourceEvent = await WaitForResourceCoreAsync(
                     dependency.Name,
-                    re => re.ResourceId == resourceId && re.Snapshot.HealthStatus == HealthStatus.Healthy,
-                    $"Resource '{displayName}' failed to become healthy before the operation was cancelled.",
-                    cancellationToken).ConfigureAwait(false);
-            }
+                    re => re.ResourceId == resourceId && re.Snapshot.ResourceReadyEvent is not null,
+                    $"Resource '{displayName}' failed to execute the resource ready event before the operation was cancelled.",
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            // Now wait for the resource ready event to be executed.
-            resourceLogger.LogInformation("Waiting for resource ready to execute for '{ResourceName}'.", displayName);
-            resourceEvent = await WaitForResourceCoreAsync(
-                dependency.Name,
-                re => re.ResourceId == resourceId && re.Snapshot.ResourceReadyEvent is not null,
-                $"Resource '{displayName}' failed to execute the resource ready event before the operation was cancelled.",
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                // Observe the result of the resource ready event task
+                await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-            // Observe the result of the resource ready event task
-            await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-            resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}'.", displayName);
-        }, cancellationToken).ConfigureAwait(false);
+                resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}'.", displayName);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            StartupTracing.SetError(activity, ex);
+            throw;
+        }
     }
 
     /// <summary>
@@ -264,6 +277,10 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilCompletionAsync(IResource resource, IResource dependency, int exitCode, CancellationToken cancellationToken)
     {
+        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependency");
+        SetDependencyWaitTags(activity, resource, dependency, WaitType.WaitForCompletion, waitBehavior: null);
+        activity?.SetTag("aspire.resource.wait.expected_exit_code", exitCode);
+
         var names = dependency.GetResolvedResourceNames();
         var tasks = new Task[names.Length];
 
@@ -287,7 +304,15 @@ public class ResourceNotificationService : IDisposable
             tasks[i] = Core(displayName, names[i]);
         }
 
-        await Task.WhenAll(tasks).ConfigureAwait(false);
+        try
+        {
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            StartupTracing.SetError(activity, ex);
+            throw;
+        }
 
         async Task Core(string displayName, string resourceId)
         {
@@ -413,13 +438,24 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilStartedAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        await WaitUntilStateAsync(resource, dependency, waitBehavior, (resourceLogger, displayName, resourceId, resourceEvent) =>
+        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependency");
+        SetDependencyWaitTags(activity, resource, dependency, WaitType.WaitUntilStarted, waitBehavior);
+
+        try
         {
-            // Unlike WaitUntilHealthyAsync, we don't wait for health checks here.
-            // We only wait for the resource to reach the Running state.
-            resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}' to start.", displayName);
-            return Task.CompletedTask;
-        }, cancellationToken).ConfigureAwait(false);
+            await WaitUntilStateAsync(resource, dependency, waitBehavior, (resourceLogger, displayName, resourceId, resourceEvent) =>
+            {
+                // Unlike WaitUntilHealthyAsync, we don't wait for health checks here.
+                // We only wait for the resource to reach the Running state.
+                resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}' to start.", displayName);
+                return Task.CompletedTask;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            StartupTracing.SetError(activity, ex);
+            throw;
+        }
     }
 
     /// <summary>
@@ -436,26 +472,53 @@ public class ResourceNotificationService : IDisposable
             return;
         }
 
-        var pendingDependencies = new List<Task>();
-        foreach (var waitAnnotation in waitAnnotations)
+        var waitAnnotationList = waitAnnotations.ToArray();
+        if (waitAnnotationList.Length == 0)
         {
-            if (waitAnnotation.Resource is IResourceWithoutLifetime)
-            {
-                // IResourceWithoutLifetime are inert and don't need to be waited on.
-                continue;
-            }
-
-            var pendingDependency = waitAnnotation.WaitType switch
-            {
-                WaitType.WaitUntilHealthy => WaitUntilHealthyAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
-                WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken),
-                WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
-                _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
-            };
-            pendingDependencies.Add(pendingDependency);
+            return;
         }
 
-        await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependencies");
+        StartupTracing.SetResourceTags(activity, resource);
+        activity?.SetTag("aspire.resource.wait.dependency_count", waitAnnotationList.Length);
+
+        try
+        {
+            var pendingDependencies = new List<Task>();
+            foreach (var waitAnnotation in waitAnnotationList)
+            {
+                if (waitAnnotation.Resource is IResourceWithoutLifetime)
+                {
+                    // IResourceWithoutLifetime are inert and don't need to be waited on.
+                    continue;
+                }
+
+                var pendingDependency = waitAnnotation.WaitType switch
+                {
+                    WaitType.WaitUntilHealthy => WaitUntilHealthyAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
+                    WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken),
+                    WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
+                    _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
+                };
+                pendingDependencies.Add(pendingDependency);
+            }
+
+            await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            StartupTracing.SetError(activity, ex);
+            throw;
+        }
+    }
+
+    private static void SetDependencyWaitTags(Activity? activity, IResource resource, IResource dependency, WaitType waitType, WaitBehavior? waitBehavior)
+    {
+        StartupTracing.SetResourceTags(activity, resource);
+        activity?.SetTag("aspire.resource.wait.type", waitType.ToString());
+        activity?.SetTag("aspire.resource.wait.dependency.name", dependency.Name);
+        activity?.SetTag("aspire.resource.wait.dependency.type", dependency.GetType().Name);
+        activity?.SetTag("aspire.resource.wait.behavior", waitBehavior?.ToString());
     }
 
     /// <summary>

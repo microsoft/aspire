@@ -20,6 +20,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Exec;
 using Aspire.Hosting.Health;
@@ -39,6 +40,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Hosting;
 
@@ -489,6 +493,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
         }
 
+        ConfigureStartupTracing();
+
         if (ExecutionContext.IsRunMode)
         {
             // Orchestrator
@@ -622,6 +628,73 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<ResourceHealthCheckService>();
             _innerBuilder.Services.AddHostedService<ResourceHealthCheckService>(sp => sp.GetRequiredService<ResourceHealthCheckService>());
         }
+    }
+
+    private void ConfigureStartupTracing()
+    {
+        if (!ShouldConfigureStartupTracing())
+        {
+            return;
+        }
+
+        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
+            .AddService(
+                serviceName: "aspire-apphost",
+                serviceVersion: typeof(DistributedApplication).Assembly.GetName().Version?.ToString())
+            .AddAttributes([
+                new KeyValuePair<string, object>("aspire.apphost.name", Path.GetFileName(AppHostPath)),
+                new KeyValuePair<string, object>("aspire.apphost.operation", ExecutionContext.Operation.ToString())
+            ]);
+
+        _innerBuilder.Services.AddOpenTelemetry()
+            .WithTracing(builder =>
+            {
+                builder
+                    .AddSource(StartupTracing.ActivitySourceName)
+                    .SetResourceBuilder(resourceBuilder);
+
+                if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+                {
+                    builder.AddOtlpExporter();
+                }
+                else
+                {
+                    var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(_innerBuilder.Configuration);
+
+                    builder.AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(url);
+                        options.Protocol = protocol switch
+                        {
+                            "http/protobuf" => OtlpExportProtocol.HttpProtobuf,
+                            _ => OtlpExportProtocol.Grpc
+                        };
+
+                        if (_innerBuilder.Configuration["AppHost:OtlpApiKey"] is { } otlpApiKey)
+                        {
+                            options.Headers = $"x-otlp-api-key={otlpApiKey}";
+                        }
+                    });
+                }
+            });
+    }
+
+    private bool ShouldConfigureStartupTracing()
+    {
+        if (!ExecutionContext.IsRunMode)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+        {
+            return true;
+        }
+
+        var dashboardOtlpGrpcUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
+        var dashboardOtlpHttpUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+
+        return !string.IsNullOrEmpty(dashboardOtlpGrpcUrl) || !string.IsNullOrEmpty(dashboardOtlpHttpUrl);
     }
 
     private void MapTransportOptionsFromCustomKeys(TransportOptions options)
@@ -845,7 +918,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             policy = NameValidationPolicyAnnotation.Default;
         }
 
-        ModelName.ValidateName(nameof(Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
+        ModelName.ValidateName(nameof(Aspire.Hosting.ApplicationModel.Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
     }
 
     private static bool PathsEqual(string left, string right) =>

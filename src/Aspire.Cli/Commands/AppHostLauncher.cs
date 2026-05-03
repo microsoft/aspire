@@ -122,6 +122,8 @@ internal sealed class AppHostLauncher(
         // Build child process arguments
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
         var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
+        var startupTelemetryContext = StartupTelemetryContext.Create(Activity.Current);
+        startupTelemetryContext.AddTags(Activity.Current);
 
         // Compute the expected socket prefix for backchannel detection
         var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
@@ -149,7 +151,7 @@ internal sealed class AppHostLauncher(
         // Start the child process and wait for the backchannel
         var launchResult = await interactionService.ShowStatusAsync(
             RunCommandStrings.StartingAppHostInBackground,
-            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, cancellationToken));
+            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, startupTelemetryContext, cancellationToken));
 
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
@@ -245,6 +247,13 @@ internal sealed class AppHostLauncher(
     internal static bool IsExtensionEnvironmentVariable(string name) =>
         name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
 
+    internal static Dictionary<string, string> CreateDetachedChildEnvironment(StartupTelemetryContext startupTelemetryContext)
+    {
+        var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
+        startupTelemetryContext.AddToEnvironment(environment);
+        return environment;
+    }
+
     private record LaunchResult(Process? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode);
 
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
@@ -252,6 +261,7 @@ internal sealed class AppHostLauncher(
         List<string> childArgs,
         string expectedHash,
         string? legacyHash,
+        StartupTelemetryContext startupTelemetryContext,
         CancellationToken cancellationToken)
     {
         Process childProcess;
@@ -263,7 +273,7 @@ internal sealed class AppHostLauncher(
                 childArgs,
                 executionContext.WorkingDirectory.FullName,
                 IsExtensionEnvironmentVariable,
-                new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" });
+                CreateDetachedChildEnvironment(startupTelemetryContext));
         }
         catch (Exception ex)
         {
