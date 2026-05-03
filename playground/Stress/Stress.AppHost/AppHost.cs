@@ -329,13 +329,13 @@ serviceBuilder.WithCommand(
             PropertyNames = properties.Select(p => p.Name).ToArray()
         };
 
-        return Task.FromResult(CreateJsonSuccess("Summarized command arguments.", payload));
+        return Task.FromResult(CreateJsonSuccess("Summarized command arguments.", payload, displayImmediately: true));
     },
     commandOptions: new CommandOptions
     {
-        Description = "Minor stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
+        Description = "Minor dashboard/API stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
         IconName = "TableLightning",
-        Visibility = ResourceCommandVisibility.Api,
+        Visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api,
         ArgumentInputs = CreateArgumentStressInputs(fieldCount: 20)
     });
 
