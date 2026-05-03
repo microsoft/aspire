@@ -215,7 +215,7 @@ internal static class CliE2EAutomatorHelpers
             $"aspire new {AspireCliShellCommandHelpers.QuoteBashArg(templateName)} " +
             $"--name {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} " +
             $"--output {AspireCliShellCommandHelpers.QuoteBashArg(output)}" +
-            $"{channelArgument} --localhost-tld {localhostTldValue}";
+            $"{channelArgument} --localhost-tld {localhostTldValue} --suppress-agent-init";
     }
 
     private static async Task WaitForAspireNewEmptyAppHostCompletionAsync(
@@ -703,6 +703,7 @@ internal static class CliE2EAutomatorHelpers
             AspireCliShellCommandHelpers.QuoteBashArg(projectName),
             "--output",
             AspireCliShellCommandHelpers.QuoteBashArg($"./{projectName}"),
+            "--suppress-agent-init",
         };
 
         foreach (var arg in extraArgs)

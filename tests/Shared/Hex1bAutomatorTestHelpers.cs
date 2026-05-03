@@ -457,12 +457,19 @@ internal static class Hex1bAutomatorTestHelpers
         var agentInitPrompt = new CellPatternSearcher()
             .Find("configure AI agent environments");
 
+        var agentInitWorkflowPromptFound = false;
         var agentInitFound = false;
         var errorPromptFound = false;
 
         // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
         await auto.WaitUntilAsync(s =>
         {
+            if (IsAgentInitWorkflowPromptVisible(s))
+            {
+                agentInitWorkflowPromptFound = true;
+                return true;
+            }
+
             if (agentInitPrompt.Search(s).Count > 0)
             {
                 agentInitFound = true;
@@ -486,6 +493,13 @@ internal static class Hex1bAutomatorTestHelpers
         if (errorPromptFound)
         {
             throw new InvalidOperationException($"Command failed with error prompt [{counter.Value} ERR:*] while waiting for the agent init prompt or success prompt.");
+        }
+
+        if (agentInitWorkflowPromptFound)
+        {
+            await auto.Ctrl().KeyAsync(Hex1bKey.C);
+            await auto.WaitForAnyPromptAsync(counter, effectiveTimeout);
+            return;
         }
 
         if (!agentInitFound)
@@ -523,8 +537,39 @@ internal static class Hex1bAutomatorTestHelpers
             return;
         }
 
+        var agentInitWorkflowStarted = false;
+        try
+        {
+            await auto.WaitUntilAsync(s =>
+            {
+                agentInitWorkflowStarted = IsAgentInitWorkflowPromptVisible(s);
+                return agentInitWorkflowStarted;
+            }, timeout: TimeSpan.FromMilliseconds(500), description: "agent init workflow prompt after agent init response");
+        }
+        catch (Hex1bAutomationException)
+        {
+        }
+
+        if (agentInitWorkflowStarted)
+        {
+            await auto.Ctrl().KeyAsync(Hex1bKey.C);
+            await auto.WaitForAnyPromptAsync(counter, effectiveTimeout);
+            return;
+        }
+
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+
+        static bool IsAgentInitWorkflowPromptVisible(Hex1bTerminalSnapshot snapshot)
+        {
+            var skillLocationPrompt = new CellPatternSearcher()
+                .Find("Where should skill files be installed?");
+            var skillsPrompt = new CellPatternSearcher()
+                .Find("Which skills should be installed?");
+
+            return skillLocationPrompt.Search(snapshot).Count > 0
+                || skillsPrompt.Search(snapshot).Count > 0;
+        }
     }
 
     /// <summary>
@@ -557,7 +602,7 @@ internal static class Hex1bAutomatorTestHelpers
             case AspireTemplate.JsReact:
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React, C# AppHost)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "JS React template selected");
                 await auto.EnterAsync();
@@ -567,7 +612,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (Express/React, TypeScript AppHost)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (Express/React").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Express React template selected");
                 await auto.EnterAsync();
@@ -578,7 +623,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React, TypeScript AppHost)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Python React template selected");
                 await auto.EnterAsync();
