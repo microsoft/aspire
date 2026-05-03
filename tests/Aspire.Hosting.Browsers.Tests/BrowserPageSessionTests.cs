@@ -99,6 +99,39 @@ public class BrowserPageSessionTests
     }
 
     [Fact]
+    public async Task SendCdpCommandJsonAsync_UsesPageOrBrowserSession()
+    {
+        var host = new TestBrowserHost();
+        var connection = new FakeBrowserLogsCdpConnection
+        {
+            CreatedTargetId = "created-target",
+            AttachSessionId = "target-session-1"
+        };
+
+        var session = await BrowserPageSession.StartAsync(
+            host,
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
+            CreateConnectionFactory(connection),
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            TimeProvider.System,
+            reuseInitialBlankTarget: false,
+            CancellationToken.None);
+
+        var pageResult = await session.SendCdpCommandJsonAsync("Runtime.evaluate", """{"expression":"document.title"}""", "page", CancellationToken.None);
+        var browserResult = await session.SendCdpCommandJsonAsync("Target.getTargets", parametersJson: null, "browser", CancellationToken.None);
+
+        Assert.Equal("""{"ok":true}""", pageResult);
+        Assert.Equal("""{"ok":true}""", browserResult);
+        Assert.Contains("Raw:target-session-1:Runtime.evaluate:{\"expression\":\"document.title\"}", connection.Calls);
+        Assert.Contains("Raw::Target.getTargets:", connection.Calls);
+
+        await session.DisposeAsync();
+    }
+
+    [Fact]
     public async Task DisposeAsync_ClosesTrackedTarget()
     {
         var host = new TestBrowserHost();
@@ -159,7 +192,7 @@ public class BrowserPageSessionTests
             reuseInitialBlankTarget: false,
             CancellationToken.None);
 
-        var result = await session.CaptureScreenshotAsync(CancellationToken.None);
+        var result = await session.CaptureScreenshotAsync(BrowserScreenshotCaptureOptions.Default, CancellationToken.None);
 
         Assert.Equal("image-data", result.Data);
         Assert.Contains("CaptureScreenshot:target-session-1", connection.Calls);
@@ -189,7 +222,7 @@ public class BrowserPageSessionTests
             reuseInitialBlankTarget: false,
             CancellationToken.None);
 
-        var captureTask = session.CaptureScreenshotAsync(CancellationToken.None);
+        var captureTask = session.CaptureScreenshotAsync(BrowserScreenshotCaptureOptions.Default, CancellationToken.None);
         await connection.ScreenshotCaptureStarted.Task.DefaultTimeout();
 
         var disposeTask = session.DisposeAsync().AsTask();
@@ -399,7 +432,13 @@ public class BrowserPageSessionTests
             });
         }
 
-        public async Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+        public Task<string> SendRawCommandAsync(string? sessionId, string method, string? parametersJson, CancellationToken cancellationToken)
+        {
+            Calls.Add($"Raw:{sessionId}:{method}:{parametersJson}");
+            return Task.FromResult("""{"ok":true}""");
+        }
+
+        public async Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
             Calls.Add($"CaptureScreenshot:{sessionId}");
             ScreenshotCaptureStarted.TrySetResult();

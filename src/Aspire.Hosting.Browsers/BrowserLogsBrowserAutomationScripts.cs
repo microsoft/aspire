@@ -223,6 +223,68 @@ const serializeValue = value => {
     return String(value);
   }
 };
+const decodeCookieComponent = value => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+const encodeCookieComponent = value => encodeURIComponent(String(value ?? ''));
+const getPageCookies = () => document.cookie
+  ? document.cookie.split(/;\s*/).filter(Boolean).map(cookieText => {
+      const separator = cookieText.indexOf('=');
+      const name = separator >= 0 ? cookieText.slice(0, separator) : cookieText;
+      const value = separator >= 0 ? cookieText.slice(separator + 1) : '';
+      return { name: decodeCookieComponent(name), value: decodeCookieComponent(value) };
+    })
+  : [];
+const setPageCookie = cookie => {
+  if (!cookie.name) {
+    throw new Error('Cookie name is required.');
+  }
+
+  const parts = [`${encodeCookieComponent(cookie.name)}=${encodeCookieComponent(cookie.value ?? '')}`];
+  parts.push(`path=${cookie.path || '/'}`);
+  if (cookie.domain) {
+    parts.push(`domain=${cookie.domain}`);
+  }
+  if (cookie.expires) {
+    parts.push(`expires=${cookie.expires}`);
+  }
+
+  document.cookie = parts.join('; ');
+};
+const clearPageCookie = (name, domain, path) => {
+  setPageCookie({ name, value: '', domain, path, expires: 'Thu, 01 Jan 1970 00:00:00 GMT' });
+};
+const getStorage = area => {
+  switch (area) {
+    case 'local':
+      return localStorage;
+    case 'session':
+      return sessionStorage;
+    default:
+      throw new Error(`Unsupported storage area '${area}'.`);
+  }
+};
+const getStorageEntries = area => {
+  const storage = getStorage(area);
+  return Object.fromEntries(Array.from({ length: storage.length }, (_, index) => {
+    const key = storage.key(index);
+    return [key, key === null ? null : storage.getItem(key)];
+  }).filter(([key]) => key !== null));
+};
+const setStorageEntries = (area, entries, clearExisting) => {
+  const storage = getStorage(area);
+  if (clearExisting) {
+    storage.clear();
+  }
+
+  for (const [key, value] of Object.entries(entries ?? {})) {
+    storage.setItem(key, String(value ?? ''));
+  }
+};
 const setElementValue = (element, value) => {
   if (element.isContentEditable) {
     element.textContent = value;
@@ -247,6 +309,46 @@ const dispatchInputEvents = element => {
 const dispatchMouseEvent = (element, type, clientX, clientY) => {
   const eventInit = { bubbles: true, cancelable: true, clientX, clientY, view: window };
   element.dispatchEvent(new MouseEvent(type, eventInit));
+};
+const getKeyboardTarget = selector => {
+  if (selector) {
+    return findElement(selector);
+  }
+
+  const activeElement = document.activeElement;
+  if (!activeElement || activeElement === document.body) {
+    throw new Error('No focused element is available. Provide a selector or focus an element first.');
+  }
+
+  return activeElement;
+};
+const dispatchKeyboardEvent = (element, type, key) => {
+  const eventOptions = { key, bubbles: true, cancelable: true };
+  element.dispatchEvent(new KeyboardEvent(type, eventOptions));
+};
+const mouseButton = button => {
+  switch (button ?? 'left') {
+    case 'left':
+      return 0;
+    case 'middle':
+      return 1;
+    case 'right':
+      return 2;
+    default:
+      throw new Error(`Unsupported mouse button '${button}'.`);
+  }
+};
+const dispatchMouseAt = (type, x, y, button, deltaX, deltaY) => {
+  const target = document.elementFromPoint(x, y) || document.body || document.documentElement;
+  const buttonNumber = mouseButton(button);
+  const eventInit = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: buttonNumber, buttons: type === 'mousedown' ? 1 : 0, view: window };
+  if (type === 'wheel') {
+    target.dispatchEvent(new WheelEvent('wheel', { ...eventInit, deltaX, deltaY }));
+    return target;
+  }
+
+  target.dispatchEvent(new MouseEvent(type, eventInit));
+  return target;
 };
 const focusElement = element => {
   element.scrollIntoView({ block: 'center', inline: 'center' });
@@ -306,6 +408,86 @@ return {
   viewport: { width: innerWidth, height: innerHeight },
   text: normalizeText(document.body?.innerText ?? '').slice(0, maxTextLength),
   elements
+};
+""");
+    }
+
+    public static string CreateUrlExpression()
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+return {
+  action: 'url',
+  url: location.href,
+  title: document.title,
+  readyState: document.readyState
+};
+""");
+    }
+
+    public static string CreateFramesExpression()
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const frames = Array.from(document.querySelectorAll('iframe, frame')).map((element, index) => {
+  let sameOrigin = false;
+  let title = null;
+  let href = null;
+  try {
+    sameOrigin = Boolean(element.contentWindow?.document);
+    title = element.contentWindow?.document?.title ?? null;
+    href = element.contentWindow?.location?.href ?? null;
+  } catch {
+    sameOrigin = false;
+  }
+
+  return {
+    index: index + 1,
+    selector: preferredSelector(element),
+    tagName: element.tagName.toLowerCase(),
+    name: element.getAttribute('name'),
+    id: element.id || null,
+    src: element.getAttribute('src'),
+    title,
+    url: href,
+    sameOrigin,
+    visible: isVisible(element)
+  };
+});
+
+return {
+  action: 'frames',
+  url: location.href,
+  count: frames.length,
+  frames
+};
+""");
+    }
+
+    public static string CreateHistoryNavigationExpression(string action)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const action = {{JsonLiteral(action)}};
+const beforeUrl = location.href;
+switch (action) {
+  case 'back':
+    history.back();
+    break;
+  case 'forward':
+    history.forward();
+    break;
+  case 'reload':
+    location.reload();
+    break;
+  default:
+    throw new Error(`Unsupported navigation action '${action}'.`);
+}
+
+return {
+  action,
+  beforeUrl,
+  url: location.href
 };
 """);
     }
@@ -501,6 +683,167 @@ return {
 """);
     }
 
+    public static string CreateCookiesExpression(string action, string? name, string? value, string? domain, string? path)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const action = {{JsonLiteral(action)}};
+const name = {{JsonLiteral(name)}};
+const value = {{JsonLiteral(value)}};
+const domain = {{JsonLiteral(domain)}};
+const path = {{JsonLiteral(path)}};
+let cookies;
+switch (action) {
+  case 'get':
+    cookies = getPageCookies();
+    if (name) {
+      cookies = cookies.filter(cookie => cookie.name === name);
+    }
+    break;
+  case 'set':
+    if (!name) {
+      throw new Error("The 'set' cookie action requires a name.");
+    }
+    setPageCookie({ name, value: value ?? '', domain, path });
+    cookies = getPageCookies().filter(cookie => cookie.name === name);
+    break;
+  case 'clear':
+    if (name) {
+      clearPageCookie(name, domain, path);
+    } else {
+      for (const cookie of getPageCookies()) {
+        clearPageCookie(cookie.name, domain, path);
+      }
+    }
+    cookies = getPageCookies();
+    break;
+  default:
+    throw new Error(`Unsupported cookie action '${action}'.`);
+}
+
+return {
+  action: 'cookies',
+  url: location.href,
+  cookieAction: action,
+  name,
+  cookies
+};
+""");
+    }
+
+    public static string CreateStorageExpression(string area, string action, string? key, string? value)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const area = {{JsonLiteral(area)}};
+const action = {{JsonLiteral(action)}};
+const key = {{JsonLiteral(key)}};
+const value = {{JsonLiteral(value)}};
+const storage = getStorage(area);
+let result;
+switch (action) {
+  case 'get':
+    result = key ? { [key]: storage.getItem(key) } : getStorageEntries(area);
+    break;
+  case 'set':
+    if (!key) {
+      throw new Error("The 'set' storage action requires a key.");
+    }
+    storage.setItem(key, value ?? '');
+    result = { [key]: storage.getItem(key) };
+    break;
+  case 'clear':
+    if (key) {
+      storage.removeItem(key);
+    } else {
+      storage.clear();
+    }
+    result = key ? { [key]: storage.getItem(key) } : getStorageEntries(area);
+    break;
+  default:
+    throw new Error(`Unsupported storage action '${action}'.`);
+}
+
+return {
+  action: 'storage',
+  url: location.href,
+  area,
+  storageAction: action,
+  key,
+  entries: result
+};
+""");
+    }
+
+    public static string CreateStateExpression(string action, string? state, bool clearExisting)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const action = {{JsonLiteral(action)}};
+const stateJson = {{JsonLiteral(state)}};
+const clearExisting = {{JsonSerializer.Serialize(clearExisting)}};
+const readState = () => ({
+  cookies: getPageCookies(),
+  localStorage: getStorageEntries('local'),
+  sessionStorage: getStorageEntries('session')
+});
+switch (action) {
+  case 'get':
+    return {
+      action: 'state',
+      stateAction: action,
+      url: location.href,
+      origin: location.origin,
+      state: readState()
+    };
+  case 'set': {
+    if (!stateJson) {
+      throw new Error("The 'set' state action requires a state JSON argument.");
+    }
+
+    // The state argument is a JSON object shaped like:
+    // { "cookies": [{ "name": "...", "value": "..." }], "localStorage": { "key": "value" }, "sessionStorage": { "key": "value" } }.
+    const parsedState = JSON.parse(stateJson);
+    if (clearExisting) {
+      for (const cookie of getPageCookies()) {
+        clearPageCookie(cookie.name);
+      }
+    }
+
+    for (const cookie of parsedState.cookies ?? []) {
+      setPageCookie(cookie);
+    }
+
+    setStorageEntries('local', parsedState.localStorage, clearExisting);
+    setStorageEntries('session', parsedState.sessionStorage, clearExisting);
+    return {
+      action: 'state',
+      stateAction: action,
+      url: location.href,
+      origin: location.origin,
+      clearExisting,
+      state: readState()
+    };
+  }
+  case 'clear':
+    for (const cookie of getPageCookies()) {
+      clearPageCookie(cookie.name);
+    }
+    localStorage.clear();
+    sessionStorage.clear();
+    return {
+      action: 'state',
+      stateAction: action,
+      url: location.href,
+      origin: location.origin,
+      state: readState()
+    };
+  default:
+    throw new Error(`Unsupported state action '${action}'.`);
+}
+""");
+    }
+
     public static string CreateClickExpression(string selector)
     {
         return CreateExpression($$"""
@@ -511,6 +854,32 @@ focusElement(element);
 element.click();
 return {
   action: 'click',
+  url: location.href,
+  selector,
+  element: describeResolvedElement(element)
+};
+""");
+    }
+
+    public static string CreateDoubleClickExpression(string selector)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const element = findElement(selector);
+focusElement(element);
+const rect = element.getBoundingClientRect();
+const clientX = rect.left + rect.width / 2;
+const clientY = rect.top + rect.height / 2;
+dispatchMouseEvent(element, 'mousedown', clientX, clientY);
+dispatchMouseEvent(element, 'mouseup', clientX, clientY);
+element.click();
+dispatchMouseEvent(element, 'mousedown', clientX, clientY);
+dispatchMouseEvent(element, 'mouseup', clientX, clientY);
+element.click();
+element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, clientX, clientY, view: window }));
+return {
+  action: 'dblclick',
   url: location.href,
   selector,
   element: describeResolvedElement(element)
@@ -538,6 +907,30 @@ return {
 """);
     }
 
+    public static string CreateCheckExpression(string selector, bool isChecked)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const checked = {{JsonSerializer.Serialize(isChecked)}};
+const element = findElement(selector);
+if (!('checked' in element)) {
+  throw new Error(`Element '${selector}' is not checkable.`);
+}
+
+focusElement(element);
+element.checked = checked;
+dispatchInputEvents(element);
+return {
+  action: checked ? 'check' : 'uncheck',
+  url: location.href,
+  selector,
+  checked: Boolean(element.checked),
+  element: describeResolvedElement(element)
+};
+""");
+    }
+
     public static string CreateFocusExpression(string selector)
     {
         return CreateExpression($$"""
@@ -550,6 +943,26 @@ return {
   url: location.href,
   selector,
   activeElementSelector: preferredSelector(document.activeElement),
+  element: describeResolvedElement(element)
+};
+""");
+    }
+
+    public static string CreateKeyEventExpression(string type, string? selector, string key)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const type = {{JsonLiteral(type)}};
+const selector = {{JsonLiteral(selector)}};
+const key = {{JsonLiteral(key)}};
+const element = getKeyboardTarget(selector);
+focusElement(element);
+dispatchKeyboardEvent(element, type, key);
+return {
+  action: type,
+  url: location.href,
+  selector: selector ?? preferredSelector(element),
+  key,
   element: describeResolvedElement(element)
 };
 """);
@@ -701,6 +1114,70 @@ return {
     ? { x: Math.round(window.scrollX), y: Math.round(window.scrollY) }
     : { x: Math.round(target.scrollLeft), y: Math.round(target.scrollTop) },
   element: target === window ? undefined : describeResolvedElement(target)
+};
+""");
+    }
+
+    public static string CreateScrollIntoViewExpression(string selector)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const element = findElement(selector);
+element.scrollIntoView({ block: 'center', inline: 'center' });
+return {
+  action: 'scroll-into-view',
+  url: location.href,
+  selector,
+  scroll: { x: Math.round(window.scrollX), y: Math.round(window.scrollY) },
+  element: describeResolvedElement(element)
+};
+""");
+    }
+
+    public static string CreateMouseExpression(string action, int x, int y, string? button, int deltaX, int deltaY)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const action = {{JsonLiteral(action)}};
+const x = {{x}};
+const y = {{y}};
+const button = {{JsonLiteral(button)}};
+const deltaX = {{deltaX}};
+const deltaY = {{deltaY}};
+let element;
+switch (action) {
+  case 'move':
+    element = dispatchMouseAt('mousemove', x, y, button, deltaX, deltaY);
+    break;
+  case 'down':
+    element = dispatchMouseAt('mousedown', x, y, button, deltaX, deltaY);
+    break;
+  case 'up':
+    element = dispatchMouseAt('mouseup', x, y, button, deltaX, deltaY);
+    break;
+  case 'click':
+    element = dispatchMouseAt('mousedown', x, y, button, deltaX, deltaY);
+    dispatchMouseAt('mouseup', x, y, button, deltaX, deltaY);
+    element.click?.();
+    break;
+  case 'wheel':
+    element = dispatchMouseAt('wheel', x, y, button, deltaX, deltaY);
+    break;
+  default:
+    throw new Error(`Unsupported mouse action '${action}'.`);
+}
+
+return {
+  action: 'mouse',
+  mouseAction: action,
+  url: location.href,
+  x,
+  y,
+  button: button ?? 'left',
+  deltaX,
+  deltaY,
+  element: element instanceof Element ? describeResolvedElement(element) : undefined
 };
 """);
     }

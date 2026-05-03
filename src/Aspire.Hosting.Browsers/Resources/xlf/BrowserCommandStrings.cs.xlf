@@ -2,6 +2,41 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../BrowserCommandStrings.resx">
     <body>
+      <trans-unit id="ActionArgumentLabel">
+        <source>Action</source>
+        <target state="new">Action</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BackBrowserDescription">
+        <source>Navigate the active tracked browser page back in its history.</source>
+        <target state="new">Navigate the active tracked browser page back in its history.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BackBrowserName">
+        <source>Go back</source>
+        <target state="new">Go back</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BackBrowserSucceeded">
+        <source>Navigated browser back.</source>
+        <target state="new">Navigated browser back.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BrowserUrlDescription">
+        <source>Return the current URL, title, and ready state for the active tracked browser page.</source>
+        <target state="new">Return the current URL, title, and ready state for the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BrowserUrlName">
+        <source>Get browser URL</source>
+        <target state="new">Get browser URL</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BrowserUrlSucceeded">
+        <source>Returned browser URL.</source>
+        <target state="new">Returned browser URL.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CaptureScreenshotDescription">
         <source>Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</source>
         <target state="new">Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</target>
@@ -10,6 +45,76 @@
       <trans-unit id="CaptureScreenshotName">
         <source>Capture screenshot</source>
         <target state="new">Capture screenshot</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpBrowserDescription">
+        <source>Send a raw Chrome DevTools Protocol command to the active tracked browser page or browser connection.</source>
+        <target state="new">Send a raw Chrome DevTools Protocol command to the active tracked browser page or browser connection.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpBrowserName">
+        <source>Send CDP command</source>
+        <target state="new">Send CDP command</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpBrowserSucceeded">
+        <source>Sent CDP command.</source>
+        <target state="new">Sent CDP command.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpMethodArgumentDescription">
+        <source>Chrome DevTools Protocol method name, such as Runtime.evaluate or Target.getTargets.</source>
+        <target state="new">Chrome DevTools Protocol method name, such as Runtime.evaluate or Target.getTargets.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpMethodArgumentLabel">
+        <source>CDP method</source>
+        <target state="new">CDP method</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpParamsArgumentDescription">
+        <source>Optional JSON object for the CDP command parameters.</source>
+        <target state="new">Optional JSON object for the CDP command parameters.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpParamsArgumentLabel">
+        <source>CDP parameters</source>
+        <target state="new">CDP parameters</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpSessionArgumentDescription">
+        <source>Send the command to the attached page session or the browser-level connection.</source>
+        <target state="new">Send the command to the attached page session or the browser-level connection.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CdpSessionArgumentLabel">
+        <source>CDP session</source>
+        <target state="new">CDP session</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CheckBrowserDescription">
+        <source>Check a checkbox or other checkable element in the active tracked browser page.</source>
+        <target state="new">Check a checkbox or other checkable element in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CheckBrowserName">
+        <source>Check browser element</source>
+        <target state="new">Check browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CheckBrowserSucceeded">
+        <source>Checked browser element.</source>
+        <target state="new">Checked browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ClearExistingArgumentDescription">
+        <source>Clear existing cookies and storage before restoring state.</source>
+        <target state="new">Clear existing cookies and storage before restoring state.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ClearExistingArgumentLabel">
+        <source>Clear existing</source>
+        <target state="new">Clear existing</target>
         <note />
       </trans-unit>
       <trans-unit id="ClickBrowserDescription">
@@ -88,13 +193,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserGlobalScopeOption">
-        <source>All BrowserLogs resources</source>
-        <target state="new">All BrowserLogs resources</target>
+        <source>All Browser Automation resources</source>
+        <target state="new">All Browser Automation resources</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserGlobalScopeResult">
-        <source>all BrowserLogs resources</source>
-        <target state="new">all BrowserLogs resources</target>
+        <source>all Browser Automation resources</source>
+        <target state="new">all Browser Automation resources</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserInteractionUnavailable">
@@ -128,8 +233,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserPromptMessage">
-        <source>Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</source>
-        <target state="new">Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</target>
+        <source>Choose tracked browser settings. Resource-specific settings override global Browser Automation settings.</source>
+        <target state="new">Choose tracked browser settings. Resource-specific settings override global Browser Automation settings.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserResourceScopeOption">
@@ -187,6 +292,66 @@
         <target state="new">Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CookieDomainArgumentDescription">
+        <source>Optional cookie domain used when setting or clearing a cookie.</source>
+        <target state="new">Optional cookie domain used when setting or clearing a cookie.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookieDomainArgumentLabel">
+        <source>Cookie domain</source>
+        <target state="new">Cookie domain</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookieNameArgumentDescription">
+        <source>Optional cookie name. Required when setting a cookie.</source>
+        <target state="new">Optional cookie name. Required when setting a cookie.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookieNameArgumentLabel">
+        <source>Cookie name</source>
+        <target state="new">Cookie name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookiePathArgumentDescription">
+        <source>Optional cookie path used when setting or clearing a cookie. Defaults to /.</source>
+        <target state="new">Optional cookie path used when setting or clearing a cookie. Defaults to /.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookiePathArgumentLabel">
+        <source>Cookie path</source>
+        <target state="new">Cookie path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookieValueArgumentDescription">
+        <source>Cookie value to set. Empty text clears the cookie value.</source>
+        <target state="new">Cookie value to set. Empty text clears the cookie value.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookieValueArgumentLabel">
+        <source>Cookie value</source>
+        <target state="new">Cookie value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookiesActionArgumentDescription">
+        <source>Cookie action to perform: get, set, or clear.</source>
+        <target state="new">Cookie action to perform: get, set, or clear.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookiesBrowserDescription">
+        <source>Get, set, or clear cookies visible to the active tracked browser page.</source>
+        <target state="new">Get, set, or clear cookies visible to the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookiesBrowserName">
+        <source>Manage browser cookies</source>
+        <target state="new">Manage browser cookies</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CookiesBrowserSucceeded">
+        <source>Updated browser cookies.</source>
+        <target state="new">Updated browser cookies.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeltaXArgumentDescription">
         <source>Horizontal scroll distance in CSS pixels. Positive values scroll right and negative values scroll left.</source>
         <target state="new">Horizontal scroll distance in CSS pixels. Positive values scroll right and negative values scroll left.</target>
@@ -205,6 +370,86 @@
       <trans-unit id="DeltaYArgumentLabel">
         <source>Delta Y</source>
         <target state="new">Delta Y</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DialogActionArgumentDescription">
+        <source>Dialog action to perform: accept or dismiss.</source>
+        <target state="new">Dialog action to perform: accept or dismiss.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DialogBrowserDescription">
+        <source>Accept or dismiss the currently open JavaScript dialog in the active tracked browser page.</source>
+        <target state="new">Accept or dismiss the currently open JavaScript dialog in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DialogBrowserName">
+        <source>Handle browser dialog</source>
+        <target state="new">Handle browser dialog</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DialogBrowserSucceeded">
+        <source>Handled browser dialog.</source>
+        <target state="new">Handled browser dialog.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoubleClickBrowserDescription">
+        <source>Double-click an element in the active tracked browser page using a CSS selector.</source>
+        <target state="new">Double-click an element in the active tracked browser page using a CSS selector.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoubleClickBrowserName">
+        <source>Double-click browser element</source>
+        <target state="new">Double-click browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DoubleClickBrowserSucceeded">
+        <source>Double-clicked browser element.</source>
+        <target state="new">Double-clicked browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadBehaviorArgumentDescription">
+        <source>Browser download behavior: allow, allowAndName, deny, or default.</source>
+        <target state="new">Browser download behavior: allow, allowAndName, deny, or default.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadBehaviorArgumentLabel">
+        <source>Download behavior</source>
+        <target state="new">Download behavior</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadEventsEnabledArgumentDescription">
+        <source>Enable browser download progress events when supported by the browser.</source>
+        <target state="new">Enable browser download progress events when supported by the browser.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadEventsEnabledArgumentLabel">
+        <source>Download events enabled</source>
+        <target state="new">Download events enabled</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadPathArgumentDescription">
+        <source>Directory path for downloaded files. Required for allow and allowAndName behavior.</source>
+        <target state="new">Directory path for downloaded files. Required for allow and allowAndName behavior.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadPathArgumentLabel">
+        <source>Download path</source>
+        <target state="new">Download path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadsBrowserDescription">
+        <source>Configure download behavior for the tracked browser.</source>
+        <target state="new">Configure download behavior for the tracked browser.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadsBrowserName">
+        <source>Configure browser downloads</source>
+        <target state="new">Configure browser downloads</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadsBrowserSucceeded">
+        <source>Configured browser downloads.</source>
+        <target state="new">Configured browser downloads.</target>
         <note />
       </trans-unit>
       <trans-unit id="ElementStateArgumentDescription">
@@ -240,6 +485,16 @@
       <trans-unit id="ExpressionArgumentLabel">
         <source>Expression</source>
         <target state="new">Expression</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FilesArgumentDescription">
+        <source>File path to upload, or a JSON array of file paths for multiple files.</source>
+        <target state="new">File path to upload, or a JSON array of file paths for multiple files.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FilesArgumentLabel">
+        <source>Files</source>
+        <target state="new">Files</target>
         <note />
       </trans-unit>
       <trans-unit id="FillBrowserDescription">
@@ -295,6 +550,46 @@
       <trans-unit id="FocusBrowserElementSucceeded">
         <source>Focused browser element.</source>
         <target state="new">Focused browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ForwardBrowserDescription">
+        <source>Navigate the active tracked browser page forward in its history.</source>
+        <target state="new">Navigate the active tracked browser page forward in its history.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ForwardBrowserName">
+        <source>Go forward</source>
+        <target state="new">Go forward</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ForwardBrowserSucceeded">
+        <source>Navigated browser forward.</source>
+        <target state="new">Navigated browser forward.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FramesBrowserDescription">
+        <source>List frame elements in the active tracked browser page.</source>
+        <target state="new">List frame elements in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FramesBrowserName">
+        <source>List browser frames</source>
+        <target state="new">List browser frames</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FramesBrowserSucceeded">
+        <source>Listed browser frames.</source>
+        <target state="new">Listed browser frames.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FullPageArgumentDescription">
+        <source>Capture beyond the current viewport when supported by the browser.</source>
+        <target state="new">Capture beyond the current viewport when supported by the browser.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FullPageArgumentLabel">
+        <source>Full page</source>
+        <target state="new">Full page</target>
         <note />
       </trans-unit>
       <trans-unit id="FunctionArgumentDescription">
@@ -402,6 +697,36 @@
         <target state="new">Key</target>
         <note />
       </trans-unit>
+      <trans-unit id="KeyDownBrowserDescription">
+        <source>Dispatch a keydown event on a selected or currently focused element in the active tracked browser page.</source>
+        <target state="new">Dispatch a keydown event on a selected or currently focused element in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeyDownBrowserName">
+        <source>Key down in browser</source>
+        <target state="new">Key down in browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeyDownBrowserSucceeded">
+        <source>Dispatched browser keydown.</source>
+        <target state="new">Dispatched browser keydown.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeyUpBrowserDescription">
+        <source>Dispatch a keyup event on a selected or currently focused element in the active tracked browser page.</source>
+        <target state="new">Dispatch a keyup event on a selected or currently focused element in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeyUpBrowserName">
+        <source>Key up in browser</source>
+        <target state="new">Key up in browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KeyUpBrowserSucceeded">
+        <source>Dispatched browser keyup.</source>
+        <target state="new">Dispatched browser keyup.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="KindArgumentDescription">
         <source>Find strategy: role, text, label, placeholder, alt, title, testid, first, last, or nth.</source>
         <target state="new">Find strategy: role, text, label, placeholder, alt, title, testid, first, last, or nth.</target>
@@ -452,6 +777,36 @@
         <target state="new">Maximum text length</target>
         <note />
       </trans-unit>
+      <trans-unit id="MouseActionArgumentDescription">
+        <source>Mouse action to dispatch: move, down, up, click, or wheel.</source>
+        <target state="new">Mouse action to dispatch: move, down, up, click, or wheel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MouseBrowserDescription">
+        <source>Dispatch low-level mouse input at viewport coordinates in the active tracked browser page.</source>
+        <target state="new">Dispatch low-level mouse input at viewport coordinates in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MouseBrowserName">
+        <source>Dispatch browser mouse input</source>
+        <target state="new">Dispatch browser mouse input</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MouseBrowserSucceeded">
+        <source>Dispatched browser mouse input.</source>
+        <target state="new">Dispatched browser mouse input.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MouseButtonArgumentDescription">
+        <source>Mouse button for down, up, and click actions.</source>
+        <target state="new">Mouse button for down, up, and click actions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MouseButtonArgumentLabel">
+        <source>Mouse button</source>
+        <target state="new">Mouse button</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>Optional attribute name, CSS property name, accessible name, or other command-specific qualifier.</source>
         <target state="new">Optional attribute name, CSS property name, accessible name, or other command-specific qualifier.</target>
@@ -478,8 +833,8 @@
         <note />
       </trans-unit>
       <trans-unit id="OpenTrackedBrowserDescription">
-        <source>Open the app in a tracked browser session and stream browser logs to this resource.</source>
-        <target state="new">Open the app in a tracked browser session and stream browser logs to this resource.</target>
+        <source>Open the app in a tracked browser session and stream browser diagnostics to this resource.</source>
+        <target state="new">Open the app in a tracked browser session and stream browser diagnostics to this resource.</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenTrackedBrowserName">
@@ -502,6 +857,16 @@
         <target state="new">Pressed browser key.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PromptTextArgumentDescription">
+        <source>Optional text to enter before accepting a prompt dialog.</source>
+        <target state="new">Optional text to enter before accepting a prompt dialog.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PromptTextArgumentLabel">
+        <source>Prompt text</source>
+        <target state="new">Prompt text</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PropertyArgumentDescription">
         <source>Browser value to read: title, url, text, html, value, attr, count, box, or styles.</source>
         <target state="new">Browser value to read: title, url, text, html, value, attr, count, box, or styles.</target>
@@ -510,6 +875,41 @@
       <trans-unit id="PropertyArgumentLabel">
         <source>Property</source>
         <target state="new">Property</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ReloadBrowserDescription">
+        <source>Reload the active tracked browser page.</source>
+        <target state="new">Reload the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ReloadBrowserName">
+        <source>Reload browser</source>
+        <target state="new">Reload browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ReloadBrowserSucceeded">
+        <source>Reloaded browser.</source>
+        <target state="new">Reloaded browser.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScreenshotFormatArgumentDescription">
+        <source>Image format for the screenshot: png, jpeg, or webp.</source>
+        <target state="new">Image format for the screenshot: png, jpeg, or webp.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScreenshotFormatArgumentLabel">
+        <source>Screenshot format</source>
+        <target state="new">Screenshot format</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScreenshotQualityArgumentDescription">
+        <source>Optional image quality from 0 to 100 for jpeg or webp screenshots.</source>
+        <target state="new">Optional image quality from 0 to 100 for jpeg or webp screenshots.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScreenshotQualityArgumentLabel">
+        <source>Screenshot quality</source>
+        <target state="new">Screenshot quality</target>
         <note />
       </trans-unit>
       <trans-unit id="ScrollBrowserDescription">
@@ -525,6 +925,21 @@
       <trans-unit id="ScrollBrowserSucceeded">
         <source>Scrolled browser.</source>
         <target state="new">Scrolled browser.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScrollIntoViewBrowserDescription">
+        <source>Scroll an element in the active tracked browser page into view.</source>
+        <target state="new">Scroll an element in the active tracked browser page into view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScrollIntoViewBrowserName">
+        <source>Scroll element into view</source>
+        <target state="new">Scroll element into view</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ScrollIntoViewBrowserSucceeded">
+        <source>Scrolled browser element into view.</source>
+        <target state="new">Scrolled browser element into view.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectBrowserOptionDescription">
@@ -567,6 +982,11 @@
         <target state="new">Snapshot after</target>
         <note />
       </trans-unit>
+      <trans-unit id="StateActionArgumentDescription">
+        <source>Browser state action to perform: get, set, or clear.</source>
+        <target state="new">Browser state action to perform: get, set, or clear.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="StateArgumentDescription">
         <source>Element state to check: visible, enabled, or checked.</source>
         <target state="new">Element state to check: visible, enabled, or checked.</target>
@@ -575,6 +995,116 @@
       <trans-unit id="StateArgumentLabel">
         <source>State</source>
         <target state="new">State</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateBrowserDescription">
+        <source>Get, restore, or clear browser page state including cookies, localStorage, and sessionStorage.</source>
+        <target state="new">Get, restore, or clear browser page state including cookies, localStorage, and sessionStorage.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateBrowserName">
+        <source>Manage browser state</source>
+        <target state="new">Manage browser state</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateBrowserSucceeded">
+        <source>Updated browser state.</source>
+        <target state="new">Updated browser state.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateJsonArgumentDescription">
+        <source>Browser state JSON returned by the get action. Required when setting browser state.</source>
+        <target state="new">Browser state JSON returned by the get action. Required when setting browser state.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateJsonArgumentLabel">
+        <source>State JSON</source>
+        <target state="new">State JSON</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageActionArgumentDescription">
+        <source>Storage action to perform: get, set, or clear.</source>
+        <target state="new">Storage action to perform: get, set, or clear.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageAreaArgumentDescription">
+        <source>Browser storage area: local or session.</source>
+        <target state="new">Browser storage area: local or session.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageAreaArgumentLabel">
+        <source>Storage area</source>
+        <target state="new">Storage area</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageBrowserDescription">
+        <source>Get, set, or clear localStorage or sessionStorage entries for the active tracked browser page.</source>
+        <target state="new">Get, set, or clear localStorage or sessionStorage entries for the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageBrowserName">
+        <source>Manage browser storage</source>
+        <target state="new">Manage browser storage</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageBrowserSucceeded">
+        <source>Updated browser storage.</source>
+        <target state="new">Updated browser storage.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageKeyArgumentDescription">
+        <source>Optional storage key. Required when setting a storage value.</source>
+        <target state="new">Optional storage key. Required when setting a storage value.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageKeyArgumentLabel">
+        <source>Storage key</source>
+        <target state="new">Storage key</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageValueArgumentDescription">
+        <source>Storage value to set. Empty text stores an empty string.</source>
+        <target state="new">Storage value to set. Empty text stores an empty string.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StorageValueArgumentLabel">
+        <source>Storage value</source>
+        <target state="new">Storage value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TabUrlArgumentDescription">
+        <source>Absolute URL for a new tab. Required when opening a tab.</source>
+        <target state="new">Absolute URL for a new tab. Required when opening a tab.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TabsActionArgumentDescription">
+        <source>Tab action to perform: list, open, or close.</source>
+        <target state="new">Tab action to perform: list, open, or close.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TabsBrowserDescription">
+        <source>List, open, or close browser page targets in the tracked browser.</source>
+        <target state="new">List, open, or close browser page targets in the tracked browser.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TabsBrowserName">
+        <source>Manage browser tabs</source>
+        <target state="new">Manage browser tabs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TabsBrowserSucceeded">
+        <source>Managed browser tabs.</source>
+        <target state="new">Managed browser tabs.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TargetIdArgumentDescription">
+        <source>Browser target ID. Required when closing a tab.</source>
+        <target state="new">Browser target ID. Required when closing a tab.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TargetIdArgumentLabel">
+        <source>Target ID</source>
+        <target state="new">Target ID</target>
         <note />
       </trans-unit>
       <trans-unit id="TextArgumentDescription">
@@ -615,6 +1145,36 @@
       <trans-unit id="TypeTextArgumentDescription">
         <source>Text to type into the target element.</source>
         <target state="new">Text to type into the target element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UncheckBrowserDescription">
+        <source>Uncheck a checkbox or other checkable element in the active tracked browser page.</source>
+        <target state="new">Uncheck a checkbox or other checkable element in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UncheckBrowserName">
+        <source>Uncheck browser element</source>
+        <target state="new">Uncheck browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UncheckBrowserSucceeded">
+        <source>Unchecked browser element.</source>
+        <target state="new">Unchecked browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UploadBrowserDescription">
+        <source>Attach one or more local files to a file input in the active tracked browser page.</source>
+        <target state="new">Attach one or more local files to a file input in the active tracked browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UploadBrowserName">
+        <source>Upload browser files</source>
+        <target state="new">Upload browser files</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UploadBrowserSucceeded">
+        <source>Uploaded browser files.</source>
+        <target state="new">Uploaded browser files.</target>
         <note />
       </trans-unit>
       <trans-unit id="UrlArgumentDescription">
@@ -725,6 +1285,26 @@
       <trans-unit id="WaitUrlArgumentDescription">
         <source>URL value to wait for. It can be a full URL, URL fragment, or regular expression depending on the match mode.</source>
         <target state="new">URL value to wait for. It can be a full URL, URL fragment, or regular expression depending on the match mode.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="XCoordinateArgumentDescription">
+        <source>Viewport X coordinate in CSS pixels.</source>
+        <target state="new">Viewport X coordinate in CSS pixels.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="XCoordinateArgumentLabel">
+        <source>X coordinate</source>
+        <target state="new">X coordinate</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YCoordinateArgumentDescription">
+        <source>Viewport Y coordinate in CSS pixels.</source>
+        <target state="new">Viewport Y coordinate in CSS pixels.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YCoordinateArgumentLabel">
+        <source>Y coordinate</source>
+        <target state="new">Y coordinate</target>
         <note />
       </trans-unit>
     </body>

@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -24,10 +24,10 @@ using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
-public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelper)
+public class BrowserAutomationBuilderExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    public void WithBrowserLogs_CreatesChildResource()
+    public void WithBrowserAutomation_CreatesChildResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -41,93 +41,146 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var browserLogsResource = Assert.Single(appModel.Resources.OfType<BrowserLogsResource>());
-        Assert.Equal("web-browser-logs", browserLogsResource.Name);
-        Assert.Equal(web.Resource.Name, browserLogsResource.ParentResource.Name);
-        Assert.Equal("chrome", browserLogsResource.InitialConfiguration.Browser);
-        Assert.Null(browserLogsResource.InitialConfiguration.Profile);
-        Assert.Contains(browserLogsResource.Annotations.OfType<NameValidationPolicyAnnotation>(), static annotation => annotation == NameValidationPolicyAnnotation.None);
+        var browserAutomationResource = Assert.Single(appModel.Resources.OfType<BrowserAutomationResource>());
+        Assert.Equal("web-browser-automation", browserAutomationResource.Name);
+        Assert.Equal(web.Resource.Name, browserAutomationResource.ParentResource.Name);
+        Assert.Equal("chrome", browserAutomationResource.InitialConfiguration.Browser);
+        Assert.Null(browserAutomationResource.InitialConfiguration.Profile);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<NameValidationPolicyAnnotation>(), static annotation => annotation == NameValidationPolicyAnnotation.None);
 
-        Assert.True(browserLogsResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.True(browserAutomationResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
         var parentRelationship = Assert.Single(relationships, relationship => relationship.Type == "Parent");
         Assert.Equal(web.Resource.Name, parentRelationship.Resource.Name);
 
-        var command = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName);
+        var command = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName);
         Assert.Equal(BrowserCommandStrings.OpenTrackedBrowserName, command.DisplayName);
         Assert.Equal(BrowserCommandStrings.OpenTrackedBrowserDescription, command.DisplayDescription);
-        var configureCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        Assert.True(command.Visibility.HasFlag(ResourceCommandVisibility.Dashboard));
+        Assert.True(command.Visibility.HasFlag(ResourceCommandVisibility.Api));
+        var configureCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserName, configureCommand.DisplayName);
         Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserDescription, configureCommand.DisplayDescription);
-        var screenshotCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.CaptureScreenshotCommandName);
+        Assert.True(configureCommand.Visibility.HasFlag(ResourceCommandVisibility.Dashboard));
+        Assert.True(configureCommand.Visibility.HasFlag(ResourceCommandVisibility.Api));
+        var screenshotCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.CaptureScreenshotCommandName);
         Assert.Equal(BrowserCommandStrings.CaptureScreenshotName, screenshotCommand.DisplayName);
         Assert.Equal(BrowserCommandStrings.CaptureScreenshotDescription, screenshotCommand.DisplayDescription);
-        var inspectCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.InspectBrowserCommandName);
+        Assert.True(screenshotCommand.Visibility.HasFlag(ResourceCommandVisibility.Dashboard));
+        Assert.True(screenshotCommand.Visibility.HasFlag(ResourceCommandVisibility.Api));
+        var inspectCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.InspectBrowserCommandName);
         Assert.Equal(BrowserCommandStrings.InspectBrowserName, inspectCommand.DisplayName);
         Assert.Contains(inspectCommand.ArgumentInputs!, input => input.Name == "maxElements" && input.InputType == InputType.Number && input.Required == false);
-        var getCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.GetCommandName);
+        Assert.Equal(ResourceCommandVisibility.Api, inspectCommand.Visibility);
+        var getCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.GetCommandName);
         Assert.Contains(getCommand.ArgumentInputs!, input => input.Name == "property" && input.InputType == InputType.Choice && input.Value == "text");
-        var isCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.IsCommandName);
+        var isCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.IsCommandName);
         Assert.Contains(isCommand.ArgumentInputs!, input => input.Name == "state" && input.InputType == InputType.Choice && input.Value == "visible");
-        var findCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FindCommandName);
+        var findCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.FindCommandName);
         Assert.Contains(findCommand.ArgumentInputs!, input => input.Name == "kind" && input.InputType == InputType.Choice && input.Value == "text");
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.HighlightCommandName);
-        var evaluateCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.EvaluateCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.HighlightCommandName);
+        var evaluateCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.EvaluateCommandName);
         Assert.Contains(evaluateCommand.ArgumentInputs!, input => input.Name == "expression" && input.InputType == InputType.Text && input.Required);
-        var clickCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ClickBrowserCommandName);
+        var cookiesCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.CookiesCommandName);
+        Assert.Contains(cookiesCommand.ArgumentInputs!, input => input.Name == "action" && input.InputType == InputType.Choice && input.Value == "get");
+        var storageCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.StorageCommandName);
+        Assert.Contains(storageCommand.ArgumentInputs!, input => input.Name == "area" && input.InputType == InputType.Choice && input.Value == "local");
+        var stateCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.StateCommandName);
+        Assert.Contains(stateCommand.ArgumentInputs!, input => input.Name == "clearExisting" && input.InputType == InputType.Boolean && !input.Required);
+        var cdpCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.CdpCommandName);
+        Assert.Contains(cdpCommand.ArgumentInputs!, input => input.Name == "method" && input.InputType == InputType.Text && input.Required);
+        Assert.Contains(cdpCommand.ArgumentInputs!, input => input.Name == "session" && input.InputType == InputType.Choice && input.Value == "page");
+        var tabsCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.TabsCommandName);
+        Assert.Contains(tabsCommand.ArgumentInputs!, input => input.Name == "action" && input.InputType == InputType.Choice && input.Value == "list");
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.FramesCommandName);
+        var dialogCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.DialogCommandName);
+        Assert.Contains(dialogCommand.ArgumentInputs!, input => input.Name == "action" && input.InputType == InputType.Choice && input.Value == "accept");
+        var downloadsCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.DownloadsCommandName);
+        Assert.Contains(downloadsCommand.ArgumentInputs!, input => input.Name == "behavior" && input.InputType == InputType.Choice && input.Value == "allow");
+        var uploadCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.UploadCommandName);
+        Assert.Contains(uploadCommand.ArgumentInputs!, input => input.Name == "files" && input.InputType == InputType.Text && input.Required);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.BrowserUrlCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.BackBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.ForwardBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.ReloadBrowserCommandName);
+        var clickCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.ClickBrowserCommandName);
         var selectorArgument = Assert.Single(clickCommand.ArgumentInputs!, input => input.Name == "selector");
         Assert.Equal(InputType.Text, selectorArgument.InputType);
         Assert.True(selectorArgument.Required);
         Assert.Contains(clickCommand.ArgumentInputs!, input => input.Name == "snapshotAfter" && input.InputType == InputType.Boolean && !input.Required);
-        var fillCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FillBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.DoubleClickBrowserCommandName);
+        var fillCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.FillBrowserCommandName);
         Assert.Contains(fillCommand.ArgumentInputs!, input => input.Name == "value" && input.InputType == InputType.Text && input.Required);
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.NavigateBrowserCommandName);
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FocusBrowserElementCommandName);
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.TypeBrowserTextCommandName);
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.PressBrowserKeyCommandName);
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.HoverBrowserElementCommandName);
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.SelectBrowserOptionCommandName);
-        var scrollCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ScrollBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.CheckBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.UncheckBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.NavigateBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.FocusBrowserElementCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.TypeBrowserTextCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.PressBrowserKeyCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.KeyDownBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.KeyUpBrowserCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.HoverBrowserElementCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.SelectBrowserOptionCommandName);
+        var scrollCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.ScrollBrowserCommandName);
         Assert.Contains(scrollCommand.ArgumentInputs!, input => input.Name == "deltaY" && input.InputType == InputType.Number && !input.Required);
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserCommandName);
-        var waitCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitCommandName);
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.ScrollIntoViewBrowserCommandName);
+        var mouseCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.MouseBrowserCommandName);
+        Assert.Contains(mouseCommand.ArgumentInputs!, input => input.Name == "action" && input.InputType == InputType.Choice && input.Value == "move");
+        Assert.Contains(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.WaitForBrowserCommandName);
+        var waitCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.WaitCommandName);
         Assert.Contains(waitCommand.ArgumentInputs!, input => input.Name == "urlContains" && input.InputType == InputType.Text && !input.Required);
         Assert.Contains(waitCommand.ArgumentInputs!, input => input.Name == "loadState" && input.InputType == InputType.Choice && input.Value is null);
         Assert.Contains(waitCommand.ArgumentInputs!, input => input.Name == "function" && input.InputType == InputType.Text && !input.Required);
-        var waitUrlCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserUrlCommandName);
+        var waitUrlCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.WaitForBrowserUrlCommandName);
         Assert.Contains(waitUrlCommand.ArgumentInputs!, input => input.Name == "match" && input.InputType == InputType.Choice && input.Value == "contains");
-        var waitLoadStateCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserLoadStateCommandName);
+        var waitLoadStateCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.WaitForBrowserLoadStateCommandName);
         Assert.Contains(waitLoadStateCommand.ArgumentInputs!, input => input.Name == "state" && input.InputType == InputType.Choice && input.Value == "load");
-        var waitElementStateCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.WaitForBrowserElementStateCommandName);
+        var waitElementStateCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.WaitForBrowserElementStateCommandName);
         Assert.Contains(waitElementStateCommand.ArgumentInputs!, input => input.Name == "state" && input.InputType == InputType.Choice && input.Value == "visible");
-        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.CloseTrackedBrowserCommandName);
+        var closeCommand = Assert.Single(browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserAutomationBuilderExtensions.CloseTrackedBrowserCommandName);
+        Assert.True(closeCommand.Visibility.HasFlag(ResourceCommandVisibility.Dashboard));
+        Assert.True(closeCommand.Visibility.HasFlag(ResourceCommandVisibility.Api));
 
-        var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
-        Assert.Equal(BrowserLogsBuilderExtensions.BrowserResourceType, snapshot.ResourceType);
+        var dashboardCommandNames = browserAutomationResource.Annotations.OfType<ResourceCommandAnnotation>()
+            .Where(annotation => annotation.Visibility.HasFlag(ResourceCommandVisibility.Dashboard))
+            .Select(annotation => annotation.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            [
+                BrowserAutomationBuilderExtensions.CaptureScreenshotCommandName,
+                BrowserAutomationBuilderExtensions.CloseTrackedBrowserCommandName,
+                BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName,
+                BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName
+            ],
+            dashboardCommandNames);
+
+        var snapshot = browserAutomationResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
+        Assert.Equal(BrowserAutomationBuilderExtensions.BrowserResourceType, snapshot.ResourceType);
         Assert.NotNull(snapshot.CreationTimeStamp);
         Assert.Contains(snapshot.Properties, property => property.Name == CustomResourceKnownProperties.Source && Equals(property.Value, "web"));
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
-        Assert.DoesNotContain(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ProfilePropertyName);
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName && Equals(property.Value, 0));
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ActiveSessionsPropertyName && Equals(property.Value, "None"));
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserSessionsPropertyName && Equals(property.Value, "[]"));
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName && Equals(property.Value, 0));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
+        Assert.DoesNotContain(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.ProfilePropertyName);
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName && Equals(property.Value, 0));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName && Equals(property.Value, "None"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.BrowserSessionsPropertyName && Equals(property.Value, "[]"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.TotalSessionsLaunchedPropertyName && Equals(property.Value, 0));
         Assert.Empty(snapshot.HealthReports);
     }
 
     [Fact]
-    public void WithBrowserLogs_UsesResourceSpecificConfigurationWhenArgumentsAreOmitted()
+    public void WithBrowserAutomation_UsesResourceSpecificConfigurationWhenArgumentsAreOmitted()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Default";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"] = "Default";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -139,17 +192,45 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
-        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        var browserAutomationResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>());
 
-        Assert.Equal("chrome", browserLogsResource.InitialConfiguration.Browser);
-        Assert.Equal("Profile 1", browserLogsResource.InitialConfiguration.Profile);
+        Assert.Equal("chrome", browserAutomationResource.InitialConfiguration.Browser);
+        Assert.Equal("Profile 1", browserAutomationResource.InitialConfiguration.Profile);
 
-        var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ProfilePropertyName && Equals(property.Value, "Profile 1"));
+        var snapshot = browserAutomationResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.ProfilePropertyName && Equals(property.Value, "Profile 1"));
+    }
+
+    [Fact]
+    public void WithBrowserAutomation_UsesLegacyBrowserLogsConfigurationWhenAutomationConfigurationIsMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.LegacyBrowserLogsConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.LegacyBrowserLogsConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.LegacyBrowserLogsConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.LegacyBrowserLogsConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserAutomation();
+
+        using var app = builder.Build();
+        var browserAutomationResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>());
+
+        Assert.Equal("chrome", browserAutomationResource.InitialConfiguration.Browser);
+        Assert.Equal("Profile 1", browserAutomationResource.InitialConfiguration.Profile);
     }
 
     [Fact]
@@ -202,7 +283,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public void WithBrowserLogs_UsesDetectedDefaultBrowserWhenConfigurationIsMissing()
+    public void WithBrowserAutomation_UsesDetectedDefaultBrowserWhenConfigurationIsMissing()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -216,22 +297,22 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
-        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        var browserAutomationResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>());
 
-        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(ChromiumBrowserResolver.TryResolveExecutable), browserLogsResource.InitialConfiguration.Browser);
-        Assert.Null(browserLogsResource.InitialConfiguration.Profile);
+        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(ChromiumBrowserResolver.TryResolveExecutable), browserAutomationResource.InitialConfiguration.Browser);
+        Assert.Null(browserAutomationResource.InitialConfiguration.Profile);
     }
 
     [Fact]
-    public void WithBrowserLogs_ExplicitArgumentsOverrideConfiguration()
+    public void WithBrowserAutomation_ExplicitArgumentsOverrideConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -243,18 +324,18 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "msedge", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
+        web.WithBrowserAutomation(browser: "msedge", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
 
         using var app = builder.Build();
-        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        var browserAutomationResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>());
 
-        Assert.Equal("msedge", browserLogsResource.InitialConfiguration.Browser);
-        Assert.Equal("Default", browserLogsResource.InitialConfiguration.Profile);
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+        Assert.Equal("msedge", browserAutomationResource.InitialConfiguration.Browser);
+        Assert.Equal("Default", browserAutomationResource.InitialConfiguration.Profile);
+        Assert.Equal(BrowserUserDataMode.Shared, browserAutomationResource.InitialConfiguration.UserDataMode);
     }
 
     [Fact]
-    public void WithBrowserLogs_DefaultsToSharedUserDataMode()
+    public void WithBrowserAutomation_DefaultsToSharedUserDataMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -267,21 +348,21 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
-        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        var browserAutomationResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>());
 
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
-        var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Shared)));
+        Assert.Equal(BrowserUserDataMode.Shared, browserAutomationResource.InitialConfiguration.UserDataMode);
+        var snapshot = browserAutomationResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserAutomationBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Shared)));
     }
 
     [Fact]
-    public void WithBrowserLogs_ReadsUserDataModeFromConfiguration()
+    public void WithBrowserAutomation_ReadsUserDataModeFromConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -293,16 +374,16 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
-        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        var browserAutomationResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>());
 
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+        Assert.Equal(BrowserUserDataMode.Shared, browserAutomationResource.InitialConfiguration.UserDataMode);
     }
 
     [Fact]
-    public void WithBrowserLogs_RejectsProfileWhenUserDataModeIsIsolated()
+    public void WithBrowserAutomation_RejectsProfileWhenUserDataModeIsIsolated()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -316,15 +397,15 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             });
 
         var ex = Assert.Throws<InvalidOperationException>(
-            () => web.WithBrowserLogs(profile: "Default", userDataMode: BrowserUserDataMode.Isolated));
-        Assert.Contains(BrowserLogsBuilderExtensions.UserDataModeConfigurationKey, ex.Message);
+            () => web.WithBrowserAutomation(profile: "Default", userDataMode: BrowserUserDataMode.Isolated));
+        Assert.Contains(BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey, ex.Message);
     }
 
     [Fact]
-    public void WithBrowserLogs_ExplicitUserDataModeOverridesConfiguration()
+    public void WithBrowserAutomation_ExplicitUserDataModeOverridesConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Isolated);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Isolated);
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -336,15 +417,15 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(userDataMode: BrowserUserDataMode.Shared);
+        web.WithBrowserAutomation(userDataMode: BrowserUserDataMode.Shared);
 
         using var app = builder.Build();
-        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+        var browserAutomationResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>());
+        Assert.Equal(BrowserUserDataMode.Shared, browserAutomationResource.InitialConfiguration.UserDataMode);
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandStartsTrackedSession()
+    public async Task WithBrowserAutomation_CommandStartsTrackedSession()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionManager = new FakeBrowserLogsSessionManager();
@@ -360,26 +441,26 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
 
         Assert.True(result.Success);
 
         var call = Assert.Single(sessionManager.Calls);
-        Assert.Same(browserLogsResource, call.Resource);
-        Assert.Equal(browserLogsResource.Name, call.ResourceName);
+        Assert.Same(browserAutomationResource, call.Resource);
+        Assert.Equal(browserAutomationResource.Name, call.ResourceName);
         Assert.Equal("chrome", call.Configuration.Browser);
         Assert.Null(call.Configuration.Profile);
         Assert.Equal(new Uri("http://localhost:8080", UriKind.Absolute), call.Url);
     }
 
     [Fact]
-    public async Task WithBrowserLogs_ConfigureCommandSavesResourceScopedBrowserSettingsAndAppliesImmediately()
+    public async Task WithBrowserAutomation_ConfigureCommandSavesResourceScopedBrowserSettingsAndAppliesImmediately()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var interactionService = new TestInteractionService();
@@ -398,13 +479,13 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
         Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserName, interaction.Title);
@@ -432,11 +513,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var result = await commandTask.DefaultTimeout();
 
         Assert.True(result.Success);
-        Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
-        Assert.Equal(nameof(BrowserUserDataMode.Shared), userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"]);
-        Assert.Equal("Default", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"]);
+        Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"]);
+        Assert.Equal(nameof(BrowserUserDataMode.Shared), userSecretsManager.Secrets[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"]);
+        Assert.Equal("Default", userSecretsManager.Secrets[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"]);
 
-        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+        var effectiveConfiguration = browserAutomationResource.ResolveCurrentConfiguration(
             app.Services.GetRequiredService<IConfiguration>(),
             app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
         Assert.Equal("msedge", effectiveConfiguration.Browser);
@@ -445,7 +526,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_ConfigureCommandAppliesRuntimeSettingsWhenUserSecretsAreUnavailable()
+    public async Task WithBrowserAutomation_ConfigureCommandAppliesRuntimeSettingsWhenUserSecretsAreUnavailable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var interactionService = new TestInteractionService();
@@ -467,13 +548,13 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
         var saveToUserSecrets = interaction.Inputs["saveToUserSecrets"];
@@ -494,7 +575,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Empty(userSecretsManager.Secrets);
         Assert.Empty(userSecretsManager.DeletedSecrets);
 
-        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+        var effectiveConfiguration = browserAutomationResource.ResolveCurrentConfiguration(
             app.Services.GetRequiredService<IConfiguration>(),
             app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
         Assert.Equal("msedge", effectiveConfiguration.Browser);
@@ -503,7 +584,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_ConfigureCommandDoesNotOverrideExplicitBuilderSettings()
+    public async Task WithBrowserAutomation_ConfigureCommandDoesNotOverrideExplicitBuilderSettings()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var interactionService = new TestInteractionService();
@@ -522,13 +603,13 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
         interaction.Inputs["scope"].Value = "resource";
@@ -540,9 +621,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var result = await commandTask.DefaultTimeout();
 
         Assert.True(result.Success);
-        Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
+        Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"]);
 
-        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+        var effectiveConfiguration = browserAutomationResource.ResolveCurrentConfiguration(
             app.Services.GetRequiredService<IConfiguration>(),
             app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
         Assert.Equal("chrome", effectiveConfiguration.Browser);
@@ -551,7 +632,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_ConfigureCommandSavesGlobalSettingsAndClearsProfile()
+    public async Task WithBrowserAutomation_ConfigureCommandSavesGlobalSettingsAndClearsProfile()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var interactionService = new TestInteractionService();
@@ -559,7 +640,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
         builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -571,13 +652,13 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
         interaction.Inputs["scope"].Value = "global";
@@ -589,11 +670,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var result = await commandTask.DefaultTimeout();
 
         Assert.True(result.Success);
-        Assert.Equal("chrome", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
-        Assert.Equal(nameof(BrowserUserDataMode.Isolated), userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"]);
-        Assert.Contains($"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}", userSecretsManager.DeletedSecrets);
+        Assert.Equal("chrome", userSecretsManager.Secrets[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"]);
+        Assert.Equal(nameof(BrowserUserDataMode.Isolated), userSecretsManager.Secrets[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"]);
+        Assert.Contains($"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}", userSecretsManager.DeletedSecrets);
 
-        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+        var effectiveConfiguration = browserAutomationResource.ResolveCurrentConfiguration(
             app.Services.GetRequiredService<IConfiguration>(),
             app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
         Assert.Equal("chrome", effectiveConfiguration.Browser);
@@ -602,18 +683,18 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_ConfigureCommandDoesNotApplyRuntimeSettingsWhenUserSecretSaveFails()
+    public async Task WithBrowserAutomation_ConfigureCommandDoesNotApplyRuntimeSettingsWhenUserSecretSaveFails()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager();
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
         builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
 
-        var userDataModeKey = $"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}";
+        var userDataModeKey = $"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}";
         userSecretsManager.FailingSetSecretNames.Add(userDataModeKey);
 
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -626,13 +707,13 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
         interaction.Inputs["scope"].Value = "resource";
@@ -645,10 +726,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         Assert.False(result.Success);
         Assert.Contains(userDataModeKey, result.Message, StringComparison.Ordinal);
-        Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
+        Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:web:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"]);
         Assert.DoesNotContain(userDataModeKey, userSecretsManager.Secrets.Keys);
 
-        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+        var effectiveConfiguration = browserAutomationResource.ResolveCurrentConfiguration(
             app.Services.GetRequiredService<IConfiguration>(),
             app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
         Assert.Equal("chrome", effectiveConfiguration.Browser);
@@ -657,7 +738,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_ConfigureCommandRefreshesAllBrowserLogsResourcesForGlobalSettings()
+    public async Task WithBrowserAutomation_ConfigureCommandRefreshesAllBrowserAutomationResourcesForGlobalSettings()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var interactionService = new TestInteractionService();
@@ -686,16 +767,16 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
-        admin.WithBrowserLogs();
+        web.WithBrowserAutomation();
+        admin.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResources = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().ToArray();
-        var webBrowserLogsResource = browserLogsResources.Single(resource => resource.ParentResource.Name == "web");
-        var adminBrowserLogsResource = browserLogsResources.Single(resource => resource.ParentResource.Name == "admin");
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(webBrowserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var browserAutomationResources = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().ToArray();
+        var webBrowserAutomationResource = browserAutomationResources.Single(resource => resource.ParentResource.Name == "web");
+        var adminBrowserAutomationResource = browserAutomationResources.Single(resource => resource.ParentResource.Name == "admin");
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(webBrowserAutomationResource, BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
         interaction.Inputs["scope"].Value = "global";
@@ -709,15 +790,15 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.True(result.Success);
 
         await app.ResourceNotifications.WaitForResourceAsync(
-            adminBrowserLogsResource.Name,
+            adminBrowserAutomationResource.Name,
             resourceEvent =>
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserPropertyName, "chrome") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.UserDataModePropertyName, nameof(BrowserUserDataMode.Isolated)) &&
-                DoesNotHaveProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ProfilePropertyName)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserPropertyName, "chrome") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.UserDataModePropertyName, nameof(BrowserUserDataMode.Isolated)) &&
+                DoesNotHaveProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ProfilePropertyName)).DefaultTimeout();
     }
 
     [Fact]
-    public async Task WithBrowserLogs_ConfigureCommandValidatesEffectiveConfigurationBeforeSaving()
+    public async Task WithBrowserAutomation_ConfigureCommandValidatesEffectiveConfigurationBeforeSaving()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var interactionService = new TestInteractionService();
@@ -736,13 +817,13 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(profile: "Default");
+        web.WithBrowserAutomation(profile: "Default");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.ConfigureTrackedBrowserCommandName);
         var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
         interaction.Inputs["scope"].Value = "resource";
@@ -758,7 +839,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Empty(userSecretsManager.Secrets);
         Assert.Empty(userSecretsManager.DeletedSecrets);
 
-        var effectiveConfiguration = browserLogsResource.ResolveCurrentConfiguration(
+        var effectiveConfiguration = browserAutomationResource.ResolveCurrentConfiguration(
             app.Services.GetRequiredService<IConfiguration>(),
             app.Services.GetRequiredService<BrowserLogsConfigurationStore>());
         Assert.Equal(BrowserUserDataMode.Shared, effectiveConfiguration.UserDataMode);
@@ -766,7 +847,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CaptureScreenshotCommandReturnsArtifactResult()
+    public async Task WithBrowserAutomation_CaptureScreenshotCommandReturnsArtifactResult()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionManager = new FakeBrowserLogsSessionManager
@@ -780,7 +861,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 "target-0002",
                 new Uri("https://localhost:8443/"),
                 new BrowserLogsArtifact(
-                    "web-browser-logs",
+                    "web-browser-automation",
                     "screenshot",
                     Path.Combine(AppContext.BaseDirectory, "artifacts", "screenshot.png"),
                     "image/png",
@@ -799,23 +880,25 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.CaptureScreenshotCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        using var screenshotArguments = JsonDocument.Parse("""{"format":"jpeg","quality":80,"fullPage":true}""");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.CaptureScreenshotCommandName, screenshotArguments.RootElement).DefaultTimeout();
 
         Assert.True(result.Success);
-        Assert.Equal("web-browser-logs", Assert.Single(sessionManager.CaptureScreenshotCalls));
+        Assert.Equal("web-browser-automation", Assert.Single(sessionManager.CaptureScreenshotCalls));
+        Assert.Equal(new BrowserScreenshotCaptureOptions("jpeg", 80, FullPage: true), sessionManager.ScreenshotOptions.GetValueOrDefault());
         Assert.Contains("screenshot.png", result.Message);
         Assert.NotNull(result.Data);
         Assert.Equal(CommandResultFormat.Json, result.Data.Format);
         Assert.True(result.Data.DisplayImmediately);
 
         using var document = JsonDocument.Parse(result.Data.Value);
-        Assert.Equal("web-browser-logs", document.RootElement.GetProperty("resourceName").GetString());
+        Assert.Equal("web-browser-automation", document.RootElement.GetProperty("resourceName").GetString());
         Assert.Equal("session-0002", document.RootElement.GetProperty("sessionId").GetString());
         Assert.Equal("msedge", document.RootElement.GetProperty("browser").GetString());
         Assert.Equal(@"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", document.RootElement.GetProperty("browserExecutable").GetString());
@@ -829,7 +912,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_BrowserCommandsForwardArgumentsAndReturnJson()
+    public async Task WithBrowserAutomation_BrowserCommandsForwardArgumentsAndReturnJson()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionManager = new FakeBrowserLogsSessionManager();
@@ -845,18 +928,31 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.GetCommandName, """{"property":"attr","selector":"#link","name":"href"}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.IsCommandName, """{"state":"visible","selector":"#submit"}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.FindCommandName, """{"kind":"role","value":"button","name":"Submit","index":1}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.HighlightCommandName, """{"selector":"#submit"}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.EvaluateCommandName, """{"expression":"document.title"}""");
-        var result = await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.ClickBrowserCommandName, """{"selector":"#submit","snapshotAfter":true}""");
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.GetCommandName, """{"property":"attr","selector":"#link","name":"href"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.IsCommandName, """{"state":"visible","selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.FindCommandName, """{"kind":"role","value":"button","name":"Submit","index":1}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.HighlightCommandName, """{"selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.EvaluateCommandName, """{"expression":"document.title"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.CookiesCommandName, """{"action":"set","name":"session","value":"abc","path":"/"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.StorageCommandName, """{"area":"local","action":"set","key":"theme","value":"dark"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.StateCommandName, """{"action":"set","state":"{\"cookies\":[],\"localStorage\":{},\"sessionStorage\":{}}","clearExisting":true}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.CdpCommandName, """{"method":"Runtime.evaluate","params":"{\"expression\":\"document.title\",\"returnByValue\":true}","session":"page"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.TabsCommandName, """{"action":"open","url":"https://example.com/"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.FramesCommandName, "{}");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.DialogCommandName, """{"action":"accept","promptText":"ok"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.DownloadsCommandName, """{"behavior":"allow","downloadPath":"/tmp/downloads","eventsEnabled":true}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.UploadCommandName, """{"selector":"#file","files":"[\"/tmp/file.txt\"]"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.BrowserUrlCommandName, "{}");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.BackBrowserCommandName, "{}");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.ForwardBrowserCommandName, "{}");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.ReloadBrowserCommandName, "{}");
+        var result = await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.ClickBrowserCommandName, """{"selector":"#submit","snapshotAfter":true}""");
 
         Assert.True(result.Success);
         Assert.NotNull(result.Data);
@@ -869,48 +965,75 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             Assert.Equal("snapshot", resultDocument.RootElement.GetProperty("snapshot").GetProperty("action").GetString());
         }
 
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.FocusBrowserElementCommandName, """{"selector":"#name"}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.TypeBrowserTextCommandName, """{"selector":"#name","text":"Aspire"}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.HoverBrowserElementCommandName, """{"selector":"#submit"}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.ScrollBrowserCommandName, """{"selector":"#panel","deltaX":10,"deltaY":400}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserUrlCommandName, """{"url":"/orders","match":"contains","timeoutMilliseconds":3000}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserLoadStateCommandName, """{"state":"networkidle","timeoutMilliseconds":3000}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitForBrowserElementStateCommandName, """{"selector":"#submit","state":"enabled","timeoutMilliseconds":3000}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitCommandName, """{"urlContains":"/dashboard","timeoutMilliseconds":3000}""");
-        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.WaitCommandName, """{"function":"window.__appReady === true","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.DoubleClickBrowserCommandName, """{"selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.CheckBrowserCommandName, """{"selector":"#accepted"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.UncheckBrowserCommandName, """{"selector":"#accepted"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.FocusBrowserElementCommandName, """{"selector":"#name"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.TypeBrowserTextCommandName, """{"selector":"#name","text":"Aspire"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.KeyDownBrowserCommandName, """{"selector":"#name","key":"Shift"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.KeyUpBrowserCommandName, """{"selector":"#name","key":"Shift"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.HoverBrowserElementCommandName, """{"selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.ScrollBrowserCommandName, """{"selector":"#panel","deltaX":10,"deltaY":400}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.ScrollIntoViewBrowserCommandName, """{"selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.MouseBrowserCommandName, """{"action":"click","x":10,"y":20,"button":"left"}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.WaitForBrowserUrlCommandName, """{"url":"/orders","match":"contains","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.WaitForBrowserLoadStateCommandName, """{"state":"networkidle","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.WaitForBrowserElementStateCommandName, """{"selector":"#submit","state":"enabled","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.WaitCommandName, """{"urlContains":"/dashboard","timeoutMilliseconds":3000}""");
+        await ExecuteBrowserCommandAsync(BrowserAutomationBuilderExtensions.WaitCommandName, """{"function":"window.__appReady === true","timeoutMilliseconds":3000}""");
 
         Assert.Equal(
             [
-                "GetAsync:web-browser-logs:attr:#link:href",
-                "IsAsync:web-browser-logs:visible:#submit",
-                "FindAsync:web-browser-logs:role:button:Submit:1",
-                "HighlightAsync:web-browser-logs:#submit",
-                "EvaluateAsync:web-browser-logs:document.title",
-                "ClickAsync:web-browser-logs:#submit",
-                "GetPageSnapshotAsync:web-browser-logs:80:8000",
-                "FocusAsync:web-browser-logs:#name",
-                "TypeAsync:web-browser-logs:#name:Aspire",
-                "HoverAsync:web-browser-logs:#submit",
-                "ScrollAsync:web-browser-logs:#panel:10:400",
-                "WaitForUrlAsync:web-browser-logs:/orders:contains:3000",
-                "WaitForLoadStateAsync:web-browser-logs:networkidle:3000",
-                "WaitForElementStateAsync:web-browser-logs:#submit:enabled:3000",
-                "WaitForUrlAsync:web-browser-logs:/dashboard:contains:3000",
-                "WaitForFunctionAsync:web-browser-logs:window.__appReady === true:3000"
+                "GetAsync:web-browser-automation:attr:#link:href",
+                "IsAsync:web-browser-automation:visible:#submit",
+                "FindAsync:web-browser-automation:role:button:Submit:1",
+                "HighlightAsync:web-browser-automation:#submit",
+                "EvaluateAsync:web-browser-automation:document.title",
+                "CookiesAsync:web-browser-automation:set:session:abc::/",
+                "StorageAsync:web-browser-automation:local:set:theme:dark",
+                """StateAsync:web-browser-automation:set:{"cookies":[],"localStorage":{},"sessionStorage":{}}:True""",
+                """CdpAsync:web-browser-automation:Runtime.evaluate:{"expression":"document.title","returnByValue":true}:page""",
+                "TabsAsync:web-browser-automation:open:https://example.com/:",
+                "FramesAsync:web-browser-automation",
+                "DialogAsync:web-browser-automation:accept:ok",
+                "DownloadsAsync:web-browser-automation:allow:/tmp/downloads:True",
+                "UploadAsync:web-browser-automation:#file:[\"/tmp/file.txt\"]",
+                "GetUrlAsync:web-browser-automation",
+                "GoBackAsync:web-browser-automation",
+                "GoForwardAsync:web-browser-automation",
+                "ReloadAsync:web-browser-automation",
+                "ClickAsync:web-browser-automation:#submit",
+                "GetPageSnapshotAsync:web-browser-automation:80:8000",
+                "DoubleClickAsync:web-browser-automation:#submit",
+                "CheckAsync:web-browser-automation:#accepted",
+                "UncheckAsync:web-browser-automation:#accepted",
+                "FocusAsync:web-browser-automation:#name",
+                "TypeAsync:web-browser-automation:#name:Aspire",
+                "KeyDownAsync:web-browser-automation:#name:Shift",
+                "KeyUpAsync:web-browser-automation:#name:Shift",
+                "HoverAsync:web-browser-automation:#submit",
+                "ScrollAsync:web-browser-automation:#panel:10:400",
+                "ScrollIntoViewAsync:web-browser-automation:#submit",
+                "MouseAsync:web-browser-automation:click:10:20:left:0:0",
+                "WaitForUrlAsync:web-browser-automation:/orders:contains:3000",
+                "WaitForLoadStateAsync:web-browser-automation:networkidle:3000",
+                "WaitForElementStateAsync:web-browser-automation:#submit:enabled:3000",
+                "WaitForUrlAsync:web-browser-automation:/dashboard:contains:3000",
+                "WaitForFunctionAsync:web-browser-automation:window.__appReady === true:3000"
             ],
             sessionManager.BrowserCommandCalls);
 
         async Task<ExecuteCommandResult> ExecuteBrowserCommandAsync(string commandName, string json)
         {
             using var arguments = JsonDocument.Parse(json);
-            var commandResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, commandName, arguments.RootElement).DefaultTimeout();
+            var commandResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, commandName, arguments.RootElement).DefaultTimeout();
             Assert.True(commandResult.Success);
             return commandResult;
         }
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CaptureScreenshotCommandReturnsClearFailureWhenNoSessionIsActive()
+    public async Task WithBrowserAutomation_CaptureScreenshotCommandReturnsClearFailureWhenNoSessionIsActive()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
@@ -924,20 +1047,20 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.CaptureScreenshotCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.CaptureScreenshotCommandName).DefaultTimeout();
 
         Assert.False(result.Success);
         Assert.Equal("No active tracked browser session is available to capture.", result.Message);
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CaptureScreenshotCommandWritesPngArtifact()
+    public async Task WithBrowserAutomation_CaptureScreenshotCommandWritesPngArtifact()
     {
         var artifactDirectory = Directory.CreateTempSubdirectory();
         try
@@ -964,21 +1087,21 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                     Properties = []
                 });
 
-            web.WithBrowserLogs(browser: "chrome");
+            web.WithBrowserAutomation(browser: "chrome");
 
             using var app = builder.Build();
             await app.StartAsync();
 
-            var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-            var openResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+            var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+            var openResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
             Assert.True(openResult.Success);
 
             var session = Assert.Single(sessionFactory.Sessions);
             session.ScreenshotBytes = [1, 2, 3, 4];
 
-            var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.CaptureScreenshotCommandName).DefaultTimeout();
+            var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.CaptureScreenshotCommandName).DefaultTimeout();
             var logs = await ConsoleLoggingTestHelpers.WatchForLogsAsync(
-                app.Services.GetRequiredService<ResourceLoggerService>().WatchAsync(browserLogsResource.Name),
+                app.Services.GetRequiredService<ResourceLoggerService>().WatchAsync(browserAutomationResource.Name),
                 targetLogCount: 6).DefaultTimeout();
 
             Assert.True(result.Success);
@@ -1009,14 +1132,14 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandUsesLatestConfiguredSettingsAndRefreshesProperties()
+    public async Task WithBrowserAutomation_CommandUsesLatestConfiguredSettingsAndRefreshesProperties()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
 
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Default";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"] = "Default";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
 
         builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
             new BrowserLogsSessionManager(
@@ -1037,16 +1160,16 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = null;
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}"] = null;
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
 
         Assert.True(result.Success);
 
@@ -1055,11 +1178,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Null(launchConfiguration.Profile);
 
         var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserPropertyName, "msedge") &&
-                !resourceEvent.Snapshot.Properties.Any(property => property.Name == BrowserLogsBuilderExtensions.ProfilePropertyName)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserPropertyName, "msedge") &&
+                !resourceEvent.Snapshot.Properties.Any(property => property.Name == BrowserAutomationBuilderExtensions.ProfilePropertyName)).DefaultTimeout();
 
         var session = Assert.Single(GetBrowserSessions(runningEvent.Snapshot));
         Assert.Equal("msedge", session.Browser);
@@ -1067,12 +1190,12 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandRefreshesBrowserExecutablePropertyWhenRelaunchFails()
+    public async Task WithBrowserAutomation_CommandRefreshesBrowserExecutablePropertyWhenRelaunchFails()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
 
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
 
         builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
             new BrowserLogsSessionManager(
@@ -1093,21 +1216,21 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
 
-        var firstResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var firstResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
         Assert.True(firstResult.Success);
 
         await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1")).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1")).DefaultTimeout();
 
         var tempDirectory = Directory.CreateTempSubdirectory();
 
@@ -1116,25 +1239,25 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             var tempBrowserPath = Path.Combine(tempDirectory.FullName, OperatingSystem.IsWindows() ? "tracked-browser.exe" : "tracked-browser");
             await File.WriteAllTextAsync(tempBrowserPath, string.Empty);
 
-            builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = tempBrowserPath;
+            builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = tempBrowserPath;
             sessionFactory.NextStartException = new InvalidOperationException("Launch failed.");
 
-            var secondResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+            var secondResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
 
             Assert.False(secondResult.Success);
             Assert.Equal("Launch failed.", secondResult.Message);
 
             var failedEvent = await app.ResourceNotifications.WaitForResourceAsync(
-                browserLogsResource.Name,
+                browserAutomationResource.Name,
                 resourceEvent =>
                     resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserPropertyName, tempBrowserPath) &&
-                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, tempBrowserPath) &&
-                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
-                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
-                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                    HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserPropertyName, tempBrowserPath) &&
+                    HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, tempBrowserPath) &&
+                    HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
+                    HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
+                    HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
                     resourceEvent.Snapshot.HealthReports.Any(report =>
-                        report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                        report.Name == BrowserAutomationBuilderExtensions.LastErrorPropertyName &&
                         report.Status == HealthStatus.Unhealthy)).DefaultTimeout();
 
             Assert.Collection(
@@ -1152,12 +1275,12 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandRemovesStaleBrowserExecutablePropertyWhenBrowserCannotBeResolved()
+    public async Task WithBrowserAutomation_CommandRemovesStaleBrowserExecutablePropertyWhenBrowserCannotBeResolved()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
 
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
 
         builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
             new BrowserLogsSessionManager(
@@ -1178,40 +1301,40 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
 
-        var firstResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var firstResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
         Assert.True(firstResult.Success);
 
         await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1")).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1")).DefaultTimeout();
 
-        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "missing-browser";
+        builder.Configuration[$"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}"] = "missing-browser";
         sessionFactory.NextStartException = new InvalidOperationException("Launch failed.");
 
-        var secondResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var secondResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
 
         Assert.False(secondResult.Success);
 
         var failedEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserPropertyName, "missing-browser") &&
-                !resourceEvent.Snapshot.Properties.Any(property => property.Name == BrowserLogsBuilderExtensions.BrowserExecutablePropertyName) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserPropertyName, "missing-browser") &&
+                !resourceEvent.Snapshot.Properties.Any(property => property.Name == BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
                 resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Name == BrowserAutomationBuilderExtensions.LastErrorPropertyName &&
                     report.Status == HealthStatus.Unhealthy)).DefaultTimeout();
 
         Assert.Collection(
@@ -1224,7 +1347,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandPublishesFailureDiagnosticsWhenLaunchFailsBeforeAnySession()
+    public async Task WithBrowserAutomation_CommandPublishesFailureDiagnosticsWhenLaunchFailsBeforeAnySession()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory
@@ -1251,27 +1374,27 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
 
         Assert.False(result.Success);
         Assert.Equal("Launch failed.", result.Message);
 
         var errorText = "InvalidOperationException: Launch failed. --> TimeoutException: CDP timed out.";
         var failedEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "None") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, "None") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastErrorPropertyName, errorText) &&
                 resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Name == BrowserAutomationBuilderExtensions.LastErrorPropertyName &&
                     report.Status == HealthStatus.Unhealthy &&
                     report.Description == errorText)).DefaultTimeout();
 
@@ -1280,7 +1403,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandClearsLastErrorAfterSuccessfulLaunch()
+    public async Task WithBrowserAutomation_CommandClearsLastErrorAfterSuccessfulLaunch()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory
@@ -1307,31 +1430,31 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var failedResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var failedResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
         Assert.False(failedResult.Success);
 
         await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.")).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.")).DefaultTimeout();
 
-        var successfulResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var successfulResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
         Assert.True(successfulResult.Success);
 
         var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                DoesNotHaveProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName) &&
-                !resourceEvent.Snapshot.HealthReports.Any(report => report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                DoesNotHaveProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastErrorPropertyName) &&
+                !resourceEvent.Snapshot.HealthReports.Any(report => report.Name == BrowserAutomationBuilderExtensions.LastErrorPropertyName)).DefaultTimeout();
 
         Assert.Collection(
             GetBrowserSessions(runningEvent.Snapshot),
@@ -1339,7 +1462,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandSurfacesAdoptedBrowserDiagnostics()
+    public async Task WithBrowserAutomation_CommandSurfacesAdoptedBrowserDiagnostics()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory
@@ -1367,21 +1490,21 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "msedge");
+        web.WithBrowserAutomation(browser: "msedge");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
         Assert.True(result.Success);
 
         var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Adopted)) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (adopted browser)")).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Adopted)) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (adopted browser)")).DefaultTimeout();
 
         var session = Assert.Single(GetBrowserSessions(runningEvent.Snapshot));
         Assert.Equal(nameof(BrowserHostOwnership.Adopted), session.BrowserHostOwnership);
@@ -1389,7 +1512,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandFailsWhenEndpointIsMissing()
+    public async Task WithBrowserAutomation_CommandFailsWhenEndpointIsMissing()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionManager = new FakeBrowserLogsSessionManager();
@@ -1403,21 +1526,21 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs();
+        web.WithBrowserAutomation();
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
 
         Assert.False(result.Success);
-        Assert.Equal("Resource 'web' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.", result.Message);
+        Assert.Equal("Resource 'web' does not have an HTTP or HTTPS endpoint. Browser automation requires an endpoint to navigate to.", result.Message);
         Assert.Empty(sessionManager.Calls);
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandBecomesEnabledWhenParentReady()
+    public async Task WithBrowserAutomation_CommandBecomesEnabledWhenParentReady()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
@@ -1431,19 +1554,19 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
         var initialEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent => resourceEvent.Snapshot.Commands.Any(command =>
-                command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName &&
+                command.Name == BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName &&
                 command.State == ResourceCommandState.Disabled)).DefaultTimeout();
 
-        Assert.Equal(ResourceCommandState.Disabled, initialEvent.Snapshot.Commands.Single(command => command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).State);
+        Assert.Equal(ResourceCommandState.Disabled, initialEvent.Snapshot.Commands.Single(command => command.Name == BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).State);
 
         await app.ResourceNotifications.PublishUpdateAsync(web.Resource, snapshot => snapshot with
         {
@@ -1454,16 +1577,16 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await eventing.PublishAsync(new ResourceReadyEvent(web.Resource, app.Services)).DefaultTimeout();
 
         var enabledEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent => resourceEvent.Snapshot.Commands.Any(command =>
-                command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName &&
+                command.Name == BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName &&
                 command.State == ResourceCommandState.Enabled)).DefaultTimeout();
 
-        Assert.Equal(ResourceCommandState.Enabled, enabledEvent.Snapshot.Commands.Single(command => command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).State);
+        Assert.Equal(ResourceCommandState.Enabled, enabledEvent.Snapshot.Commands.Single(command => command.Name == BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).State);
     }
 
     [Fact]
-    public async Task WithBrowserLogs_CommandTracksMultipleSessionsWithUniqueIds()
+    public async Task WithBrowserAutomation_CommandTracksMultipleSessionsWithUniqueIds()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
@@ -1487,28 +1610,28 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
+        web.WithBrowserAutomation(browser: "chrome", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
 
-        var firstResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var firstResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
         Assert.True(firstResult.Success);
 
         var firstSession = Assert.Single(sessionFactory.Sessions);
         Assert.Equal("session-0001", firstSession.SessionId);
 
         var firstRunningEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001)") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 1) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastSessionPropertyName, "session-0001") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001)") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.TotalSessionsLaunchedPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastSessionPropertyName, "session-0001") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1") &&
                 resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0001" && report.Status == HealthStatus.Healthy)).DefaultTimeout();
 
         Assert.Single(firstRunningEvent.Snapshot.HealthReports);
@@ -1529,7 +1652,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             });
         Assert.Equal(0, firstSession.StopCallCount);
 
-        var secondResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        var secondResult = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
         Assert.True(secondResult.Success);
 
         Assert.Equal(2, sessionFactory.Sessions.Count);
@@ -1537,14 +1660,14 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Equal("session-0002", secondSession.SessionId);
 
         var secondRunningEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 2) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001), session-0002 (PID 1002)") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 2) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastSessionPropertyName, "session-0002") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-2") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 2) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001), session-0002 (PID 1002)") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.TotalSessionsLaunchedPropertyName, 2) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastSessionPropertyName, "session-0002") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-2") &&
                 resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0001" && report.Status == HealthStatus.Healthy) &&
                 resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0002" && report.Status == HealthStatus.Healthy)).DefaultTimeout();
 
@@ -1569,11 +1692,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await firstSession.CompleteAsync(exitCode: 0);
 
         var firstCompletedEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0002 (PID 1002)") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, "session-0002 (PID 1002)") &&
                 resourceEvent.Snapshot.HealthReports.Length == 1 &&
                 resourceEvent.Snapshot.HealthReports[0].Name == "session-0002").DefaultTimeout();
 
@@ -1585,12 +1708,12 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await secondSession.CompleteAsync(exitCode: 0);
 
         var allCompletedEvent = await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Finished &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "None") &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 2) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, "None") &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.TotalSessionsLaunchedPropertyName, 2) &&
                 resourceEvent.Snapshot.HealthReports.IsEmpty).DefaultTimeout();
 
         Assert.Equal(KnownResourceStates.Finished, allCompletedEvent.Snapshot.State?.Text);
@@ -1598,7 +1721,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public async Task WithBrowserLogs_PreservesLastErrorWhenOneOfMultipleSessionsFails()
+    public async Task WithBrowserAutomation_PreservesLastErrorWhenOneOfMultipleSessionsFails()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
@@ -1622,15 +1745,15 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         using var app = builder.Build();
         await app.StartAsync();
 
-        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
 
-        Assert.True((await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout()).Success);
-        Assert.True((await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout()).Success);
+        Assert.True((await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout()).Success);
+        Assert.True((await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout()).Success);
 
         var firstSession = sessionFactory.Sessions[0];
         var secondSession = sessionFactory.Sessions[1];
@@ -1638,35 +1761,35 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         var errorText = "InvalidOperationException: Target crashed.";
         await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastErrorPropertyName, errorText) &&
                 resourceEvent.Snapshot.HealthReports.Any(report =>
                     report.Name == "session-0002" &&
                     report.Status == HealthStatus.Healthy) &&
                 resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Name == BrowserAutomationBuilderExtensions.LastErrorPropertyName &&
                     report.Status == HealthStatus.Unhealthy &&
                     report.Description == errorText)).DefaultTimeout();
 
         await secondSession.CompleteAsync(exitCode: 0);
 
         await app.ResourceNotifications.WaitForResourceAsync(
-            browserLogsResource.Name,
+            browserAutomationResource.Name,
             resourceEvent =>
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Exited &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
+                HasProperty(resourceEvent.Snapshot, BrowserAutomationBuilderExtensions.LastErrorPropertyName, errorText) &&
                 resourceEvent.Snapshot.HealthReports.Any(report =>
-                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Name == BrowserAutomationBuilderExtensions.LastErrorPropertyName &&
                     report.Status == HealthStatus.Unhealthy &&
                     report.Description == errorText)).DefaultTimeout();
     }
 
     [Fact]
-    public async Task WithBrowserLogs_DisposeWaitsForCompletionObservers()
+    public async Task WithBrowserAutomation_DisposeWaitsForCompletionObservers()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
@@ -1690,7 +1813,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome");
+        web.WithBrowserAutomation(browser: "chrome");
 
         var app = builder.Build();
         var disposed = false;
@@ -1699,8 +1822,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         {
             await app.StartAsync();
 
-            var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-            var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+            var browserAutomationResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserAutomationResource>().Single();
+            var result = await app.ResourceCommands.ExecuteCommandAsync(browserAutomationResource, BrowserAutomationBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
             Assert.True(result.Success);
 
             var session = Assert.Single(sessionFactory.Sessions);
@@ -1728,9 +1851,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task BrowserEventLogger_LogsSuccessfulNetworkRequests()
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
-        var resourceLogger = resourceLoggerService.GetLogger("web-browser-logs");
+        var resourceLogger = resourceLoggerService.GetLogger("web-browser-automation");
         var eventLogger = new BrowserEventLogger("session-0001", resourceLogger);
-        var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
+        var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-automation", () =>
         {
             eventLogger.HandleEvent(ParseProtocolEvent("""
                 {
@@ -1786,9 +1909,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task BrowserEventLogger_LogsFailedNetworkRequests()
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
-        var resourceLogger = resourceLoggerService.GetLogger("web-browser-logs");
+        var resourceLogger = resourceLoggerService.GetLogger("web-browser-automation");
         var eventLogger = new BrowserEventLogger("session-0002", resourceLogger);
-        var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
+        var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-automation", () =>
         {
             eventLogger.HandleEvent(ParseProtocolEvent("""
                 {
@@ -1833,7 +1956,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
     private static IReadOnlyList<BrowserSessionPropertyValue> GetBrowserSessions(CustomResourceSnapshot snapshot)
     {
-        var property = snapshot.Properties.Single(property => property.Name == BrowserLogsBuilderExtensions.BrowserSessionsPropertyName);
+        var property = snapshot.Properties.Single(property => property.Name == BrowserAutomationBuilderExtensions.BrowserSessionsPropertyName);
         var value = Assert.IsType<string>(property.Value);
         return JsonSerializer.Deserialize<List<BrowserSessionPropertyValue>>(value, BrowserSessionPropertyJsonOptions)
             ?? throw new InvalidOperationException("Expected browser session property JSON.");
@@ -1857,6 +1980,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public List<string> BrowserCommandCalls { get; } = [];
 
+        public BrowserScreenshotCaptureOptions? ScreenshotOptions { get; private set; }
+
         public BrowserLogsScreenshotCaptureResult ScreenshotResult { get; set; } = new(
             "session-0001",
             "chrome",
@@ -1866,22 +1991,23 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             "target-1",
             new Uri("https://localhost:5001/"),
             new BrowserLogsArtifact(
-                "web-browser-logs",
+                "web-browser-automation",
                 "screenshot",
                 Path.Combine(AppContext.BaseDirectory, "screenshot.png"),
                 "image/png",
                 0,
                 DateTimeOffset.UnixEpoch));
 
-        public Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
+        public Task StartSessionAsync(BrowserAutomationResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
         {
             Calls.Add(new SessionStartCall(resource, configuration, resourceName, url));
             return Task.CompletedTask;
         }
 
-        public Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, CancellationToken cancellationToken)
+        public Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
             CaptureScreenshotCalls.Add(resourceName);
+            ScreenshotOptions = options;
             return Task.FromResult(ScreenshotResult);
         }
 
@@ -1921,7 +2047,85 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             return Task.FromResult("""{"action":"eval"}""");
         }
 
-        public Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
+        public Task<string> CookiesAsync(string resourceName, string action, string? name, string? value, string? domain, string? path, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(CookiesAsync)}:{resourceName}:{action}:{name}:{value}:{domain}:{path}");
+            return Task.FromResult("""{"action":"cookies"}""");
+        }
+
+        public Task<string> StorageAsync(string resourceName, string area, string action, string? key, string? value, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(StorageAsync)}:{resourceName}:{area}:{action}:{key}:{value}");
+            return Task.FromResult("""{"action":"storage"}""");
+        }
+
+        public Task<string> StateAsync(string resourceName, string action, string? state, bool clearExisting, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(StateAsync)}:{resourceName}:{action}:{state}:{clearExisting}");
+            return Task.FromResult("""{"action":"state"}""");
+        }
+
+        public Task<string> CdpAsync(string resourceName, string method, string? parametersJson, string session, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(CdpAsync)}:{resourceName}:{method}:{parametersJson}:{session}");
+            return Task.FromResult("""{"action":"cdp"}""");
+        }
+
+        public Task<string> TabsAsync(string resourceName, string action, string? url, string? targetId, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(TabsAsync)}:{resourceName}:{action}:{url}:{targetId}");
+            return Task.FromResult("""{"action":"tabs"}""");
+        }
+
+        public Task<string> FramesAsync(string resourceName, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(FramesAsync)}:{resourceName}");
+            return Task.FromResult("""{"action":"frames"}""");
+        }
+
+        public Task<string> DialogAsync(string resourceName, string action, string? promptText, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(DialogAsync)}:{resourceName}:{action}:{promptText}");
+            return Task.FromResult("""{"action":"dialog"}""");
+        }
+
+        public Task<string> DownloadsAsync(string resourceName, string behavior, string? downloadPath, bool eventsEnabled, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(DownloadsAsync)}:{resourceName}:{behavior}:{downloadPath}:{eventsEnabled}");
+            return Task.FromResult("""{"action":"downloads"}""");
+        }
+
+        public Task<string> UploadAsync(string resourceName, string selector, string files, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(UploadAsync)}:{resourceName}:{selector}:{files}");
+            return Task.FromResult("""{"action":"upload"}""");
+        }
+
+        public Task<string> GetUrlAsync(string resourceName, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(GetUrlAsync)}:{resourceName}");
+            return Task.FromResult("""{"action":"url"}""");
+        }
+
+        public Task<string> GoBackAsync(string resourceName, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(GoBackAsync)}:{resourceName}");
+            return Task.FromResult("""{"action":"back"}""");
+        }
+
+        public Task<string> GoForwardAsync(string resourceName, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(GoForwardAsync)}:{resourceName}");
+            return Task.FromResult("""{"action":"forward"}""");
+        }
+
+        public Task<string> ReloadAsync(string resourceName, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(ReloadAsync)}:{resourceName}");
+            return Task.FromResult("""{"action":"reload"}""");
+        }
+
+        public Task<string> NavigateAsync(BrowserAutomationResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
         {
             BrowserCommandCalls.Add($"{nameof(NavigateAsync)}:{resourceName}:{url}");
             return Task.FromResult("""{"action":"navigate"}""");
@@ -1933,10 +2137,28 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             return Task.FromResult("""{"action":"click"}""");
         }
 
+        public Task<string> DoubleClickAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(DoubleClickAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"dblclick"}""");
+        }
+
         public Task<string> FillAsync(string resourceName, string selector, string value, CancellationToken cancellationToken)
         {
             BrowserCommandCalls.Add($"{nameof(FillAsync)}:{resourceName}:{selector}:{value}");
             return Task.FromResult("""{"action":"fill"}""");
+        }
+
+        public Task<string> CheckAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(CheckAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"check"}""");
+        }
+
+        public Task<string> UncheckAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(UncheckAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"uncheck"}""");
         }
 
         public Task<string> FocusAsync(string resourceName, string selector, CancellationToken cancellationToken)
@@ -1957,6 +2179,18 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             return Task.FromResult("""{"action":"press"}""");
         }
 
+        public Task<string> KeyDownAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(KeyDownAsync)}:{resourceName}:{selector}:{key}");
+            return Task.FromResult("""{"action":"keydown"}""");
+        }
+
+        public Task<string> KeyUpAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(KeyUpAsync)}:{resourceName}:{selector}:{key}");
+            return Task.FromResult("""{"action":"keyup"}""");
+        }
+
         public Task<string> HoverAsync(string resourceName, string selector, CancellationToken cancellationToken)
         {
             BrowserCommandCalls.Add($"{nameof(HoverAsync)}:{resourceName}:{selector}");
@@ -1973,6 +2207,18 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         {
             BrowserCommandCalls.Add($"{nameof(ScrollAsync)}:{resourceName}:{selector}:{deltaX}:{deltaY}");
             return Task.FromResult("""{"action":"scroll"}""");
+        }
+
+        public Task<string> ScrollIntoViewAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(ScrollIntoViewAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"scroll-into-view"}""");
+        }
+
+        public Task<string> MouseAsync(string resourceName, string action, int x, int y, string? button, int deltaX, int deltaY, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(MouseAsync)}:{resourceName}:{action}:{x}:{y}:{button}:{deltaX}:{deltaY}");
+            return Task.FromResult("""{"action":"mouse"}""");
         }
 
         public Task<string> WaitForAsync(string resourceName, string? selector, string? text, int timeoutMilliseconds, CancellationToken cancellationToken)
@@ -2012,7 +2258,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         }
     }
 
-    private sealed record SessionStartCall(BrowserLogsResource Resource, BrowserConfiguration Configuration, string ResourceName, Uri Url);
+    private sealed record SessionStartCall(BrowserAutomationResource Resource, BrowserConfiguration Configuration, string ResourceName, Uri Url);
 
     private sealed class FakeBrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory
     {
@@ -2105,7 +2351,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             return Task.CompletedTask;
         }
 
-        public Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken)
+        public Task<byte[]> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
             return Task.FromResult(ScreenshotBytes);
         }
@@ -2118,6 +2364,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         public Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
         {
             return Task.FromResult("""{"action":"evaluate"}""");
+        }
+
+        public Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"action":"cdp"}""");
         }
 
         public async Task CompleteAsync(int exitCode, Exception? error = null)
@@ -2217,4 +2468,4 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
 #pragma warning restore ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning restore ASPIREBROWSERLOGS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning restore ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

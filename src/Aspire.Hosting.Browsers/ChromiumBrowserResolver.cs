@@ -11,7 +11,7 @@ namespace Aspire.Hosting;
 /// Resolves Chromium-based browser executables, user data directories, and profile directories.
 /// </summary>
 /// <remarks>
-/// This type translates the resolved browser-log configuration into local machine paths. Keep OS/browser probing here
+/// This type translates the resolved browser automation configuration into local machine paths. Keep OS/browser probing here
 /// so <see cref="BrowserConfiguration"/> stays focused on configuration precedence and effective option values.
 /// </remarks>
 internal static class ChromiumBrowserResolver

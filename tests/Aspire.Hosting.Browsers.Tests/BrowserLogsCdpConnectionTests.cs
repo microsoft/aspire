@@ -121,13 +121,15 @@ public class BrowserLogsCdpConnectionTests
             CancellationToken.None,
             () => connector);
 
-        var captureTask = connection.CaptureScreenshotAsync("target-session-1", CancellationToken.None);
+        var captureTask = connection.CaptureScreenshotAsync("target-session-1", new BrowserScreenshotCaptureOptions("jpeg", 80, FullPage: true), CancellationToken.None);
 
         var command = await ReceiveCommandAsync(pair.ServerSocket).DefaultTimeout();
         Assert.Equal(BrowserLogsCdpProtocol.PageCaptureScreenshotMethod, command.Method);
         Assert.Equal("target-session-1", command.SessionId);
-        Assert.Equal("png", command.Format);
+        Assert.Equal("jpeg", command.Format);
         Assert.Equal(true, command.FromSurface);
+        Assert.Equal(80, command.Quality);
+        Assert.Equal(true, command.CaptureBeyondViewport);
 
         await SendTextAsync(
             pair.ServerSocket,
@@ -370,6 +372,12 @@ public class BrowserLogsCdpConnectionTests
         var fromSurface = parameters?.TryGetProperty("fromSurface", out var fromSurfaceElement) == true
             ? fromSurfaceElement.GetBoolean()
             : (bool?)null;
+        var quality = parameters?.TryGetProperty("quality", out var qualityElement) == true
+            ? qualityElement.GetInt32()
+            : (int?)null;
+        var captureBeyondViewport = parameters?.TryGetProperty("captureBeyondViewport", out var captureBeyondViewportElement) == true
+            ? captureBeyondViewportElement.GetBoolean()
+            : (bool?)null;
         var expression = parameters?.TryGetProperty("expression", out var expressionElement) == true
             ? expressionElement.GetString()
             : null;
@@ -383,7 +391,7 @@ public class BrowserLogsCdpConnectionTests
             ? userGestureElement.GetBoolean()
             : (bool?)null;
 
-        return new ReceivedCommand(id, method, sessionId, targetId, url, format, fromSurface, expression, awaitPromise, returnByValue, userGesture);
+        return new ReceivedCommand(id, method, sessionId, targetId, url, format, fromSurface, quality, captureBeyondViewport, expression, awaitPromise, returnByValue, userGesture);
     }
 
     private static BrowserLogsConsoleApiCalledEvent CreateConsoleEvent(string sessionId)
@@ -464,6 +472,8 @@ public class BrowserLogsCdpConnectionTests
         string? Url,
         string? Format,
         bool? FromSurface,
+        int? Quality,
+        bool? CaptureBeyondViewport,
         string? Expression,
         bool? AwaitPromise,
         bool? ReturnByValue,
@@ -520,7 +530,7 @@ public class BrowserLogsCdpConnectionTests
             return Task.CompletedTask;
         }
 
-        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
             return Task.FromResult(new BrowserLogsCaptureScreenshotResult { Data = "image-data" });
         }
@@ -539,6 +549,11 @@ public class BrowserLogsCdpConnectionTests
                     Value = new BrowserLogsCdpProtocolStringValue("""{"action":"evaluate"}""")
                 }
             });
+        }
+
+        public Task<string> SendRawCommandAsync(string? sessionId, string method, string? parametersJson, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"ok":true}""");
         }
 
         public ValueTask DisposeAsync()

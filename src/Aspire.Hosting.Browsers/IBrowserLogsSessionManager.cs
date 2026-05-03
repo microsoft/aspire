@@ -5,9 +5,9 @@ namespace Aspire.Hosting;
 
 internal interface IBrowserLogsSessionManager
 {
-    Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken);
+    Task StartSessionAsync(BrowserAutomationResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken);
 
-    Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, CancellationToken cancellationToken);
+    Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken);
 
     Task<string> GetPageSnapshotAsync(string resourceName, int maxElements, int maxTextLength, CancellationToken cancellationToken);
 
@@ -21,11 +21,43 @@ internal interface IBrowserLogsSessionManager
 
     Task<string> EvaluateAsync(string resourceName, string expression, CancellationToken cancellationToken);
 
-    Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken);
+    Task<string> CookiesAsync(string resourceName, string action, string? name, string? value, string? domain, string? path, CancellationToken cancellationToken);
+
+    Task<string> StorageAsync(string resourceName, string area, string action, string? key, string? value, CancellationToken cancellationToken);
+
+    Task<string> StateAsync(string resourceName, string action, string? state, bool clearExisting, CancellationToken cancellationToken);
+
+    Task<string> CdpAsync(string resourceName, string method, string? parametersJson, string session, CancellationToken cancellationToken);
+
+    Task<string> TabsAsync(string resourceName, string action, string? url, string? targetId, CancellationToken cancellationToken);
+
+    Task<string> FramesAsync(string resourceName, CancellationToken cancellationToken);
+
+    Task<string> DialogAsync(string resourceName, string action, string? promptText, CancellationToken cancellationToken);
+
+    Task<string> DownloadsAsync(string resourceName, string behavior, string? downloadPath, bool eventsEnabled, CancellationToken cancellationToken);
+
+    Task<string> UploadAsync(string resourceName, string selector, string files, CancellationToken cancellationToken);
+
+    Task<string> GetUrlAsync(string resourceName, CancellationToken cancellationToken);
+
+    Task<string> GoBackAsync(string resourceName, CancellationToken cancellationToken);
+
+    Task<string> GoForwardAsync(string resourceName, CancellationToken cancellationToken);
+
+    Task<string> ReloadAsync(string resourceName, CancellationToken cancellationToken);
+
+    Task<string> NavigateAsync(BrowserAutomationResource resource, string resourceName, Uri url, CancellationToken cancellationToken);
 
     Task<string> ClickAsync(string resourceName, string selector, CancellationToken cancellationToken);
 
+    Task<string> DoubleClickAsync(string resourceName, string selector, CancellationToken cancellationToken);
+
     Task<string> FillAsync(string resourceName, string selector, string value, CancellationToken cancellationToken);
+
+    Task<string> CheckAsync(string resourceName, string selector, CancellationToken cancellationToken);
+
+    Task<string> UncheckAsync(string resourceName, string selector, CancellationToken cancellationToken);
 
     Task<string> FocusAsync(string resourceName, string selector, CancellationToken cancellationToken);
 
@@ -38,6 +70,14 @@ internal interface IBrowserLogsSessionManager
     Task<string> SelectAsync(string resourceName, string selector, string value, CancellationToken cancellationToken);
 
     Task<string> ScrollAsync(string resourceName, string? selector, int deltaX, int deltaY, CancellationToken cancellationToken);
+
+    Task<string> ScrollIntoViewAsync(string resourceName, string selector, CancellationToken cancellationToken);
+
+    Task<string> KeyDownAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken);
+
+    Task<string> KeyUpAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken);
+
+    Task<string> MouseAsync(string resourceName, string action, int x, int y, string? button, int deltaX, int deltaY, CancellationToken cancellationToken);
 
     Task<string> WaitForAsync(string resourceName, string? selector, string? text, int timeoutMilliseconds, CancellationToken cancellationToken);
 

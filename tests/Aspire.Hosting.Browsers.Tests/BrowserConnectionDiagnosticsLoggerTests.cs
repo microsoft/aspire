@@ -13,7 +13,7 @@ public class BrowserConnectionDiagnosticsLoggerTests
     public async Task LogsConnectionProblems()
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
-        var resourceName = "web-browser-logs";
+        var resourceName = "web-browser-automation";
         var diagnostics = new BrowserConnectionDiagnosticsLogger("session-0001", resourceLoggerService.GetLogger(resourceName));
 
         var logs = await ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount: 4, () =>

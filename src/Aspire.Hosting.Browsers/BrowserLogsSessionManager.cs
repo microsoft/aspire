@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -13,7 +13,7 @@ using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting;
 
-// Coordinates browser-log commands with dashboard resource state. The running session owns CDP capture; this manager
+// Coordinates browser automation commands with dashboard resource state. The running session owns CDP capture; this manager
 // owns session ids, resource logs, health reports, and snapshot properties that make failures diagnosable in the dashboard.
 internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IAsyncDisposable
 {
@@ -59,7 +59,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         _sessionFactory = sessionFactory;
     }
 
-    public async Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
+    public async Task StartSessionAsync(BrowserAutomationResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(configuration.Browser);
@@ -68,7 +68,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         ThrowIfDisposing();
 
         var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
-        // Dashboard commands can start/stop browser-log sessions for the same resource while previous targets are still
+        // Dashboard commands can start/stop browser automation sessions for the same resource while previous targets are still
         // completing. Serialize per resource so session ids, health reports, and properties describe the same observed
         // set of browser targets.
         await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -181,7 +181,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         }
     }
 
-    public async Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, CancellationToken cancellationToken)
+    public async Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ThrowIfDisposing();
@@ -211,13 +211,13 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceState.Lock.Release();
         }
 
-        var screenshotBytes = await activeSession.Session.CaptureScreenshotAsync(cancellationToken).ConfigureAwait(false);
+        var screenshotBytes = await activeSession.Session.CaptureScreenshotAsync(options, cancellationToken).ConfigureAwait(false);
         var artifact = await _artifactWriter.WriteArtifactAsync(
             activeSession.AppHostKey,
             resourceName,
             artifactType: "screenshot",
-            fileExtension: ".png",
-            mimeType: "image/png",
+            fileExtension: options.FileExtension,
+            mimeType: options.MimeType,
             content: screenshotBytes,
             cancellationToken).ConfigureAwait(false);
 
@@ -313,7 +313,203 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
+    public async Task<string> CookiesAsync(string resourceName, string action, string? name, string? value, string? domain, string? path, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "cookies", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateCookiesExpression(action, name, value, domain, path),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> StorageAsync(string resourceName, string area, string action, string? key, string? value, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(area);
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "storage", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateStorageExpression(area, action, key, value),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> StateAsync(string resourceName, string action, string? state, bool clearExisting, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "state", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateStateExpression(action, state, clearExisting),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> CdpAsync(string resourceName, string method, string? parametersJson, string session, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        ArgumentException.ThrowIfNullOrWhiteSpace(session);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "send CDP command", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.SendCdpCommandJsonAsync(method, parametersJson, session, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> TabsAsync(string resourceName, string action, string? url, string? targetId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "manage tabs", cancellationToken).ConfigureAwait(false);
+        var resultJson = action switch
+        {
+            "list" => await activeSession.Session.SendCdpCommandJsonAsync("Target.getTargets", parametersJson: null, "browser", cancellationToken).ConfigureAwait(false),
+            "open" => await activeSession.Session.SendCdpCommandJsonAsync(
+                "Target.createTarget",
+                JsonSerializer.Serialize(new { url = GetRequiredUrlText(url) }),
+                "browser",
+                cancellationToken).ConfigureAwait(false),
+            "close" => await activeSession.Session.SendCdpCommandJsonAsync(
+                "Target.closeTarget",
+                JsonSerializer.Serialize(new { targetId = GetRequiredTargetId(targetId) }),
+                "browser",
+                cancellationToken).ConfigureAwait(false),
+            _ => throw new InvalidOperationException("Tab action must be 'list', 'open', or 'close'.")
+        };
+
+        return CreateBrowserCommandEnvelope("tabs", resultJson);
+    }
+
+    public async Task<string> FramesAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        var activeSession = await GetActiveSessionAsync(resourceName, "list frames", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateFramesExpression(),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> DialogAsync(string resourceName, string action, string? promptText, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+
+        var accept = action switch
+        {
+            "accept" => true,
+            "dismiss" => false,
+            _ => throw new InvalidOperationException("Dialog action must be 'accept' or 'dismiss'.")
+        };
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "handle dialog", cancellationToken).ConfigureAwait(false);
+        var parametersJson = promptText is null
+            ? JsonSerializer.Serialize(new { accept })
+            : JsonSerializer.Serialize(new { accept, promptText });
+        var resultJson = await activeSession.Session.SendCdpCommandJsonAsync("Page.handleJavaScriptDialog", parametersJson, "page", cancellationToken).ConfigureAwait(false);
+
+        return CreateBrowserCommandEnvelope("dialog", resultJson);
+    }
+
+    public async Task<string> DownloadsAsync(string resourceName, string behavior, string? downloadPath, bool eventsEnabled, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(behavior);
+
+        if (behavior is not ("allow" or "deny" or "default" or "allowAndName"))
+        {
+            throw new InvalidOperationException("Download behavior must be 'allow', 'allowAndName', 'deny', or 'default'.");
+        }
+
+        if ((behavior is "allow" or "allowAndName") && string.IsNullOrWhiteSpace(downloadPath))
+        {
+            throw new InvalidOperationException("A download path is required when download behavior is 'allow' or 'allowAndName'.");
+        }
+
+        var parametersJson = string.IsNullOrWhiteSpace(downloadPath)
+            ? JsonSerializer.Serialize(new { behavior, eventsEnabled })
+            : JsonSerializer.Serialize(new { behavior, downloadPath, eventsEnabled });
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "configure downloads", cancellationToken).ConfigureAwait(false);
+        var resultJson = await activeSession.Session.SendCdpCommandJsonAsync("Browser.setDownloadBehavior", parametersJson, "browser", cancellationToken).ConfigureAwait(false);
+
+        return CreateBrowserCommandEnvelope("downloads", resultJson);
+    }
+
+    public async Task<string> UploadAsync(string resourceName, string selector, string files, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+        ArgumentException.ThrowIfNullOrWhiteSpace(files);
+
+        var filePaths = ParseFilePaths(files);
+        if (filePaths.Length == 0)
+        {
+            throw new InvalidOperationException("At least one file path is required.");
+        }
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "upload files", cancellationToken).ConfigureAwait(false);
+        var documentJson = await activeSession.Session.SendCdpCommandJsonAsync("DOM.getDocument", parametersJson: null, "page", cancellationToken).ConfigureAwait(false);
+        var rootNodeId = GetIntegerProperty(documentJson, "root", "nodeId");
+        var queryJson = await activeSession.Session.SendCdpCommandJsonAsync(
+            "DOM.querySelector",
+            JsonSerializer.Serialize(new { nodeId = rootNodeId, selector }),
+            "page",
+            cancellationToken).ConfigureAwait(false);
+        var nodeId = GetIntegerProperty(queryJson, "nodeId");
+        if (nodeId == 0)
+        {
+            throw new InvalidOperationException($"Element '{selector}' was not found.");
+        }
+
+        var resultJson = await activeSession.Session.SendCdpCommandJsonAsync(
+            "DOM.setFileInputFiles",
+            JsonSerializer.Serialize(new { files = filePaths, nodeId }),
+            "page",
+            cancellationToken).ConfigureAwait(false);
+
+        return JsonSerializer.Serialize(new
+        {
+            action = "upload",
+            selector,
+            files = filePaths,
+            result = JsonSerializer.Deserialize<JsonElement>(resultJson)
+        });
+    }
+
+    public async Task<string> GetUrlAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        var activeSession = await GetActiveSessionAsync(resourceName, "get URL", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateUrlExpression(),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> GoBackAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        var activeSession = await GetActiveSessionAsync(resourceName, "go back", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateHistoryNavigationExpression("back"),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> GoForwardAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        var activeSession = await GetActiveSessionAsync(resourceName, "go forward", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateHistoryNavigationExpression("forward"),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> ReloadAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        var activeSession = await GetActiveSessionAsync(resourceName, "reload", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateHistoryNavigationExpression("reload"),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> NavigateAsync(BrowserAutomationResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(url);
@@ -342,6 +538,17 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<string> DoubleClickAsync(string resourceName, string selector, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "double click", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateDoubleClickExpression(selector),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<string> FillAsync(string resourceName, string selector, string value, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(selector);
@@ -350,6 +557,28 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         var activeSession = await GetActiveSessionAsync(resourceName, "fill", cancellationToken).ConfigureAwait(false);
         return await activeSession.Session.EvaluateJsonAsync(
             BrowserLogsBrowserAutomationScripts.CreateFillExpression(selector, value),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> CheckAsync(string resourceName, string selector, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "check", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateCheckExpression(selector, isChecked: true),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> UncheckAsync(string resourceName, string selector, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "uncheck", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateCheckExpression(selector, isChecked: false),
             timeout: null,
             cancellationToken).ConfigureAwait(false);
     }
@@ -416,6 +645,50 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         var activeSession = await GetActiveSessionAsync(resourceName, "scroll", cancellationToken).ConfigureAwait(false);
         return await activeSession.Session.EvaluateJsonAsync(
             BrowserLogsBrowserAutomationScripts.CreateScrollExpression(selector, deltaX, deltaY),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> ScrollIntoViewAsync(string resourceName, string selector, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "scroll into view", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateScrollIntoViewExpression(selector),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> KeyDownAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "key down", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateKeyEventExpression("keydown", selector, key),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> KeyUpAsync(string resourceName, string? selector, string key, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "key up", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateKeyEventExpression("keyup", selector, key),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> MouseAsync(string resourceName, string action, int x, int y, string? button, int deltaX, int deltaY, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(action);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "mouse input", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateMouseExpression(action, x, y, button, deltaX, deltaY),
             timeout: null,
             cancellationToken).ConfigureAwait(false);
     }
@@ -560,7 +833,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     }
 
     private async Task HandleSessionCompletedAsync(
-        BrowserLogsResource resource,
+        BrowserAutomationResource resource,
         string resourceName,
         ResourceSessionState resourceState,
         string sessionId,
@@ -616,7 +889,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     }
 
     private Task PublishResourceSnapshotAsync(
-        BrowserLogsResource resource,
+        BrowserAutomationResource resource,
         string resourceName,
         ResourceSessionState resourceState,
         string stateText,
@@ -672,7 +945,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         else if (resourceState.LastError is not null)
         {
             reports.Add(new HealthReportSnapshot(
-                BrowserLogsBuilderExtensions.LastErrorPropertyName,
+                BrowserAutomationBuilderExtensions.LastErrorPropertyName,
                 HealthStatus.Unhealthy,
                 resourceState.LastError,
                 null)
@@ -686,34 +959,34 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
     private static IEnumerable<ResourcePropertySnapshot> GetPropertyUpdates(ResourceSessionState resourceState)
     {
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, resourceState.ActiveSessions.Count);
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, FormatActiveSessions(resourceState.ActiveSessions.Values));
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserSessionsPropertyName, FormatBrowserSessions(resourceState.ActiveSessions.Values));
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, resourceState.TotalSessionsLaunched);
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, resourceState.ActiveSessions.Count);
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, FormatActiveSessions(resourceState.ActiveSessions.Values));
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.BrowserSessionsPropertyName, FormatBrowserSessions(resourceState.ActiveSessions.Values));
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.TotalSessionsLaunchedPropertyName, resourceState.TotalSessionsLaunched);
 
         if (resourceState.LastSessionId is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.LastSessionPropertyName, resourceState.LastSessionId);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.LastSessionPropertyName, resourceState.LastSessionId);
         }
 
         if (resourceState.LastTargetUrl is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.TargetUrlPropertyName, resourceState.LastTargetUrl);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.TargetUrlPropertyName, resourceState.LastTargetUrl);
         }
 
         if (resourceState.LastBrowserExecutable is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable);
         }
 
         if (resourceState.LastBrowserHostOwnership is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership);
         }
 
         if (resourceState.LastError is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.LastErrorPropertyName, resourceState.LastError);
         }
     }
 
@@ -723,24 +996,24 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         IEnumerable<ResourcePropertySnapshot> propertyUpdates)
     {
         properties = resourceState.LastBrowser is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserPropertyName, resourceState.LastBrowser)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserPropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.BrowserPropertyName, resourceState.LastBrowser)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.BrowserPropertyName);
 
         properties = resourceState.LastBrowserExecutable is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName);
 
         properties = resourceState.LastBrowserHostOwnership is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName);
 
         properties = resourceState.LastError is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.LastErrorPropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.LastErrorPropertyName, resourceState.LastError)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.LastErrorPropertyName);
 
         properties = resourceState.LastProfile is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.ProfilePropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.ProfilePropertyName);
 
         return properties.SetResourcePropertyRange(propertyUpdates);
     }
@@ -779,7 +1052,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         }
     }
 
-    private async Task UpdateActiveSessionTargetUrlAsync(BrowserLogsResource resource, string resourceName, string sessionId, Uri targetUrl, CancellationToken cancellationToken)
+    private async Task UpdateActiveSessionTargetUrlAsync(BrowserAutomationResource resource, string resourceName, string sessionId, Uri targetUrl, CancellationToken cancellationToken)
     {
         var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
         await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -806,6 +1079,63 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         {
             resourceState.Lock.Release();
         }
+    }
+
+    private static string GetRequiredUrlText(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            throw new InvalidOperationException("A URL is required for the tab open action.");
+        }
+
+        return url;
+    }
+
+    private static string GetRequiredTargetId(string? targetId)
+    {
+        if (string.IsNullOrWhiteSpace(targetId))
+        {
+            throw new InvalidOperationException("A target id is required for the tab close action.");
+        }
+
+        return targetId;
+    }
+
+    private static string[] ParseFilePaths(string files)
+    {
+        var trimmed = files.Trim();
+        if (!trimmed.StartsWith("[", StringComparison.Ordinal))
+        {
+            return [trimmed];
+        }
+
+        return JsonSerializer.Deserialize<string[]>(trimmed)
+            ?? throw new InvalidOperationException("File paths JSON must be an array of strings.");
+    }
+
+    private static int GetIntegerProperty(string json, params string[] propertyPath)
+    {
+        using var document = JsonDocument.Parse(json);
+        var current = document.RootElement;
+        foreach (var propertyName in propertyPath)
+        {
+            current = current.TryGetProperty(propertyName, out var property)
+                ? property
+                : throw new InvalidOperationException($"CDP response did not contain '{string.Join(".", propertyPath)}'.");
+        }
+
+        return current.TryGetInt32(out var value)
+            ? value
+            : throw new InvalidOperationException($"CDP response property '{string.Join(".", propertyPath)}' was not an integer.");
+    }
+
+    private static string CreateBrowserCommandEnvelope(string action, string resultJson)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            action,
+            result = JsonSerializer.Deserialize<JsonElement>(resultJson)
+        });
     }
 
     private static ActiveBrowserSession? SelectActiveSession(ResourceSessionState resourceState)

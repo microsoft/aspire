@@ -16,7 +16,7 @@ namespace Aspire.Hosting;
 //
 // Why this exists:
 // - Chromium's singleton is keyed by the user data root, not by Aspire. If a WebSocket-based option already launched a
-//   debug-enabled browser for that root, a later browser-log session can attach to it instead of starting another
+//   debug-enabled browser for that root, a later browser automation session can attach to it instead of starting another
 //   process.
 // - Chromium's DevToolsActivePort file is only a launch-time hand-off file and isn't enough for cross-session adoption.
 //   This sidecar records the exact browser identity and endpoint proved during startup.

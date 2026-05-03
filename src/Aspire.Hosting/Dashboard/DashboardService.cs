@@ -415,7 +415,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         // ResourceCommandRequest arguments are encoded as a google.protobuf.Value in the dashboard gRPC protocol:
         // {
         //   "command_name": "click",
-        //   "resource_name": "web-browser-logs",
+        //   "resource_name": "web-browser-automation",
         //   "arguments": { "selector": "#submit" }
         // }
         //

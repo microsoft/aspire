@@ -5,7 +5,7 @@ using System.Globalization;
 
 namespace Aspire.Hosting;
 
-// Writes durable browser-log command artifacts outside of command output so commands can return concise, agent-friendly
+// Writes durable browser automation command artifacts outside of command output so commands can return concise, agent-friendly
 // summaries while large payloads stay on disk.
 internal interface IBrowserLogsArtifactWriter
 {
@@ -90,7 +90,7 @@ internal sealed class BrowserLogsArtifactWriter : IBrowserLogsArtifactWriter
             return new BrowserLogsArtifact(resourceName, artifactType, filePath, mimeType, content.Length, createdAt);
         }
 
-        throw new IOException($"Unable to create a unique browser-log command artifact file under '{directory}'.");
+        throw new IOException($"Unable to create a unique browser automation command artifact file under '{directory}'.");
     }
 
     private static string GetAppHostSegment(string? appHostKey)

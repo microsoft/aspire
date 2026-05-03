@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 using System.Globalization;
 using Aspire.Hosting.Browsers.Resources;
@@ -42,15 +42,39 @@ internal readonly record struct BrowserConfiguration(
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
 
-        var browserLogsSection = configuration.GetSection(BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName);
-        var resourceSection = browserLogsSection.GetSection(resourceName);
+        var browserAutomationSection = configuration.GetSection(BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName);
+        var resourceSection = browserAutomationSection.GetSection(resourceName);
+        var legacyBrowserLogsSection = configuration.GetSection(BrowserAutomationBuilderExtensions.LegacyBrowserLogsConfigurationSectionName);
+        var legacyResourceSection = legacyBrowserLogsSection.GetSection(resourceName);
 
-        // Resolution order is explicit argument -> resource-specific config -> global browser-log config -> default.
+        // Resolution order is explicit argument -> resource-specific config -> global browser automation config -> default.
         // Resolve user-data mode before browser so the browser default can prefer Edge for shared state and Chrome for
         // disposable isolated state.
-        var resolvedProfile = ResolveProfile(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
-        var resolvedUserDataMode = ResolveUserDataMode(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection);
-        var resolvedBrowser = ResolveBrowser(explicitValues, resourceRuntimeConfiguration, globalRuntimeConfiguration, resourceSection, browserLogsSection, resolvedUserDataMode);
+        var resolvedProfile = ResolveProfile(
+            explicitValues,
+            resourceRuntimeConfiguration,
+            globalRuntimeConfiguration,
+            resourceSection,
+            browserAutomationSection,
+            legacyResourceSection,
+            legacyBrowserLogsSection);
+        var resolvedUserDataMode = ResolveUserDataMode(
+            explicitValues,
+            resourceRuntimeConfiguration,
+            globalRuntimeConfiguration,
+            resourceSection,
+            browserAutomationSection,
+            legacyResourceSection,
+            legacyBrowserLogsSection);
+        var resolvedBrowser = ResolveBrowser(
+            explicitValues,
+            resourceRuntimeConfiguration,
+            globalRuntimeConfiguration,
+            resourceSection,
+            browserAutomationSection,
+            legacyResourceSection,
+            legacyBrowserLogsSection,
+            resolvedUserDataMode);
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
         {
@@ -68,9 +92,9 @@ internal readonly record struct BrowserConfiguration(
                 string.Format(
                     CultureInfo.CurrentCulture,
                     BrowserMessageStrings.BrowserLogsProfileRequiresSharedUserDataMode,
-                    BrowserLogsBuilderExtensions.ProfileConfigurationKey,
+                    BrowserAutomationBuilderExtensions.ProfileConfigurationKey,
                     resolvedProfile,
-                    BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+                    BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey,
                     BrowserUserDataMode.Isolated,
                     BrowserUserDataMode.Shared));
         }
@@ -130,7 +154,7 @@ internal readonly record struct BrowserConfiguration(
                 CultureInfo.CurrentCulture,
                 BrowserMessageStrings.BrowserLogsInvalidUserDataModeConfiguration,
                 value,
-                BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+                BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey,
                 BrowserUserDataMode.Shared,
                 BrowserUserDataMode.Isolated));
     }
@@ -143,15 +167,19 @@ internal readonly record struct BrowserConfiguration(
         BrowserConfiguration? resourceRuntimeConfiguration,
         BrowserConfiguration? globalRuntimeConfiguration,
         IConfigurationSection resourceSection,
-        IConfigurationSection browserLogsSection)
+        IConfigurationSection browserAutomationSection,
+        IConfigurationSection legacyResourceSection,
+        IConfigurationSection legacyBrowserLogsSection)
         => ResolveValue(
             FromOptionalString(explicitValues.Profile),
             resourceRuntimeConfiguration,
             globalRuntimeConfiguration,
             static configuration => configuration.Profile,
             resourceSection,
-            browserLogsSection,
-            BrowserLogsBuilderExtensions.ProfileConfigurationKey,
+            browserAutomationSection,
+            legacyResourceSection,
+            legacyBrowserLogsSection,
+            BrowserAutomationBuilderExtensions.ProfileConfigurationKey,
             FromOptionalString,
             static () => null);
 
@@ -160,7 +188,9 @@ internal readonly record struct BrowserConfiguration(
         BrowserConfiguration? resourceRuntimeConfiguration,
         BrowserConfiguration? globalRuntimeConfiguration,
         IConfigurationSection resourceSection,
-        IConfigurationSection browserLogsSection)
+        IConfigurationSection browserAutomationSection,
+        IConfigurationSection legacyResourceSection,
+        IConfigurationSection legacyBrowserLogsSection)
         => ResolveValue(
             explicitValues.UserDataMode is { } explicitUserDataMode
                 ? ConfigurationValue<BrowserUserDataMode>.Present(explicitUserDataMode)
@@ -169,8 +199,10 @@ internal readonly record struct BrowserConfiguration(
             globalRuntimeConfiguration,
             static configuration => configuration.UserDataMode,
             resourceSection,
-            browserLogsSection,
-            BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+            browserAutomationSection,
+            legacyResourceSection,
+            legacyBrowserLogsSection,
+            BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey,
             ParseUserDataMode,
             static () => DefaultUserDataMode);
 
@@ -179,7 +211,9 @@ internal readonly record struct BrowserConfiguration(
         BrowserConfiguration? resourceRuntimeConfiguration,
         BrowserConfiguration? globalRuntimeConfiguration,
         IConfigurationSection resourceSection,
-        IConfigurationSection browserLogsSection,
+        IConfigurationSection browserAutomationSection,
+        IConfigurationSection legacyResourceSection,
+        IConfigurationSection legacyBrowserLogsSection,
         BrowserUserDataMode resolvedUserDataMode)
         => ResolveValue<string?>(
             FromOptionalString(explicitValues.Browser),
@@ -187,8 +221,10 @@ internal readonly record struct BrowserConfiguration(
             globalRuntimeConfiguration,
             static configuration => configuration.Browser,
             resourceSection,
-            browserLogsSection,
-            BrowserLogsBuilderExtensions.BrowserConfigurationKey,
+            browserAutomationSection,
+            legacyResourceSection,
+            legacyBrowserLogsSection,
+            BrowserAutomationBuilderExtensions.BrowserConfigurationKey,
             FromOptionalString,
             () => GetDefaultBrowser(resolvedUserDataMode))!;
 
@@ -198,7 +234,9 @@ internal readonly record struct BrowserConfiguration(
         BrowserConfiguration? globalRuntimeConfiguration,
         Func<BrowserConfiguration, T> getRuntimeValue,
         IConfigurationSection resourceSection,
-        IConfigurationSection browserLogsSection,
+        IConfigurationSection browserAutomationSection,
+        IConfigurationSection legacyResourceSection,
+        IConfigurationSection legacyBrowserLogsSection,
         string configurationKey,
         Func<string?, ConfigurationValue<T>> parseConfigurationValue,
         Func<T> getDefault)
@@ -214,6 +252,11 @@ internal readonly record struct BrowserConfiguration(
         }
 
         var resourceConfiguration = parseConfigurationValue(resourceSection[configurationKey]);
+        if (!resourceConfiguration.HasValue)
+        {
+            resourceConfiguration = parseConfigurationValue(legacyResourceSection[configurationKey]);
+        }
+
         if (resourceConfiguration.HasValue)
         {
             return resourceConfiguration.Value;
@@ -224,7 +267,12 @@ internal readonly record struct BrowserConfiguration(
             return getRuntimeValue(globalRuntime);
         }
 
-        var globalConfiguration = parseConfigurationValue(browserLogsSection[configurationKey]);
+        var globalConfiguration = parseConfigurationValue(browserAutomationSection[configurationKey]);
+        if (!globalConfiguration.HasValue)
+        {
+            globalConfiguration = parseConfigurationValue(legacyBrowserLogsSection[configurationKey]);
+        }
+
         return globalConfiguration.HasValue
             ? globalConfiguration.Value
             : getDefault();

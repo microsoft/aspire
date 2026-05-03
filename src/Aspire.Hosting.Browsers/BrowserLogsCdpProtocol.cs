@@ -225,6 +225,42 @@ internal static class BrowserLogsCdpProtocol
         return result;
     }
 
+    internal static string ParseRawCommandResponse(ReadOnlySpan<byte> framePayload)
+    {
+        // Expected generic CDP response shape:
+        // { "id": 1, "result": { ... } } or { "id": 1, "error": { "code": -32601, "message": "..." } }
+        using var document = JsonDocument.Parse(framePayload.ToArray());
+        var root = document.RootElement;
+
+        if (root.TryGetProperty("error", out var errorElement))
+        {
+            ThrowIfProtocolError(new BrowserLogsCdpProtocolError
+            {
+                Code = errorElement.TryGetProperty("code", out var codeElement) && codeElement.TryGetInt32(out var code) ? code : null,
+                Message = errorElement.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == JsonValueKind.String ? messageElement.GetString() : null
+            });
+        }
+
+        return root.TryGetProperty("result", out var resultElement)
+            ? JsonSerializer.Serialize(resultElement)
+            : "{}";
+    }
+
+    internal static void WriteRawCommandParameters(Utf8JsonWriter writer, string parametersJson)
+    {
+        using var document = JsonDocument.Parse(parametersJson);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException("CDP command parameters must be a JSON object.");
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            property.WriteTo(writer);
+        }
+    }
+
     internal static string DescribeFrame(ReadOnlySpan<byte> framePayload, int maxLength = 512)
     {
         var text = Encoding.UTF8.GetString(framePayload);

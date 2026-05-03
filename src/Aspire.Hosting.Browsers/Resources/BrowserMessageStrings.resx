@@ -61,8 +61,8 @@
     <value>Browser profile '{0}' matched multiple Chromium profiles under '{1}'. Specify the profile directory name instead.</value>
     <comment>{0} is the requested browser profile, {1} is the browser user data directory path</comment>
   </data>
-  <data name="BrowserLogsResourceMissingHttpEndpoint" xml:space="preserve">
-    <value>Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</value>
+  <data name="BrowserAutomationResourceMissingHttpEndpoint" xml:space="preserve">
+    <value>Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser automation requires an endpoint to navigate to.</value>
     <comment>{0} is the Aspire resource name</comment>
   </data>
   <data name="BrowserLogsEndpointNotAllocated" xml:space="preserve">
