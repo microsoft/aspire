@@ -45,6 +45,16 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
+        // Use a known browser token so we can construct the dashboard URL directly,
+        // avoiding the need to parse it from logs (which contain Spectre Console OSC 8
+        // escape sequences that break grep-based URL extraction).
+        var browserToken = "testtoken1234567890abcdef12345678";
+
+        // Set the browser token env var before starting the dashboard
+        await auto.TypeAsync($"export DASHBOARD__FRONTEND__BROWSERTOKEN={browserToken}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
         // Store the dashboard log path inside the workspace so it gets captured on failure
         var dashboardLogPath = $"/workspace/{workspace.WorkspaceRoot.Name}/dashboard.log";
 
@@ -73,19 +83,10 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Extract the dashboard login URL (with token) from the aspire dashboard run output.
-        // The dashboard outputs: "Login to the dashboard at http://host:port/login?t=xxx ."
-        // Use [a-f0-9]+ for the token to avoid matching through Spectre Console link markup
-        // which concatenates the URL twice (link target + display text) with no separator.
-        await auto.TypeAsync("OTEL_DASHBOARD_URL=$(grep -oE 'https?://[^ ]+/login\\?t=[a-f0-9]+' " + dashboardLogPath + " | head -1)");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        // Construct the dashboard URL using the known token and localhost URL
+        var dashboardUrl = $"{localhostUrl}/login?t={browserToken}";
 
-        await auto.TypeAsync("echo \"OTEL_DASHBOARD_URL=$OTEL_DASHBOARD_URL\"");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire otel traces --dashboard-url \"$OTEL_DASHBOARD_URL\"");
+        await auto.TypeAsync($"aspire otel traces --dashboard-url \"{dashboardUrl}\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("No traces found", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
