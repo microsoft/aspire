@@ -25,6 +25,24 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
         string? displayDescription,
         object? parameter,
+        string? confirmationMessage,
+        string? iconName,
+        IconVariant? iconVariant,
+        bool isHighlighted)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, argumentInputs: null, confirmationMessage, iconName, iconVariant, isHighlighted)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceCommandAnnotation"/> class.
+    /// </summary>
+    public ResourceCommandAnnotation(
+        string name,
+        string displayName,
+        Func<UpdateCommandStateContext, ResourceCommandState> updateState,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        string? displayDescription,
+        object? parameter,
         IReadOnlyList<InteractionInput>? argumentInputs,
         string? confirmationMessage,
         string? iconName,
