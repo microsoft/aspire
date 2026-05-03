@@ -11,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ExchangeName = {ExchangeName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQDestination, IRabbitMQProvisionable
+public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQBindableDestination, IRabbitMQProvisionable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQExchangeResource"/> class.
@@ -107,7 +107,7 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
     {
         foreach (var binding in Bindings)
         {
-            await binding.Destination.BindAsync(
+            await ((IRabbitMQBindableDestination)binding.Destination).BindAsync(
                 client,
                 Parent.VirtualHostName,
                 ExchangeName,
@@ -125,6 +125,6 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
             : RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
 
-    Task IRabbitMQDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
+    Task IRabbitMQBindableDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
         => client.BindExchangeAsync(vhost, sourceExchange, ExchangeName, routingKey, args, ct);
 }

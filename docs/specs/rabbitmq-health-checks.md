@@ -55,7 +55,7 @@ Shovels move messages between otherwise-independent endpoints. If a shovel fails
 still exists and is correctly configured. The shovel's live-state probe naturally catches downstream
 breakage without needing to cascade to source or destination.
 
-### Policy failures cascade to matching queues/exchanges (planned)
+### Policy failures cascade to matching queues/exchanges
 
 Unlike bindings, a policy changes the behaviour of the entity itself (TTL, max-length, DLX, HA).
 A queue without its declared TTL policy will silently retain messages forever — a correctness bug
@@ -63,8 +63,9 @@ the user cannot observe from "queue exists = true". Therefore a policy failure m
 queue/exchange whose name matches the policy pattern as `Unhealthy`.
 
 Policy-to-entity matching is resolved once after the model is fully built (not at `AddPolicy` call
-time, to avoid order-dependency) and cached on each entity. The same resolution pass adds a
-dashboard relationship edge so the cascade is visible without reading logs.
+time, to avoid order-dependency) and cached on each entity via `AppliedPolicies`. The same
+resolution pass adds a dashboard relationship edge so the cascade is visible without reading logs.
+This behaviour is implemented and covered by tests.
 
 ## Extension guidance
 

@@ -24,9 +24,16 @@ public interface IRabbitMQDestination
     /// Gets the kind of the destination.
     /// </summary>
     RabbitMQDestinationKind Kind { get; }
+}
 
+/// <summary>
+/// Internal extension of <see cref="IRabbitMQDestination"/> that adds the ability to declare
+/// a binding via the provisioning client. Only in-assembly resource types implement this interface.
+/// </summary>
+internal interface IRabbitMQBindableDestination : IRabbitMQDestination
+{
     /// <summary>
     /// Binds this destination to the given source exchange using the provisioning client.
     /// </summary>
-    internal Task BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct);
+    Task BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct);
 }

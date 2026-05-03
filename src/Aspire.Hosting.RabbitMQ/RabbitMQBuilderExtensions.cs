@@ -155,6 +155,10 @@ public static class RabbitMQBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        if (virtualHostName is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualHostName, nameof(virtualHostName));
+        }
 
         var vhostName = virtualHostName ?? name;
         if (builder.Resource.VirtualHosts.Any(v => v.VirtualHostName == vhostName))
@@ -203,6 +207,10 @@ public static class RabbitMQBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        if (queueName is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(queueName, nameof(queueName));
+        }
 
         var qName = queueName ?? name;
         if (builder.Resource.Queues.Any(q => q.QueueName == qName))
@@ -255,6 +263,10 @@ public static class RabbitMQBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        if (exchangeName is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(exchangeName, nameof(exchangeName));
+        }
 
         var exName = exchangeName ?? name;
         if (builder.Resource.Exchanges.Any(e => e.ExchangeName == exName))
@@ -375,6 +387,10 @@ public static class RabbitMQBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(destination);
+        if (shovelName is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(shovelName, nameof(shovelName));
+        }
 
         var wireName = shovelName ?? name;
         if (vhost.Resource.Shovels.Any(s => s.ShovelName == wireName))
@@ -461,6 +477,10 @@ public static class RabbitMQBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(pattern);
+        if (policyName is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(policyName, nameof(policyName));
+        }
 
         var wireName = policyName ?? name;
         if (builder.Resource.Policies.Any(p => p.PolicyName == wireName))
@@ -602,7 +622,8 @@ public static class RabbitMQBuilderExtensions
                 var plugins = builder.Resource.Annotations
                     .OfType<RabbitMQPluginAnnotation>()
                     .Select(a => a.PluginName)
-                    .ToHashSet(StringComparer.Ordinal);
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(x => x, StringComparer.Ordinal);
 
                 var content = $"[{string.Join(",", plugins)}].";
                 IEnumerable<ContainerFileSystemItem> items =

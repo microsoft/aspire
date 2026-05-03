@@ -79,7 +79,7 @@ builder.AddProject<Projects.BillingWorker>("worker")
 
 ### Policies
 
-Policies apply server-side configuration (TTL, dead-lettering, queue length limits, HA) to queues and/or exchanges whose names match a regex pattern. Call `AddPolicy` **after** all queues and exchanges have been added so the pattern can be matched at model-freeze time.
+Policies apply server-side configuration (TTL, dead-lettering, queue length limits, HA) to queues and/or exchanges whose names match a regex pattern. The order of `AddPolicy` relative to `AddQueue`/`AddExchange` calls does not matter — pattern matching is resolved at model-freeze time (during the `BeforeStartEvent`), after all resources have been registered.
 
 ```csharp
 var rmq   = builder.AddRabbitMQ("rmq");

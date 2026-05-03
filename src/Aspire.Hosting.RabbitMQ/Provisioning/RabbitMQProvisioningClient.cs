@@ -59,6 +59,15 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
                 return racy.Item2;
             }
 
+            // Dispose the stale connection/channel before replacing it to avoid leaking resources.
+            if (_channels.TryRemove(vhost, out var stale))
+            {
+                try { await stale.Item2.CloseAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false); } catch { }
+                try { stale.Item2.Dispose(); } catch { }
+                try { await stale.Item1.CloseAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false); } catch { }
+                try { stale.Item1.Dispose(); } catch { }
+            }
+
             var cs = await _server.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
             var f = new ConnectionFactory { Uri = new Uri(cs!), VirtualHost = vhost };
             var conn = await f.CreateConnectionAsync(ct).ConfigureAwait(false);

@@ -11,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, QueueName = {QueueName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQDestination, IRabbitMQProvisionable
+public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQBindableDestination, IRabbitMQProvisionable
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQQueueResource"/> class.
@@ -122,6 +122,6 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
             : RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
 
-    Task IRabbitMQDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
+    Task IRabbitMQBindableDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
         => client.BindQueueAsync(vhost, sourceExchange, QueueName, routingKey, args, ct);
 }
