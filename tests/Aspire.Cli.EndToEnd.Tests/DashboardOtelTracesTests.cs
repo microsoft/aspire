@@ -28,7 +28,7 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await DashboardRunWithOtelTracesReturnsNoTracesCore("http://dashboard.dev.localhost:18888", "http://localhost:18888");
     }
 
-    private async Task DashboardRunWithOtelTracesReturnsNoTracesCore(string browserDashboardUrl, string localhostDashboardUrl)
+    private async Task DashboardRunWithOtelTracesReturnsNoTracesCore(string frontendUrl, string localhostUrl)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -48,8 +48,8 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         // Store the dashboard log path inside the workspace so it gets captured on failure
         var dashboardLogPath = $"/workspace/{workspace.WorkspaceRoot.Name}/dashboard.log";
 
-        // Start the dashboard in the background
-        await auto.TypeAsync($"aspire dashboard run --dashboard-url {browserDashboardUrl} > {dashboardLogPath} 2>&1 &");
+        // Start the dashboard in the background with the specified frontend URL
+        await auto.TypeAsync($"aspire dashboard run --frontend-url {frontendUrl} > {dashboardLogPath} 2>&1 &");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -59,7 +59,7 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for the dashboard to become ready by polling the localhost URL
-        await auto.TypeAsync($"for i in $(seq 1 30); do curl -ksSL -o /dev/null -w '%{{http_code}}' {localhostDashboardUrl} 2>/dev/null | grep -q 200 && break; sleep 1; done");
+        await auto.TypeAsync($"for i in $(seq 1 30); do curl -ksSL -o /dev/null -w '%{{http_code}}' {localhostUrl} 2>/dev/null | grep -q 200 && break; sleep 1; done");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
@@ -73,13 +73,9 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Get the dashboard URL from aspire ps and use it for otel traces
-        await auto.TypeAsync("aspire ps --format json > /tmp/ps_output.json");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Extract dashboardUrl from the JSON array and run otel traces with it
-        await auto.TypeAsync("OTEL_DASHBOARD_URL=$(python3 -c \"import sys,json; data=json.load(open('/tmp/ps_output.json')); print(data[0]['dashboardUrl'])\")");
+        // Extract the dashboard URL (including login?t=xxx token) from the dashboard run output log.
+        // For the dev.localhost variant, the CLI must normalize the *.localhost host to localhost for HTTP requests.
+        await auto.TypeAsync("OTEL_DASHBOARD_URL=$(grep -oE 'https?://[^ ]+login\\?t=[^ ]+' " + dashboardLogPath + " | head -1)");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
