@@ -74,7 +74,11 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     npm install -g yarn@1.22.22 pnpm@10 && \
-    curl -fsSL https://bun.sh/install | bash && \
+    for attempt in 1 2 3 4 5; do \
+      curl -fsSL https://bun.sh/install | bash && break; \
+      if [ "$attempt" = "5" ]; then exit 1; fi; \
+      sleep 10; \
+    done && \
     ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
     ln -s /root/.bun/bin/bunx /usr/local/bin/bunx && \
     rm -rf /var/lib/apt/lists/*
