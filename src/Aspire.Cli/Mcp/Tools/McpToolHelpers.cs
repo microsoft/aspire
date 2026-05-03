@@ -64,6 +64,11 @@ internal static class McpToolHelpers
     /// <summary>
     /// Replaces AppHost-scoped <c>*.localhost</c> dashboard hostnames with <c>localhost</c>.
     /// </summary>
+    /// <remarks>
+    /// DNS resolvers typically don't implement RFC 6761 for localhost subdomains, so hosts
+    /// like <c>dashboard.dev.localhost</c> fail to resolve when making HTTP requests.
+    /// Rewriting to <c>localhost</c> ensures the CLI can reach the dashboard API.
+    /// </remarks>
     internal static string NormalizeDashboardUrl(string url)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && IsLocalhostTld(uri.Host))
