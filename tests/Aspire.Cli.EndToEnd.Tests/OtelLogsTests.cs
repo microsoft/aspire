@@ -17,14 +17,19 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
     [Fact]
     [CaptureWorkspaceOnFailure]
     public Task OtelLogsReturnsStructuredLogsFromStarterApp()
-        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: false);
+        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: false, useDevLocalhost: false);
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task OtelLogsReturnsStructuredLogsFromStarterAppIsolated()
-        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: true);
+    public Task OtelLogsReturnsStructuredLogsFromStarterApp_Isolated()
+        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: true, useDevLocalhost: false);
 
-    private async Task OtelLogsReturnsStructuredLogsFromStarterAppCore(bool isolated)
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task OtelLogsReturnsStructuredLogsFromStarterApp_DevLocalhost()
+        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: false, useDevLocalhost: true);
+
+    private async Task OtelLogsReturnsStructuredLogsFromStarterAppCore(bool isolated, bool useDevLocalhost)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -42,14 +47,14 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new Starter project (includes an ASP.NET Core apiservice)
-        await auto.AspireNewAsync("AspireOtelLogsApp", counter);
+        await auto.AspireNewAsync("AspireOtelLogsApp", counter, useDevLocalhost: useDevLocalhost);
 
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspireOtelLogsApp/AspireOtelLogsApp.AppHost");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Start the AppHost in the background
+        // Start the AppHost
         await auto.AspireStartAsync(counter, isolated: isolated);
 
         // Wait for the apiservice resource to be running before querying logs
