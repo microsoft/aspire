@@ -1670,6 +1670,27 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DcpInstanceIdPrefix));
     }
 
+    [Fact]
+    public void DetachedChildEnvironment_IncludesStartupTelemetryContext()
+    {
+        var context = StartupTelemetryContext.FromEnvironment(name => name switch
+        {
+            StartupTelemetryContext.OperationIdEnvironmentVariable => "operation-1",
+            StartupTelemetryContext.TraceParentEnvironmentVariable => "00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01",
+            StartupTelemetryContext.TraceStateEnvironmentVariable => "state-1",
+            _ => null
+        });
+
+        Assert.NotNull(context);
+
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(context);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.Equal("operation-1", environment[StartupTelemetryContext.OperationIdEnvironmentVariable]);
+        Assert.Equal("00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01", environment[StartupTelemetryContext.TraceParentEnvironmentVariable]);
+        Assert.Equal("state-1", environment[StartupTelemetryContext.TraceStateEnvironmentVariable]);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

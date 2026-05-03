@@ -101,6 +101,14 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <summary>
+    /// Starts a new activity for reported telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartReportedActivity(string name, ActivityKind kind, ActivityContext parentContext)
+    {
+        return StartActivityCore(_reportedActivitySource, name, kind, parentContext);
+    }
+
+    /// <summary>
     /// Starts a new activity for diagnostic telemetry used for internal diagnostics only.
     /// Uses the caller member name if no name is provided.
     /// </summary>
@@ -112,14 +120,29 @@ internal sealed class AspireCliTelemetry : IHostedService
         return StartActivityCore(_diagnosticsActivitySource, name, kind);
     }
 
+    /// <summary>
+    /// Starts a new activity for diagnostic telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartDiagnosticActivity(string name, ActivityKind kind, ActivityContext parentContext)
+    {
+        return StartActivityCore(_diagnosticsActivitySource, name, kind, parentContext);
+    }
+
     private Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind)
+    {
+        return StartActivityCore(source, name, kind, parentContext: null);
+    }
+
+    private Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind, ActivityContext? parentContext)
     {
         CheckInitialization();
 
         // Activities must have a name.
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var activity = source.StartActivity(name, kind);
+        var activity = parentContext is { } context
+            ? source.StartActivity(name, kind, context)
+            : source.StartActivity(name, kind);
 
         if (activity is not null)
         {
@@ -207,6 +230,12 @@ internal sealed class AspireCliTelemetry : IHostedService
             _tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
             _tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
             _tagsList.Add(new(TelemetryConstants.Tags.OsVersion, Environment.OSVersion.Version.ToString()));
+
+            var startupTelemetryContext = StartupTelemetryContext.FromEnvironment(Environment.GetEnvironmentVariable);
+            if (startupTelemetryContext is not null)
+            {
+                _tagsList.Add(new(TelemetryConstants.Tags.StartupOperationId, startupTelemetryContext.OperationId));
+            }
         }
         catch (Exception ex)
         {

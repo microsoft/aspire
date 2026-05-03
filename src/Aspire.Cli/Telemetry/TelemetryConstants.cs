@@ -109,6 +109,11 @@ internal static class TelemetryConstants
         public const string AppHostLanguage = "aspire.cli.apphost.language";
 
         /// <summary>
+        /// Tag for correlating spans emitted during a single Aspire startup operation.
+        /// </summary>
+        public const string StartupOperationId = "aspire.startup.operation_id";
+
+        /// <summary>
         /// Tag indicating whether the app host was launched in detached mode.
         /// </summary>
         public const string AppHostDetached = "aspire.cli.apphost.detached";

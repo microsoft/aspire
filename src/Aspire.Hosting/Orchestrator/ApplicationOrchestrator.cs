@@ -9,6 +9,7 @@ using System.Diagnostics;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
@@ -93,6 +94,8 @@ internal sealed class ApplicationOrchestrator
 
     private async Task WaitForInBeforeResourceStartedEvent(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
     {
+        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.before_start_wait");
+        StartupTracing.SetResourceTags(activity, @event.Resource);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
@@ -117,6 +120,11 @@ internal sealed class ApplicationOrchestrator
                 // Make error visible from completed task.
                 await completedTask.ConfigureAwait(false);
             }
+        }
+        catch (Exception ex)
+        {
+            StartupTracing.SetError(activity, ex);
+            throw;
         }
         finally
         {
