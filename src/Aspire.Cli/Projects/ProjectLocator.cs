@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.IO.Enumeration;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -11,6 +10,8 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.FileSystemGlobbing;
+using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -137,27 +138,29 @@ internal sealed class ProjectLocator(
             var nugetCachePath = GetNuGetPackagesCachePath();
             logger.LogDebug("NuGet cache path to exclude: {NuGetCachePath}", nugetCachePath ?? "(none)");
 
-            // Collect all candidates with their handlers across all patterns
+            // Collect all candidates with their handlers across all patterns.
             var candidatesWithHandlers = new List<(FileInfo File, IAppHostProject Handler)>();
+            var (candidateFiles, candidateCountsByPattern) = FindMatchingFiles(searchDirectory, allPatterns, enumerationOptions, nugetCachePath);
 
             foreach (var pattern in allPatterns)
             {
-                var candidateFiles = FindMatchingFiles(searchDirectory, pattern, enumerationOptions, nugetCachePath);
-                logger.LogDebug("Found {CandidateCount} files matching pattern '{Pattern}'", candidateFiles.Length, pattern);
+                logger.LogDebug("Found {CandidateCount} files matching pattern '{Pattern}'", candidateCountsByPattern[pattern], pattern);
+            }
 
-                foreach (var candidateFile in candidateFiles)
+            logger.LogDebug("Found {CandidateCount} unique candidate files matching AppHost detection patterns", candidateFiles.Length);
+
+            foreach (var candidateFile in candidateFiles)
+            {
+                logger.LogDebug("Checking candidate file {CandidateFile}", candidateFile.FullName);
+
+                var handler = projectFactory.TryGetProject(candidateFile);
+                if (handler is null)
                 {
-                    logger.LogDebug("Checking candidate file {CandidateFile}", candidateFile.FullName);
-
-                    var handler = projectFactory.TryGetProject(candidateFile);
-                    if (handler is null)
-                    {
-                        logger.LogTrace("No handler found for {CandidateFile}", candidateFile.FullName);
-                        continue;
-                    }
-
-                    candidatesWithHandlers.Add((candidateFile, handler));
+                    logger.LogTrace("No handler found for {CandidateFile}", candidateFile.FullName);
+                    continue;
                 }
+
+                candidatesWithHandlers.Add((candidateFile, handler));
             }
 
             // If any candidates are .NET projects, ensure the SDK is available
@@ -705,32 +708,67 @@ internal sealed class ProjectLocator(
         _ = AspireConfigFile.LoadOrCreate(settingsRootDirectory.FullName);
     }
 
-    private static FileInfo[] FindMatchingFiles(DirectoryInfo searchDirectory, string pattern, EnumerationOptions options, string? excludePath)
+    private static (FileInfo[] Files, Dictionary<string, int> CountsByPattern) FindMatchingFiles(DirectoryInfo searchDirectory, IReadOnlyList<string> patterns, EnumerationOptions options, string? excludePath)
     {
+        if (patterns.Count == 0)
+        {
+            return ([], new Dictionary<string, int>(StringComparer.Ordinal));
+        }
+
         var pathComparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 
-        var enumerable = new FileSystemEnumerable<FileInfo>(
-            searchDirectory.FullName,
-            (ref FileSystemEntry entry) => new FileInfo(entry.ToFullPath()),
-            options)
-        {
-            ShouldIncludePredicate = (ref FileSystemEntry entry) =>
-                !entry.IsDirectory && FileSystemName.MatchesSimpleExpression(pattern, entry.FileName),
-            ShouldRecursePredicate = (ref FileSystemEntry entry) =>
-            {
-                if (excludePath is null)
-                {
-                    return true;
-                }
-                var dirPath = entry.ToFullPath();
-                return !dirPath.Equals(excludePath, pathComparison)
-                    && !dirPath.StartsWith(excludePath + Path.DirectorySeparatorChar, pathComparison);
-            }
-        };
+        var matcher = CreateMatcher(patterns);
 
-        return enumerable.ToArray();
+        var directory = new MatcherDirectoryInfo(searchDirectory, options, excludePath, pathComparison);
+        var matchedFilePaths = matcher.Execute(directory).Files.Select(match => match.Path).ToArray();
+
+        var matchedFiles = matchedFilePaths
+            .Select(path => new FileInfo(Path.Combine(searchDirectory.FullName, path.Replace('/', Path.DirectorySeparatorChar))))
+            .ToArray();
+
+        var countsByPattern = patterns.ToDictionary(pattern => pattern, _ => 0, StringComparer.Ordinal);
+        var matchersByPattern = patterns.Select(pattern => (Pattern: pattern, Matcher: CreateMatcher(pattern))).ToArray();
+        foreach (var matchedFilePath in matchedFilePaths)
+        {
+            foreach (var (pattern, patternMatcher) in matchersByPattern)
+            {
+                if (patternMatcher.Match(matchedFilePath).HasMatches)
+                {
+                    countsByPattern[pattern]++;
+                }
+            }
+        }
+
+        return (matchedFiles, countsByPattern);
+    }
+
+    private static string ToRecursiveGlobPattern(string pattern)
+    {
+        var normalizedPattern = pattern.Replace(Path.DirectorySeparatorChar, '/');
+        if (Path.AltDirectorySeparatorChar != Path.DirectorySeparatorChar)
+        {
+            normalizedPattern = normalizedPattern.Replace(Path.AltDirectorySeparatorChar, '/');
+        }
+
+        return normalizedPattern.Contains('/', StringComparison.Ordinal)
+            ? normalizedPattern
+            : $"**/{normalizedPattern}";
+    }
+
+    private static Matcher CreateMatcher(IEnumerable<string> patterns)
+    {
+        var matcher = new Matcher(StringComparison.OrdinalIgnoreCase);
+        matcher.AddIncludePatterns(patterns.Select(ToRecursiveGlobPattern));
+        return matcher;
+    }
+
+    private static Matcher CreateMatcher(string pattern)
+    {
+        var matcher = new Matcher(StringComparison.OrdinalIgnoreCase);
+        matcher.AddInclude(ToRecursiveGlobPattern(pattern));
+        return matcher;
     }
 
     private string? GetNuGetPackagesCachePath()
@@ -748,6 +786,93 @@ internal sealed class ProjectLocator(
         }
 
         return null;
+    }
+
+    private sealed class MatcherDirectoryInfo(DirectoryInfo directory, EnumerationOptions options, string? excludePath, StringComparison pathComparison) : DirectoryInfoBase
+    {
+        private readonly DirectoryInfo _directory = directory;
+        private readonly EnumerationOptions _options = options;
+        private readonly string? _excludePath = excludePath;
+        private readonly StringComparison _pathComparison = pathComparison;
+
+        public override string Name => _directory.Name;
+
+        public override string FullName => _directory.FullName;
+
+        public override DirectoryInfoBase ParentDirectory => _directory.Parent is { } parent
+            ? new MatcherDirectoryInfo(parent, _options, _excludePath, _pathComparison)
+            : null!;
+
+        public override IEnumerable<FileSystemInfoBase> EnumerateFileSystemInfos()
+        {
+            foreach (var entry in _directory.EnumerateFileSystemInfos("*", CreateTopDirectoryOnlyOptions(_options)))
+            {
+                if (entry is DirectoryInfo childDirectory)
+                {
+                    if (!ShouldExcludeDirectory(childDirectory))
+                    {
+                        yield return new MatcherDirectoryInfo(childDirectory, _options, _excludePath, _pathComparison);
+                    }
+                }
+                else if (entry is FileInfo childFile)
+                {
+                    yield return new MatcherFileInfo(childFile, _options, _excludePath, _pathComparison);
+                }
+            }
+        }
+
+        public override DirectoryInfoBase GetDirectory(string path)
+        {
+            return new MatcherDirectoryInfo(new DirectoryInfo(Path.Combine(_directory.FullName, path)), _options, _excludePath, _pathComparison);
+        }
+
+        public override FileInfoBase GetFile(string path)
+        {
+            return new MatcherFileInfo(new FileInfo(Path.Combine(_directory.FullName, path)), _options, _excludePath, _pathComparison);
+        }
+
+        private bool ShouldExcludeDirectory(DirectoryInfo directory)
+        {
+            if (_excludePath is null)
+            {
+                return false;
+            }
+
+            var directoryPath = Path.GetFullPath(directory.FullName);
+            return directoryPath.Equals(_excludePath, _pathComparison)
+                || directoryPath.StartsWith(_excludePath + Path.DirectorySeparatorChar, _pathComparison);
+        }
+    }
+
+    private sealed class MatcherFileInfo(FileInfo file, EnumerationOptions options, string? excludePath, StringComparison pathComparison) : FileInfoBase
+    {
+        private readonly FileInfo _file = file;
+        private readonly EnumerationOptions _options = options;
+        private readonly string? _excludePath = excludePath;
+        private readonly StringComparison _pathComparison = pathComparison;
+
+        public override string Name => _file.Name;
+
+        public override string FullName => _file.FullName;
+
+        public override DirectoryInfoBase ParentDirectory => _file.Directory is { } parent
+            ? new MatcherDirectoryInfo(parent, _options, _excludePath, _pathComparison)
+            : null!;
+    }
+
+    private static EnumerationOptions CreateTopDirectoryOnlyOptions(EnumerationOptions options)
+    {
+        return new EnumerationOptions
+        {
+            AttributesToSkip = options.AttributesToSkip,
+            BufferSize = options.BufferSize,
+            IgnoreInaccessible = options.IgnoreInaccessible,
+            MatchCasing = options.MatchCasing,
+            MatchType = options.MatchType,
+            MaxRecursionDepth = options.MaxRecursionDepth,
+            RecurseSubdirectories = false,
+            ReturnSpecialDirectories = options.ReturnSpecialDirectories
+        };
     }
 }
 

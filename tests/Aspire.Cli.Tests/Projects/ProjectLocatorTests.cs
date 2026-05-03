@@ -865,6 +865,33 @@ builder.Build().Run();");
     }
 
     [Fact]
+    public async Task FindAppHostProjectFilesAsync_DoesNotDuplicateFilesThatMatchMultiplePatterns()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var overlappingLanguage = new LanguageInfo(
+            LanguageId: new LanguageId("overlapping"),
+            DisplayName: "Overlapping",
+            PackageName: "",
+            DetectionPatterns: ["AppHost.csproj"],
+            CodeGenerator: "",
+            AppHostFileName: "AppHost.csproj");
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            languageDiscovery: new TestLanguageDiscovery(overlappingLanguage));
+
+        var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        var foundFile = Assert.Single(foundFiles);
+        Assert.Equal(projectFile.FullName, foundFile.FullName);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileAsync_AcceptsExplicitSingleFileAppHost()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
