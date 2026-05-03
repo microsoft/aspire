@@ -217,6 +217,31 @@
         <target state="new">Element state</target>
         <note />
       </trans-unit>
+      <trans-unit id="EvaluateBrowserDescription">
+        <source>Evaluate a JavaScript expression in the active tracked browser page and return the JSON-serializable result.</source>
+        <target state="new">Evaluate a JavaScript expression in the active tracked browser page and return the JSON-serializable result.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="EvaluateBrowserName">
+        <source>Evaluate browser script</source>
+        <target state="new">Evaluate browser script</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="EvaluateBrowserSucceeded">
+        <source>Evaluated browser script.</source>
+        <target state="new">Evaluated browser script.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExpressionArgumentDescription">
+        <source>JavaScript expression or zero-argument function to evaluate in the browser page.</source>
+        <target state="new">JavaScript expression or zero-argument function to evaluate in the browser page.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExpressionArgumentLabel">
+        <source>Expression</source>
+        <target state="new">Expression</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FillBrowserDescription">
         <source>Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</source>
         <target state="new">Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</target>
@@ -230,6 +255,31 @@
       <trans-unit id="FillBrowserSucceeded">
         <source>Filled browser field.</source>
         <target state="new">Filled browser field.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FindBrowserDescription">
+        <source>Find a browser element by role, text, label, placeholder, alt text, title, test ID, or selector position and return its snapshot details.</source>
+        <target state="new">Find a browser element by role, text, label, placeholder, alt text, title, test ID, or selector position and return its snapshot details.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FindBrowserName">
+        <source>Find browser element</source>
+        <target state="new">Find browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FindBrowserSucceeded">
+        <source>Found browser element.</source>
+        <target state="new">Found browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FindValueArgumentDescription">
+        <source>Search text, role, test ID, or CSS selector depending on the find strategy.</source>
+        <target state="new">Search text, role, test ID, or CSS selector depending on the find strategy.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FindValueArgumentLabel">
+        <source>Find value</source>
+        <target state="new">Find value</target>
         <note />
       </trans-unit>
       <trans-unit id="FocusBrowserElementDescription">
@@ -257,6 +307,36 @@
         <target state="new">Function</target>
         <note />
       </trans-unit>
+      <trans-unit id="GetBrowserDescription">
+        <source>Return a structured value from the active tracked browser page, such as title, URL, text, HTML, field value, attribute, count, box, or styles.</source>
+        <target state="new">Return a structured value from the active tracked browser page, such as title, URL, text, HTML, field value, attribute, count, box, or styles.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GetBrowserName">
+        <source>Get browser value</source>
+        <target state="new">Get browser value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GetBrowserSucceeded">
+        <source>Retrieved browser value.</source>
+        <target state="new">Retrieved browser value.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HighlightBrowserDescription">
+        <source>Highlight an element in the active tracked browser page for visual debugging.</source>
+        <target state="new">Highlight an element in the active tracked browser page for visual debugging.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HighlightBrowserName">
+        <source>Highlight browser element</source>
+        <target state="new">Highlight browser element</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HighlightBrowserSucceeded">
+        <source>Highlighted browser element.</source>
+        <target state="new">Highlighted browser element.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HoverBrowserElementDescription">
         <source>Move the pointer over an element in the active tracked browser page using a CSS selector.</source>
         <target state="new">Move the pointer over an element in the active tracked browser page using a CSS selector.</target>
@@ -270,6 +350,16 @@
       <trans-unit id="HoverBrowserElementSucceeded">
         <source>Hovered browser element.</source>
         <target state="new">Hovered browser element.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IndexArgumentDescription">
+        <source>One-based element index used by nth find strategy.</source>
+        <target state="new">One-based element index used by nth find strategy.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IndexArgumentLabel">
+        <source>Index</source>
+        <target state="new">Index</target>
         <note />
       </trans-unit>
       <trans-unit id="InspectBrowserDescription">
@@ -287,6 +377,21 @@
         <target state="new">Captured browser page snapshot.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IsBrowserDescription">
+        <source>Check whether a selected browser element is visible, enabled, or checked.</source>
+        <target state="new">Check whether a selected browser element is visible, enabled, or checked.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IsBrowserName">
+        <source>Check browser element state</source>
+        <target state="new">Check browser element state</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IsBrowserSucceeded">
+        <source>Checked browser element state.</source>
+        <target state="new">Checked browser element state.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="KeyArgumentDescription">
         <source>Keyboard key to press, such as Enter, Escape, Tab, or a single character.</source>
         <target state="new">Keyboard key to press, such as Enter, Escape, Tab, or a single character.</target>
@@ -295,6 +400,16 @@
       <trans-unit id="KeyArgumentLabel">
         <source>Key</source>
         <target state="new">Key</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KindArgumentDescription">
+        <source>Find strategy: role, text, label, placeholder, alt, title, testid, first, last, or nth.</source>
+        <target state="new">Find strategy: role, text, label, placeholder, alt, title, testid, first, last, or nth.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="KindArgumentLabel">
+        <source>Kind</source>
+        <target state="new">Kind</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadStateArgumentDescription">
@@ -337,6 +452,16 @@
         <target state="new">Maximum text length</target>
         <note />
       </trans-unit>
+      <trans-unit id="NameArgumentDescription">
+        <source>Optional attribute name, CSS property name, accessible name, or other command-specific qualifier.</source>
+        <target state="new">Optional attribute name, CSS property name, accessible name, or other command-specific qualifier.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NameArgumentLabel">
+        <source>Name</source>
+        <target state="new">Name</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavigateBrowserDescription">
         <source>Navigate the active tracked browser page to an absolute URL.</source>
         <target state="new">Navigate the active tracked browser page to an absolute URL.</target>
@@ -375,6 +500,16 @@
       <trans-unit id="PressBrowserKeySucceeded">
         <source>Pressed browser key.</source>
         <target state="new">Pressed browser key.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PropertyArgumentDescription">
+        <source>Browser value to read: title, url, text, html, value, attr, count, box, or styles.</source>
+        <target state="new">Browser value to read: title, url, text, html, value, attr, count, box, or styles.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PropertyArgumentLabel">
+        <source>Property</source>
+        <target state="new">Property</target>
         <note />
       </trans-unit>
       <trans-unit id="ScrollBrowserDescription">
@@ -430,6 +565,11 @@
       <trans-unit id="SnapshotAfterArgumentLabel">
         <source>Snapshot after</source>
         <target state="new">Snapshot after</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StateArgumentDescription">
+        <source>Element state to check: visible, enabled, or checked.</source>
+        <target state="new">Element state to check: visible, enabled, or checked.</target>
         <note />
       </trans-unit>
       <trans-unit id="StateArgumentLabel">

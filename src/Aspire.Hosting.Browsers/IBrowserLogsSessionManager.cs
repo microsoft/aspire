@@ -11,6 +11,16 @@ internal interface IBrowserLogsSessionManager
 
     Task<string> GetPageSnapshotAsync(string resourceName, int maxElements, int maxTextLength, CancellationToken cancellationToken);
 
+    Task<string> GetAsync(string resourceName, string property, string? selector, string? name, CancellationToken cancellationToken);
+
+    Task<string> IsAsync(string resourceName, string state, string selector, CancellationToken cancellationToken);
+
+    Task<string> FindAsync(string resourceName, string kind, string value, string? name, int index, CancellationToken cancellationToken);
+
+    Task<string> HighlightAsync(string resourceName, string selector, CancellationToken cancellationToken);
+
+    Task<string> EvaluateAsync(string resourceName, string expression, CancellationToken cancellationToken);
+
     Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken);
 
     Task<string> ClickAsync(string resourceName, string selector, CancellationToken cancellationToken);

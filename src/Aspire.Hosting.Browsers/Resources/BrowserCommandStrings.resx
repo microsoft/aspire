@@ -125,6 +125,51 @@
   <data name="InspectBrowserSucceeded" xml:space="preserve">
     <value>Captured browser page snapshot.</value>
   </data>
+  <data name="GetBrowserDescription" xml:space="preserve">
+    <value>Return a structured value from the active tracked browser page, such as title, URL, text, HTML, field value, attribute, count, box, or styles.</value>
+  </data>
+  <data name="GetBrowserName" xml:space="preserve">
+    <value>Get browser value</value>
+  </data>
+  <data name="GetBrowserSucceeded" xml:space="preserve">
+    <value>Retrieved browser value.</value>
+  </data>
+  <data name="IsBrowserDescription" xml:space="preserve">
+    <value>Check whether a selected browser element is visible, enabled, or checked.</value>
+  </data>
+  <data name="IsBrowserName" xml:space="preserve">
+    <value>Check browser element state</value>
+  </data>
+  <data name="IsBrowserSucceeded" xml:space="preserve">
+    <value>Checked browser element state.</value>
+  </data>
+  <data name="FindBrowserDescription" xml:space="preserve">
+    <value>Find a browser element by role, text, label, placeholder, alt text, title, test ID, or selector position and return its snapshot details.</value>
+  </data>
+  <data name="FindBrowserName" xml:space="preserve">
+    <value>Find browser element</value>
+  </data>
+  <data name="FindBrowserSucceeded" xml:space="preserve">
+    <value>Found browser element.</value>
+  </data>
+  <data name="HighlightBrowserDescription" xml:space="preserve">
+    <value>Highlight an element in the active tracked browser page for visual debugging.</value>
+  </data>
+  <data name="HighlightBrowserName" xml:space="preserve">
+    <value>Highlight browser element</value>
+  </data>
+  <data name="HighlightBrowserSucceeded" xml:space="preserve">
+    <value>Highlighted browser element.</value>
+  </data>
+  <data name="EvaluateBrowserDescription" xml:space="preserve">
+    <value>Evaluate a JavaScript expression in the active tracked browser page and return the JSON-serializable result.</value>
+  </data>
+  <data name="EvaluateBrowserName" xml:space="preserve">
+    <value>Evaluate browser script</value>
+  </data>
+  <data name="EvaluateBrowserSucceeded" xml:space="preserve">
+    <value>Evaluated browser script.</value>
+  </data>
   <data name="NavigateBrowserDescription" xml:space="preserve">
     <value>Navigate the active tracked browser page to an absolute URL.</value>
   </data>
@@ -278,6 +323,42 @@
   <data name="ValueArgumentDescription" xml:space="preserve">
     <value>Text value to assign to the target field.</value>
   </data>
+  <data name="PropertyArgumentLabel" xml:space="preserve">
+    <value>Property</value>
+  </data>
+  <data name="PropertyArgumentDescription" xml:space="preserve">
+    <value>Browser value to read: title, url, text, html, value, attr, count, box, or styles.</value>
+  </data>
+  <data name="NameArgumentLabel" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="NameArgumentDescription" xml:space="preserve">
+    <value>Optional attribute name, CSS property name, accessible name, or other command-specific qualifier.</value>
+  </data>
+  <data name="KindArgumentLabel" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="KindArgumentDescription" xml:space="preserve">
+    <value>Find strategy: role, text, label, placeholder, alt, title, testid, first, last, or nth.</value>
+  </data>
+  <data name="FindValueArgumentLabel" xml:space="preserve">
+    <value>Find value</value>
+  </data>
+  <data name="FindValueArgumentDescription" xml:space="preserve">
+    <value>Search text, role, test ID, or CSS selector depending on the find strategy.</value>
+  </data>
+  <data name="IndexArgumentLabel" xml:space="preserve">
+    <value>Index</value>
+  </data>
+  <data name="IndexArgumentDescription" xml:space="preserve">
+    <value>One-based element index used by nth find strategy.</value>
+  </data>
+  <data name="ExpressionArgumentLabel" xml:space="preserve">
+    <value>Expression</value>
+  </data>
+  <data name="ExpressionArgumentDescription" xml:space="preserve">
+    <value>JavaScript expression or zero-argument function to evaluate in the browser page.</value>
+  </data>
   <data name="TypeTextArgumentDescription" xml:space="preserve">
     <value>Text to type into the target element.</value>
   </data>
@@ -331,6 +412,9 @@
   </data>
   <data name="StateArgumentLabel" xml:space="preserve">
     <value>State</value>
+  </data>
+  <data name="StateArgumentDescription" xml:space="preserve">
+    <value>Element state to check: visible, enabled, or checked.</value>
   </data>
   <data name="LoadStateArgumentLabel" xml:space="preserve">
     <value>Load state</value>

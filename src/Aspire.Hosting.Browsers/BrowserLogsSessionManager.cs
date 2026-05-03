@@ -256,6 +256,63 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         return await activeSession.Session.EvaluateJsonAsync(expression, timeout: null, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<string> GetAsync(string resourceName, string property, string? selector, string? name, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(property);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "get", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateGetExpression(property, selector, name),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> IsAsync(string resourceName, string state, string selector, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(state);
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "is", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateIsExpression(state, selector),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> FindAsync(string resourceName, string kind, string value, string? name, int index, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "find", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateFindExpression(kind, value, name, index),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> HighlightAsync(string resourceName, string selector, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(selector);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "highlight", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateHighlightExpression(selector),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> EvaluateAsync(string resourceName, string expression, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expression);
+
+        var activeSession = await GetActiveSessionAsync(resourceName, "evaluate", cancellationToken).ConfigureAwait(false);
+        return await activeSession.Session.EvaluateJsonAsync(
+            BrowserLogsBrowserAutomationScripts.CreateEvaluateExpression(expression),
+            timeout: null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);

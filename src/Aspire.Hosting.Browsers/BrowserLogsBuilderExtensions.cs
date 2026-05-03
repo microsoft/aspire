@@ -44,6 +44,11 @@ public static class BrowserLogsBuilderExtensions
     internal const string OpenTrackedBrowserCommandName = "open-tracked-browser";
     internal const string ConfigureTrackedBrowserCommandName = "configure-tracked-browser";
     internal const string InspectBrowserCommandName = "inspect-browser";
+    internal const string GetCommandName = "get";
+    internal const string IsCommandName = "is";
+    internal const string FindCommandName = "find";
+    internal const string HighlightCommandName = "highlight";
+    internal const string EvaluateCommandName = "eval";
     internal const string NavigateBrowserCommandName = "navigate-browser";
     internal const string ClickBrowserCommandName = "click-browser";
     internal const string FillBrowserCommandName = "fill-browser";
@@ -270,6 +275,129 @@ public static class BrowserLogsBuilderExtensions
                         CreateNumberArgument("maxElements", BrowserCommandStrings.MaxElementsArgumentLabel, BrowserCommandStrings.MaxElementsArgumentDescription, DefaultSnapshotMaxElements.ToString(CultureInfo.InvariantCulture), required: false),
                         CreateNumberArgument("maxTextLength", BrowserCommandStrings.MaxTextLengthArgumentLabel, BrowserCommandStrings.MaxTextLengthArgumentDescription, DefaultSnapshotMaxTextLength.ToString(CultureInfo.InvariantCulture), required: false)
                     ]))
+            .WithCommand(
+                GetCommandName,
+                BrowserCommandStrings.GetBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var property = GetRequiredStringArgument(context.Arguments, "property");
+                        var selector = GetOptionalStringArgument(context.Arguments, "selector");
+                        var name = GetOptionalStringArgument(context.Arguments, "name");
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.GetAsync(context.ResourceName, property, selector, name, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.GetBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.GetBrowserDescription,
+                    "Code",
+                    [
+                        CreateChoiceArgument("property", BrowserCommandStrings.PropertyArgumentLabel, BrowserCommandStrings.PropertyArgumentDescription, "text", required: true, ["title", "url", "text", "html", "value", "attr", "count", "box", "styles"]),
+                        CreateSelectorArgument(required: false),
+                        CreateTextArgument("name", BrowserCommandStrings.NameArgumentLabel, BrowserCommandStrings.NameArgumentDescription, required: false, placeholder: "href")
+                    ]))
+            .WithCommand(
+                IsCommandName,
+                BrowserCommandStrings.IsBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var state = GetRequiredStringArgument(context.Arguments, "state");
+                        var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.IsAsync(context.ResourceName, state, selector, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.IsBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.IsBrowserDescription,
+                    "CheckmarkCircle",
+                    [
+                        CreateChoiceArgument("state", BrowserCommandStrings.StateArgumentLabel, BrowserCommandStrings.StateArgumentDescription, "visible", required: true, ["visible", "enabled", "checked"]),
+                        CreateSelectorArgument()
+                    ]))
+            .WithCommand(
+                FindCommandName,
+                BrowserCommandStrings.FindBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var kind = GetRequiredStringArgument(context.Arguments, "kind");
+                        var value = GetRequiredStringArgument(context.Arguments, "value");
+                        var name = GetOptionalStringArgument(context.Arguments, "name");
+                        var index = GetOptionalIntegerArgument(context.Arguments, "index", defaultValue: 1, minimum: 1, maximum: 10_000);
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.FindAsync(context.ResourceName, kind, value, name, index, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.FindBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.FindBrowserDescription,
+                    "Search",
+                    [
+                        CreateChoiceArgument("kind", BrowserCommandStrings.KindArgumentLabel, BrowserCommandStrings.KindArgumentDescription, "text", required: true, ["role", "text", "label", "placeholder", "alt", "title", "testid", "first", "last", "nth"]),
+                        CreateTextArgument("value", BrowserCommandStrings.FindValueArgumentLabel, BrowserCommandStrings.FindValueArgumentDescription, required: true, placeholder: "Submit"),
+                        CreateTextArgument("name", BrowserCommandStrings.NameArgumentLabel, BrowserCommandStrings.NameArgumentDescription, required: false, placeholder: "Save"),
+                        CreateNumberArgument("index", BrowserCommandStrings.IndexArgumentLabel, BrowserCommandStrings.IndexArgumentDescription, "1", required: false)
+                    ]))
+            .WithCommand(
+                HighlightCommandName,
+                BrowserCommandStrings.HighlightBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var selector = GetRequiredStringArgument(context.Arguments, "selector");
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.HighlightAsync(context.ResourceName, selector, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.HighlightBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.HighlightBrowserDescription,
+                    "Highlight",
+                    [CreateSelectorArgument()]))
+            .WithCommand(
+                EvaluateCommandName,
+                BrowserCommandStrings.EvaluateBrowserName,
+                async context =>
+                {
+                    try
+                    {
+                        var expression = GetRequiredStringArgument(context.Arguments, "expression");
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var resultJson = await sessionManager.EvaluateAsync(context.ResourceName, expression, context.CancellationToken).ConfigureAwait(false);
+                        return BrowserJsonCommandSuccess(BrowserCommandStrings.EvaluateBrowserSucceeded, resultJson);
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                CreateBrowserCommandOptions(
+                    BrowserCommandStrings.EvaluateBrowserDescription,
+                    "DeveloperBoard",
+                    [CreateTextArgument("expression", BrowserCommandStrings.ExpressionArgumentLabel, BrowserCommandStrings.ExpressionArgumentDescription, required: true, placeholder: "document.title")]))
             .WithCommand(
                 NavigateBrowserCommandName,
                 BrowserCommandStrings.NavigateBrowserName,

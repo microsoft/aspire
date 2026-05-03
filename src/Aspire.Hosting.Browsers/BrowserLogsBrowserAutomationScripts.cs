@@ -65,6 +65,45 @@ const associatedLabel = element => {
   const label = element.closest('label');
   return label ? normalizeText(label.innerText || label.textContent) : undefined;
 };
+const implicitRole = element => {
+  if (element.getAttribute('role')) {
+    return element.getAttribute('role');
+  }
+
+  switch (element.localName) {
+    case 'a':
+      return element.hasAttribute('href') ? 'link' : undefined;
+    case 'button':
+      return 'button';
+    case 'input': {
+      const type = (element.getAttribute('type') || 'text').toLowerCase();
+      if (type === 'checkbox') {
+        return 'checkbox';
+      }
+      if (type === 'radio') {
+        return 'radio';
+      }
+      if (type === 'button' || type === 'submit' || type === 'reset') {
+        return 'button';
+      }
+      return 'textbox';
+    }
+    case 'select':
+      return 'combobox';
+    case 'textarea':
+      return 'textbox';
+    default:
+      return undefined;
+  }
+};
+const accessibleName = element => normalizeText(
+  element.getAttribute('aria-label')
+  || associatedLabel(element)
+  || element.getAttribute('title')
+  || element.getAttribute('placeholder')
+  || element.innerText
+  || element.textContent
+);
 const interactiveSelector = [
   'a[href]',
   'button',
@@ -91,7 +130,7 @@ const describeElement = (element, index) => {
     ref: index >= 0 ? `e${index + 1}` : undefined,
     selector: preferredSelector(element),
     tag,
-    role: element.getAttribute('role') || undefined,
+    role: implicitRole(element),
     type: element.getAttribute('type') || undefined,
     name: element.getAttribute('name') || undefined,
     label: associatedLabel(element),
@@ -134,6 +173,55 @@ const findElement = selector => {
   }
 
   return element;
+};
+const findMatchingElement = (kind, value, name, index) => {
+  const normalizedValue = normalizeText(value);
+  const normalizedName = normalizeText(name);
+  switch (kind) {
+    case 'role':
+      return Array.from(document.querySelectorAll('*')).find(element => {
+        if (implicitRole(element) !== normalizedValue) {
+          return false;
+        }
+
+        return !normalizedName || accessibleName(element).includes(normalizedName);
+      });
+    case 'text':
+      return Array.from(document.querySelectorAll('body *')).find(element => normalizeText(element.innerText || element.textContent).includes(normalizedValue));
+    case 'label':
+      return Array.from(document.querySelectorAll('input, textarea, select')).find(element => normalizeText(associatedLabel(element)).includes(normalizedValue));
+    case 'placeholder':
+      return Array.from(document.querySelectorAll('[placeholder]')).find(element => normalizeText(element.getAttribute('placeholder')).includes(normalizedValue));
+    case 'alt':
+      return Array.from(document.querySelectorAll('[alt]')).find(element => normalizeText(element.getAttribute('alt')).includes(normalizedValue));
+    case 'title':
+      return Array.from(document.querySelectorAll('[title]')).find(element => normalizeText(element.getAttribute('title')).includes(normalizedValue));
+    case 'testid':
+      return document.querySelector(`[data-testid="${cssString(value)}"], [data-test="${cssString(value)}"], [data-qa="${cssString(value)}"]`);
+    case 'first':
+      return document.querySelector(value);
+    case 'last': {
+      const elements = Array.from(document.querySelectorAll(value));
+      return elements.at(-1);
+    }
+    case 'nth': {
+      const elements = Array.from(document.querySelectorAll(value));
+      return elements[index - 1];
+    }
+    default:
+      throw new Error(`Unsupported find kind '${kind}'.`);
+  }
+};
+const serializeValue = value => {
+  if (value instanceof Element) {
+    return describeResolvedElement(value);
+  }
+
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return String(value);
+  }
 };
 const setElementValue = (element, value) => {
   if (element.isContentEditable) {
@@ -218,6 +306,192 @@ return {
   viewport: { width: innerWidth, height: innerHeight },
   text: normalizeText(document.body?.innerText ?? '').slice(0, maxTextLength),
   elements
+};
+""");
+    }
+
+    public static string CreateGetExpression(string property, string? selector, string? name)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const property = {{JsonLiteral(property)}};
+const selector = {{JsonLiteral(selector)}};
+const name = {{JsonLiteral(name)}};
+const element = selector && property !== 'count' ? findElement(selector) : undefined;
+let value;
+switch (property) {
+  case 'title':
+    value = document.title;
+    break;
+  case 'url':
+    value = location.href;
+    break;
+  case 'text':
+    value = normalizeText(element ? (element.innerText || element.textContent) : (document.body?.innerText ?? ''));
+    break;
+  case 'html':
+    value = element ? element.outerHTML : document.documentElement.outerHTML;
+    break;
+  case 'value':
+    if (!element) {
+      throw new Error("The 'value' property requires a selector.");
+    }
+    value = 'value' in element ? element.value : element.getAttribute('value');
+    break;
+  case 'attr':
+    if (!element || !name) {
+      throw new Error("The 'attr' property requires selector and name arguments.");
+    }
+    value = element.getAttribute(name);
+    break;
+  case 'count':
+    if (!selector) {
+      throw new Error("The 'count' property requires a selector.");
+    }
+    value = /^e([1-9]\d*)$/.test(selector) ? 1 : document.querySelectorAll(selector).length;
+    break;
+  case 'box':
+    if (!element) {
+      throw new Error("The 'box' property requires a selector.");
+    }
+    value = describeResolvedElement(element).bounds;
+    break;
+  case 'styles':
+    if (!element) {
+      throw new Error("The 'styles' property requires a selector.");
+    }
+    const styles = getComputedStyle(element);
+    value = name
+      ? styles.getPropertyValue(name)
+      : {
+          display: styles.display,
+          visibility: styles.visibility,
+          color: styles.color,
+          backgroundColor: styles.backgroundColor,
+          fontSize: styles.fontSize,
+          fontWeight: styles.fontWeight
+        };
+    break;
+  default:
+    throw new Error(`Unsupported get property '${property}'.`);
+}
+
+return {
+  action: 'get',
+  url: location.href,
+  property,
+  selector,
+  name,
+  value,
+  element: element ? describeResolvedElement(element) : undefined
+};
+""");
+    }
+
+    public static string CreateIsExpression(string state, string selector)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const state = {{JsonLiteral(state)}};
+const selector = {{JsonLiteral(selector)}};
+const element = findElement(selector);
+let value;
+switch (state) {
+  case 'visible':
+    value = isVisible(element);
+    break;
+  case 'enabled':
+    value = isEnabled(element);
+    break;
+  case 'checked':
+    value = isChecked(element);
+    break;
+  default:
+    throw new Error(`Unsupported element state '${state}'.`);
+}
+
+return {
+  action: 'is',
+  url: location.href,
+  selector,
+  state,
+  value,
+  element: describeResolvedElement(element)
+};
+""");
+    }
+
+    public static string CreateFindExpression(string kind, string value, string? name, int index)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const kind = {{JsonLiteral(kind)}};
+const value = {{JsonLiteral(value)}};
+const name = {{JsonLiteral(name)}};
+const index = {{index}};
+const element = findMatchingElement(kind, value, name, index);
+if (!element) {
+  throw new Error(`No element matched find criteria '${kind}' '${value}'.`);
+}
+
+return {
+  action: 'find',
+  url: location.href,
+  kind,
+  value,
+  name,
+  index,
+  element: describeResolvedElement(element)
+};
+""");
+    }
+
+    public static string CreateHighlightExpression(string selector)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const selector = {{JsonLiteral(selector)}};
+const element = findElement(selector);
+element.scrollIntoView({ block: 'center', inline: 'center' });
+if ('dataset' in element) {
+  element.dataset.aspireBrowserLogsHighlight = 'true';
+}
+element.style.outline = '3px solid #ffbf00';
+element.style.outlineOffset = '2px';
+element.style.boxShadow = '0 0 0 4px rgba(255, 191, 0, 0.35)';
+return {
+  action: 'highlight',
+  url: location.href,
+  selector,
+  element: describeResolvedElement(element)
+};
+""");
+    }
+
+    public static string CreateEvaluateExpression(string expression)
+    {
+        return CreateExpression($$"""
+{{Helpers}}
+const expression = {{JsonLiteral(expression)}};
+let evaluator;
+try {
+  evaluator = Function(`"use strict"; return (${expression});`);
+} catch {
+  evaluator = Function(`"use strict"; ${expression}`);
+}
+
+let value = evaluator();
+if (typeof value === 'function') {
+  value = value();
+}
+
+value = await Promise.resolve(value);
+return {
+  action: 'eval',
+  url: location.href,
+  expression,
+  valueType: value === null ? 'null' : typeof value,
+  value: serializeValue(value)
 };
 """);
     }

@@ -69,6 +69,15 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var inspectCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.InspectBrowserCommandName);
         Assert.Equal(BrowserCommandStrings.InspectBrowserName, inspectCommand.DisplayName);
         Assert.Contains(inspectCommand.ArgumentInputs!, input => input.Name == "maxElements" && input.InputType == InputType.Number && input.Required == false);
+        var getCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.GetCommandName);
+        Assert.Contains(getCommand.ArgumentInputs!, input => input.Name == "property" && input.InputType == InputType.Choice && input.Value == "text");
+        var isCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.IsCommandName);
+        Assert.Contains(isCommand.ArgumentInputs!, input => input.Name == "state" && input.InputType == InputType.Choice && input.Value == "visible");
+        var findCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.FindCommandName);
+        Assert.Contains(findCommand.ArgumentInputs!, input => input.Name == "kind" && input.InputType == InputType.Choice && input.Value == "text");
+        Assert.Contains(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.HighlightCommandName);
+        var evaluateCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.EvaluateCommandName);
+        Assert.Contains(evaluateCommand.ArgumentInputs!, input => input.Name == "expression" && input.InputType == InputType.Text && input.Required);
         var clickCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ClickBrowserCommandName);
         var selectorArgument = Assert.Single(clickCommand.ArgumentInputs!, input => input.Name == "selector");
         Assert.Equal(InputType.Text, selectorArgument.InputType);
@@ -842,6 +851,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.GetCommandName, """{"property":"attr","selector":"#link","name":"href"}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.IsCommandName, """{"state":"visible","selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.FindCommandName, """{"kind":"role","value":"button","name":"Submit","index":1}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.HighlightCommandName, """{"selector":"#submit"}""");
+        await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.EvaluateCommandName, """{"expression":"document.title"}""");
         var result = await ExecuteBrowserCommandAsync(BrowserLogsBuilderExtensions.ClickBrowserCommandName, """{"selector":"#submit","snapshotAfter":true}""");
 
         Assert.True(result.Success);
@@ -867,6 +881,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         Assert.Equal(
             [
+                "GetAsync:web-browser-logs:attr:#link:href",
+                "IsAsync:web-browser-logs:visible:#submit",
+                "FindAsync:web-browser-logs:role:button:Submit:1",
+                "HighlightAsync:web-browser-logs:#submit",
+                "EvaluateAsync:web-browser-logs:document.title",
                 "ClickAsync:web-browser-logs:#submit",
                 "GetPageSnapshotAsync:web-browser-logs:80:8000",
                 "FocusAsync:web-browser-logs:#name",
@@ -1870,6 +1889,36 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         {
             BrowserCommandCalls.Add($"{nameof(GetPageSnapshotAsync)}:{resourceName}:{maxElements}:{maxTextLength}");
             return Task.FromResult("""{"action":"snapshot"}""");
+        }
+
+        public Task<string> GetAsync(string resourceName, string property, string? selector, string? name, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(GetAsync)}:{resourceName}:{property}:{selector}:{name}");
+            return Task.FromResult("""{"action":"get"}""");
+        }
+
+        public Task<string> IsAsync(string resourceName, string state, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(IsAsync)}:{resourceName}:{state}:{selector}");
+            return Task.FromResult("""{"action":"is"}""");
+        }
+
+        public Task<string> FindAsync(string resourceName, string kind, string value, string? name, int index, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(FindAsync)}:{resourceName}:{kind}:{value}:{name}:{index}");
+            return Task.FromResult("""{"action":"find"}""");
+        }
+
+        public Task<string> HighlightAsync(string resourceName, string selector, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(HighlightAsync)}:{resourceName}:{selector}");
+            return Task.FromResult("""{"action":"highlight"}""");
+        }
+
+        public Task<string> EvaluateAsync(string resourceName, string expression, CancellationToken cancellationToken)
+        {
+            BrowserCommandCalls.Add($"{nameof(EvaluateAsync)}:{resourceName}:{expression}");
+            return Task.FromResult("""{"action":"eval"}""");
         }
 
         public Task<string> NavigateAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
