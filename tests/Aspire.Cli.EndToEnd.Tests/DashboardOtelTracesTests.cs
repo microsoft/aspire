@@ -80,6 +80,10 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        await auto.TypeAsync("echo \"OTEL_DASHBOARD_URL=$OTEL_DASHBOARD_URL\"");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
         await auto.TypeAsync("aspire otel traces --dashboard-url \"$OTEL_DASHBOARD_URL\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("No traces found", timeout: TimeSpan.FromSeconds(30));
