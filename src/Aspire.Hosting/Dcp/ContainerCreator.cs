@@ -45,6 +45,8 @@ internal record struct HostResourceWithEndpoints(
 /// </summary>
 internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCreationContext>, IObjectCreator<ContainerExec, EmptyCreationContext>
 {
+    private const string ContainerTunnelContainerName = "aspire";
+
     private readonly IConfiguration _configuration;
     private readonly IOptions<DcpOptions> _options;
     private readonly DcpNameGenerator _nameGenerator;
@@ -123,7 +125,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     public IEnumerable<RenderedModelResource<Container>> PrepareObjects()
     {
-        var modelContainerResources = _model.GetContainerResources();
+        var modelContainerResources = _model.GetContainerResources().ToArray();
+        ValidateContainerTunnelContainerNameConflicts(modelContainerResources);
+
         var result = new List<RenderedModelResource<Container>>();
 
         foreach (var container in modelContainerResources)
@@ -192,6 +196,31 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         return result;
+    }
+
+    private void ValidateContainerTunnelContainerNameConflicts(IEnumerable<IResource> modelContainerResources)
+    {
+        if (!_options.Value.EnableAspireContainerTunnel)
+        {
+            return;
+        }
+
+        foreach (var container in modelContainerResources)
+        {
+            if (IsContainerTunnelContainerName(container.Name))
+            {
+                throw new DistributedApplicationException($"Container resource '{container.Name}' cannot be named '{ContainerTunnelContainerName}' when the Aspire container tunnel is enabled because that name is reserved for the container tunnel.");
+            }
+
+            if (container.TryGetLastAnnotation<ContainerNameAnnotation>(out var containerNameAnnotation) &&
+                IsContainerTunnelContainerName(containerNameAnnotation.Name))
+            {
+                throw new DistributedApplicationException($"Container resource '{container.Name}' cannot use container name '{containerNameAnnotation.Name}' when the Aspire container tunnel is enabled because '{ContainerTunnelContainerName}' is reserved for the container tunnel.");
+            }
+        }
+
+        static bool IsContainerTunnelContainerName(string name)
+            => name.ToLowerInvariant() == ContainerTunnelContainerName;
     }
 
     public bool IsReadyToCreate(RenderedModelResource<Container> resource, ContainerCreationContext cctx)
