@@ -514,7 +514,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
+                // CLI's on-disk log under the default file-logger filter (Debug). Previously
+                // these lines were dropped entirely, which made apphost-side warnings
+                // (for example, "LoaderExceptions" from the type-discovery path) invisible to
+                // anyone diagnosing a "no code generator found" / "no language support found"
+                // error. See https://github.com/microsoft/aspire/issues/16729.
+                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -522,7 +528,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                // Promoted from LogTrace to LogInformation so that apphost-server stderr is
+                // visible at the default console log level (Information). Stderr is reserved
+                // for genuine problems in well-behaved server processes, so surfacing it
+                // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
+                _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };
