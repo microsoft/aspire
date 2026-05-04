@@ -186,7 +186,18 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["run", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.NotNull(runtimeSpec.WatchExecute);
         Assert.Equal("bun", runtimeSpec.WatchExecute?.Command);
-        Assert.Contains("bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\"", runtimeSpec.WatchExecute!.Args);
+        Assert.Equal(
+            [
+                "run",
+                "nodemon",
+                "--signal", "SIGTERM",
+                "--watch", ".",
+                "--ext", "ts",
+                "--ignore", "node_modules/",
+                "--ignore", ".modules/",
+                "--exec", "bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\""
+            ],
+            runtimeSpec.WatchExecute!.Args);
         Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
     }
 
