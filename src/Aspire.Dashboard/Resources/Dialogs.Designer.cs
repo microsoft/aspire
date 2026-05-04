@@ -628,7 +628,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Go to Microsoft Learn documentation.
+        ///   Looks up a localized string similar to Go to aspire.dev documentation.
         /// </summary>
         public static string HelpDialogGetHelpLinkText {
             get {

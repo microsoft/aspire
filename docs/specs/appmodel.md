@@ -631,7 +631,7 @@ private static ReferenceExpression BuildConnectionString(
 
 ## Endpoint Primitives
 
-The [EndpointReference](https://learn.microsoft.com/en-us/dotnet/api/aspire.hosting.applicationmodel.endpointreference?view=dotnet-aspire-8.0) is the fundamental type used to interact with another resource's endpoint. It provides properties such as:
+The [EndpointReference](https://aspire.dev/reference/api/csharp/aspire.hosting/endpointreference/) is the fundamental type used to interact with another resource's endpoint. It provides properties such as:
 
 - Url
 - Host
@@ -737,7 +737,7 @@ builder.Build().Run();
   Error accessing Url: Endpoint has not been allocated.
   ```
 
-**NOTE: The overloads of [WithEnvironment](https://learn.microsoft.com/en-us/dotnet/api/aspire.hosting.resourcebuilderextensions.withenvironment) that take a callback run after endpoints have been allocated.** 
+**NOTE: The overloads of [WithEnvironment](https://aspire.dev/reference/api/csharp/aspire.hosting/resourcebuilderextensions/methods/#withenvironment-iresourcebuilder-t-action-environmentcallbackcontext) that take a callback run after endpoints have been allocated.** 
 
 ---
 

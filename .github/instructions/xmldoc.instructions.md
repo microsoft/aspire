@@ -13,7 +13,7 @@ This document provides comprehensive guidelines for writing high-quality XML doc
 XML documentation comments serve multiple purposes:
 
 - Generate IntelliSense tooltips in IDEs for developers using Aspire APIs
-- Create public API documentation published to Microsoft Learn
+- Create public API documentation published to aspire.dev
 - Improve code maintainability and understanding
 - Support automated documentation generation tools
 
@@ -26,7 +26,7 @@ XML documentation comments serve multiple purposes:
 - All public classes, interfaces, methods, properties, and events must be well-documented
 - Include detailed `<summary>`, `<remarks>`, `<example>`, and other appropriate tags
 - Focus on explaining purpose, usage patterns, and providing practical examples
-- This documentation will be published to Microsoft Learn and shown in IntelliSense
+- This documentation will be published to aspire.dev and shown in IntelliSense
 
 **Internal APIs require minimal documentation:**
 
