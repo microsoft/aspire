@@ -8,17 +8,29 @@ fi
 
 shift
 
-for attempt in 1 2 3 4 5; do
-  apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq &&
-    apt-get -o Acquire::Retries=5 -o Dpkg::Use-Pty=0 install -y --no-install-recommends "$@" &&
+for attempt in 1 2 3; do
+  echo "apt install attempt $attempt/3: $*" >&2
+  rm -rf /var/lib/apt/lists/*
+
+  apt-get \
+    -o Acquire::Retries=2 \
+    -o Acquire::http::Timeout=20 \
+    -o Acquire::https::Timeout=20 \
+    -o APT::Update::Error-Mode=any \
+    update -qq &&
+    apt-get \
+      -o Acquire::Retries=2 \
+      -o Acquire::http::Timeout=20 \
+      -o Acquire::https::Timeout=20 \
+      -o Dpkg::Use-Pty=0 \
+      install -y --no-install-recommends "$@" &&
     exit 0
   status=$?
 
-  if [ "$attempt" = "5" ]; then
+  if [ "$attempt" = "3" ]; then
     exit "$status"
   fi
 
-  echo "apt install failed on attempt $attempt/5; retrying..." >&2
-  rm -rf /var/lib/apt/lists/*
-  sleep 10
+  echo "apt install failed on attempt $attempt/3; retrying..." >&2
+  sleep 5
 done
