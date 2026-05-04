@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -56,7 +57,7 @@ public class ResourceCommandService
     /// <returns>The <see cref="ExecuteCommandResult" /> indicates command success or failure.</returns>
     public async Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, CancellationToken cancellationToken = default)
     {
-        return await ExecuteCommandAsync(resourceId, commandName, arguments: null, cancellationToken).ConfigureAwait(false);
+        return await ExecuteCommandCoreAsync(resourceId, commandName, arguments: null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -77,17 +78,14 @@ public class ResourceCommandService
     /// </remarks>
     /// <param name="resourceId">The resource id. This id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates (i.e. replicas).</param>
     /// <param name="commandName">The command name.</param>
-    /// <param name="arguments">Optional invocation arguments supplied to the command callback.</param>
+    /// <param name="arguments">The invocation arguments supplied to the command callback.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The <see cref="ExecuteCommandResult" /> indicates command success or failure.</returns>
-    public async Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken = default)
+    public async Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken = default)
     {
-        if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
-        {
-            return new ExecuteCommandResult { Success = false, Message = $"Resource '{resourceId}' not found." };
-        }
+        ArgumentNullException.ThrowIfNull(arguments);
 
-        return await ExecuteCommandCoreAsync(resourceEvent.ResourceId, resourceEvent.Resource, commandName, arguments, cancellationToken).ConfigureAwait(false);
+        return await ExecuteCommandCoreAsync(resourceId, commandName, arguments, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -99,7 +97,9 @@ public class ResourceCommandService
     /// <returns>The <see cref="ExecuteCommandResult" /> indicates command success or failure.</returns>
     public async Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, CancellationToken cancellationToken = default)
     {
-        return await ExecuteCommandAsync(resource, commandName, arguments: null, cancellationToken).ConfigureAwait(false);
+        var arguments = CreateArguments([], argumentValues: null);
+
+        return await ExecuteCommandAsync(resource, commandName, arguments, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -107,11 +107,13 @@ public class ResourceCommandService
     /// </summary>
     /// <param name="resource">The resource. If the resource has multiple instances, such as replicas, then the command will be executed for each instance.</param>
     /// <param name="commandName">The command name.</param>
-    /// <param name="arguments">Optional invocation arguments supplied to the command callback.</param>
+    /// <param name="arguments">The invocation arguments supplied to the command callback.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The <see cref="ExecuteCommandResult" /> indicates command success or failure.</returns>
-    public async Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken = default)
+    public async Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(arguments);
+
         var names = resource.GetResolvedResourceNames();
         // Single resource for IResource. Return its result directly.
         if (names.Length == 1)
@@ -123,7 +125,7 @@ public class ResourceCommandService
         var tasks = new List<Task<ExecuteCommandResult>>();
         foreach (var name in names)
         {
-            tasks.Add(ExecuteCommandCoreAsync(name, resource, commandName, arguments, cancellationToken));
+            tasks.Add(ExecuteCommandCoreAsync(name, resource, commandName, CloneArguments(arguments), cancellationToken));
         }
 
         // Check for failures and cancellations.
@@ -173,20 +175,20 @@ public class ResourceCommandService
         }
     }
 
-    internal InteractionInputCollection? CreateCommandArguments(string resourceId, string commandName, IReadOnlyDictionary<string, string?>? argumentValues)
+    internal InteractionInputCollection CreateCommandArguments(string resourceId, string commandName, IReadOnlyDictionary<string, string?>? argumentValues)
     {
         if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
         {
-            return null;
+            return CreateArguments([], argumentValues);
         }
 
         var resolvedCommandName = commandName;
         var annotation = ResolveCommandAnnotation(resourceEvent.Resource, ref resolvedCommandName);
 
-        return CreateArguments(annotation?.Arguments, argumentValues);
+        return CreateArguments(annotation?.Arguments ?? [], argumentValues);
     }
 
-    internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken)
+    internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
     {
         var logger = _resourceLoggerService.GetLogger(resourceId);
 
@@ -198,6 +200,18 @@ public class ResourceCommandService
         {
             try
             {
+                arguments = NormalizeCommandArguments(annotation, arguments);
+
+                if (!await ValidateArgumentsAsync(annotation, arguments, cancellationToken).ConfigureAwait(false))
+                {
+                    return new ExecuteCommandResult
+                    {
+                        Success = false,
+                        Message = "Command argument validation failed.",
+                        InvalidArguments = arguments
+                    };
+                }
+
                 var context = new ExecuteCommandContext
                 {
                     ResourceName = resourceId,
@@ -240,6 +254,41 @@ public class ResourceCommandService
         return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
     }
 
+    internal async Task<InteractionInputCollection?> ValidateCommandArgumentsAsync(string resourceId, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
+        {
+            return null;
+        }
+
+        var resolvedCommandName = commandName;
+        var annotation = ResolveCommandAnnotation(resourceEvent.Resource, ref resolvedCommandName);
+
+        if (annotation is null)
+        {
+            return null;
+        }
+
+        var normalizedArguments = NormalizeCommandArguments(annotation, arguments);
+        return await ValidateArgumentsAsync(annotation, normalizedArguments, cancellationToken).ConfigureAwait(false)
+            ? null
+            : normalizedArguments;
+    }
+
+    private async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken)
+    {
+        if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
+        {
+            return new ExecuteCommandResult { Success = false, Message = $"Resource '{resourceId}' not found." };
+        }
+
+        arguments ??= CreateCommandArguments(resourceEvent.ResourceId, commandName, argumentValues: null);
+
+        return await ExecuteCommandCoreAsync(resourceEvent.ResourceId, resourceEvent.Resource, commandName, arguments, cancellationToken).ConfigureAwait(false);
+    }
+
     private static ResourceCommandAnnotation? ResolveCommandAnnotation(IResource resource, ref string commandName, ILogger? logger = null)
     {
         var requestedCommandName = commandName;
@@ -260,11 +309,81 @@ public class ResourceCommandService
         return annotation;
     }
 
-    private static InteractionInputCollection? CreateArguments(IReadOnlyList<InteractionInput>? commandArguments, IReadOnlyDictionary<string, string?>? argumentValues)
+    private async Task<bool> ValidateArgumentsAsync(ResourceCommandAnnotation annotation, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    {
+        foreach (var argument in arguments)
+        {
+            argument.ValidationErrors.Clear();
+        }
+
+        var context = new CommandArgumentsValidationContext
+        {
+            Arguments = arguments,
+            CancellationToken = cancellationToken,
+            Services = _serviceProvider
+        };
+
+        foreach (var argument in arguments)
+        {
+            var value = argument.Value = argument.Value?.Trim();
+
+            if (string.IsNullOrEmpty(value))
+            {
+                if (argument.Required)
+                {
+                    context.AddValidationError(argument, "Value is required.");
+                }
+
+                continue;
+            }
+
+            switch (argument.InputType)
+            {
+                case InputType.Text:
+                case InputType.SecretText:
+                    var maxLength = InteractionHelpers.GetMaxLength(argument.MaxLength);
+
+                    if (value.Length > maxLength)
+                    {
+                        context.AddValidationError(argument, $"Value length exceeds {maxLength} characters.");
+                    }
+                    break;
+                case InputType.Choice:
+                    if (!argument.AllowCustomChoice && argument.Options is { } options && !options.Any(o => o.Key == value))
+                    {
+                        context.AddValidationError(argument, "Value must be one of the provided options.");
+                    }
+                    break;
+                case InputType.Boolean:
+                    if (!bool.TryParse(value, out _))
+                    {
+                        context.AddValidationError(argument, "Value must be a valid boolean.");
+                    }
+                    break;
+                case InputType.Number:
+                    if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    {
+                        context.AddValidationError(argument, "Value must be a valid number.");
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (!context.HasErrors && annotation.ValidateArguments is { } validateArguments)
+        {
+            await validateArguments(context).ConfigureAwait(false);
+        }
+
+        return !context.HasErrors;
+    }
+
+    private static InteractionInputCollection CreateArguments(IReadOnlyList<InteractionInput> commandArguments, IReadOnlyDictionary<string, string?>? argumentValues)
     {
         if (commandArguments is not { Count: > 0 })
         {
-            return null;
+            return new InteractionInputCollection([]);
         }
 
         var inputs = new InteractionInput[commandArguments.Count];
@@ -281,6 +400,32 @@ public class ResourceCommandService
         }
 
         return new InteractionInputCollection(inputs);
+    }
+
+    private static InteractionInputCollection NormalizeCommandArguments(ResourceCommandAnnotation annotation, InteractionInputCollection arguments)
+    {
+        if (annotation.Arguments.Count == 0)
+        {
+            return arguments;
+        }
+
+        return CreateArguments(annotation.Arguments, CreateArgumentValues(arguments));
+    }
+
+    private static IReadOnlyDictionary<string, string?>? CreateArgumentValues(InteractionInputCollection arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            return null;
+        }
+
+        var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
+        foreach (var argument in arguments)
+        {
+            values[argument.Name] = argument.Value;
+        }
+
+        return values;
     }
 
     private static InteractionInput CloneInput(InteractionInput input, string? value)
@@ -301,6 +446,18 @@ public class ResourceCommandService
             Disabled = input.Disabled,
             MaxLength = input.MaxLength
         };
+    }
+
+    private static InteractionInputCollection CloneArguments(InteractionInputCollection arguments)
+    {
+        var inputs = new InteractionInput[arguments.Count];
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var input = arguments[i];
+            inputs[i] = CloneInput(input, input.Value);
+        }
+
+        return new InteractionInputCollection(inputs);
     }
 
 }

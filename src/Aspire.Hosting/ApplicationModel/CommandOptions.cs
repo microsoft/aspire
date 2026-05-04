@@ -11,6 +11,8 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireDto]
 public class CommandOptions
 {
+    private IReadOnlyList<InteractionInput> _arguments = [];
+
     internal static CommandOptions Default { get; } = new();
 
     /// <summary>
@@ -36,7 +38,23 @@ public class CommandOptions
     /// metadata to supply the same values directly.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<InteractionInput>? Arguments { get; set; }
+    public IReadOnlyList<InteractionInput> Arguments
+    {
+        get => _arguments;
+        set => _arguments = value ?? [];
+    }
+
+    /// <summary>
+    /// Gets or sets the callback that validates invocation arguments before the command callback is executed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When validation errors are added to the <see cref="CommandArgumentsValidationContext"/>, the command callback is not
+    /// executed. Dashboard clients can display the errors next to the matching inputs, while API clients can report the same
+    /// errors to callers.
+    /// </para>
+    /// </remarks>
+    public Func<CommandArgumentsValidationContext, Task>? ValidateArguments { get; set; }
 
     /// <summary>
     /// Gets or sets where the command is visible to users and clients.

@@ -299,7 +299,7 @@ public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState S
     /// <summary>
     /// Gets the invocation arguments accepted by the command.
     /// </summary>
-    public IReadOnlyList<InteractionInput>? Arguments { get; init; }
+    public IReadOnlyList<InteractionInput> Arguments { get; init; } = [];
 #pragma warning restore ASPIREINTERACTION001
 
     /// <summary>

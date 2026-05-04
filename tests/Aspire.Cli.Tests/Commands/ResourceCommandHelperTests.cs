@@ -176,4 +176,41 @@ public class ResourceCommandHelperTests
         Assert.NotNull(connection.ExecuteResourceCommandArguments);
         Assert.Equal("#submit", connection.ExecuteResourceCommandArguments.Value.GetProperty("selector").GetString());
     }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WithValidationErrors_DisplaysArgumentErrors()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ValidationErrors =
+                [
+                    new ResourceCommandArgumentValidationError
+                    {
+                        ArgumentName = "target",
+                        ErrorMessage = "Target must not be prod."
+                    }
+                ]
+            }
+        };
+
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "myResource",
+            "validate",
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Command argument validation failed.", error);
+        Assert.Contains("target: Target must not be prod.", error);
+    }
 }

@@ -206,6 +206,7 @@ partial class ResourceCommandResponse
             ErrorMessage = resolvedMessage,
             Message = resolvedMessage,
             Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind,
+            ArgumentInputs = ArgumentInputs.ToImmutableArray(),
             Result = Result is not null ? new ResourceCommandResultViewModel
             {
                 Value = Result.Value,

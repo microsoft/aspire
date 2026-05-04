@@ -752,7 +752,7 @@ internal sealed class DashboardClient : IDashboardClient
         return resourceLogLines;
     }
 
-    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, CancellationToken cancellationToken)
+    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, bool validateOnly, CancellationToken cancellationToken)
     {
         EnsureInitialized();
 
@@ -761,7 +761,8 @@ internal sealed class DashboardClient : IDashboardClient
             CommandName = command.Name,
             Arguments = arguments,
             ResourceName = resourceName,
-            ResourceType = resourceType
+            ResourceType = resourceType,
+            ValidateOnly = validateOnly
         };
 
         try

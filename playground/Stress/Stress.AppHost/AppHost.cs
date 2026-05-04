@@ -101,11 +101,7 @@ serviceBuilder.WithCommand(
     displayName: "Echo command arguments",
     executeCommand: (c) =>
     {
-        if (c.Arguments is not { } arguments)
-        {
-            return Task.FromResult(CommandResults.Failure("No command arguments were supplied."));
-        }
-
+        var arguments = c.Arguments;
         if (string.IsNullOrWhiteSpace(arguments.GetString("message")) || string.IsNullOrWhiteSpace(arguments.GetString("count")))
         {
             return Task.FromResult(CommandResults.Failure("The message and count arguments are required."));
@@ -316,11 +312,7 @@ serviceBuilder.WithCommand(
     displayName: "Argument stress test",
     executeCommand: c =>
     {
-        if (c.Arguments is not { } arguments)
-        {
-            return Task.FromResult(CommandResults.Failure("No command arguments were supplied."));
-        }
-
+        var arguments = c.Arguments;
         var inputsWithValues = arguments.Where(i => i.Value is not null).ToArray();
         var payload = new
         {
@@ -547,13 +539,8 @@ static string SerializeCommandPayload(object payload)
     return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
 }
 
-static EchoCommandArguments ReadEchoCommandArguments(InteractionInputCollection? arguments)
+static EchoCommandArguments ReadEchoCommandArguments(InteractionInputCollection arguments)
 {
-    if (arguments is null)
-    {
-        return new EchoCommandArguments();
-    }
-
     return new EchoCommandArguments
     {
         Message = arguments.GetString("message"),
@@ -564,13 +551,8 @@ static EchoCommandArguments ReadEchoCommandArguments(InteractionInputCollection?
     };
 }
 
-static ValidateCommandArguments ReadValidateCommandArguments(InteractionInputCollection? arguments)
+static ValidateCommandArguments ReadValidateCommandArguments(InteractionInputCollection arguments)
 {
-    if (arguments is null)
-    {
-        return new ValidateCommandArguments();
-    }
-
     return new ValidateCommandArguments
     {
         Target = arguments.GetString("target"),

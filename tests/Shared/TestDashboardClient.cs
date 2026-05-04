@@ -53,7 +53,7 @@ public class TestDashboardClient : IDashboardClient
         return default;
     }
 
-    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, CancellationToken cancellationToken)
+    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, bool validateOnly, CancellationToken cancellationToken)
     {
         if (_executeResourceCommand is not null)
         {

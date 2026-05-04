@@ -364,11 +364,12 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, message, value) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, ConvertArgumentValues(request.Arguments), context.CancellationToken).ConfigureAwait(false);
+        var (result, message, value, invalidArguments) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, ConvertArgumentValues(request.Arguments), request.ValidateOnly, context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
             ExecuteCommandResultType.Canceled => ResourceCommandResponseKind.Cancelled,
+            ExecuteCommandResultType.Failure when invalidArguments is not null => ResourceCommandResponseKind.ValidationFailed,
             ExecuteCommandResultType.Failure => ResourceCommandResponseKind.Failed,
             _ => ResourceCommandResponseKind.Undefined
         };
@@ -399,6 +400,11 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                 Format = MapFormat(value.Format),
                 DisplayImmediately = value.DisplayImmediately
             };
+        }
+
+        if (invalidArguments is not null)
+        {
+            response.ArgumentInputs.AddRange(invalidArguments.Select(argument => CreateInteractionInputDto(argument)));
         }
 
         return response;

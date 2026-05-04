@@ -2578,7 +2578,7 @@ public static class ResourceBuilderExtensions
         }
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility));
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
 #pragma warning restore CS0618
     }
 
@@ -2648,13 +2648,8 @@ public static class ResourceBuilderExtensions
     }
 
 #pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.
-    private static void ValidateCommandArguments(IReadOnlyList<InteractionInput>? arguments)
+    private static void ValidateCommandArguments(IReadOnlyList<InteractionInput> arguments)
     {
-        if (arguments is null)
-        {
-            return;
-        }
-
         _ = new InteractionInputCollection(arguments);
     }
 #pragma warning restore ASPIREINTERACTION001

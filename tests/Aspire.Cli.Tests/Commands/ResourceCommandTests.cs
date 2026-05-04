@@ -187,6 +187,33 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_DoesNotRejectMissingRequiredArgumentWithDefaultValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = CreateBackchannelWithCommandInputs(
+            "web-browser-automation",
+            "click-browser",
+            new ResourceSnapshotCommandArgument { Name = "selector", InputType = "Text", Required = true, Value = "#submit" });
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation click-browser""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Null(backchannel.ExecuteResourceCommandArguments);
+    }
+
+    [Fact]
     public async Task ResourceCommand_ForwardsMixedPositionalAndNamedArgumentsFromCommandInputs()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

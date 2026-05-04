@@ -173,6 +173,7 @@ internal static class ResourceSnapshotMapper
             InputType = input.InputType,
             Required = input.Required,
             Placeholder = input.Placeholder,
+            Value = input.Value,
             Options = input.Options,
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,

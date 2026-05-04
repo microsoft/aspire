@@ -80,6 +80,8 @@ message ResourceCommandRequest {
     // Optional invocation arguments to pass to the command.
     // Unlike parameter, this value is supplied by the client for this execution.
     optional google.protobuf.Value arguments = 5;
+    // When true, validate the supplied arguments without executing the command.
+    bool validate_only = 6;
 }
 
 enum ResourceCommandState {
@@ -93,6 +95,7 @@ enum ResourceCommandResponseKind {
     RESOURCE_COMMAND_RESPONSE_KIND_SUCCEEDED = 1;
     RESOURCE_COMMAND_RESPONSE_KIND_FAILED = 2;
     RESOURCE_COMMAND_RESPONSE_KIND_CANCELLED = 3;
+    RESOURCE_COMMAND_RESPONSE_KIND_VALIDATION_FAILED = 4;
 }
 
 message ResourceCommandResponse {
@@ -100,6 +103,7 @@ message ResourceCommandResponse {
     optional string error_message = 2 [deprecated = true];
     optional string message = 3;
     optional ResourceCommandResult result = 4;
+    repeated InteractionInput argument_inputs = 5;
 }
 
 message ResourceCommandResult {

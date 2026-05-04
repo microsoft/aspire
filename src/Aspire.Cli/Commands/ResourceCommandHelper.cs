@@ -84,6 +84,7 @@ internal static class ResourceCommandHelper
 #pragma warning disable CS0618 // Type or member is obsolete
             var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
 #pragma warning restore CS0618 // Type or member is obsolete
+            errorMessage = AppendValidationErrors(errorMessage, response.ValidationErrors);
             interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
         }
 
@@ -117,6 +118,7 @@ internal static class ResourceCommandHelper
 #pragma warning disable CS0618 // Type or member is obsolete
             var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
 #pragma warning restore CS0618 // Type or member is obsolete
+            errorMessage = AppendValidationErrors(errorMessage, response.ValidationErrors);
             interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
         }
 
@@ -143,5 +145,16 @@ internal static class ResourceCommandHelper
     private static string GetFriendlyErrorMessage(string? errorMessage)
     {
         return string.IsNullOrEmpty(errorMessage) ? "Unknown error occurred." : errorMessage;
+    }
+
+    private static string AppendValidationErrors(string errorMessage, ResourceCommandArgumentValidationError[] validationErrors)
+    {
+        if (validationErrors.Length == 0)
+        {
+            return errorMessage;
+        }
+
+        var errors = validationErrors.Select(error => $"{error.ArgumentName}: {error.ErrorMessage}");
+        return $"{errorMessage}{Environment.NewLine}{string.Join(Environment.NewLine, errors)}";
     }
 }

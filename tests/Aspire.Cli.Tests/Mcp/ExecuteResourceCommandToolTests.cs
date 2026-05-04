@@ -132,6 +132,38 @@ public class ExecuteResourceCommandToolTests
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandTool_ReturnsValidationErrors_WhenCommandArgumentsAreInvalid()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ValidationErrors =
+                [
+                    new ResourceCommandArgumentValidationError
+                    {
+                        ArgumentName = "target",
+                        ErrorMessage = "Target must not be prod."
+                    }
+                ]
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "validate")), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError);
+        Assert.Contains(result.Content, c => c is ModelContextProtocol.Protocol.TextContentBlock t &&
+            t.Text.Contains("Command argument validation failed.") &&
+            t.Text.Contains("target: Target must not be prod."));
+    }
+
+    [Fact]
     public async Task ExecuteResourceCommandTool_ThrowsException_WhenCommandCanceled()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
