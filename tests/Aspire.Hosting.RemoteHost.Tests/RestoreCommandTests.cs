@@ -12,7 +12,7 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 public class RestoreCommandTests
 {
     [Fact]
-    public async Task RestoreCommand_UsesRuntimeIdentifierGraphToResolvePortableRuntimeAssets()
+    public async Task RestoreAndManifestCommands_WritePortableRuntimeAssetsToPackageProbeManifest()
     {
         var workspaceRoot = Directory.CreateTempSubdirectory("aspire-restore-tests").FullName;
 
@@ -24,11 +24,12 @@ public class RestoreCommandTests
             Directory.CreateDirectory(sourcePath);
             Directory.CreateDirectory(outputPath);
 
-            CreatePackage(sourcePath);
+            var packageId = $"Test.Package.RuntimeAssets.{Guid.NewGuid():N}";
+            CreatePackage(sourcePath, packageId);
 
             var command = RestoreCommand.Create();
             var parseResult = command.Parse([
-                "--package", "Test.Package,1.0.0",
+                "--package", $"{packageId},1.0.0",
                 "--framework", "net10.0",
                 "--runtime-identifier", RuntimeInformation.RuntimeIdentifier,
                 "--output", outputPath,
@@ -41,20 +42,37 @@ public class RestoreCommandTests
             Assert.Equal(0, exitCode);
 
             var assetsPath = Path.Combine(outputPath, "project.assets.json");
-            using var stream = File.OpenRead(assetsPath);
-            using var document = await JsonDocument.ParseAsync(stream);
+            var manifestPath = Path.Combine(outputPath, "integration-package-probe-manifest.json");
+            var manifestCommand = ManifestCommand.Create();
+            var manifestParseResult = manifestCommand.Parse([
+                "--assets", assetsPath,
+                "--output", manifestPath,
+                "--framework", "net10.0",
+                "--runtime-identifier", RuntimeInformation.RuntimeIdentifier
+            ]);
 
-            var targets = document.RootElement.GetProperty("targets");
-            Assert.True(targets.TryGetProperty($"net10.0/{RuntimeInformation.RuntimeIdentifier}", out var ridTarget));
+            var manifestExitCode = await manifestParseResult.InvokeAsync();
 
-            var runtimeEntries = ridTarget
-                .GetProperty("Test.Package/1.0.0")
-                .GetProperty("runtime")
-                .EnumerateObject()
-                .Select(p => p.Name)
+            Assert.Equal(0, manifestExitCode);
+
+            await using var stream = File.OpenRead(manifestPath);
+            using var manifest = await JsonDocument.ParseAsync(stream);
+            var managedAssemblyPaths = manifest.RootElement
+                .GetProperty("managedAssemblies")
+                .EnumerateArray()
+                .Select(p => p.GetProperty("path").GetString())
                 .ToArray();
 
-            Assert.Equal([GetExpectedRuntimeAssemblyPath()], runtimeEntries);
+            Assert.Contains(
+                managedAssemblyPaths,
+                path => path?.EndsWith(
+                    Path.Combine(packageId.ToLowerInvariant(), "1.0.0", GetExpectedRuntimeAssemblyPath().Replace('/', Path.DirectorySeparatorChar)),
+                    StringComparison.OrdinalIgnoreCase) == true);
+            Assert.DoesNotContain(
+                managedAssemblyPaths,
+                path => path?.EndsWith(
+                    Path.Combine(packageId.ToLowerInvariant(), "1.0.0", "lib", "net10.0", "Test.Package.dll"),
+                    StringComparison.OrdinalIgnoreCase) == true);
         }
         finally
         {
@@ -65,9 +83,9 @@ public class RestoreCommandTests
         }
     }
 
-    private static void CreatePackage(string sourcePath)
+    private static void CreatePackage(string sourcePath, string packageId)
     {
-        var packagePath = Path.Combine(sourcePath, "Test.Package.1.0.0.nupkg");
+        var packagePath = Path.Combine(sourcePath, $"{packageId}.1.0.0.nupkg");
 
         using var fileStream = File.Create(packagePath);
         using var archive = new ZipArchive(fileStream, ZipArchiveMode.Create);
@@ -75,11 +93,11 @@ public class RestoreCommandTests
         AddEntry(
             archive,
             "Test.Package.nuspec",
-            """
+            $"""
             <?xml version="1.0" encoding="utf-8"?>
             <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
               <metadata>
-                <id>Test.Package</id>
+                <id>{packageId}</id>
                 <version>1.0.0</version>
                 <authors>Aspire</authors>
                 <description>Test package</description>

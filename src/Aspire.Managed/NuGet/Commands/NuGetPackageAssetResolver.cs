@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using NuGet.Frameworks;
 using NuGet.ProjectModel;
+using NuGet.RuntimeModel;
 
 namespace Aspire.Managed.NuGet.Commands;
 
@@ -66,12 +68,26 @@ internal static class NuGetPackageAssetResolver
         }
 
         var packagesPath = GetPackagesPath(lockFile);
+        var targetFramework = target.TargetFramework.GetShortFolderName();
         var assets = new List<NuGetPackageAsset>();
         var skippedCount = 0;
+        var runtimeIdentifiers = GetRuntimeIdentifiers(assetsPath, framework, effectiveRuntimeIdentifier);
+        var packageLibraries = lockFile.Libraries
+            .Where(library => string.Equals(library.Type, "package", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(
+                library => GetLibraryKey(library.Name, library.Version?.ToString()),
+                StringComparer.OrdinalIgnoreCase);
 
         foreach (var library in target.Libraries)
         {
-            var (libraryAssets, librarySkippedCount) = ResolveLibrary(library, packagesPath, verboseLog);
+            packageLibraries.TryGetValue(GetLibraryKey(library.Name, library.Version?.ToString()), out var packageLibrary);
+            var (libraryAssets, librarySkippedCount) = ResolveLibrary(
+                library,
+                packageLibrary,
+                packagesPath,
+                targetFramework,
+                runtimeIdentifiers,
+                verboseLog);
             assets.AddRange(libraryAssets);
             skippedCount += librarySkippedCount;
         }
@@ -79,7 +95,7 @@ internal static class NuGetPackageAssetResolver
         return new NuGetPackageAssetResolution
         {
             PackagesPath = packagesPath,
-            TargetFramework = target.TargetFramework.GetShortFolderName(),
+            TargetFramework = targetFramework,
             RuntimeIdentifier = effectiveRuntimeIdentifier,
             LibraryCount = target.Libraries.Count,
             SkippedPackageCount = skippedCount,
@@ -110,7 +126,10 @@ internal static class NuGetPackageAssetResolver
 
     private static (IReadOnlyList<NuGetPackageAsset> Assets, int SkippedCount) ResolveLibrary(
         LockFileTargetLibrary library,
+        LockFileLibrary? packageLibrary,
         string packagesPath,
+        string targetFramework,
+        IReadOnlyList<string> runtimeIdentifiers,
         Action<string>? verboseLog)
     {
         if (library.Type != "package")
@@ -129,7 +148,10 @@ internal static class NuGetPackageAssetResolver
         }
 
         var assets = new List<NuGetPackageAsset>();
-        AddRuntimeAssemblies(assets, library.RuntimeAssemblies, packagePath);
+        // Synthetic restores can leave the base lib assembly in the target even when the package
+        // contains a compatible portable runtime asset. Prefer the runtime asset for probing.
+        var runtimeAssemblyOverrides = GetRuntimeAssemblyOverrides(packageLibrary, targetFramework, runtimeIdentifiers);
+        AddRuntimeAssemblies(assets, library.RuntimeAssemblies, packagePath, runtimeAssemblyOverrides);
         AddRuntimeTargets(assets, library.RuntimeTargets, packagePath);
         AddResourceAssemblies(assets, library.ResourceAssemblies, packagePath);
         AddNativeLibraries(assets, library.NativeLibraries, packagePath);
@@ -140,35 +162,149 @@ internal static class NuGetPackageAssetResolver
     private static void AddRuntimeAssemblies(
         List<NuGetPackageAsset> assets,
         IEnumerable<LockFileItem> runtimeAssemblies,
-        string packagePath)
+        string packagePath,
+        IReadOnlyDictionary<string, string> runtimeAssemblyOverrides)
     {
         foreach (var runtimeAssembly in runtimeAssemblies)
         {
-            if (IsPlaceholderPath(runtimeAssembly.Path))
+            var relativePath = NormalizeRelativePath(runtimeAssembly.Path);
+            if (IsPlaceholderPath(relativePath))
             {
                 continue;
             }
 
-            var sourcePath = Path.Combine(packagePath, runtimeAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(sourcePath))
+            if (!relativePath.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase) &&
+                runtimeAssemblyOverrides.TryGetValue(GetFileName(relativePath), out var overridePath))
             {
+                AddRuntimeAssembly(assets, packagePath, overridePath);
                 continue;
             }
 
-            var fileName = Path.GetFileName(sourcePath);
-            AddAsset(assets, sourcePath, fileName, isManagedAssembly: IsManagedAssembly(sourcePath), isNativeLibrary: false);
+            AddRuntimeAssembly(assets, packagePath, relativePath);
+        }
+    }
 
-            if (runtimeAssembly.Path.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase))
-            {
-                AddAsset(assets, sourcePath, runtimeAssembly.Path, isManagedAssembly: IsManagedAssembly(sourcePath), isNativeLibrary: false);
-            }
+    private static void AddRuntimeAssembly(
+        List<NuGetPackageAsset> assets,
+        string packagePath,
+        string relativePath)
+    {
+        var sourcePath = Path.Combine(packagePath, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(sourcePath))
+        {
+            return;
+        }
 
-            var xmlSourcePath = Path.ChangeExtension(sourcePath, ".xml");
-            if (File.Exists(xmlSourcePath))
+        var fileName = Path.GetFileName(sourcePath);
+        AddAsset(assets, sourcePath, fileName, isManagedAssembly: IsManagedAssembly(sourcePath), isNativeLibrary: false);
+
+        if (relativePath.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase))
+        {
+            AddAsset(assets, sourcePath, relativePath, isManagedAssembly: IsManagedAssembly(sourcePath), isNativeLibrary: false);
+        }
+
+        var xmlSourcePath = Path.ChangeExtension(sourcePath, ".xml");
+        if (File.Exists(xmlSourcePath))
+        {
+            AddAsset(assets, xmlSourcePath, Path.ChangeExtension(fileName, ".xml"), isManagedAssembly: false, isNativeLibrary: false);
+        }
+    }
+
+    private static IReadOnlyDictionary<string, string> GetRuntimeAssemblyOverrides(
+        LockFileLibrary? packageLibrary,
+        string targetFramework,
+        IReadOnlyList<string> runtimeIdentifiers)
+    {
+        if (packageLibrary is null)
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var runtimeIdentifier in runtimeIdentifiers)
+        {
+            var runtimePrefix = $"runtimes/{runtimeIdentifier}/lib/{targetFramework}/";
+            foreach (var file in packageLibrary.Files)
             {
-                AddAsset(assets, xmlSourcePath, Path.ChangeExtension(fileName, ".xml"), isManagedAssembly: false, isNativeLibrary: false);
+                var relativePath = NormalizeRelativePath(file);
+                if (!relativePath.StartsWith(runtimePrefix, StringComparison.OrdinalIgnoreCase) ||
+                    IsPlaceholderPath(relativePath) ||
+                    !IsManagedAssembly(relativePath))
+                {
+                    continue;
+                }
+
+                overrides.TryAdd(GetFileName(relativePath), relativePath);
             }
         }
+
+        return overrides;
+    }
+
+    private static IReadOnlyList<string> GetRuntimeIdentifiers(string assetsPath, string framework, string runtimeIdentifier)
+    {
+        var runtimeIdentifiers = new List<string>();
+        var seenRuntimeIdentifiers = new HashSet<string>(StringComparer.Ordinal);
+
+        AddRuntimeIdentifier(runtimeIdentifier);
+
+        var runtimeIdentifierGraphPath = GetRuntimeIdentifierGraphPath(assetsPath, framework);
+        if (runtimeIdentifierGraphPath is not null && File.Exists(runtimeIdentifierGraphPath))
+        {
+            var runtimeGraph = JsonRuntimeFormat.ReadRuntimeGraph(runtimeIdentifierGraphPath);
+            foreach (var candidateRuntimeIdentifier in runtimeGraph.ExpandRuntime(runtimeIdentifier))
+            {
+                AddRuntimeIdentifier(candidateRuntimeIdentifier);
+            }
+        }
+
+        return runtimeIdentifiers;
+
+        void AddRuntimeIdentifier(string candidateRuntimeIdentifier)
+        {
+            if (seenRuntimeIdentifiers.Add(candidateRuntimeIdentifier))
+            {
+                runtimeIdentifiers.Add(candidateRuntimeIdentifier);
+            }
+        }
+    }
+
+    private static string? GetRuntimeIdentifierGraphPath(string assetsPath, string framework)
+    {
+        using var stream = File.OpenRead(assetsPath);
+        using var document = JsonDocument.Parse(stream);
+
+        if (!document.RootElement.TryGetProperty("project", out var project) ||
+            !project.TryGetProperty("frameworks", out var frameworks) ||
+            !frameworks.TryGetProperty(framework, out var frameworkElement) ||
+            !frameworkElement.TryGetProperty("runtimeIdentifierGraphPath", out var runtimeIdentifierGraphPathElement))
+        {
+            return null;
+        }
+
+        var runtimeIdentifierGraphPath = runtimeIdentifierGraphPathElement.GetString();
+        if (string.IsNullOrWhiteSpace(runtimeIdentifierGraphPath))
+        {
+            return null;
+        }
+
+        return Path.IsPathRooted(runtimeIdentifierGraphPath)
+            ? runtimeIdentifierGraphPath
+            : Path.GetFullPath(runtimeIdentifierGraphPath, Path.GetDirectoryName(Path.GetFullPath(assetsPath))!);
+    }
+
+    private static string GetLibraryKey(string? name, string? version)
+    {
+        return $"{name}/{version}";
+    }
+
+    private static string GetFileName(string path)
+    {
+        var normalizedPath = NormalizeRelativePath(path);
+        var separatorIndex = normalizedPath.LastIndexOf('/');
+        return separatorIndex >= 0
+            ? normalizedPath[(separatorIndex + 1)..]
+            : normalizedPath;
     }
 
     private static void AddRuntimeTargets(
