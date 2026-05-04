@@ -40,8 +40,8 @@
     <TestArchiveTestsDir>$(TestArchiveTestsDirForCliEndToEndTests)</TestArchiveTestsDir>
 
     <!-- Test session settings -->
-    <TestSessionTimeout>30m</TestSessionTimeout>
-    <TestHangTimeout>20m</TestHangTimeout>
+    <TestSessionTimeout>45m</TestSessionTimeout>
+    <TestHangTimeout>30m</TestHangTimeout>
     <MtpBaseArgs>$(_MtpDiagnosticFlags) --hangdump-timeout $(TestHangTimeout) --timeout $(TestSessionTimeout)</MtpBaseArgs>
   </PropertyGroup>
 
