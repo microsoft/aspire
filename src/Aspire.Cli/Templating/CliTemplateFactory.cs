@@ -110,12 +110,13 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                supportsLanguageCallback: static languageId =>
-                    languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase) ||
-                    languageId.Equals(KnownLanguageId.Python, StringComparison.OrdinalIgnoreCase),
-                selectableAppHostLanguages: [KnownLanguageId.CSharp, KnownLanguageId.TypeScript, KnownLanguageId.Python],
+                supportsLanguageCallback: languageId =>
+                    IsLanguageAvailable(languageId) &&
+                    (languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
+                     languageId.Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) ||
+                     languageId.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase) ||
+                     languageId.Equals(KnownLanguageId.Python, StringComparison.OrdinalIgnoreCase)),
+                selectableAppHostLanguages: FilterAvailableLanguages([KnownLanguageId.CSharp, KnownLanguageId.TypeScript, KnownLanguageId.Python]),
                 isEmpty: true),
 
             new CallbackTemplate(
@@ -182,6 +183,16 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         }
 
         return _languageDiscovery.GetLanguageById(new LanguageId(template.LanguageId)) is not null;
+    }
+
+    private bool IsLanguageAvailable(string languageId)
+    {
+        return _languageDiscovery.GetLanguageById(new LanguageId(languageId)) is not null;
+    }
+
+    private string[] FilterAvailableLanguages(string[] languageIds)
+    {
+        return languageIds.Where(IsLanguageAvailable).ToArray();
     }
 
     private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, AppHostProfilePorts ports, string hostName = "localhost")

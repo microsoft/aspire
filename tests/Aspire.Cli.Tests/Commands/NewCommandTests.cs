@@ -73,6 +73,66 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void EmptyAppHostTemplate_DoesNotOfferPythonLanguage_WhenPolyglotPythonDisabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var templateProvider = provider.GetRequiredService<ITemplateProvider>();
+        var emptyTemplate = templateProvider.GetTemplates()
+            .Single(t => t.Name == KnownTemplateId.CSharpEmptyAppHost);
+
+        Assert.Contains(KnownLanguageId.CSharp, emptyTemplate.SelectableAppHostLanguages);
+        Assert.Contains(KnownLanguageId.TypeScript, emptyTemplate.SelectableAppHostLanguages);
+        Assert.DoesNotContain(KnownLanguageId.Python, emptyTemplate.SelectableAppHostLanguages);
+
+        Assert.True(emptyTemplate.SupportsLanguage(KnownLanguageId.CSharp));
+        Assert.True(emptyTemplate.SupportsLanguage(KnownLanguageId.TypeScript));
+        Assert.False(emptyTemplate.SupportsLanguage(KnownLanguageId.Python));
+    }
+
+    [Fact]
+    public void EmptyAppHostTemplate_OffersPythonLanguage_WhenPolyglotPythonEnabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
+                return features;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var templateProvider = provider.GetRequiredService<ITemplateProvider>();
+        var emptyTemplate = templateProvider.GetTemplates()
+            .Single(t => t.Name == KnownTemplateId.CSharpEmptyAppHost);
+
+        Assert.Contains(KnownLanguageId.CSharp, emptyTemplate.SelectableAppHostLanguages);
+        Assert.Contains(KnownLanguageId.TypeScript, emptyTemplate.SelectableAppHostLanguages);
+        Assert.Contains(KnownLanguageId.Python, emptyTemplate.SelectableAppHostLanguages);
+
+        Assert.True(emptyTemplate.SupportsLanguage(KnownLanguageId.Python));
+    }
+
+    [Fact]
+    public async Task NewCommandWithExplicitPythonOnEmptyTemplate_FailsWhenPolyglotPythonDisabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new {KnownTemplateId.CSharpEmptyAppHost} --name TestApp --output . --language python");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
     public async Task NewCommandInteractiveFlowSmokeTest()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
