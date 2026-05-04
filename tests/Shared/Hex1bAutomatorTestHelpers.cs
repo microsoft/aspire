@@ -597,6 +597,15 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.EnterAsync();
                 break;
 
+            case AspireTemplate.PythonEmptyAppHost:
+                await auto.TypeAsync("Empty (Python AppHost)");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Empty (Python AppHost)").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Python Empty AppHost template selected");
+                await auto.EnterAsync();
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }

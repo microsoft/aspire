@@ -673,6 +673,18 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Enables experimental Python polyglot support for CLI tests.
+    /// </summary>
+    internal static async Task EnableExperimentalPythonSupportAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:experimentalPolyglot:python true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
     /// Installs a specific GA version of the Aspire CLI using the install script.
     /// </summary>
     internal static async Task InstallAspireCliVersionAsync(

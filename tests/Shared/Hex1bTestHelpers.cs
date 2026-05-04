@@ -67,6 +67,12 @@ internal enum AspireTemplate
     /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     JavaEmptyAppHost,
+
+    /// <summary>
+    /// Empty (Python AppHost) — visible only when experimental Python support is enabled.
+    /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
+    /// </summary>
+    PythonEmptyAppHost,
 }
 
 /// <summary>
@@ -468,6 +474,14 @@ internal static class Hex1bTestHelpers
                     .Find("> Empty (Java AppHost)");
                 builder.Type("Empty (Java AppHost)")
                     .WaitUntil(s => javaEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                    .Enter();
+                break;
+
+            case AspireTemplate.PythonEmptyAppHost:
+                var pythonEmptyAppHostSelected = new CellPatternSearcher()
+                    .Find("> Empty (Python AppHost)");
+                builder.Type("Empty (Python AppHost)")
+                    .WaitUntil(s => pythonEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
                 break;
         }
