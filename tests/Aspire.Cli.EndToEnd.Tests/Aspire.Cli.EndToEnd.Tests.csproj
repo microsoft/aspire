@@ -42,6 +42,7 @@
     <!-- Test session settings -->
     <TestSessionTimeout>30m</TestSessionTimeout>
     <TestHangTimeout>15m</TestHangTimeout>
+    <MtpBaseArgs>$(_MtpDiagnosticFlags) --hangdump-timeout $(TestHangTimeout) --timeout $(TestSessionTimeout)</MtpBaseArgs>
   </PropertyGroup>
 
   <ItemGroup>
