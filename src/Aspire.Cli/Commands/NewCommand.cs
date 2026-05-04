@@ -170,6 +170,10 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             choice => choice.DisplayName.EscapeMarkup(),
             cancellationToken: cancellationToken);
 
+        // The prompt is cleared after selection.
+        // Write out the selected language again for context before proceeding.
+        InteractionService.DisplayPlainText($"Which language would you like to use? {selected.DisplayName}");
+
         return selected.LanguageId;
     }
 
@@ -412,8 +416,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
-
-        InteractionService.DisplayEmptyLine();
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);

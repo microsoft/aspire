@@ -112,6 +112,9 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return new(previousResultExitCode, [], []);
         }
 
+        // Add a separating line between prompt and previous work in aspire new and aspire init.
+        interactionService.DisplayEmptyLine();
+
         var runAgentInit = await interactionService.PromptConfirmAsync(
             SharedCommandStrings.PromptRunAgentInit,
             binding: agentInitBinding,

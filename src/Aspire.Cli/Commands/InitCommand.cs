@@ -157,8 +157,6 @@ internal sealed class InitCommand : BaseCommand
             }
         }
 
-        InteractionService.DisplayEmptyLine();
-
         // Step 4: Chain to aspire agent init for MCP server + skill configuration.
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
