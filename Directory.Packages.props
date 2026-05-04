@@ -7,44 +7,44 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <!-- The Npgsql versions used when using Npgsql EF Core on net8/net9. The major versions need to match between Npgsql and EF Core. -->
-    <Npgsql8Version>8.0.6</Npgsql8Version>
-    <Npgsql9Version>9.0.4</Npgsql9Version>
+    <Npgsql8Version>10.0.2</Npgsql8Version>
+    <Npgsql9Version>10.0.2</Npgsql9Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- Azure SDK for .NET dependencies -->
     <PackageVersion Include="Azure.AI.AgentServer.AgentFramework" Version="1.0.0-beta.11" />
     <PackageVersion Include="Azure.AI.Inference" Version="1.0.0-beta.5" />
-    <PackageVersion Include="Azure.AI.OpenAI" Version="2.5.0-beta.1" />
-    <PackageVersion Include="Azure.AI.Projects" Version="2.0.0" />
+    <PackageVersion Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
+    <PackageVersion Include="Azure.AI.Projects" Version="2.0.1" />
     <PackageVersion Include="Azure.Data.Tables" Version="12.11.0" />
-    <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.4.0" />
+    <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.5.1" />
     <PackageVersion Include="Azure.Messaging.EventHubs" Version="5.12.2" />
     <PackageVersion Include="Azure.Messaging.EventHubs.Processor" Version="5.12.2" />
     <PackageVersion Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
-    <PackageVersion Include="Azure.Search.Documents" Version="11.7.0" />
+    <PackageVersion Include="Azure.Search.Documents" Version="12.0.0" />
     <PackageVersion Include="Azure.Messaging.WebPubSub" Version="1.6.0" />
-    <PackageVersion Include="Azure.Security.KeyVault.Secrets" Version="4.8.0" />
+    <PackageVersion Include="Azure.Security.KeyVault.Secrets" Version="4.10.0" />
     <PackageVersion Include="Azure.Security.KeyVault.Certificates" Version="4.8.0" />
-    <PackageVersion Include="Azure.Security.KeyVault.Keys" Version="4.8.0" />
-    <PackageVersion Include="Azure.Storage.Blobs" Version="12.26.0" />
-    <PackageVersion Include="Azure.Storage.Files.DataLake" Version="12.23.0" />
-    <PackageVersion Include="Azure.Storage.Files.Shares" Version="12.24.0" />
-    <PackageVersion Include="Azure.Storage.Queues" Version="12.24.0" />
-    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.54.0" />
-    <PackageVersion Include="Microsoft.Azure.Kusto.Data" Version="14.0.3" />
-    <PackageVersion Include="Microsoft.Azure.Kusto.Ingest" Version="14.0.3" />
-    <PackageVersion Include="Microsoft.Azure.SignalR" Version="1.32.0" />
-    <PackageVersion Include="Microsoft.Azure.SignalR.Management" Version="1.32.0" />
+    <PackageVersion Include="Azure.Security.KeyVault.Keys" Version="4.9.0" />
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.27.0" />
+    <PackageVersion Include="Azure.Storage.Files.DataLake" Version="12.25.0" />
+    <PackageVersion Include="Azure.Storage.Files.Shares" Version="12.25.0" />
+    <PackageVersion Include="Azure.Storage.Queues" Version="12.25.0" />
+    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.59.0" />
+    <PackageVersion Include="Microsoft.Azure.Kusto.Data" Version="14.1.2" />
+    <PackageVersion Include="Microsoft.Azure.Kusto.Ingest" Version="14.1.2" />
+    <PackageVersion Include="Microsoft.Azure.SignalR" Version="1.33.0" />
+    <PackageVersion Include="Microsoft.Azure.SignalR.Management" Version="1.33.0" />
     <PackageVersion Include="Microsoft.Azure.StackExchangeRedis" Version="3.3.1" />
-    <PackageVersion Include="Microsoft.Extensions.Azure" Version="1.13.1" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.4.0" />
+    <PackageVersion Include="Microsoft.Extensions.Azure" Version="1.14.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.AzureAppConfiguration" Version="8.5.0" />
     <!-- Azure Management SDK for .NET dependencies -->
     <PackageVersion Include="Azure.Provisioning" Version="1.5.0" />
     <PackageVersion Include="Azure.Provisioning.AppConfiguration" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.AppContainers" Version="1.2.0" />
     <PackageVersion Include="Azure.Provisioning.AppService" Version="1.3.1" />
     <PackageVersion Include="Azure.Provisioning.ApplicationInsights" Version="1.1.0" />
-    <PackageVersion Include="Azure.Provisioning.Cdn" Version="1.0.0-beta.1" />
+    <PackageVersion Include="Azure.Provisioning.Cdn" Version="1.0.0-beta.2" />
     <PackageVersion Include="Azure.Provisioning.ContainerRegistry" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.ContainerService" Version="1.0.0-beta.6" />
     <PackageVersion Include="Azure.Provisioning.CognitiveServices" Version="1.2.0" />
@@ -85,61 +85,61 @@
     <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.Uris" Version="9.0.0" />
     <!-- MSBuild dependencies -->
-    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="17.9.5" /> <!-- This should not be updated, so we support older VS versions -->
+    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.4.0" /> <!-- This should not be updated, so we support older VS versions -->
     <PackageVersion Include="Microsoft.IO.Redist" Version="6.1.3" /> <!-- Pinned transitive dependency to address vulnerability. This is a transitive dependency of Microsoft.Build.Utilities.Core -->
     <!-- NuGet dependencies -->
-    <PackageVersion Include="NuGet.Commands" Version="6.14.0" />
-    <PackageVersion Include="NuGet.ProjectModel" Version="6.14.0" />
-    <PackageVersion Include="NuGet.Protocol" Version="6.14.0" />
-    <PackageVersion Include="NuGet.Resolver" Version="6.14.0" />
+    <PackageVersion Include="NuGet.Commands" Version="7.3.1" />
+    <PackageVersion Include="NuGet.ProjectModel" Version="7.3.1" />
+    <PackageVersion Include="NuGet.Protocol" Version="7.3.1" />
+    <PackageVersion Include="NuGet.Resolver" Version="7.3.1" />
     <!-- external dependencies -->
-    <PackageVersion Include="Confluent.Kafka" Version="2.13.0" />
-    <PackageVersion Include="Dapper" Version="2.1.66" />
+    <PackageVersion Include="Confluent.Kafka" Version="2.14.0" />
+    <PackageVersion Include="Dapper" Version="2.1.72" />
     <PackageVersion Include="DnsClient" Version="1.8.0" />
-    <PackageVersion Include="Google.Protobuf" Version="3.33.5" />
-    <PackageVersion Include="Grpc.AspNetCore" Version="2.76.0" />
-    <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.76.0" />
-    <PackageVersion Include="Grpc.Tools" Version="2.78.0" />
-    <PackageVersion Include="Hex1b" Version="0.133.0" />
+    <PackageVersion Include="Google.Protobuf" Version="3.34.1" />
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.80.0" />
+    <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.80.0" />
+    <PackageVersion Include="Grpc.Tools" Version="2.80.0" />
+    <PackageVersion Include="Hex1b" Version="0.143.0" />
     <PackageVersion Include="Hex1b.McpServer" Version="0.133.0" />
     <PackageVersion Include="Hex1b.Tool" Version="0.133.0" />
-    <PackageVersion Include="Humanizer.Core" Version="2.14.1" />
-    <PackageVersion Include="KubernetesClient" Version="18.0.13" />
-    <PackageVersion Include="JsonPatch.Net" Version="3.3.0" />
-    <PackageVersion Include="Markdig" Version="0.45.0" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.3.0" />
+    <PackageVersion Include="Humanizer.Core" Version="3.0.10" />
+    <PackageVersion Include="KubernetesClient" Version="19.0.2" />
+    <PackageVersion Include="JsonPatch.Net" Version="5.0.2" />
+    <PackageVersion Include="Markdig" Version="1.1.3" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.9.0" />
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.1.0" />
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.1" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.1" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
-    <PackageVersion Include="ModelContextProtocol" Version="1.0.0" />
-    <PackageVersion Include="MongoDB.Driver" Version="3.6.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="1.2.0" />
+    <PackageVersion Include="MongoDB.Driver" Version="3.8.0" />
     <PackageVersion Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" Version="3.0.0" />
     <PackageVersion Include="MySqlConnector.DependencyInjection" Version="2.5.0" />
     <PackageVersion Include="MySqlConnector.Logging.Microsoft.Extensions.Logging" Version="2.1.0" />
-    <PackageVersion Include="NATS.Net" Version="2.7.2" />
+    <PackageVersion Include="NATS.Net" Version="2.7.3" />
     <PackageVersion Include="NCrontab.Signed" Version="3.4.0" />
-    <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.1" />
+    <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.2" />
     <PackageVersion Include="OpenAI" Version="2.10.0" />
-    <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.100" />
-    <PackageVersion Include="Polly.Core" Version="8.6.5" />
-    <PackageVersion Include="Polly.Extensions" Version="8.6.5" />
+    <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.200" />
+    <PackageVersion Include="Polly.Core" Version="8.6.6" />
+    <PackageVersion Include="Polly.Extensions" Version="8.6.6" />
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
-    <PackageVersion Include="Qdrant.Client" Version="1.16.1" />
-    <PackageVersion Include="RabbitMQ.Client" Version="7.2.0" />
+    <PackageVersion Include="Qdrant.Client" Version="1.17.0" />
+    <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
     <PackageVersion Include="Spectre.Console" Version="0.55.2" />
-    <PackageVersion Include="StackExchange.Redis" Version="2.11.0" />
-    <PackageVersion Include="System.IO.Hashing" Version="10.0.3" />
+    <PackageVersion Include="StackExchange.Redis" Version="2.12.14" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.7" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
-    <PackageVersion Include="StreamJsonRpc" Version="2.22.23" />
+    <PackageVersion Include="StreamJsonRpc" Version="2.24.84" />
     <PackageVersion Include="Semver" Version="3.0.0" />
-    <PackageVersion Include="Sigstore" Version="0.4.0" />
-    <PackageVersion Include="Tuf" Version="0.4.0" />
+    <PackageVersion Include="Sigstore" Version="0.5.0" />
+    <PackageVersion Include="Tuf" Version="0.5.0" />
     <PackageVersion Include="Microsoft.DevTunnels.Connections" Version="1.3.12" />
     <!-- Open Telemetry -->
-    <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="$(AzureMonitorOpenTelemetryExporterVersion)" />
-    <PackageVersion Include="Npgsql.OpenTelemetry" Version="10.0.1" />
+    <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.8.0" />
+    <PackageVersion Include="Npgsql.OpenTelemetry" Version="10.0.2" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryExporterOpenTelemetryProtocolVersion)" />
@@ -151,38 +151,38 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.SqlClient" Version="1.15.2" />
     <!-- build dependencies -->
     <PackageVersion Include="MicroBuild.Plugins.SwixBuild.Dotnet" Version="1.1.87-gba258badda" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.3.0" />
     <PackageVersion Include="Microsoft.Signed.Wix" Version="$(MicrosoftSignedWixVersion)" />
     <PackageVersion Include="Microsoft.DotNet.Build.Tasks.Archives" Version="$(MicrosoftDotNetBuildTasksArchivesVersion)" />
     <PackageVersion Include="Microsoft.DotNet.GenAPI.Task" Version="9.0.103-servicing.25065.25" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.0" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.7" />
     <!-- test dependencies shared with playground -->
     <PackageVersion Include="xunit.v3.assert" Version="$(XunitV3Version)" />
     <!-- playground apps dependencies -->
-    <PackageVersion Include="Microsoft.Orleans.Clustering.AzureStorage" Version="9.2.1" />
-    <PackageVersion Include="Microsoft.Orleans.Persistence.AzureStorage" Version="9.2.1" />
-    <PackageVersion Include="Microsoft.Orleans.Client" Version="9.2.1" />
-    <PackageVersion Include="Microsoft.Orleans.Server" Version="9.2.1" />
-    <PackageVersion Include="Microsoft.Orleans.Sdk" Version="9.2.1" />
+    <PackageVersion Include="Microsoft.Orleans.Clustering.AzureStorage" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.Orleans.Persistence.AzureStorage" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.Orleans.Client" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.Orleans.Server" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.Orleans.Sdk" Version="10.1.0" />
     <!-- playground apps dependencies for AzureAppConfiguration -->
-    <PackageVersion Include="Microsoft.Azure.AppConfiguration.AspNetCore" Version="8.4.0" />
+    <PackageVersion Include="Microsoft.Azure.AppConfiguration.AspNetCore" Version="8.5.0" />
     <!-- playground apps dependencies for AzureFunctionsEndToEnd -->
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker" Version="2.2.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.1.0" />
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Blobs" Version="6.8.0" />
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Queues" Version="5.5.3" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Blobs" Version="6.8.1" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Queues" Version="5.5.4" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.ServiceBus" Version="5.24.0" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.EventHubs" Version="6.5.0" />
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.CosmosDb" Version="4.14.0" />
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker.OpenTelemetry" Version="1.1.0-preview6" />
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
-    <PackageVersion Include="Microsoft.ApplicationInsights.WorkerService" Version="2.23.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.CosmosDb" Version="4.15.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.OpenTelemetry" Version="1.2.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
+    <PackageVersion Include="Microsoft.ApplicationInsights.WorkerService" Version="3.1.0" />
     <!-- playground apps dependencies for AzureFunctionsWithDts -->
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask" Version="1.11.0" />
-    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.0.1" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask" Version="1.16.4" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.6.0" />
     <!-- playground apps dependencies for javascript -->
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.7" />
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
     <PackageVersion Include="Azure.Core" Version="1.53.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
@@ -194,8 +194,8 @@
        The dependencies on this group should not be updated manually and should instead use arcade's dependency flow to get updated.-->
   <ItemGroup>
     <!-- dotnet/extensions dependencies ** Common between net8, net9, and net10 ** -->
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="$(MicrosoftExtensionsAIVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="$(MicrosoftExtensionsAIOpenAIVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.5.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.5.1" />
     <PackageVersion Include="Microsoft.Extensions.AI.AzureAIInference" Version="$(MicrosoftExtensionsAIAzureAIInferenceVersion)" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.AutoActivation" Version="$(MicrosoftExtensionsDependencyInjectionAutoActivationVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.Testing" Version="$(MicrosoftExtensionsDiagnosticsTestingVersion)" />
@@ -219,20 +219,20 @@
     <PackageVersion Include="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpPreviewVersion)" />
     <PackageVersion Include="System.Formats.Asn1" Version="$(SystemFormatsAsn1PreviewVersion)" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsVersion)" />
-    <PackageVersion Include="System.Text.Json" Version="$(SystemTextJsonPreviewVersion)" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.7" />
   </ItemGroup>
 
   <!-- The following groups are for packages that need to switch based on the .NET TFM being used.
        The dependencies on any of these two groups should not be updated manually and should instead use arcade's dependency flow to get updated.-->
   <ItemGroup>
     <!-- EF -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosLTSVersion)" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignLTSVersion)" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerLTSVersion)" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsLTSVersion)" />
-    <PackageVersion Include="MongoDB.EntityFrameworkCore" Version="8.2.3" />
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
-    <PackageVersion Include="Oracle.EntityFrameworkCore" Version="8.23.26000" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Cosmos" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7" />
+    <PackageVersion Include="MongoDB.EntityFrameworkCore" Version="9.1.1" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageVersion Include="Oracle.EntityFrameworkCore" Version="9.23.26200" />
     <!-- ASP.NET Core -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateLTSVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerLTSVersion)" />
@@ -240,24 +240,24 @@
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiLTSVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="$(MicrosoftAspNetCoreOutputCachingStackExchangeRedisLTSVersion)" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostLTSVersion)" />
-    <PackageVersion Include="Microsoft.OpenApi" Version="3.1.1" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(MicrosoftExtensionsCachingStackExchangeRedisLTSVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksLTSVersion)" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.5.3" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesLTSVersion)" />
     <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="$(MicrosoftExtensionsFileProvidersEmbeddedLTSVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientLTSVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.7" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <!-- EF -->
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsVersion)" />
-    <PackageVersion Update="MongoDB.Driver" Version="3.3.0" />
-    <PackageVersion Update="MongoDB.EntityFrameworkCore" Version="9.0.0" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="9.0.15" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="10.0.7" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.15" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7" />
+    <PackageVersion Update="MongoDB.Driver" Version="3.8.0" />
+    <PackageVersion Update="MongoDB.EntityFrameworkCore" Version="9.1.1" />
     <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
-    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="9.23.26000" />
+    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="9.23.26200" />
     <!-- ASP.NET Core -->
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerVersion)" />
@@ -265,21 +265,21 @@
     <PackageVersion Update="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="$(MicrosoftAspNetCoreOutputCachingStackExchangeRedisVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(MicrosoftExtensionsCachingStackExchangeRedisVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.7" />
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.7" />
     <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientVersion)" />
+    <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="10.0.7" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <!-- EF -->
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosPreviewVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignPreviewVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerPreviewVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsPreviewVersion)" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="9.0.15" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="10.0.7" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.15" />
+    <PackageVersion Update="Microsoft.EntityFrameworkCore.Tools" Version="10.0.7" />
     <!-- MongoDB.EntityFrameworkCore does not support EF Core 10 yet, so no version override here -->
-    <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
-    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="10.23.26000" />
+    <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="9.23.26200" />
     <!-- ASP.NET Core -->
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificatePreviewVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerPreviewVersion)" />
@@ -287,10 +287,10 @@
     <PackageVersion Update="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiPreviewVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="$(MicrosoftAspNetCoreOutputCachingStackExchangeRedisPreviewVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostPreviewVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(MicrosoftExtensionsCachingStackExchangeRedisPreviewVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCorePreviewVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.7" />
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.7" />
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.7" />
     <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesPreviewVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientPreviewVersion)" />
+    <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="10.0.7" />
   </ItemGroup>
 </Project>
