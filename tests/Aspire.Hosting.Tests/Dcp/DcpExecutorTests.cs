@@ -311,7 +311,7 @@ public class DcpExecutorTests
             dcpOptions: new DcpOptions { EnableAspireContainerTunnel = true });
 
         var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => appExecutor.RunApplicationAsync());
-        Assert.Contains("reserved for the container tunnel", ex.Message);
+        Assert.Contains("container tunnel container name", ex.Message);
     }
 
     [Theory]
@@ -333,7 +333,7 @@ public class DcpExecutorTests
             dcpOptions: new DcpOptions { EnableAspireContainerTunnel = true });
 
         var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => appExecutor.RunApplicationAsync());
-        Assert.Contains("reserved for the container tunnel", ex.Message);
+        Assert.Contains("container tunnel container name", ex.Message);
     }
 
     [Fact]

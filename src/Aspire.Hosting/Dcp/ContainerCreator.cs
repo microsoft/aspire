@@ -209,13 +209,13 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         {
             if (IsContainerTunnelContainerName(container.Name))
             {
-                throw new DistributedApplicationException($"Container resource '{container.Name}' cannot be named '{ContainerTunnelContainerName}' when the Aspire container tunnel is enabled because that name is reserved for the container tunnel.");
+                throw new DistributedApplicationException($"Container resource name '{container.Name}' conflicts with the Aspire container tunnel container name '{ContainerTunnelContainerName}'. Rename the resource or disable the Aspire container tunnel.");
             }
 
             if (container.TryGetLastAnnotation<ContainerNameAnnotation>(out var containerNameAnnotation) &&
                 IsContainerTunnelContainerName(containerNameAnnotation.Name))
             {
-                throw new DistributedApplicationException($"Container resource '{container.Name}' cannot use container name '{containerNameAnnotation.Name}' when the Aspire container tunnel is enabled because '{ContainerTunnelContainerName}' is reserved for the container tunnel.");
+                throw new DistributedApplicationException($"Container resource '{container.Name}' uses container name '{containerNameAnnotation.Name}', which conflicts with the Aspire container tunnel container name '{ContainerTunnelContainerName}'. Rename the container or disable the Aspire container tunnel.");
             }
         }
 
