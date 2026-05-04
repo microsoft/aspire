@@ -312,7 +312,7 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static ResourceSnapshotCommandArgument? FindMissingRequiredInput(ResourceSnapshotCommandArgument[] inputs, HashSet<string> providedInputs)
     {
-        return inputs.FirstOrDefault(i => i.Required && !providedInputs.Contains(i.Name));
+        return inputs.FirstOrDefault(i => i.Required && !providedInputs.Contains(i.Name) && string.IsNullOrEmpty(i.Value));
     }
 
     private static string? WriteArgumentValue(Utf8JsonWriter writer, ResourceSnapshotCommandArgument input, string value)

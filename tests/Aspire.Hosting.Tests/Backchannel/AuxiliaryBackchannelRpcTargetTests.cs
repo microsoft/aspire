@@ -867,6 +867,65 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnlyWithInvalidArguments_ReturnsValidationErrors()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "validate",
+            displayName: "Validate",
+            executeCommand: context =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "target",
+                        InputType = InputType.Text
+                    }
+                ],
+                ValidateArguments = context =>
+                {
+                    var target = context.Arguments.Single(argument => argument.Name == "target");
+                    context.AddValidationError(target, "Target must not be prod.");
+
+                    return Task.CompletedTask;
+                }
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "validate",
+            ValidateOnly = true,
+            Arguments = JsonSerializer.SerializeToElement(new
+            {
+                target = "prod"
+            })
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.False(executed);
+        var validationError = Assert.Single(response.ValidationErrors);
+        Assert.Equal("target", validationError.ArgumentName);
+        Assert.Equal("Target must not be prod.", validationError.ErrorMessage);
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_ReturnsNotFound_WhenResourceDoesNotExist()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

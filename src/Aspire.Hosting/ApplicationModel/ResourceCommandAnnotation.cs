@@ -47,7 +47,8 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         string? iconName,
         IconVariant? iconVariant,
         bool isHighlighted,
-        ResourceCommandVisibility visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api)
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api,
+        Func<CommandArgumentsValidationContext, Task>? validateArguments = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -62,7 +63,8 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
 #pragma warning disable CS0618 // Parameter is obsolete but still stored for compatibility.
         Parameter = parameter;
 #pragma warning restore CS0618
-        Arguments = arguments;
+        Arguments = arguments ?? [];
+        ValidateArguments = validateArguments;
         ConfirmationMessage = confirmationMessage;
         IconName = iconName;
         IconVariant = iconVariant;
@@ -113,7 +115,12 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// Each input name maps to a value in <see cref="ExecuteCommandContext.Arguments"/> when the command is executed.
     /// </para>
     /// </remarks>
-    public IReadOnlyList<InteractionInput>? Arguments { get; }
+    public IReadOnlyList<InteractionInput> Arguments { get; }
+
+    /// <summary>
+    /// Gets the callback that validates invocation arguments before the command callback is executed.
+    /// </summary>
+    public Func<CommandArgumentsValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -277,6 +284,8 @@ public sealed class ExecuteCommandResult
     /// An optional value produced by the command.
     /// </summary>
     public CommandResultData? Data { get; init; }
+
+    internal InteractionInputCollection? InvalidArguments { get; init; }
 }
 
 /// <summary>
@@ -354,8 +363,50 @@ public sealed class ExecuteCommandContext
     /// command callback is invoked.
     /// </para>
     /// </remarks>
-    public InteractionInputCollection? Arguments { get; init; }
+    public required InteractionInputCollection Arguments { get; init; }
 
+}
+
+/// <summary>
+/// Context for validating resource command invocation arguments.
+/// </summary>
+[AspireExport(ExposeProperties = true)]
+public sealed class CommandArgumentsValidationContext
+{
+    internal bool HasErrors { get; private set; }
+
+    /// <summary>
+    /// Gets the invocation arguments being validated.
+    /// </summary>
+    public required InteractionInputCollection Arguments { get; init; }
+
+    /// <summary>
+    /// Gets the service provider for resolving services during validation.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
+
+    /// <summary>
+    /// Gets the cancellation token.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// Adds a validation error for the specified argument.
+    /// </summary>
+    /// <param name="argument">The argument to add a validation error for.</param>
+    /// <param name="errorMessage">The error message to add.</param>
+    public void AddValidationError(InteractionInput argument, string errorMessage)
+    {
+        ArgumentNullException.ThrowIfNull(argument);
+
+        if (string.IsNullOrEmpty(errorMessage))
+        {
+            throw new ArgumentException("Error message cannot be null or empty.", nameof(errorMessage));
+        }
+
+        argument.ValidationErrors.Add(errorMessage);
+        HasErrors = true;
+    }
 }
 
 #pragma warning restore ASPIREINTERACTION001

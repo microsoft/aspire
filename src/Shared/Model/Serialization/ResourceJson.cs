@@ -273,6 +273,11 @@ internal sealed class ResourceCommandArgumentJson
     public string? Placeholder { get; set; }
 
     /// <summary>
+    /// The default value.
+    /// </summary>
+    public string? Value { get; set; }
+
+    /// <summary>
     /// Choice options keyed by submitted value.
     /// </summary>
     public Dictionary<string, string>? Options { get; set; }

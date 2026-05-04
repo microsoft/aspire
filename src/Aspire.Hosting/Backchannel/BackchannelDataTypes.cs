@@ -270,6 +270,11 @@ internal sealed class ExecuteResourceCommandRequest
     /// Gets optional invocation arguments to pass to the resource command.
     /// </summary>
     public JsonElement? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request should validate arguments without executing the command.
+    /// </summary>
+    public bool ValidateOnly { get; init; }
 }
 
 /// <summary>
@@ -302,6 +307,27 @@ internal sealed class ExecuteResourceCommandResponse
     /// Gets the value produced by the command.
     /// </summary>
     public ExecuteResourceCommandResult? Value { get; init; }
+
+    /// <summary>
+    /// Gets validation errors for submitted command arguments.
+    /// </summary>
+    public ResourceCommandArgumentValidationError[] ValidationErrors { get; init; } = [];
+}
+
+/// <summary>
+/// Represents a validation error for a submitted resource command argument.
+/// </summary>
+internal sealed class ResourceCommandArgumentValidationError
+{
+    /// <summary>
+    /// Gets the argument name.
+    /// </summary>
+    public required string ArgumentName { get; init; }
+
+    /// <summary>
+    /// Gets the validation error message.
+    /// </summary>
+    public required string ErrorMessage { get; init; }
 }
 
 /// <summary>
@@ -954,6 +980,11 @@ internal sealed class ResourceSnapshotCommandArgument
     /// Gets the placeholder text.
     /// </summary>
     public string? Placeholder { get; init; }
+
+    /// <summary>
+    /// Gets the default or submitted value.
+    /// </summary>
+    public string? Value { get; init; }
 
     /// <summary>
     /// Gets choice options keyed by submitted value.

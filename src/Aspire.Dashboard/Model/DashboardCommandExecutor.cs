@@ -103,7 +103,7 @@ public sealed class DashboardCommandExecutor(
             }
         }
 
-        var (argumentsCanceled, arguments) = await GetCommandArgumentsAsync(command).ConfigureAwait(false);
+        var (argumentsCanceled, arguments) = await GetCommandArgumentsAsync(resource, command).ConfigureAwait(false);
         if (argumentsCanceled)
         {
             return;
@@ -160,7 +160,7 @@ public sealed class DashboardCommandExecutor(
             });
             closeToastCts.CancelAfter(DashboardUIHelpers.ToastTimeout);
 
-            response = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, CancellationToken.None).ConfigureAwait(false);
+            response = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, validateOnly: false, CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
@@ -283,7 +283,7 @@ public sealed class DashboardCommandExecutor(
         };
     }
 
-    private async Task<(bool Canceled, Value? Arguments)> GetCommandArgumentsAsync(CommandViewModel command)
+    private async Task<(bool Canceled, Value? Arguments)> GetCommandArgumentsAsync(ResourceViewModel resource, CommandViewModel command)
     {
         if (command.ArgumentInputs.IsDefaultOrEmpty)
         {
@@ -304,7 +304,8 @@ public sealed class DashboardCommandExecutor(
 
         var completion = new TaskCompletionSource<IReadOnlyList<InteractionInput>?>(TaskCreationOptions.RunContinuationsAsynchronously);
         IDialogReference? dialogReference = null;
-        var viewModel = new InteractionsInputsDialogViewModel
+        InteractionsInputsDialogViewModel? viewModel = null;
+        viewModel = new InteractionsInputsDialogViewModel
         {
             Interaction = interaction,
             Message = WebUtility.HtmlEncode(interaction.Message),
@@ -312,6 +313,16 @@ public sealed class DashboardCommandExecutor(
             {
                 if (update)
                 {
+                    return;
+                }
+
+                var arguments = CreateCommandArguments(submittedInteraction.InputsDialog.InputItems);
+                var validationResponse = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, validateOnly: true, CancellationToken.None).ConfigureAwait(false);
+                if (validationResponse.Kind == ResourceCommandResponseKind.ValidationFailed)
+                {
+                    submittedInteraction.InputsDialog.InputItems.Clear();
+                    submittedInteraction.InputsDialog.InputItems.AddRange(validationResponse.ArgumentInputs);
+                    await viewModel!.UpdateInteractionAsync(submittedInteraction).ConfigureAwait(false);
                     return;
                 }
 

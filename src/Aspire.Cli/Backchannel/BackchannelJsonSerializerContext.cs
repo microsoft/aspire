@@ -77,6 +77,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(StopAppHostResponse))]
 [JsonSerializable(typeof(ExecuteResourceCommandRequest))]
 [JsonSerializable(typeof(ExecuteResourceCommandResponse))]
+[JsonSerializable(typeof(ResourceCommandArgumentValidationError))]
 [JsonSerializable(typeof(WaitForResourceRequest))]
 [JsonSerializable(typeof(WaitForResourceResponse))]
 [JsonSerializable(typeof(PipelineStepInfo))]

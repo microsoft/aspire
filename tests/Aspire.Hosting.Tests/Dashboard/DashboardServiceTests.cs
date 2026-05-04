@@ -310,6 +310,75 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
     }
 
+    [Fact]
+    public async Task ExecuteResourceCommand_ValidateOnlyWithInvalidArguments_ReturnsValidationErrors()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
+        using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+
+        var executed = false;
+        var testResource = new TestResource("test-resource");
+        using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
+        var builder = applicationBuilder.AddResource(testResource);
+        builder.WithCommand(
+            name: "validate",
+            displayName: "Validate",
+            executeCommand: c =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new()
+            {
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "target",
+                        InputType = InputType.Text
+                    }
+                ],
+                ValidateArguments = context =>
+                {
+                    var target = context.Arguments.Single(argument => argument.Name == "target");
+                    context.AddValidationError(target, "Target must not be prod.");
+
+                    return Task.CompletedTask;
+                }
+            });
+
+        await resourceNotificationService.PublishUpdateAsync(testResource, s =>
+        {
+            return s with { State = new ResourceStateSnapshot("Running", null) };
+        }).DefaultTimeout();
+
+        var context = TestServerCallContext.Create();
+        var response = await dashboardService.ExecuteResourceCommand(
+            new ResourceCommandRequest
+            {
+                ResourceName = testResource.Name,
+                CommandName = "validate",
+                ValidateOnly = true,
+                Arguments = Value.ForStruct(new Struct
+                {
+                    Fields =
+                    {
+                        ["target"] = Value.ForString("prod")
+                    }
+                })
+            },
+            context);
+
+        Assert.Equal(ResourceCommandResponseKind.ValidationFailed, response.Kind);
+        Assert.False(executed);
+        var invalidArgument = Assert.Single(response.ArgumentInputs);
+        Assert.Equal("target", invalidArgument.Name);
+        Assert.Equal("Target must not be prod.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

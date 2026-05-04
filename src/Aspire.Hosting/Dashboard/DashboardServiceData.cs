@@ -94,22 +94,40 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value)> ExecuteCommandAsync(string resourceId, string type, IReadOnlyDictionary<string, string?>? argumentValues, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, IReadOnlyDictionary<string, string?>? argumentValues, bool validateOnly, CancellationToken cancellationToken)
     {
         try
         {
             var arguments = _resourceCommandService.CreateCommandArguments(resourceId, type, argumentValues);
-            var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
+            var result = validateOnly
+                ? await ValidateCommandArgumentsAsync(_resourceCommandService, resourceId, type, arguments, cancellationToken).ConfigureAwait(false)
+                : await _resourceCommandService.ExecuteCommandAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
-                return (ExecuteCommandResultType.Canceled, result.Message, null);
+                return (ExecuteCommandResultType.Canceled, result.Message, null, null);
             }
-            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.Message, result.Data);
+            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.Message, result.Data, result.InvalidArguments);
         }
         catch
         {
             // Note: Exception is already logged in the command executor.
-            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null);
+            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null, null);
+        }
+
+        static async Task<ExecuteCommandResult> ValidateCommandArgumentsAsync(ResourceCommandService resourceCommandService, string resourceId, string type, InteractionInputCollection arguments, CancellationToken cancellationToken)
+        {
+            var invalidArguments = await resourceCommandService.ValidateCommandArgumentsAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
+            if (invalidArguments is null)
+            {
+                return CommandResults.Success();
+            }
+
+            return new ExecuteCommandResult
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                InvalidArguments = invalidArguments
+            };
         }
     }
 
