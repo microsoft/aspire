@@ -758,7 +758,7 @@ internal sealed class RunCommand : BaseCommand
 
     private void DisplayStartupTimeout(int timeoutSeconds)
     {
-        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeoutSeconds));
+        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
         InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
     }
 

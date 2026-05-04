@@ -335,7 +335,7 @@ internal sealed class AppHostLauncher(
         }
         else
         {
-            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeoutSeconds));
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
 
             if (!result.ChildProcess.HasExited)
             {

@@ -86,7 +86,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ConfigurationCallback += config =>
             {
-                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "0";
+                config[CliConfigNames.AppHostStartupTimeout] = "0";
             };
         });
         using var provider = services.BuildServiceProvider();
@@ -98,7 +98,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeoutSeconds),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeout),
             Assert.Single(interactionService.DisplayedErrors));
     }
 
@@ -116,7 +116,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ConfigurationCallback += config =>
             {
-                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "37";
+                config[CliConfigNames.AppHostStartupTimeout] = "37";
             };
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
@@ -143,7 +143,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.True(detachedProcessLauncher.Process.Killed);
         Assert.True(detachedProcessLauncher.Process.KilledEntireProcessTree);
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37, CliConfigNames.AppHostStartupTimeoutSeconds),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37, CliConfigNames.AppHostStartupTimeout),
             Assert.Single(interactionService.DisplayedErrors));
     }
 

@@ -14,7 +14,7 @@ internal static class AppHostStartupTimeout
     {
         timeoutSeconds = WaitCommand.DefaultTimeoutSeconds;
 
-        var configuredTimeout = configuration[CliConfigNames.AppHostStartupTimeoutSeconds];
+        var configuredTimeout = configuration[CliConfigNames.AppHostStartupTimeout];
         if (string.IsNullOrWhiteSpace(configuredTimeout))
         {
             return true;
@@ -30,7 +30,7 @@ internal static class AppHostStartupTimeout
         interactionService.DisplayError(string.Format(
             CultureInfo.CurrentCulture,
             RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable,
-            CliConfigNames.AppHostStartupTimeoutSeconds));
+            CliConfigNames.AppHostStartupTimeout));
         return false;
     }
 }

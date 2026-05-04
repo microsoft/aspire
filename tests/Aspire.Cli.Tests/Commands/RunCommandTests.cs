@@ -54,7 +54,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ConfigurationCallback += config =>
             {
-                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "0";
+                config[CliConfigNames.AppHostStartupTimeout] = "0";
             };
         });
         using var provider = services.BuildServiceProvider();
@@ -66,7 +66,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeoutSeconds),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeout),
             Assert.Single(interactionService.DisplayedErrors));
     }
 
@@ -82,7 +82,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
             options.ConfigurationCallback += config =>
             {
-                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "37";
+                config[CliConfigNames.AppHostStartupTimeout] = "37";
             };
         });
         services.RemoveAll<IDetachedProcessLauncher>();
@@ -104,7 +104,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(detachedProcessLauncher.Process.Killed);
         Assert.True(detachedProcessLauncher.Process.KilledEntireProcessTree);
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37, CliConfigNames.AppHostStartupTimeoutSeconds),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37, CliConfigNames.AppHostStartupTimeout),
             Assert.Single(interactionService.DisplayedErrors));
     }
 
@@ -146,7 +146,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ConfigurationCallback += config =>
             {
-                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "1";
+                config[CliConfigNames.AppHostStartupTimeout] = "1";
             };
         });
 
@@ -159,7 +159,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 1, CliConfigNames.AppHostStartupTimeoutSeconds),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 1, CliConfigNames.AppHostStartupTimeout),
             Assert.Single(interactionService.DisplayedErrors));
         Assert.True(runCancellationObserved.Task.IsCompletedSuccessfully);
     }
@@ -196,7 +196,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ConfigurationCallback += config =>
             {
-                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "2";
+                config[CliConfigNames.AppHostStartupTimeout] = "2";
             };
         });
         services.RemoveAll<TimeProvider>();
@@ -214,7 +214,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Expected startup timeout to use the remaining budget, but the command took {stopwatch.Elapsed}.");
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeoutSeconds),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeout),
             Assert.Single(interactionService.DisplayedErrors));
     }
 
