@@ -206,6 +206,56 @@ public class ConsoleInteractionServiceTests
         Assert.True(outputString.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length >= 3);
     }
 
+    [Theory]
+    [MemberData(nameof(DisplayMarkdown_BetweenPlainText_Data))]
+    public void DisplayMarkdown_BetweenPlainText_DoesNotInsertExtraEmptyLine(string markdown, string expectedOutput)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+
+        interactionService.DisplayPlainText("before markdown");
+        interactionService.DisplayMarkdown(markdown);
+        interactionService.DisplayPlainText("after markdown");
+
+        Assert.Equal(expectedOutput, output.ToString(), ignoreLineEndingDifferences: true);
+    }
+
+    public static TheoryData<string, string> DisplayMarkdown_BetweenPlainText_Data => new()
+    {
+        {
+            """
+            # Heading
+
+            This is a paragraph.
+            """,
+            """
+            before markdown
+            Heading
+
+            This is a paragraph.
+
+            after markdown
+
+            """
+        },
+        {
+            "**bold**",
+            """
+            before markdown
+            bold
+            after markdown
+
+            """
+        },
+    };
+
     [Fact]
     public async Task ShowStatusAsync_InDebugMode_DisplaysSubtleMessageInsteadOfSpinner()
     {

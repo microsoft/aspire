@@ -565,8 +565,10 @@ var TestConfigs = struct {
 }
 
 var WellKnownPipelineSteps = struct {
+	BeforeStart string
 	Build string
 	BuildPrereq string
+	CheckContainerRuntime string
 	Deploy string
 	DeployPrereq string
 	Destroy string
@@ -579,8 +581,10 @@ var WellKnownPipelineSteps = struct {
 	PushPrereq string
 	ValidateComputeEnvironments string
 }{
+	BeforeStart: "before-start",
 	Build: "build",
 	BuildPrereq: "build-prereq",
+	CheckContainerRuntime: "check-container-runtime",
 	Deploy: "deploy",
 	DeployPrereq: "deploy-prereq",
 	Destroy: "destroy",

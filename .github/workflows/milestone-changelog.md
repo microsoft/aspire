@@ -125,7 +125,7 @@ jobs:
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,author,mergedAt,labels,additions,deletions,changedFiles \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-milestone-prs.json"
 
@@ -428,20 +428,25 @@ The pre-computation step (in the frontmatter) has already:
   file present)
 - Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
 
-Each entry in `batch-prs.json` contains: `number`, `title`, `author` (object with
-`login` and `is_bot`), `mergedAt`, `labels` (array of objects with `name`), `additions`,
-`deletions`, `changedFiles`.
+Each entry in `batch-prs.json` contains: `number`, `title`, `body`, `author` (object
+with `login` and `is_bot`), `mergedAt`, `labels` (array of objects with `name`),
+`additions`, `deletions`, `changedFiles`.
 
 ## Step 3: Process the batch PRs
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
 unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
-`number`, `title`, `author` (object with `login` and `is_bot`), `mergedAt`, `labels`
-(array of objects with `name`), `additions`, `deletions`, `changedFiles`.
+`number`, `title`, `body`, `author` (object with `login` and `is_bot`), `mergedAt`,
+`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`.
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
-   **except** `app/copilot-swe-agent` which makes product changes on behalf of
-   developers and should be processed normally.
+   **except** these cases which should be processed normally:
+   - `app/copilot-swe-agent` — makes product changes on behalf of developers.
+   - **Backport PRs** — PRs whose body contains the word `backport` or `port`
+     and, upon inspection, appears to be a backport of another PR (e.g.,
+     references an original PR number). These are created by backport bots
+     and contain the same meaningful changes as their source PRs, just
+     targeting a release branch.
    Record each excluded bot PR as an individual tracker file in `prs/` with
    `status: "excluded"` in Step 6b so they are not re-processed on future runs.
 2. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
@@ -452,7 +457,43 @@ full body/description and changed file paths. Collect: number, title, author,
 `author_association`, body/description, labels, the list of changed files, and the
 total number of changed lines (additions + deletions).
 
-### 3a. Read the PR diff when needed
+### 3a. Processing backport PRs
+
+Backport PRs are identified by checking whether the PR body contains the word
+`backport` or `port` (case-insensitive). If either word is present, inspect the
+body text to determine whether the PR is actually a backport of another PR —
+look for references to an original PR number (e.g., "Backport of #1234",
+"port of #5678", a markdown link to another PR, etc.). Their body typically
+contains only this backport reference plus a shiproom template that may be unfilled
+or partially filled. To process them:
+
+1. **Extract the original PR number** from the body by inspecting the text for
+   a reference to the source PR (e.g., "Backport of #1234", "#1234", or a
+   full URL like `https://github.com/microsoft/aspire/pull/1234`).
+2. **Fetch the original PR** using `pull_request_read` to get its full title,
+   body/description, labels, and changed file paths. Use the original PR's
+   content as the primary source for generating the changelog entry.
+3. **Use the backport PR's title** (stripping any branch prefix, such as
+   `[release/...]`, if present) as the display name if the original PR's title
+   is identical. Otherwise prefer the clearer of the two.
+4. **Use the backport PR's number** (not the original) in the `Changes:` line
+   and in `prs` arrays, since the backport is the PR that was merged into the
+   milestone.
+5. **Use the original PR author's `author_association`** for the community
+   contribution flag (Step 5b), since the backport bot is not a meaningful author.
+   Set the `author` field in the PR tracker to the original PR's author, not the
+   bot. When evaluating Step 5b's "Community contribution" flag for a backport PR,
+   use the **original author's** `author_association` and treat `author.is_bot` as
+   `false` (since the original author — not the backport bot — is the meaningful
+   contributor).
+6. **Set `backport: true`** in the change file for this entry (see Step 6a schema).
+   If the backport PR is grouped with an existing entry that was not a backport,
+   keep `backport: false` (the entry is not purely backport-derived).
+
+If the original PR number cannot be parsed from the body, fall back to processing
+the backport PR using its own title, labels, and changed files (same as a normal PR).
+
+### 3b. Read the PR diff when needed
 
 For PRs with **5,000 or fewer** total changed lines, read the diff if **any** of these
 conditions are true:
@@ -547,7 +588,7 @@ Then determine whether either of these optional flags applies:
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
 | **Docs required** | 📝 | Change needs documentation on aspire.dev (new feature, changed behavior, new config options) |
-| **Community contribution** | 🌍 | PR author's `author_association` is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor |
+| **Community contribution** | 🌍 | PR author's `author_association` is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `author_association` and ignore the backport bot's `is_bot` flag. |
 
 > **Important — verifying `author_association`:** The `pull_request_read` MCP tool
 > may omit the `author_association` field from its response. If the field is missing
@@ -653,6 +694,7 @@ Schema:
 {
   "area": "CLI",
   "areaEmoji": "💻",
+  "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": ["@contributor"],
@@ -669,6 +711,7 @@ Schema:
 Field definitions:
 - **area**: Product area name (see Step 5a area table)
 - **areaEmoji**: Emoji for the product area (see Step 5a area table)
+- **backport**: `true` if this entry was generated from a backport PR (Step 3a item 6), `false` otherwise. When grouping: if a backport PR is grouped with an existing non-backport entry, keep `false`
 - **breaking**: `true` if this is a breaking change, `false` otherwise
 - **changeType**: One of `"New features"`, `"Improvements"`, or `"Bug fixes"`
 - **communityContributors**: Array of GitHub usernames (prefixed with `@`) of

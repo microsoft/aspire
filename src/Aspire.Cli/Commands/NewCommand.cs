@@ -170,6 +170,10 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             choice => choice.DisplayName.EscapeMarkup(),
             cancellationToken: cancellationToken);
 
+        // The prompt is cleared after selection.
+        // Write out the selected language again for context before proceeding.
+        InteractionService.DisplayPlainText($"Which language would you like to use? {selected.DisplayName}");
+
         return selected.LanguageId;
     }
 

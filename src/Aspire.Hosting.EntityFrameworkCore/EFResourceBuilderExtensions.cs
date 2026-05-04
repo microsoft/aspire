@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREDOTNETTOOL
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
 using System.Diagnostics;
 using System.Text;
@@ -33,7 +34,7 @@ public static class EFResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
-    /// <param name="contextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations for this context type have already been added.</exception>
     /// <remarks>
@@ -50,13 +51,13 @@ public static class EFResourceBuilderExtensions
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
-        string contextTypeName)
+        string dbContextTypeName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
-        ArgumentException.ThrowIfNullOrEmpty(contextTypeName);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName, configureToolResource: null);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource: null);
     }
 
     /// <summary>
@@ -64,7 +65,7 @@ public static class EFResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
-    /// <param name="contextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type to manage migrations for.</param>
     /// <param name="configureToolResource">Optional callback to configure the dotnet-ef tool resource used for migrations.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations for this context type have already been added.</exception>
@@ -82,14 +83,14 @@ public static class EFResourceBuilderExtensions
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
-        string contextTypeName,
+        string dbContextTypeName,
         Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
-        ArgumentException.ThrowIfNullOrEmpty(contextTypeName);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName, configureToolResource);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource);
     }
 
     /// <summary>
@@ -106,7 +107,7 @@ public static class EFResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName: null, configureToolResource: null);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource: null);
     }
 
     /// <summary>
@@ -125,13 +126,13 @@ public static class EFResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return AddEFMigrationsCore(builder, name, contextTypeName: null, configureToolResource);
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource);
     }
 
     private static IResourceBuilder<EFMigrationResource> AddEFMigrationsCore(
         IResourceBuilder<ProjectResource> builder,
         string name,
-        string? contextTypeName,
+        string? dbContextTypeName,
         Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
     {
         // Check for duplicate context types and null/non-null conflicts
@@ -140,15 +141,15 @@ public static class EFResourceBuilderExtensions
             .Where(r => r.ProjectResource == builder.Resource)
             .ToList();
 
-        if (contextTypeName != null)
+        if (dbContextTypeName != null)
         {
-            if (existingMigrations.Any(r => r.ContextTypeName == contextTypeName))
+            if (existingMigrations.Any(r => r.DbContextTypeName == dbContextTypeName))
             {
                 throw new InvalidOperationException(
-                    $"The DbContext type '{GetShortTypeName(contextTypeName)}' has already been registered for EF migrations on resource '{builder.Resource.Name}'.");
+                    $"The DbContext type '{GetShortTypeName(dbContextTypeName)}' has already been registered for EF migrations on resource '{builder.Resource.Name}'.");
             }
 
-            if (existingMigrations.Any(r => r.ContextTypeName == null))
+            if (existingMigrations.Any(r => r.DbContextTypeName == null))
             {
                 throw new InvalidOperationException(
                     $"Cannot add migrations for a specific DbContext type when auto-detected migrations have already been registered on resource '{builder.Resource.Name}'.");
@@ -163,7 +164,7 @@ public static class EFResourceBuilderExtensions
             }
         }
 
-        var migrationResource = new EFMigrationResource(name, builder.Resource, contextTypeName)
+        var migrationResource = new EFMigrationResource(name, builder.Resource, dbContextTypeName)
         {
             ConfigureToolResource = configureToolResource
         };
@@ -180,7 +181,7 @@ public static class EFResourceBuilderExtensions
             .WithIconName("Database")
             .WithPipelineStepFactory(CreateMigrationPipelineStep);
 
-        AddEFMigrationCommands(innerBuilder, migrationResource, contextTypeName);
+        AddEFMigrationCommands(innerBuilder, migrationResource, dbContextTypeName);
 
         return innerBuilder;
     }
@@ -270,7 +271,7 @@ public static class EFResourceBuilderExtensions
         using var executor = new EFCoreOperationExecutor(
             migrationResource.ProjectResource,
             migrationResource.MigrationsProjectPath,
-            migrationResource.ContextTypeName,
+            migrationResource.DbContextTypeName,
             logger,
             stepContext.CancellationToken,
             stepContext.Services,
@@ -520,9 +521,9 @@ public static class EFResourceBuilderExtensions
     private static void AddEFMigrationCommands(
         IResourceBuilder<EFMigrationResource> migrationBuilder,
         EFMigrationResource migrationResource,
-        string? contextTypeName)
+        string? dbContextTypeName)
     {
-        var contextShortName = GetShortTypeName(contextTypeName);
+        var contextShortName = GetShortTypeName(dbContextTypeName);
 
         // Create hidden DotnetToolResource for running EF commands
         var toolName = $"ef-tool-{migrationResource.Name}";
@@ -718,7 +719,7 @@ public static class EFResourceBuilderExtensions
             using var executor = new EFCoreOperationExecutor(
                 migrationResource.ProjectResource,
                 migrationResource.MigrationsProjectPath,
-                migrationResource.ContextTypeName,
+                migrationResource.DbContextTypeName,
                 logger,
                 context.CancellationToken,
                 context.ServiceProvider,

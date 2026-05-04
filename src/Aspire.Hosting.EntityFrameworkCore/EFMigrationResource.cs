@@ -5,22 +5,22 @@
 
 using Aspire.Hosting.ApplicationModel;
 
-namespace Aspire.Hosting;
+namespace Aspire.Hosting.EntityFrameworkCore;
 
 /// <summary>
 /// Represents an EF Core migration resource associated with a project.
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="projectResource">The parent project resource that contains the DbContext.</param>
-/// <param name="contextTypeName">The fully qualified name of the DbContext type, or null to auto-detect.</param>
+/// <param name="dbContextTypeName">The fully qualified name of the DbContext type, or null to auto-detect.</param>
 /// <remarks>
 /// The resource inherits from <see cref="ContainerResource"/> so it can be published as a container image
 /// that runs the migration bundle at deploy time when
-/// <see cref="EFMigrationResourceBuilderExtensions.PublishAsMigrationBundle(ApplicationModel.IResourceBuilder{EFMigrationResource}, string?, bool, bool, string?)"/>
+/// <see cref="EFMigrationResourceBuilderExtensions.PublishAsMigrationBundle(IResourceBuilder{EFMigrationResource}, string?, bool, bool, string?)"/>
 /// is called with <c>publishContainer: true</c>.
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
-public class EFMigrationResource(string name, ProjectResource projectResource, string? contextTypeName)
+public class EFMigrationResource(string name, ProjectResource projectResource, string? dbContextTypeName)
     : ContainerResource(name)
 {
     /// <summary>
@@ -35,7 +35,7 @@ public class EFMigrationResource(string name, ProjectResource projectResource, s
     /// This property is used to specify which DbContext to use when the project contains multiple DbContext types.
     /// When null, the EF Core tools will auto-detect the DbContext to use.
     /// </remarks>
-    public string? ContextTypeName { get; } = contextTypeName;
+    public string? DbContextTypeName { get; } = dbContextTypeName;
 
     /// <summary>
     /// Gets or sets whether a migration script should be generated during publishing.

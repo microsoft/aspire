@@ -42,6 +42,7 @@
       "src\\Components\\Aspire.Npgsql\\Aspire.Npgsql.csproj",
       "src\\Components\\Aspire.RabbitMQ.Client\\Aspire.RabbitMQ.Client.csproj",
       "src\\Components\\Aspire.StackExchange.Redis\\Aspire.StackExchange.Redis.csproj",
+      "src\\Tools\\ConfigurationSchemaGenerator\\ConfigurationSchemaGenerator.csproj",
       "tests\\Aspire.Cli.EndToEnd.Tests\\Aspire.Cli.EndToEnd.Tests.csproj",
       "tests\\Aspire.Cli.Tests\\Aspire.Cli.Tests.csproj",
       "tests\\Aspire.Components.Common.TestUtilities\\Aspire.Components.Common.TestUtilities.csproj",
