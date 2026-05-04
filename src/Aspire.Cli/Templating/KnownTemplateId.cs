@@ -34,6 +34,11 @@ internal static class KnownTemplateId
     public const string JavaEmptyAppHost = "aspire-java-empty";
 
     /// <summary>
+    /// The template ID for the CLI Python empty AppHost template.
+    /// </summary>
+    public const string PythonEmptyAppHost = "aspire-py-empty";
+
+    /// <summary>
     /// The template ID for the Python starter template.
     /// </summary>
     public const string PythonStarter = "aspire-py-starter";

@@ -139,6 +139,16 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 isEmpty: true),
 
             new CallbackTemplate(
+                KnownTemplateId.PythonEmptyAppHost,
+                "Empty (Python AppHost)",
+                projectName => $"./{projectName}",
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Python,
+                isEmpty: true),
+
+            new CallbackTemplate(
                 KnownTemplateId.GoEmptyAppHost,
                 "Empty (Go AppHost)",
                 projectName => $"./{projectName}",

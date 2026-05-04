@@ -61,6 +61,38 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void NewCommandWithPythonPolyglotEnabled_ExposesPythonEmptyAppHostSubcommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
+                return features;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        Assert.NotEmpty(command.Subcommands);
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.PythonEmptyAppHost && subcommand.Description == "Empty (Python AppHost)");
+    }
+
+    [Fact]
+    public void NewCommandWithPythonPolyglotDisabled_DoesNotExposePythonEmptyAppHostSubcommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        Assert.NotEmpty(command.Subcommands);
+        Assert.DoesNotContain(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.PythonEmptyAppHost);
+    }
+
+    [Fact]
     public void NewCommandWithPolyglotDisabled_ExposesTemplateSubcommands()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
