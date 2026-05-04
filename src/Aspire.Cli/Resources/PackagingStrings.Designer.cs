@@ -64,5 +64,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("BasedOnNuGetConfig", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The 'staging' channel cannot be resolved deterministically when running a daily/CI Aspire CLI build (CLI version: '{0}'). To update against staging, either run a stable Aspire CLI build, or set the 'overrideStagingFeed' configuration value to an explicit staging feed URL (for example: 'aspire config set overrideStagingFeed &lt;url&gt;').
+        /// </summary>
+        internal static string StagingChannelUnavailableForDailyCliFormat {
+            get {
+                return ResourceManager.GetString("StagingChannelUnavailableForDailyCliFormat", resourceCulture);
+            }
+        }
     }
 }

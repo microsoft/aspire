@@ -1718,6 +1718,59 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         return OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
     }
+
+    [Fact]
+    public async Task UpdateCommand_StagingChannelUnavailable_DisplaysReasonFromPackagingService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        TestInteractionService? testInteractionService = null;
+        const string ExpectedReason = "Staging is unavailable on a daily CLI; set 'overrideStagingFeed' to recover.";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater();
+
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (ct) =>
+                {
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
+                },
+                GetStagingChannelUnavailableReasonCallback = () => ExpectedReason,
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --channel staging");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotNull(testInteractionService);
+        var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
+        Assert.Contains(ExpectedReason, errorMessage);
+        Assert.Equal(ExitCodeConstants.FailedToUpgradeProject, exitCode);
+    }
 }
 
 // Helper class to track DisplayCancellationMessage calls

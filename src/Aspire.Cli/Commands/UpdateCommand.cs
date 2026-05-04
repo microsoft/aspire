@@ -184,7 +184,7 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 // Try to find a channel matching the provided channel/quality
                 channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                    ?? throw new ChannelNotFoundException(BuildChannelNotFoundMessage(channelName, allChannels));
 
                 if (channelFromConfig)
                 {
@@ -302,6 +302,24 @@ internal sealed class UpdateCommand : BaseCommand
         }
 
         return 0;
+    }
+
+    private string BuildChannelNotFoundMessage(string channelName, IEnumerable<PackageChannel> allChannels)
+    {
+        // For an explicit `--channel staging` request, surface the staging-specific
+        // unavailability reason (issue #16652) instead of the generic "no channel
+        // matching" message so users on a daily CLI know why the channel was omitted
+        // and how to recover (set 'overrideStagingFeed' or use a stable CLI).
+        if (string.Equals(channelName, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase))
+        {
+            var stagingReason = _packagingService.GetStagingChannelUnavailableReason();
+            if (!string.IsNullOrEmpty(stagingReason))
+            {
+                return stagingReason;
+            }
+        }
+
+        return $"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}";
     }
 
     private async Task<int> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)

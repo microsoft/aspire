@@ -7,6 +7,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 
@@ -932,6 +933,282 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.Contains(packageList, p => p.Version!.StartsWith("13.3"));
         Assert.Contains(packageList, p => p.Version!.StartsWith("13.2"));
     }
+
+    // ==========================================================================================
+    // Regression tests for issue #16652:
+    //   Ensure that on a daily/CI Aspire CLI build, `--channel staging` cannot silently resolve
+    //   to daily packages. The `internal:packaging:cliVersionForTesting` configuration key is a
+    //   test-only seam used to deterministically simulate stable / blessed-prerelease / daily
+    //   CLI builds without depending on the actual built CLI version at test time.
+    // ==========================================================================================
+
+    [Theory]
+    [InlineData("13.4.0", false)]                          // stable release → not daily
+    [InlineData("13.4.0-preview.1", false)]                // blessed preview → not daily
+    [InlineData("13.4.0-rc.1", false)]                     // blessed RC → not daily
+    [InlineData("13.4.0-dev", false)]                      // local dev build → not daily
+    [InlineData("13.4.0-preview.1.26210.1", true)]         // arcade daily build → daily
+    [InlineData("13.4.0-preview.1.26210.1+abc1234", true)] // daily with build metadata → daily
+    [InlineData("13.4.0-rc.1.26300.5", true)]              // RC-flavored CI build → daily
+    [InlineData("not-a-valid-version", true)]              // unparseable → fail-safe (treat as daily)
+    [InlineData("", true)]                                 // empty → fail-safe (treat as daily)
+    [InlineData(null, true)]                               // null → fail-safe (treat as daily)
+    public void IsCliPrereleaseDailyBuild_HeuristicProducesExpectedResult(string? informationalVersion, bool expectedIsDaily)
+    {
+        var actual = PackagingService.IsCliPrereleaseDailyBuild(informationalVersion);
+        Assert.Equal(expectedIsDaily, actual);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_DailyCliRequestsStaging_NoFeedOverride_StagingChannelOmittedAndReasonExplains()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["internal:packaging:cliVersionForTesting"] = "13.4.0-preview.1.26210.1+abc1234"
+            })
+            .Build();
+
+        var loggerProvider = new CapturingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(loggerProvider);
+        });
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, loggerFactory.CreateLogger<PackagingService>());
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(channels, c => c.Name == "staging");
+
+        var reason = packagingService.GetStagingChannelUnavailableReason();
+        Assert.NotNull(reason);
+        Assert.Contains("staging", reason);
+        Assert.Contains("daily", reason, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("13.4.0-preview.1.26210.1", reason);
+        Assert.Contains("overrideStagingFeed", reason);
+
+        // Warning was logged so the omission is observable in CLI output.
+        Assert.Contains(loggerProvider.LogEntries, e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("staging") &&
+            e.Message.Contains("13.4.0-preview.1.26210.1"));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_DailyCliRequestsStaging_NoFeedOverride_PrereleaseQuality_AlsoOmitted()
+    {
+        // The Prerelease/Both quality + no-feed-override path used to silently fall back
+        // to the shared dotnet9 daily feed and return daily packages — exactly the bug
+        // tracked by #16652. On a daily CLI we now block it too.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["internal:packaging:cliVersionForTesting"] = "13.4.0-preview.1.26210.1",
+                ["overrideStagingQuality"] = "Prerelease"
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(channels, c => c.Name == "staging");
+        Assert.NotNull(packagingService.GetStagingChannelUnavailableReason());
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_DailyCliRequestsStaging_WithExplicitFeedOverride_UsesOverrideFeed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+
+        const string explicitFeedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["internal:packaging:cliVersionForTesting"] = "13.4.0-preview.1.26210.1+abc1234",
+                ["overrideStagingFeed"] = explicitFeedUrl
+            })
+            .Build();
+
+        var loggerProvider = new CapturingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(loggerProvider);
+        });
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, loggerFactory.CreateLogger<PackagingService>());
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        // Explicit feed override is honored even on a daily CLI.
+        var stagingChannel = Assert.Single(channels, c => c.Name == "staging");
+        Assert.Null(packagingService.GetStagingChannelUnavailableReason());
+
+        var aspireMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "Aspire*");
+        Assert.NotNull(aspireMapping);
+        Assert.Equal(explicitFeedUrl, aspireMapping.Source);
+
+        // Resolved feed URL is logged so users can verify channel resolution from CLI output.
+        Assert.Contains(loggerProvider.LogEntries, e =>
+            e.Level == LogLevel.Information &&
+            e.Message.Contains(explicitFeedUrl) &&
+            e.Message.Contains("staging"));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_StableCliRequestsStaging_NoFeedOverride_StagingChannelCreatedFromShaUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                // A real stable CLI: no prerelease label.
+                ["internal:packaging:cliVersionForTesting"] = "13.4.0+a1b2c3d4e5f6"
+            })
+            .Build();
+
+        var loggerProvider = new CapturingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.AddProvider(loggerProvider);
+        });
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, loggerFactory.CreateLogger<PackagingService>());
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        // Staging channel is created. The exact feed URL on a real stable CLI uses the
+        // real assembly commit hash; this test only asserts the channel exists and uses
+        // the darc-pub-* naming pattern so we don't tightly couple to assembly metadata.
+        var stagingChannel = Assert.Single(channels, c => c.Name == "staging");
+        Assert.Null(packagingService.GetStagingChannelUnavailableReason());
+
+        var aspireMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "Aspire*");
+        Assert.NotNull(aspireMapping);
+        Assert.StartsWith("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-", aspireMapping.Source);
+
+        Assert.Contains(loggerProvider.LogEntries, e =>
+            e.Level == LogLevel.Information &&
+            e.Message.Contains("staging") &&
+            e.Message.Contains("darc-pub-microsoft-aspire-"));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_BlessedPrereleaseCliRequestsStaging_NoFeedOverride_StagingChannelCreated()
+    {
+        // Blessed previews/RCs (e.g. "13.4.0-preview.1", "13.4.0-rc.1") have darc-pub-* feeds
+        // because the build pipeline creates them for those builds. They are NOT daily CI
+        // builds, so they should still be allowed to synthesize the staging channel.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["internal:packaging:cliVersionForTesting"] = "13.4.0-rc.1+a1b2c3d4e5f6"
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.Contains(channels, c => c.Name == "staging");
+        Assert.Null(packagingService.GetStagingChannelUnavailableReason());
+    }
+
+    [Fact]
+    public void GetStagingChannelUnavailableReason_StagingFeatureDisabled_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        // Daily CLI but staging is not enabled — there's no "unavailability" to report.
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["internal:packaging:cliVersionForTesting"] = "13.4.0-preview.1.26210.1+abc1234"
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        Assert.Null(packagingService.GetStagingChannelUnavailableReason());
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        public List<CapturedLogEntry> LogEntries { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, LogEntries);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(string categoryName, List<CapturedLogEntry> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                lock (entries)
+                {
+                    entries.Add(new CapturedLogEntry(categoryName, logLevel, formatter(state, exception)));
+                }
+            }
+        }
+    }
+
+    private sealed record CapturedLogEntry(string Category, LogLevel Level, string Message);
 
     private sealed class FakeNuGetPackageCacheWithPackages(List<Aspire.Shared.NuGetPackageCli> packages) : INuGetPackageCache
     {
