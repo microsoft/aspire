@@ -46,7 +46,7 @@ internal sealed class LanguageService
             var languageSupport = _resolver.GetLanguageSupport(language);
             if (languageSupport == null)
             {
-                throw new ArgumentException($"No language support found for: {language}");
+                throw new ArgumentException(BuildNoLanguageSupportMessage(language));
             }
 
             var request = new ScaffoldRequest
@@ -118,7 +118,7 @@ internal sealed class LanguageService
             var languageSupport = _resolver.GetLanguageSupport(language);
             if (languageSupport == null)
             {
-                throw new ArgumentException($"No language support found for: {language}");
+                throw new ArgumentException(BuildNoLanguageSupportMessage(language));
             }
 
             var spec = languageSupport.GetRuntimeSpec();
@@ -131,5 +131,26 @@ internal sealed class LanguageService
             _logger.LogError(ex, "<< getRuntimeSpec({Language}) failed", language);
             throw;
         }
+    }
+
+    private string BuildNoLanguageSupportMessage(string language)
+    {
+        var available = _resolver.GetAllLanguages()
+            .Select(l => l.Language)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (available.Length == 0)
+        {
+            // No language support discovered at all is almost always a binary-mismatch /
+            // type-load failure (see LanguageSupportResolver warnings). Point the user at
+            // the apphost server log and the GitHub issue tracker.
+            return $"No language support found for: {language}. " +
+                   "No language support implementations were discovered in any loaded assembly. " +
+                   "This usually indicates a binary mismatch between the bundled apphost server and the integration assemblies on disk; " +
+                   "check the apphost server log for 'LoaderExceptions' Warnings.";
+        }
+
+        return $"No language support found for: {language}. Available languages: {string.Join(", ", available)}.";
     }
 }
