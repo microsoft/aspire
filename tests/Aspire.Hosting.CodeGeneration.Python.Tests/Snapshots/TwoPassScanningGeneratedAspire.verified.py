@@ -6930,7 +6930,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     image_tag: str
     image_registry: str
     image: str | tuple[str, str]
-    image_s_h_a256: str
+    image_sha256: str
     container_runtime_args: typing.Iterable[str]
     lifetime: ContainerLifetime
     image_pull_policy: ImagePullPolicy
@@ -7044,7 +7044,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_image_s_h_a256(self, sha256: str) -> typing.Self:
+    def with_image_sha256(self, sha256: str) -> typing.Self:
         """Sets the image SHA256 digest"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['sha256'] = sha256
@@ -7716,13 +7716,13 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImage', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image'. Expected: str or (str, str)")
-        if _image_s_h_a256 := kwargs.pop("image_s_h_a256", None):
-            if _validate_type(_image_s_h_a256, str):
+        if _image_sha256 := kwargs.pop("image_sha256", None):
+            if _validate_type(_image_sha256, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["sha256"] = typing.cast(str, _image_s_h_a256)
+                rpc_args["sha256"] = typing.cast(str, _image_sha256)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImageSHA256', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'image_s_h_a256'. Expected: str")
+                raise TypeError("Invalid type for option 'image_sha256'. Expected: str")
         if _container_runtime_args := kwargs.pop("container_runtime_args", None):
             if _validate_type(_container_runtime_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

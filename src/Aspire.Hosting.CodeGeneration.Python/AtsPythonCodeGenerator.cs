@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.TypeSystem;
 
@@ -933,23 +934,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             return name;
         }
 
-        var result = new System.Text.StringBuilder();
-        result.Append(char.ToLowerInvariant(name[0]));
-
-        for (int i = 1; i < name.Length; i++)
-        {
-            var c = name[i];
-            if (char.IsUpper(c))
-            {
-                result.Append('_');
-                result.Append(char.ToLowerInvariant(c));
-            }
-            else
-            {
-                result.Append(c);
-            }
-        }
-        var resultStr = result.ToString();
+        var resultStr = JsonNamingPolicy.SnakeCaseLower.ConvertName(name);
         resultStr = resultStr.Replace("environment", "env");
         resultStr = resultStr.Replace("configuration", "config");
         resultStr = resultStr.Replace("application", "app");

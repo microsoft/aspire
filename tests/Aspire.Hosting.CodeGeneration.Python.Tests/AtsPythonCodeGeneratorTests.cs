@@ -306,6 +306,17 @@ public class AtsPythonCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_PreservesAcronymsInSnakeCaseIdentifiers()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextWithAcronymIdentifiers());
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains("def with_something_ai(self, something_ai: str)", aspirePy);
+        Assert.DoesNotContain("with_something_a_i", aspirePy);
+        Assert.DoesNotContain("something_a_i", aspirePy);
+    }
+
+    [Fact]
     public void GeneratedCode_SanitizesClrGenericNamesInInheritance()
     {
         var files = _generator.GenerateDistributedApplication(CreateContextWithGenericInheritance());
@@ -428,6 +439,62 @@ public class AtsPythonCodeGeneratorTests
         };
     }
 
+    private static AtsContext CreateContextWithAcronymIdentifiers()
+    {
+        var resourceType = new AtsTypeRef
+        {
+            TypeId = "Tests/AcronymResource",
+            ClrType = typeof(AcronymResource),
+            Category = AtsTypeCategory.Handle
+        };
+
+        return new AtsContext
+        {
+            Capabilities =
+            [
+                new AtsCapabilityInfo
+                {
+                    CapabilityId = "Tests/withSomethingAI",
+                    MethodName = "withSomethingAI",
+                    Parameters =
+                    [
+                        new AtsParameterInfo
+                        {
+                            Name = "builder",
+                            Type = resourceType
+                        },
+                        new AtsParameterInfo
+                        {
+                            Name = "somethingAI",
+                            Type = new AtsTypeRef
+                            {
+                                TypeId = AtsConstants.String,
+                                Category = AtsTypeCategory.Primitive
+                            }
+                        }
+                    ],
+                    ReturnType = resourceType,
+                    TargetTypeId = resourceType.TypeId,
+                    TargetType = resourceType,
+                    TargetParameterName = "builder",
+                    ExpandedTargetTypes = [resourceType],
+                    ReturnsBuilder = true,
+                    CapabilityKind = AtsCapabilityKind.Method
+                }
+            ],
+            HandleTypes =
+            [
+                new AtsTypeInfo
+                {
+                    AtsTypeId = resourceType.TypeId,
+                    ClrType = typeof(AcronymResource)
+                }
+            ],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+    }
+
     private static AtsContext CreateContextWithGenericInheritance()
     {
         var genericBaseType = typeof(GenericBaseResource<GenericTypeArgument<int, string>>);
@@ -512,6 +579,8 @@ public class AtsPythonCodeGeneratorTests
     }
 
     private sealed class KeywordResource;
+
+    private sealed class AcronymResource;
 
     private interface IGenericResource<T>;
 
