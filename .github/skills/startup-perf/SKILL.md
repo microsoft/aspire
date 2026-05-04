@@ -135,7 +135,7 @@ Important files:
 
 ## What the Harness Validates
 
-The shared validator (`eng/scripts/validate-startup-otel-export.mjs`) reads the dashboard export and requires a startup operation with correlated spans from:
+The shared C# file-based validator (`tools/StartupOtelValidator/ValidateStartupOtelExport.cs`) reads the dashboard export and requires a startup operation with correlated spans from:
 
 - CLI startup/launch spans, including `aspire/cli/start_apphost.spawn_child`.
 - Child CLI spans such as `aspire/cli/run`, dotnet build/run spans, backchannel connect spans, and dashboard URL retrieval.

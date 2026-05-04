@@ -780,6 +780,7 @@ START_JSON_PATH="$start_stdout" \
 EXPORT_ZIP="$export_zip" \
 DOTNET_TRACE_DIR="$dotnet_trace_dir" \
 DOTNET_BINLOG_DIR="$dotnet_binlog_dir" \
-node "$repo_root/eng/scripts/validate-startup-otel-export.mjs"
+MSBUILDTERMINALLOGGER=false \
+dotnet run "$repo_root/tools/StartupOtelValidator/ValidateStartupOtelExport.cs"
 
 write_step "Startup OTEL harness passed"

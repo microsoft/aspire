@@ -409,7 +409,8 @@ await builder.build().run();
     }
 
     Write-Step "Validating startup OTEL export"
-    & node (Join-Path $repoRoot "eng\scripts\validate-startup-otel-export.mjs")
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "MSBUILDTERMINALLOGGER" -Value "false"
+    & dotnet run (Join-Path $repoRoot "tools\StartupOtelValidator\ValidateStartupOtelExport.cs")
     if ($LASTEXITCODE -ne 0) {
         throw "Startup OTEL export validation failed. See $spanSummaryPath"
     }
