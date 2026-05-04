@@ -83,8 +83,9 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Construct the dashboard URL using the known token and localhost URL
-        var dashboardUrl = $"{localhostUrl}/login?t={browserToken}";
+        // Construct the dashboard URL using the known token and the frontend URL.
+        // In the dev.localhost variant this exercises the CLI's NormalizeDashboardUrl path end-to-end.
+        var dashboardUrl = $"{frontendUrl}/login?t={browserToken}";
 
         await auto.TypeAsync($"aspire otel traces --dashboard-url \"{dashboardUrl}\"");
         await auto.EnterAsync();

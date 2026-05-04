@@ -230,10 +230,10 @@ internal static class TelemetryCommandHelpers
                     var errorInfo = exchangeResult.FailureKind switch
                     {
                         TokenExchangeFailureKind.ConnectionError => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardConnectionFailedHint),
                         TokenExchangeFailureKind.ApiNotEnabled => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardApiNotEnabledHint),
                         _ => new TelemetryErrorInfo(
                             TelemetryCommandStrings.DashboardLoginTokenFailed,
