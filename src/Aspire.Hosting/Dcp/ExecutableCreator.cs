@@ -7,6 +7,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
@@ -105,22 +106,43 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
 
-        // Configure terminal spec if the resource has a TerminalAnnotation.
-        // Phase 4 of WithTerminal will populate per-replica TerminalSpec values from
-        // TerminalAnnotation.TerminalHost.Layout.ProducerUdsPaths[replicaIndex]; the
-        // current ExecutableSpec.Terminal shape (single SocketPath) is being replaced
-        // with per-replica routing in DCP, so we leave the spec unset here for now.
+        // Configure the per-replica terminal spec if the resource has a TerminalAnnotation.
+        // Each replica gets its own DCP UDS producer endpoint from the layout so the
+        // terminal host can multiplex viewers per (resource, replica).
+        //
+        // DCP currently implements PTY support for Executables on Windows only (ConPTY).
+        // On other platforms we leave Terminal unset, log a warning, and the resource runs
+        // without an attachable terminal session — the TerminalHostResource itself still
+        // starts but never receives any HMP v1 producer connection.
         if (er.ModelResource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
         {
             var terminalAnnotation = terminalAnnotations.FirstOrDefault();
             if (terminalAnnotation is not null)
             {
-                spec.Terminal = new TerminalSpec
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    Enabled = true,
-                    Columns = terminalAnnotation.Options.Columns,
-                    Rows = terminalAnnotation.Options.Rows
-                };
+                    _logger.LogWarning(
+                        "WithTerminal() is currently only supported on Windows. Resource '{ResourceName}' will run without an attachable terminal in this Aspire version.",
+                        er.ModelResource.Name);
+                }
+                else if (TryGetReplicaIndex(exe, out var replicaIndex)
+                    && replicaIndex >= 0
+                    && replicaIndex < terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths.Count)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        Enabled = true,
+                        UdsPath = terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths[replicaIndex],
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Could not determine a producer UDS path for replica of resource '{ResourceName}'; terminal will not be attached for this replica.",
+                        er.ModelResource.Name);
+                }
             }
         }
 
@@ -523,5 +545,21 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     {
         resource.AddLifeCycleCommands();
         _nameGenerator.EnsureDcpInstancesPopulated(resource);
+    }
+
+    private static bool TryGetReplicaIndex(Executable exe, out int replicaIndex)
+    {
+        replicaIndex = -1;
+        if (exe.Metadata.Annotations is not { } annotations)
+        {
+            return false;
+        }
+
+        if (!annotations.TryGetValue(CustomResource.ResourceReplicaIndex, out var value))
+        {
+            return false;
+        }
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex);
     }
 }
