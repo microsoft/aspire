@@ -1,9 +1,0 @@
-{
-  "author": "app/aspire-repo-bot",
-  "comment": "Bot-authored PR (aspire-repo-bot); excluded",
-  "mergedAt": "2026-05-01T20:54:15Z",
-  "number": 16585,
-  "runDate": "2026-05-01T22:22:39Z",
-  "status": "excluded",
-  "title": "[release/13.3] Gateway TLS without hostname (FQDN discovery) + TS AppHost endpoint fix"
-}

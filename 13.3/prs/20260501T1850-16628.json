@@ -1,9 +1,0 @@
-{
-  "author": "app/aspire-repo-bot",
-  "comment": "Bot-authored backport PR",
-  "mergedAt": "2026-05-01T18:50:02Z",
-  "number": 16628,
-  "runDate": "2026-05-01T20:25:44Z",
-  "status": "excluded",
-  "title": "[release/13.3] Remove obsolete ATS export shims"
-}

@@ -1,9 +1,0 @@
-{
-  "author": "Copilot",
-  "comment": "Internal build fixture fix, not user-facing",
-  "mergedAt": "2026-04-24T17:17:03Z",
-  "number": 16418,
-  "runDate": "2026-04-30T15:33:02Z",
-  "status": "excluded",
-  "title": "Fix nextjs fixture package-lock.json: replace internal AzDO registry URLs with public npm"
-}

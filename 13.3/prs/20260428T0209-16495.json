@@ -1,9 +1,0 @@
-{
-  "author": "IEvangelist",
-  "comment": "CI workflow fix for pr-docs-check shallow clone; no user-facing impact",
-  "mergedAt": "2026-04-28T02:09:45Z",
-  "number": 16495,
-  "runDate": "2026-04-30T16:04:37Z",
-  "status": "excluded",
-  "title": "Fetch release/* refs in pr-docs-check checkout"
-}

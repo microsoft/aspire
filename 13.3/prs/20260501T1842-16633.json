@@ -1,9 +1,0 @@
-{
-  "author": "app/aspire-repo-bot",
-  "comment": "Bot-authored backport PR",
-  "mergedAt": "2026-05-01T18:42:04Z",
-  "number": 16633,
-  "runDate": "2026-05-01T20:25:44Z",
-  "status": "excluded",
-  "title": "[release/13.3] Move Ingress and Gateway extensions to Aspire.Hosting namespace"
-}

@@ -1,9 +1,0 @@
-{
-  "author": "app/aspire-repo-bot",
-  "comment": "Bot-authored backport PR (app/aspire-repo-bot)",
-  "mergedAt": "2026-04-30T17:02:46Z",
-  "number": 16564,
-  "runDate": "2026-05-01T00:02:54Z",
-  "status": "excluded",
-  "title": "[release/13.3] Normalize App Service Application Insights Bicep identifiers"
-}

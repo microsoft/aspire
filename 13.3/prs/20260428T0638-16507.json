@@ -1,9 +1,0 @@
-{
-  "author": "adamint",
-  "comment": "Minor lockfile URL fix to use internal npm feed; no user-facing impact",
-  "mergedAt": "2026-04-28T06:38:03Z",
-  "number": 16507,
-  "runDate": "2026-04-30T16:04:37Z",
-  "status": "excluded",
-  "title": "Use internal feed for extension Yarn tarballs"
-}

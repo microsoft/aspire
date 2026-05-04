@@ -1,9 +1,0 @@
-{
-  "author": "mitchdenny",
-  "comment": "Test-only: adds regression test for getConnectionProperty unwrapping fix",
-  "mergedAt": "2026-04-26T07:00:12Z",
-  "number": 16392,
-  "runDate": "2026-04-30T15:45:32Z",
-  "status": "excluded",
-  "title": "Add regression test for getConnectionProperty builder-to-resource unwrapping"
-}
