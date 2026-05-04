@@ -16,8 +16,4 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Terminals.TerminalHost\Terminals.TerminalHost.csproj" />
-  </ItemGroup>
-
 </Project>

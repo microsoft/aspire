@@ -131,8 +131,6 @@
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="ConsoleLogs\UrlParser.cs" />
     <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
-    <Compile Include="$(SharedDir)Terminal\TerminalProtocol.cs" Link="Terminal\TerminalProtocol.cs" />
-    <Compile Include="$(SharedDir)Terminal\TerminalFrameReaderWriter.cs" Link="Terminal\TerminalFrameReaderWriter.cs" />
   </ItemGroup>
 
   <ItemGroup>

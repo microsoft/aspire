@@ -78,6 +78,7 @@
     <Project Path="src/Aspire.Hosting.Valkey/Aspire.Hosting.Valkey.csproj" />
     <Project Path="src/Aspire.Hosting.Yarp/Aspire.Hosting.Yarp.csproj" />
     <Project Path="src/Aspire.Hosting/Aspire.Hosting.csproj" />
+    <Project Path="src/Aspire.TerminalHost/Aspire.TerminalHost.csproj" />
     <Project Path="src/Aspire.TypeSystem/Aspire.TypeSystem.csproj" />
     <Project Path="src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj" />
   </Folder>
@@ -507,6 +508,7 @@
     <Project Path="tests/Aspire.Hosting.SqlServer.Tests/Aspire.Hosting.SqlServer.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj" />
+    <Project Path="tests/Aspire.TerminalHost.Tests/Aspire.TerminalHost.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Valkey.Tests/Aspire.Hosting.Valkey.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Yarp.Tests/Aspire.Hosting.Yarp.Tests.csproj" />
   </Folder>

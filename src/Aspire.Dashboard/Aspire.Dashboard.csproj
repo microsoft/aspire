@@ -294,8 +294,6 @@
     <Compile Include="$(SharedDir)KnownUnsupportedUrlSchemes.cs" Link="Utils\KnownUnsupportedUrlSchemes.cs" />
     <Compile Include="$(SharedDir)TaskHelpers.cs" Link="Utils\TaskHelpers.cs" />
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Utils\KnownProperties.cs" />
-    <Compile Include="$(SharedDir)Terminal\TerminalProtocol.cs" Link="Terminal\TerminalProtocol.cs" />
-    <Compile Include="$(SharedDir)Terminal\TerminalFrameReaderWriter.cs" Link="Terminal\TerminalFrameReaderWriter.cs" />
     <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Utils\KnownResourceTypes.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
     <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.shared.cs" />
