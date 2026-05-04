@@ -311,6 +311,7 @@ internal static class CliE2ETestHelpers
             startInfo.ArgumentList.Add("--quiet");
             startInfo.ArgumentList.Add("--build-arg");
             startInfo.ArgumentList.Add("SKIP_SOURCE_BUILD=true");
+            AddUbuntuAptMirrorBuildArg(startInfo);
             startInfo.ArgumentList.Add("-f");
             startInfo.ArgumentList.Add(dockerfilePath);
             startInfo.ArgumentList.Add("-t");
@@ -360,6 +361,7 @@ internal static class CliE2ETestHelpers
 
             startInfo.ArgumentList.Add("build");
             startInfo.ArgumentList.Add("--quiet");
+            AddUbuntuAptMirrorBuildArg(startInfo);
             startInfo.ArgumentList.Add("-f");
             startInfo.ArgumentList.Add(dockerfilePath);
             startInfo.ArgumentList.Add("-t");
@@ -444,6 +446,18 @@ internal static class CliE2ETestHelpers
     private static string GenerateDockerContainerName()
     {
         return $"hex1b-test-{Guid.NewGuid():N}".Substring(0, 32);
+    }
+
+    private static void AddUbuntuAptMirrorBuildArg(ProcessStartInfo startInfo)
+    {
+        var buildArgs = new Dictionary<string, string>();
+        CliInstallStrategy.ConfigureUbuntuAptMirrorBuildArg(buildArgs);
+
+        foreach (var (name, value) in buildArgs)
+        {
+            startInfo.ArgumentList.Add("--build-arg");
+            startInfo.ArgumentList.Add($"{name}={value}");
+        }
     }
 
     /// <summary>
