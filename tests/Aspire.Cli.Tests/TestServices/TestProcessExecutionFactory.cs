@@ -104,6 +104,8 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public int ExitCode => 0;
 
+    public int ProcessId { get; init; } = Environment.ProcessId;
+
     public bool StartReturnValue { get; init; } = true;
 
     public bool Start()
@@ -171,6 +173,7 @@ internal static class DotNetCliRunnerTestHelper
             logger ?? serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
             serviceProvider,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
+            new ProfilingTelemetry(executionContext),
             configuration ?? serviceProvider.GetRequiredService<IConfiguration>(),
             diskCache ?? new NullDiskCache(),
             serviceProvider.GetRequiredService<IFeatures>(),
@@ -201,6 +204,7 @@ internal static class DotNetCliRunnerTestHelper
             logger ?? serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
             serviceProvider,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
+            new ProfilingTelemetry(executionContext),
             configuration ?? serviceProvider.GetRequiredService<IConfiguration>(),
             diskCache ?? new NullDiskCache(),
             serviceProvider.GetRequiredService<IFeatures>(),

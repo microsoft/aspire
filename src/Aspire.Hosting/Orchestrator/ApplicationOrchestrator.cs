@@ -94,8 +94,7 @@ internal sealed class ApplicationOrchestrator
 
     private async Task WaitForInBeforeResourceStartedEvent(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
     {
-        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.before_start_wait");
-        StartupTracing.SetResourceTags(activity, @event.Resource);
+        using var activity = ProfilingTelemetry.StartResourceBeforeStartWait(@event.Resource);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
@@ -123,7 +122,7 @@ internal sealed class ApplicationOrchestrator
         }
         catch (Exception ex)
         {
-            StartupTracing.SetError(activity, ex);
+            activity.SetError(ex);
             throw;
         }
         finally

@@ -9,6 +9,7 @@ param(
     [string]$DcpPath,
     [string]$OutputRoot,
     [switch]$RequireDcpSpans,
+    [int]$PostStartDelaySeconds = 0,
     [switch]$SkipBuild
 )
 
@@ -178,79 +179,6 @@ function Restore-ProcessEnvironmentVariables {
     }
 }
 
-function Get-SpanAttributeValue {
-    param(
-        [Parameter(Mandatory = $true)]
-        [object]$Span,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Key
-    )
-
-    foreach ($attribute in @($Span.attributes)) {
-        if ($attribute.key -ne $Key) {
-            continue
-        }
-
-        $value = $attribute.value
-        foreach ($propertyName in @("stringValue", "intValue", "doubleValue", "boolValue")) {
-            if ($value.PSObject.Properties.Name -contains $propertyName) {
-                return $value.$propertyName
-            }
-        }
-    }
-
-    return $null
-}
-
-function Get-JsonPropertyValue {
-    param(
-        [Parameter(Mandatory = $true)]
-        [object]$Object,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
-
-    if ($Object.PSObject.Properties.Name -contains $Name) {
-        return $Object.$Name
-    }
-
-    return $null
-}
-
-function Read-ExportedSpans {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Directory
-    )
-
-    $spans = New-Object System.Collections.Generic.List[object]
-    $traceFiles = Get-ChildItem -Path (Join-Path $Directory "traces") -Filter "*.json" -File -ErrorAction SilentlyContinue
-    foreach ($traceFile in $traceFiles) {
-        $document = Get-Content $traceFile.FullName -Raw | ConvertFrom-Json
-        foreach ($resourceSpan in @($document.resourceSpans)) {
-            foreach ($scopeSpan in @($resourceSpan.scopeSpans)) {
-                foreach ($span in @($scopeSpan.spans)) {
-                    $spans.Add([pscustomobject]@{
-                        File = $traceFile.Name
-                        Scope = $scopeSpan.scope.name
-                        Name = $span.name
-                        TraceId = $span.traceId
-                        SpanId = $span.spanId
-                        ParentSpanId = Get-JsonPropertyValue -Object $span -Name "parentSpanId"
-                        StartupOperationId = Get-SpanAttributeValue -Span $span -Key "aspire.startup.operation_id"
-                        CommandName = Get-SpanAttributeValue -Span $span -Key "aspire.cli.command.name"
-                        ProcessId = Get-SpanAttributeValue -Span $span -Key "process.pid"
-                    })
-                }
-            }
-        }
-    }
-
-    return $spans
-}
-
 if (-not $TargetAspirePath) {
     $TargetAspirePath = Join-Path $repoRoot "artifacts\bin\Aspire.Cli\Debug\net10.0\aspire.exe"
 }
@@ -321,9 +249,14 @@ try {
     Wait-HttpReady -Url $dashboardUrl -TimeoutSeconds 90
 
     Write-Step "Configuring CLI diagnostic OTLP export to $otlpGrpcUrl"
+    # Keep both forms: OTEL_* configures CLI/OpenTelemetry exporters, while ASPIRE_OTEL_* is
+    # projected into AppHost IConfiguration as OTEL_* by DistributedApplicationBuilder.
     $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_CLI_TELEMETRY_OPTOUT" -Value "true"
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_STARTUP_PROFILING_ENABLED" -Value "true"
     $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "OTEL_EXPORTER_OTLP_ENDPOINT" -Value $otlpGrpcUrl
     $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "OTEL_EXPORTER_OTLP_PROTOCOL" -Value "grpc"
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_OTEL_EXPORTER_OTLP_ENDPOINT" -Value $otlpGrpcUrl
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_OTEL_EXPORTER_OTLP_PROTOCOL" -Value "grpc"
 
     if ($DcpPath) {
         $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_DCP_PATH" -Value $DcpPath
@@ -345,13 +278,18 @@ try {
   "profiles": {
     "https": {
       "applicationUrl": "http://localhost:$appHostDashboardPort",
-      "environmentVariables": {
-        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:$appHostOtlpGrpcPort",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:$appHostResourceServicePort"
+        "environmentVariables": {
+          "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
+          "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:$appHostOtlpGrpcPort",
+          "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:$appHostResourceServicePort",
+          "ASPIRE_STARTUP_PROFILING_ENABLED": "true",
+          "OTEL_EXPORTER_OTLP_ENDPOINT": "$otlpGrpcUrl",
+          "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+          "ASPIRE_OTEL_EXPORTER_OTLP_ENDPOINT": "$otlpGrpcUrl",
+          "ASPIRE_OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"
+        }
       }
     }
-  }
 }
 "@ | Set-Content -Path (Join-Path $projectDir "aspire.config.json") -Encoding UTF8
 
@@ -429,7 +367,11 @@ await builder.build().run();
 
     Write-Step "Starting TypeScript AppHost with telemetry export enabled"
     $startResult = Invoke-LoggedCommand -FilePath $TargetAspirePath -Arguments @("start", "--isolated", "--format", "Json", "--apphost", $appHostPath) -WorkingDirectory $projectDir -Name "start"
-    $startJson = Get-Content $startResult.Stdout -Raw | ConvertFrom-Json
+
+    if ($PostStartDelaySeconds -gt 0) {
+        Write-Step "Waiting ${PostStartDelaySeconds}s for startup telemetry to flush"
+        Start-Sleep -Seconds $PostStartDelaySeconds
+    }
 
     Write-Step "Stopping TypeScript AppHost"
     Invoke-LoggedCommand -FilePath $TargetAspirePath -Arguments @("stop", "--apphost", $appHostPath) -WorkingDirectory $projectDir -Name "stop" | Out-Null
@@ -444,91 +386,35 @@ await builder.build().run();
     }
 
     Expand-Archive -Path $exportZip -DestinationPath $exportDir -Force
-    $spans = @(Read-ExportedSpans -Directory $exportDir)
-    $spans | ConvertTo-Json -Depth 5 | Set-Content -Path $spanSummaryPath -Encoding UTF8
 
-    $startupGroups = @($spans | Where-Object { $_.StartupOperationId } | Group-Object StartupOperationId)
-    if ($startupGroups.Count -eq 0) {
-        throw "No exported spans contained aspire.startup.operation_id. See $spanSummaryPath"
+    $requireDcpSpansValue = if ($RequireDcpSpans) { "true" } else { "false" }
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "REQUIRE_DCP_SPANS" -Value $requireDcpSpansValue
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "EXPORT_DIR" -Value $exportDir
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "SPAN_SUMMARY_PATH" -Value $spanSummaryPath
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "RUN_ROOT" -Value $runRoot
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "TARGET_ASPIRE_PATH" -Value (Resolve-Path $TargetAspirePath).Path
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "PROFILER_ASPIRE_PATH" -Value (Resolve-Path $ProfilerAspirePath).Path
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "POST_START_DELAY_SECONDS" -Value $PostStartDelaySeconds.ToString()
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "DASHBOARD_URL" -Value $dashboardUrl
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "OTLP_GRPC_URL" -Value $otlpGrpcUrl
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "OTLP_HTTP_URL" -Value $otlpHttpUrl
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "APPHOST_PATH" -Value $appHostPath
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "START_JSON_PATH" -Value $startResult.Stdout
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "EXPORT_ZIP" -Value $exportZip
+    if ($LayoutPath) {
+        $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "LAYOUT_PATH" -Value $LayoutPath
+    }
+    if ($DcpPath) {
+        $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "DCP_PATH" -Value $DcpPath
     }
 
-    $validStartupGroup = $null
-    $validTraceGroup = $null
-    foreach ($startupGroup in $startupGroups) {
-        foreach ($traceGroup in @($startupGroup.Group | Where-Object { $_.TraceId } | Group-Object TraceId)) {
-            $traceSpans = @($traceGroup.Group)
-            $commands = @($traceSpans | ForEach-Object { $_.CommandName } | Where-Object { $_ } | Sort-Object -Unique)
-            $hasChildDiagnosticSpan = @($traceSpans | Where-Object {
-                $_.Scope -eq "Aspire.Cli.Diagnostics" -and
-                    $_.Name -in @("BuildAsync", "ConnectAsync", "GetDashboardUrlsAsync", "EnsureCertificatesTrustedAsync")
-            }).Count -gt 0
-            $hasHostingDcpSpan = @($traceSpans | Where-Object {
-                $_.Scope -eq "Aspire.Hosting.Startup" -and
-                    $_.Name -in @("aspire.hosting.dcp.run_application", "aspire.hosting.dcp.create_rendered_resources", "aspire.hosting.dcp.allocate_service_addresses")
-            }).Count -gt 0
-            $hasResourceCreateSpan = @($traceSpans | Where-Object {
-                $_.Scope -eq "Aspire.Hosting.Startup" -and $_.Name -eq "aspire.hosting.resource.create"
-            }).Count -gt 0
-            $hasResourceWaitSpan = @($traceSpans | Where-Object {
-                $_.Scope -eq "Aspire.Hosting.Startup" -and
-                    $_.Name -in @("aspire.hosting.resource.before_start_wait", "aspire.hosting.resource.wait_for_dependencies", "aspire.hosting.resource.wait_for_dependency")
-            }).Count -gt 0
-            $hasDcpProcessSpan = @($traceSpans | Where-Object {
-                $_.Scope -eq "dcp.startup" -and
-                    $_.Name -in @("dcp.command", "dcp.start_apiserver", "dcp.start_apiserver.fork", "dcp.run", "dcp.apiserver.start", "dcp.hosted_services.start", "dcp.controllers.run", "dcp.controllers.create_manager")
-            }).Count -gt 0
-            $hasDcpResourceSpan = @($traceSpans | Where-Object {
-                $_.Scope -eq "dcp.startup" -and
-                    $_.Name -in @("dcp.controller.reconcile", "dcp.executable.manage", "dcp.service.ensure_effective_address", "dcp.container.manage")
-            }).Count -gt 0
-            $hasRequiredDcpSpans = -not $RequireDcpSpans -or ($hasDcpProcessSpan -and $hasDcpResourceSpan)
-
-            if ($commands -contains "aspire start" -and
-                $hasChildDiagnosticSpan -and
-                $hasHostingDcpSpan -and
-                $hasResourceCreateSpan -and
-                $hasResourceWaitSpan -and
-                $hasRequiredDcpSpans) {
-                $validStartupGroup = $startupGroup
-                $validTraceGroup = $traceGroup
-                break
-            }
-        }
-
-        if ($validStartupGroup) {
-            break
-        }
+    Write-Step "Validating startup OTEL export"
+    & node (Join-Path $repoRoot "eng\scripts\validate-startup-otel-export.mjs")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Startup OTEL export validation failed. See $spanSummaryPath"
     }
-
-    if (-not $validStartupGroup) {
-        $dcpRequirement = if ($RequireDcpSpans) { ", DCP process, and DCP resource/controller" } else { "" }
-        throw "No startup operation contained correlated CLI, Hosting DCP resource creation, resource wait$dcpRequirement spans in one trace. See $spanSummaryPath"
-    }
-
-    $summary = [pscustomobject]@{
-        RunRoot = $runRoot
-        TargetAspirePath = (Resolve-Path $TargetAspirePath).Path
-        ProfilerAspirePath = (Resolve-Path $ProfilerAspirePath).Path
-        LayoutPath = $LayoutPath
-        DcpPath = $DcpPath
-        RequireDcpSpans = [bool]$RequireDcpSpans
-        DashboardUrl = $dashboardUrl
-        OtlpGrpcUrl = $otlpGrpcUrl
-        OtlpHttpUrl = $otlpHttpUrl
-        AppHostPath = $appHostPath
-        StartedDashboardUrl = $startJson.dashboardUrl
-        ExportZip = $exportZip
-        SpanSummary = $spanSummaryPath
-        StartupOperationId = $validStartupGroup.Name
-        CorrelatedSpanCount = $validTraceGroup.Count
-        TraceId = $validTraceGroup.Name
-    }
-
-    $summaryPath = Join-Path $runRoot "summary.json"
-    $summary | ConvertTo-Json -Depth 5 | Set-Content -Path $summaryPath -Encoding UTF8
 
     Write-Step "Startup OTEL harness passed"
-    $summary | ConvertTo-Json -Depth 5
 }
 finally {
     if ($environmentSnapshot.Count -gt 0) {

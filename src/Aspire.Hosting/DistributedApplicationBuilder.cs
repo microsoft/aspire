@@ -493,7 +493,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
         }
 
-        ConfigureStartupTracing();
+        ConfigureProfilingTelemetry();
 
         if (ExecutionContext.IsRunMode)
         {
@@ -630,9 +630,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
     }
 
-    private void ConfigureStartupTracing()
+    private void ConfigureProfilingTelemetry()
     {
-        if (!ShouldConfigureStartupTracing())
+        if (!ShouldConfigureProfilingTelemetry())
         {
             return;
         }
@@ -641,16 +641,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             .AddService(
                 serviceName: "aspire-apphost",
                 serviceVersion: typeof(DistributedApplication).Assembly.GetName().Version?.ToString())
-            .AddAttributes([
-                new KeyValuePair<string, object>("aspire.apphost.name", Path.GetFileName(AppHostPath)),
-                new KeyValuePair<string, object>("aspire.apphost.operation", ExecutionContext.Operation.ToString())
-            ]);
+            .AddAttributes(ProfilingTelemetry.CreateAppHostResourceAttributes(AppHostPath, ExecutionContext.Operation.ToString()));
 
         _innerBuilder.Services.AddOpenTelemetry()
             .WithTracing(builder =>
             {
                 builder
-                    .AddSource(StartupTracing.ActivitySourceName)
+                    .AddSource(ProfilingTelemetry.ActivitySourceName)
                     .SetResourceBuilder(resourceBuilder);
 
                 if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
@@ -679,9 +676,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             });
     }
 
-    private bool ShouldConfigureStartupTracing()
+    private bool ShouldConfigureProfilingTelemetry()
     {
         if (!ExecutionContext.IsRunMode)
+        {
+            return false;
+        }
+
+        // Dashboard OTLP is normally configured for app telemetry. Startup profiling
+        // spans are high-cardinality diagnostics, so only export them when requested.
+        if (_innerBuilder.Configuration.GetBool(KnownConfigNames.StartupProfilingEnabled) is not true)
         {
             return false;
         }

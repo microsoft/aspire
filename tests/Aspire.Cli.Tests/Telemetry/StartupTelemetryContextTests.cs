@@ -36,6 +36,7 @@ public class StartupTelemetryContextTests
     {
         var context = StartupTelemetryContext.FromEnvironment(name => name switch
         {
+            StartupTelemetryContext.EnabledEnvironmentVariable => "true",
             StartupTelemetryContext.OperationIdEnvironmentVariable => "operation-1",
             _ => null
         });
@@ -45,6 +46,7 @@ public class StartupTelemetryContextTests
         var environment = new Dictionary<string, string>();
         context.AddToEnvironment(environment);
 
+        Assert.Equal("true", environment[StartupTelemetryContext.EnabledEnvironmentVariable]);
         Assert.Equal("operation-1", environment[StartupTelemetryContext.OperationIdEnvironmentVariable]);
         Assert.False(environment.ContainsKey(StartupTelemetryContext.TraceParentEnvironmentVariable));
         Assert.False(environment.ContainsKey(StartupTelemetryContext.TraceStateEnvironmentVariable));
@@ -53,8 +55,44 @@ public class StartupTelemetryContextTests
     [Fact]
     public void FromEnvironment_ReturnsNullWhenOperationIdIsMissing()
     {
-        var context = StartupTelemetryContext.FromEnvironment(_ => null);
+        var context = StartupTelemetryContext.FromEnvironment(name => name switch
+        {
+            StartupTelemetryContext.EnabledEnvironmentVariable => "true",
+            _ => null
+        });
 
         Assert.Null(context);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("false")]
+    [InlineData("0")]
+    public void FromEnvironment_ReturnsNullWhenStartupProfilingIsNotEnabled(string? enabled)
+    {
+        var context = StartupTelemetryContext.FromEnvironment(name => name switch
+        {
+            StartupTelemetryContext.EnabledEnvironmentVariable => enabled,
+            StartupTelemetryContext.OperationIdEnvironmentVariable => "operation-1",
+            _ => null
+        });
+
+        Assert.Null(context);
+    }
+
+    [Theory]
+    [InlineData("true")]
+    [InlineData("TRUE")]
+    [InlineData("1")]
+    public void IsEnabled_ReturnsTrueForSupportedTrueValues(string enabled)
+    {
+        var isEnabled = StartupTelemetryContext.IsEnabled(name => name switch
+        {
+            StartupTelemetryContext.EnabledEnvironmentVariable => enabled,
+            _ => null
+        });
+
+        Assert.True(isEnabled);
     }
 }

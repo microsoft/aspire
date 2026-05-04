@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Hosting;
 
 namespace Aspire.Cli.Telemetry;
 
@@ -11,19 +12,24 @@ namespace Aspire.Cli.Telemetry;
 internal sealed class StartupTelemetryContext
 {
     /// <summary>
+    /// Environment variable that enables startup profiling.
+    /// </summary>
+    internal const string EnabledEnvironmentVariable = KnownConfigNames.StartupProfilingEnabled;
+
+    /// <summary>
     /// Environment variable that carries the stable startup operation identifier.
     /// </summary>
-    internal const string OperationIdEnvironmentVariable = "ASPIRE_STARTUP_OPERATION_ID";
+    internal const string OperationIdEnvironmentVariable = KnownConfigNames.StartupOperationId;
 
     /// <summary>
     /// Environment variable that carries the W3C traceparent value.
     /// </summary>
-    internal const string TraceParentEnvironmentVariable = "ASPIRE_STARTUP_TRACEPARENT";
+    internal const string TraceParentEnvironmentVariable = KnownConfigNames.StartupTraceParent;
 
     /// <summary>
     /// Environment variable that carries the W3C tracestate value.
     /// </summary>
-    internal const string TraceStateEnvironmentVariable = "ASPIRE_STARTUP_TRACESTATE";
+    internal const string TraceStateEnvironmentVariable = KnownConfigNames.StartupTraceState;
 
     private StartupTelemetryContext(string operationId, string? traceParent, string? traceState)
     {
@@ -63,6 +69,11 @@ internal sealed class StartupTelemetryContext
     /// </summary>
     public static StartupTelemetryContext? FromEnvironment(Func<string, string?> getEnvironmentVariable)
     {
+        if (!IsEnabled(getEnvironmentVariable))
+        {
+            return null;
+        }
+
         var operationId = getEnvironmentVariable(OperationIdEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(operationId))
         {
@@ -75,10 +86,20 @@ internal sealed class StartupTelemetryContext
     }
 
     /// <summary>
+    /// Returns <see langword="true"/> when startup profiling has been explicitly enabled.
+    /// </summary>
+    public static bool IsEnabled(Func<string, string?> getEnvironmentVariable)
+    {
+        var value = getEnvironmentVariable(EnabledEnvironmentVariable);
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
+    }
+
+    /// <summary>
     /// Adds this context to a child process environment dictionary.
     /// </summary>
     public void AddToEnvironment(IDictionary<string, string> environment)
     {
+        environment[EnabledEnvironmentVariable] = "true";
         environment[OperationIdEnvironmentVariable] = OperationId;
 
         if (!string.IsNullOrWhiteSpace(TraceParent))
@@ -112,6 +133,6 @@ internal sealed class StartupTelemetryContext
     /// </summary>
     public void AddTags(Activity? activity)
     {
-        activity?.SetTag(TelemetryConstants.Tags.StartupOperationId, OperationId);
+        activity?.SetTag(ProfilingTelemetry.Tags.StartupOperationId, OperationId);
     }
 }

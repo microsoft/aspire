@@ -230,12 +230,6 @@ internal sealed class AspireCliTelemetry : IHostedService
             _tagsList.Add(new(TelemetryConstants.Tags.OsName, GetOsName()));
             _tagsList.Add(new(TelemetryConstants.Tags.OsType, GetOsType()));
             _tagsList.Add(new(TelemetryConstants.Tags.OsVersion, Environment.OSVersion.Version.ToString()));
-
-            var startupTelemetryContext = StartupTelemetryContext.FromEnvironment(Environment.GetEnvironmentVariable);
-            if (startupTelemetryContext is not null)
-            {
-                _tagsList.Add(new(TelemetryConstants.Tags.StartupOperationId, startupTelemetryContext.OperationId));
-            }
         }
         catch (Exception ex)
         {

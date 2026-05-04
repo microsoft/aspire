@@ -764,10 +764,7 @@ public class Program
         };
 
         var executionContext = app.Services.GetRequiredService<CliExecutionContext>();
-        var startupTelemetryContext = StartupTelemetryContext.FromEnvironment(executionContext.GetEnvironmentVariable);
-        using var mainActivity = startupTelemetryContext is not null && startupTelemetryContext.TryGetActivityContext(out var parentContext)
-            ? telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal, parentContext)
-            : telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
+        using var mainActivity = telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
 
         if (mainActivity != null)
         {
@@ -775,7 +772,6 @@ public class Program
             mainActivity.SetStartTime(currentProcess.StartTime);
             mainActivity.AddTag(TelemetryConstants.Tags.ProcessPid, currentProcess.Id);
             mainActivity.AddTag(TelemetryConstants.Tags.ProcessExecutableName, "aspire");
-            startupTelemetryContext?.AddTags(mainActivity);
         }
 
         try

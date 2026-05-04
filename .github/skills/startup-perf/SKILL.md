@@ -1,240 +1,204 @@
 ---
 name: startup-perf
-description: Measures Aspire application startup performance using dotnet-trace and the TraceAnalyzer tool. Use this when asked to measure impact of a code change on Aspire application startup performance.
+description: Measures Aspire startup profiling with the OTEL startup harness, dashboard export, optional dotnet-trace traces, and optional MSBuild binlogs.
 ---
 
-# Aspire Startup Performance Measurement
+# Aspire Startup Profiling with OTEL
 
-This skill provides patterns and practices for measuring .NET Aspire application startup performance using the `Measure-StartupPerformance.ps1` (Windows/PowerShell) or `measure-startup-performance.sh` (macOS/Linux) script and the companion `TraceAnalyzer` tool.
+Use this skill when measuring, validating, or investigating Aspire startup performance with the OTEL profiling harness.
 
-## Overview
+The primary workflow is the PowerShell-free `eng/scripts/verify-startup-otel.sh` harness. A Windows PowerShell equivalent exists at `eng/scripts/verify-startup-otel.ps1` for parity checks. Both scripts run a throwaway AppHost through the Aspire CLI, enable profiling-only OTEL instrumentation, export dashboard telemetry, and validate that CLI, Hosting, and DCP startup spans are correlated in one trace.
 
-The startup performance tooling collects `dotnet-trace` traces from an Aspire AppHost application and computes the startup duration from `AspireEventSource` events. Specifically, it measures the time between the `DcpModelCreationStart` (event ID 17) and `DcpModelCreationStop` (event ID 18) events emitted by the `Microsoft-Aspire-Hosting` EventSource provider.
+## Current Profiling Model
 
-**PowerShell Script (Windows)**: `tools/perf/Measure-StartupPerformance.ps1`
-**Bash Script (macOS/Linux)**: `tools/perf/measure-startup-performance.sh`
-**TraceAnalyzer Location**: `tools/perf/TraceAnalyzer/`
-**Documentation**: `docs/getting-perf-traces.md`
+Startup profiling is opt-in and separate from reported telemetry:
+
+- Enable profiling with `ASPIRE_STARTUP_PROFILING_ENABLED=true` or `1`.
+- CLI profiling spans use the `Aspire.Cli.Profiling` ActivitySource.
+- Hosting profiling spans use the `Aspire.Hosting.Profiling` ActivitySource.
+- DCP startup spans use the `dcp.startup` instrumentation scope.
+- Reported telemetry must not carry startup operation IDs, high-cardinality profiling tags, or profiling spans.
+
+The older EventSource/dotnet-trace startup measurement scripts still exist, but they are a legacy fallback for explicit EventSource timing requests. Prefer the OTEL harness for current startup profiling work.
 
 ## Prerequisites
 
-### Windows
+The Bash harness runs on macOS/Linux with:
 
-- PowerShell 7+
-- `dotnet-trace` global tool (`dotnet tool install -g dotnet-trace`)
-- .NET SDK (restored via `./restore.cmd` or `./restore.sh`)
+- Bash
+- `dotnet`
+- `node`
+- `curl`
+- `unzip`
+- `pgrep` and `ps`
+- `dotnet-trace` only when using `--collect-dotnet-traces`
 
-### macOS / Linux
+From a clean checkout, the harness can restore and build the local CLI and bundle layout itself. Use `--skip-build` only when the CLI and bundle layout were already built in the same worktree.
 
-- Bash 4+
-- `dotnet-trace` global tool (`dotnet tool install -g dotnet-trace`)
-- `python3` (for parsing `launchSettings.json`)
-- .NET SDK (restored via `./restore.sh`)
+The PowerShell harness runs on Windows with PowerShell 7+, `dotnet`, `node`/`npm`, and the usual Aspire CLI prerequisites. The Bash harness has the richer diagnostics path today (`--collect-dotnet-traces` and `--collect-dotnet-binlogs`); keep the shared validator in parity when updating either shell.
 
 ## Quick Start
 
-### Single Measurement
-
-```powershell
-# From repository root — measures the default TestShop.AppHost (Windows)
-.\tools\perf\Measure-StartupPerformance.ps1
+```bash
+# From repository root. Builds local CLI/layout if needed.
+./eng/scripts/verify-startup-otel.sh
 ```
 
+After a successful run, inspect the generated run root:
+
 ```bash
-# From repository root — measures the default TestShop.AppHost (macOS/Linux)
+cat artifacts/tmp/startup-otel-harness/*/summary.json
+```
+
+For faster iteration after a successful local build:
+
+```bash
+./eng/scripts/verify-startup-otel.sh --skip-build
+```
+
+Windows parity check:
+
+```powershell
+.\eng\scripts\verify-startup-otel.ps1 -SkipBuild
+```
+
+Collect sampled CPU traces and MSBuild binlogs:
+
+```bash
+./eng/scripts/verify-startup-otel.sh --collect-dotnet-traces
+```
+
+Collect only MSBuild binlogs:
+
+```bash
+./eng/scripts/verify-startup-otel.sh --collect-dotnet-binlogs
+```
+
+Use a specific Aspire CLI, bundle layout, or DCP build:
+
+```bash
+./eng/scripts/verify-startup-otel.sh \
+  --target-aspire-path artifacts/bin/Aspire.Cli/Debug/net10.0/aspire \
+  --layout-path artifacts/bundle/osx-arm64 \
+  --dcp-path path/to/dcp
+```
+
+## Bash Harness Options
+
+| Option | Description |
+| --- | --- |
+| `--target-aspire-path PATH` | Aspire CLI under test. Alias: `--aspire-path`. |
+| `--profiler-aspire-path PATH` | Aspire CLI used to host/export dashboard telemetry. Alias: `--dashboard-aspire-path`. |
+| `--layout-path PATH` | Aspire bundle layout path. |
+| `--dcp-path PATH` | DCP directory or binary path override. |
+| `--output-root PATH` | Output root for harness artifacts. Defaults to `artifacts/tmp/startup-otel-harness`. |
+| `--post-start-delay SECONDS` | Delay after AppHost start before stopping to allow extra telemetry to flush. |
+| `--require-dcp-spans` | Require exported DCP process/resource spans in addition to CLI/Hosting spans. |
+| `--collect-dotnet-traces` | Collect `.nettrace` files for the CLI and child .NET processes. Also enables MSBuild binlog collection. |
+| `--collect-dotnet-binlogs` | Collect `.binlog` files for dotnet MSBuild commands. |
+| `--skip-build` | Do not restore/build the local Aspire CLI or bundle layout. |
+
+## PowerShell Harness Options
+
+The PowerShell script intentionally mirrors the core validation knobs but does not duplicate the Bash-only process sampling path:
+
+| Parameter | Description |
+| --- | --- |
+| `-TargetAspirePath PATH` | Aspire CLI under test. Alias: `-AspirePath`. |
+| `-ProfilerAspirePath PATH` | Aspire CLI used to host/export dashboard telemetry. Alias: `-DashboardAspirePath`. |
+| `-LayoutPath PATH` | Aspire bundle layout path. |
+| `-DcpPath PATH` | DCP directory or binary path override. |
+| `-OutputRoot PATH` | Output root for harness artifacts. Defaults to `artifacts\tmp\startup-otel-harness`. |
+| `-PostStartDelaySeconds SECONDS` | Delay after AppHost start before stopping to allow extra telemetry to flush. |
+| `-RequireDcpSpans` | Require exported DCP process/resource spans in addition to CLI/Hosting spans. |
+| `-SkipBuild` | Do not restore/build the local Aspire CLI. |
+
+## Output Artifacts
+
+Each run writes to:
+
+```text
+artifacts/tmp/startup-otel-harness/<timestamp>/
+```
+
+Important files:
+
+| Path | Description |
+| --- | --- |
+| `summary.json` | Run summary with `StartupOperationId`, `TraceId`, `CorrelatedSpanCount`, paths, and optional trace/binlog file lists. |
+| `span-summary.json` | Flattened exported span summary for quick inspection. |
+| `startup-otel-export.zip` | Dashboard export containing trace JSON. |
+| `logs/` | stdout/stderr for harness commands and child processes. |
+| `workspace/` | Generated throwaway AppHost fixture. |
+| `dotnet-traces/` | Optional `.nettrace` files from `--collect-dotnet-traces`. |
+| `binlogs/` | Optional MSBuild `.binlog` files from trace/binlog collection. |
+
+## What the Harness Validates
+
+The shared validator (`eng/scripts/validate-startup-otel-export.mjs`) reads the dashboard export and requires a startup operation with correlated spans from:
+
+- CLI startup/launch spans, including `aspire/cli/start_apphost.spawn_child`.
+- Child CLI spans such as `aspire/cli/run`, dotnet build/run spans, backchannel connect spans, and dashboard URL retrieval.
+- Hosting spans such as DCP model work, resource creation, resource wait, and DCP resource observation.
+- Hosting-to-DCP trace links for created DCP objects.
+- Resource wait events, including observed and completed events.
+- DCP process/resource spans when `--require-dcp-spans` is specified.
+
+If validation fails, inspect `span-summary.json` first. Then use `startup-otel-export.zip` for the full dashboard export and `logs/` for process output.
+
+## Comparing Before/After Changes
+
+Prefer separate worktrees for baseline and feature measurements so branch switching does not disturb a dirty worktree.
+
+```bash
+# Baseline worktree
+./eng/scripts/verify-startup-otel.sh --output-root artifacts/tmp/startup-otel-baseline --collect-dotnet-binlogs
+
+# Feature worktree
+./eng/scripts/verify-startup-otel.sh --output-root artifacts/tmp/startup-otel-feature --collect-dotnet-binlogs
+```
+
+Compare:
+
+- `summary.json` for correlated span count and artifact paths.
+- `span-summary.json` for span names, durations, operation IDs, process IDs, and events.
+- `binlogs/` for MSBuild cost.
+- `.nettrace` files when CPU sampling was collected.
+
+For statistically meaningful wall-clock comparisons, run multiple iterations manually and keep the environment stable. The OTEL harness validates correlation and produces artifacts; it is not a statistical benchmark runner by itself.
+
+## Instrumentation Guidance
+
+Keep profiling APIs coarse-grained and profiling-specific:
+
+- Centralize raw `Activity`, activity names, tag names, and event names in the profiling telemetry type for the area (`Aspire.Cli.Profiling` or `Aspire.Hosting.Profiling`).
+- Do not expose one public/internal method per tag. Prefer operation/result-level methods that accept the data for a phase and set multiple tags/events internally.
+- Good API shape examples: start a dotnet process span with command, project, working directory, and options; record a process start result with started/process ID; record process completion with exit code and output counts; start a Kubernetes API span with operation/resource type; record retry details as one event method.
+- Call sites should describe the operation being profiled, not know tag/event names.
+- Do not add profiling tags/events to `Activity.Current` unless the current activity is known to be a profiling activity or profiling has explicitly wrapped it.
+- Keep high-cardinality data out of reported telemetry.
+
+## Common Issues
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `Required command 'dotnet-trace' was not found` | `--collect-dotnet-traces` was used without the global tool. | Run `dotnet tool install -g dotnet-trace`. |
+| `Target Aspire CLI not found` | CLI was not built or `--target-aspire-path` is wrong. | Omit `--skip-build` or pass the correct CLI path. |
+| `No exported spans contained aspire.startup.operation_id` | Profiling was not enabled or telemetry was not exported. | Confirm `ASPIRE_STARTUP_PROFILING_ENABLED=true` and inspect `logs/`. |
+| `No startup operation contained correlated... spans` | CLI/Hosting/DCP spans did not land in one correlated trace. | Inspect `span-summary.json` for missing scopes or broken parent/trace IDs. |
+| `No dotnet-trace files were collected` | Trace collection was requested but no traceable child process was found or attach failed. | Inspect `logs/dotnet-trace-*.stderr.txt`; rerun with a longer `--post-start-delay`. |
+| `No dotnet MSBuild binlogs were collected` | Binlog collection was requested but no MSBuild-backed dotnet command ran. | Inspect `logs/start.*`; rerun without `--skip-build` if necessary. |
+
+## Legacy EventSource Tooling
+
+Use the legacy perf scripts only when the task explicitly asks for `Microsoft-Aspire-Hosting` EventSource timing or the `DcpModelCreationStart`/`DcpModelCreationStop` duration:
+
+```bash
 ./tools/perf/measure-startup-performance.sh
 ```
 
-### Multiple Iterations with Statistics
-
 ```powershell
-.\tools\perf\Measure-StartupPerformance.ps1 -Iterations 5
+.\tools\perf\Measure-StartupPerformance.ps1
 ```
 
-```bash
-./tools/perf/measure-startup-performance.sh --iterations 5
-```
-
-### Custom Project
-
-```powershell
-.\tools\perf\Measure-StartupPerformance.ps1 -ProjectPath "path\to\MyApp.AppHost.csproj" -Iterations 3
-```
-
-```bash
-./tools/perf/measure-startup-performance.sh --project-path path/to/MyApp.AppHost.csproj --iterations 3
-```
-
-### Preserve Traces for Manual Analysis
-
-```powershell
-.\tools\perf\Measure-StartupPerformance.ps1 -Iterations 3 -PreserveTraces -TraceOutputDirectory "C:\traces"
-```
-
-```bash
-./tools/perf/measure-startup-performance.sh --iterations 3 --preserve-traces --trace-output-directory /tmp/traces
-```
-
-### Verbose Output
-
-```powershell
-.\tools\perf\Measure-StartupPerformance.ps1 -Verbose
-```
-
-```bash
-./tools/perf/measure-startup-performance.sh --verbose
-```
-
-## Parameters
-
-| PowerShell Parameter | Bash Parameter | Default | Description |
-|---------------------|----------------|---------|-------------|
-| `-ProjectPath` | `--project-path` | TestShop.AppHost | Path to the AppHost `.csproj` to measure |
-| `-Iterations` | `--iterations` | 1 | Number of measurement runs (1–100) |
-| `-PreserveTraces` | `--preserve-traces` | false | Keep `.nettrace` files after analysis |
-| `-TraceOutputDirectory` | `--trace-output-directory` | temp folder | Directory for preserved trace files |
-| `-SkipBuild` | `--skip-build` | false | Skip `dotnet build` before running |
-| `-TraceDurationSeconds` | `--trace-duration-seconds` | 60 | Maximum trace collection time (1–86400) |
-| `-PauseBetweenIterationsSeconds` | `--pause-between-iterations-seconds` | 45 | Pause between iterations (0–3600) |
-| `-Verbose` | `--verbose` | false | Show detailed output |
-
-## How It Works
-
-The script follows this sequence:
-
-1. **Prerequisites check** — Verifies `dotnet-trace` is installed and the project exists.
-2. **Build** — Builds the AppHost project in Release configuration (unless `-SkipBuild`).
-3. **Build TraceAnalyzer** — Builds the companion `tools/perf/TraceAnalyzer` project.
-4. **For each iteration:**
-   a. Locates the compiled executable (Arcade-style or traditional output paths).
-   b. Reads `launchSettings.json` for environment variables.
-   c. Launches the AppHost as a separate process.
-   d. Attaches `dotnet-trace` to the running process with the `Microsoft-Aspire-Hosting` provider.
-   e. Waits for the trace to complete (duration timeout or process exit).
-   f. Runs the TraceAnalyzer to extract the startup duration from the `.nettrace` file.
-   g. Cleans up processes.
-5. **Reports results** — Prints per-iteration times and statistics (min, max, average, std dev).
-
-## TraceAnalyzer Tool
-
-The `tools/perf/TraceAnalyzer` is a small .NET console app that parses `.nettrace` files using the `Microsoft.Diagnostics.Tracing.TraceEvent` library.
-
-### What It Does
-
-- Opens the `.nettrace` file with `EventPipeEventSource`
-- Listens for events from the `Microsoft-Aspire-Hosting` provider
-- Extracts timestamps for `DcpModelCreationStart` (ID 17) and `DcpModelCreationStop` (ID 18)
-- Outputs the duration in milliseconds (or `"null"` if events are not found)
-
-### Standalone Usage
-
-```bash
-dotnet run --project tools/perf/TraceAnalyzer -c Release -- <path-to-nettrace-file>
-```
-
-## Understanding Output
-
-### Successful Run
-
-```
-==================================================
- Aspire Startup Performance Measurement
-==================================================
-
-Project: TestShop.AppHost
-Iterations: 3
-...
-
-Iteration 1
-----------------------------------------
-Starting TestShop.AppHost...
-Attaching trace collection to PID 12345...
-Collecting performance trace...
-Trace collection completed.
-Analyzing trace: ...
-Startup time: 1234.56 ms
-
-...
-
-==================================================
- Results Summary
-==================================================
-
-Iteration StartupTimeMs
---------- -------------
-        1       1234.56
-        2       1189.23
-        3       1201.45
-
-Statistics:
-  Successful iterations: 3 / 3
-  Minimum: 1189.23 ms
-  Maximum: 1234.56 ms
-  Average: 1208.41 ms
-  Std Dev: 18.92 ms
-```
-
-### Common Issues
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `dotnet-trace is not installed` | Missing global tool | Run `dotnet tool install -g dotnet-trace` |
-| `Could not find compiled executable` | Project not built | Remove `-SkipBuild` or build manually |
-| `Could not find DcpModelCreation events` | Trace too short or events not emitted | Increase `-TraceDurationSeconds` |
-| `Application exited immediately` | App crash on startup | Check app logs, ensure dependencies are available |
-| `dotnet-trace exited with code != 0` | Trace collection error | Check verbose output; trace file may still be valid |
-
-## Comparing Before/After Performance
-
-To measure the impact of a code change:
-
-```powershell
-# Windows: Measure baseline (on main branch)
-git checkout main
-.\tools\perf\Measure-StartupPerformance.ps1 -Iterations 5 -PreserveTraces -TraceOutputDirectory "C:\traces\baseline"
-
-# Windows: Measure with changes
-git checkout my-feature-branch
-.\tools\perf\Measure-StartupPerformance.ps1 -Iterations 5 -PreserveTraces -TraceOutputDirectory "C:\traces\feature"
-
-# Compare the reported averages and std devs
-```
-
-```bash
-# macOS/Linux: Measure baseline (on main branch)
-git checkout main
-./tools/perf/measure-startup-performance.sh --iterations 5 --preserve-traces --trace-output-directory /tmp/traces/baseline
-
-# macOS/Linux: Measure with changes
-git checkout my-feature-branch
-./tools/perf/measure-startup-performance.sh --iterations 5 --preserve-traces --trace-output-directory /tmp/traces/feature
-
-# Compare the reported averages and std devs
-```
-
-Use enough iterations (5+) and a consistent pause between iterations for reliable comparisons.
-
-## Collecting Traces for Manual Analysis
-
-If you need to inspect trace files manually (e.g., in PerfView or Visual Studio):
-
-```powershell
-.\tools\perf\Measure-StartupPerformance.ps1 -PreserveTraces -TraceOutputDirectory "C:\my-traces"
-```
-
-```bash
-./tools/perf/measure-startup-performance.sh --preserve-traces --trace-output-directory /tmp/my-traces
-```
-
-See `docs/getting-perf-traces.md` for guidance on analyzing traces with PerfView or `dotnet trace report`.
-
-## EventSource Provider Details
-
-The `Microsoft-Aspire-Hosting` EventSource emits events for key Aspire lifecycle milestones. The startup performance script focuses on:
-
-| Event ID | Event Name | Description |
-|----------|------------|-------------|
-| 17 | `DcpModelCreationStart` | Marks the beginning of DCP model creation |
-| 18 | `DcpModelCreationStop` | Marks the completion of DCP model creation |
-
-The measured startup time is the wall-clock difference between these two events, representing the time to create all application services and supporting dependencies.
+These scripts collect `dotnet-trace` EventSource data and analyze it with `tools/perf/TraceAnalyzer`. They do not validate OTEL span correlation.

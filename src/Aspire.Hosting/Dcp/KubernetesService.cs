@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
 using k8s;
@@ -473,7 +474,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         var delay = s_initialRetryDelay;
         AspireEventSource.Instance.DcpApiCallStart(operationType, resourceType);
 
-        var resiliencePipeline = CreateKubernetesCallResiliencePipeline(operationType, resourceType, isRetryable);
+        using var activity = ProfilingTelemetry.StartDcpKubernetesApi(operationType, resourceType);
+        var retryCount = 0;
+
+        var resiliencePipeline = CreateKubernetesCallResiliencePipeline(operationType, resourceType, isRetryable, activity, () => retryCount++);
 
         try
         {
@@ -485,6 +489,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         }
         finally
         {
+            activity.SetDcpApiRetryCount(retryCount);
             AspireEventSource.Instance.DcpApiCallStop(operationType, resourceType);
         }
     }
@@ -498,7 +503,9 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     private ResiliencePipeline CreateKubernetesCallResiliencePipeline(
         DcpApiOperationType operationType,
         string resourceType,
-        Func<Exception, bool> isRetryable)
+        Func<Exception, bool> isRetryable,
+        ProfilingTelemetry.ActivityScope activity,
+        Action recordRetry)
     {
         var resiliencePipeline = new ResiliencePipelineBuilder()
             .AddTimeout(new TimeoutStrategyOptions
@@ -506,6 +513,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                 Timeout = MaxRetryDuration,
                 OnTimeout = (_) =>
                 {
+                    activity.AddKubernetesApiTimeout();
                     AspireEventSource.Instance.DcpApiCallTimeout(operationType, resourceType);
                     return ValueTask.CompletedTask;
                 }
@@ -519,6 +527,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                 MaxDelay = TimeSpan.FromSeconds(5),
                 OnRetry = (retry) =>
                 {
+                    recordRetry();
+                    activity.AddKubernetesApiRetry(retry.AttemptNumber, retry.RetryDelay, retry.Outcome.Exception);
                     AspireEventSource.Instance.DcpApiCallRetry(operationType, resourceType);
                     return ValueTask.CompletedTask;
                 }
@@ -566,13 +576,20 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             return;
         }
 
+        using var activity = ProfilingTelemetry.StartDcpEnsureKubernetesClient(File.Exists(locations.DcpKubeconfigPath));
+
+        var lockWaitStopwatch = Stopwatch.StartNew();
         await _kubeconfigReadSemaphore.WaitAsync(-1, cancellationToken).ConfigureAwait(false);
+        lockWaitStopwatch.Stop();
+        activity.SetDcpKubeconfigLockWait(lockWaitStopwatch.ElapsedMilliseconds);
+        activity.AddKubeconfigLockAcquired();
 
         try
         {
             // Second chance shortcut if multiple threads got caught.
             if (_kubernetes != null)
             {
+                activity.SetDcpKubernetesClientAlreadyInitialized();
                 return;
             }
 
@@ -600,9 +617,12 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     locations.DcpKubeconfigPath,
                     readStopwatch.ElapsedMilliseconds
                     );
+                activity.SetDcpKubeconfigReadDuration(readStopwatch.ElapsedMilliseconds);
+                activity.AddKubeconfigReadComplete();
 
                 return new DcpKubernetesClient(config);
             }, cancellationToken).ConfigureAwait(false);
+            activity.AddKubernetesClientCreated();
         }
         finally
         {

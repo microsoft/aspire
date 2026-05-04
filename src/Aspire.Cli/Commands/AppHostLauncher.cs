@@ -29,6 +29,7 @@ internal sealed class AppHostLauncher(
     IAuxiliaryBackchannelMonitor backchannelMonitor,
     ICliHostEnvironment hostEnvironment,
     AspireCliTelemetry telemetry,
+    ProfilingTelemetry profilingTelemetry,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
@@ -122,8 +123,8 @@ internal sealed class AppHostLauncher(
         // Build child process arguments
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
         var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
-        var startupTelemetryContext = StartupTelemetryContext.Create(Activity.Current);
-        startupTelemetryContext.AddTags(Activity.Current);
+        // Only create cross-process startup correlation when the profiling harness opted in.
+        var startupTelemetryContext = profilingTelemetry.CreateContextFromCurrentActivity();
 
         // Compute the expected socket prefix for backchannel detection
         var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
@@ -247,10 +248,10 @@ internal sealed class AppHostLauncher(
     internal static bool IsExtensionEnvironmentVariable(string name) =>
         name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
 
-    internal static Dictionary<string, string> CreateDetachedChildEnvironment(StartupTelemetryContext startupTelemetryContext)
+    internal static Dictionary<string, string> CreateDetachedChildEnvironment(StartupTelemetryContext? startupTelemetryContext)
     {
         var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
-        startupTelemetryContext.AddToEnvironment(environment);
+        startupTelemetryContext?.AddToEnvironment(environment);
         return environment;
     }
 
@@ -261,30 +262,37 @@ internal sealed class AppHostLauncher(
         List<string> childArgs,
         string expectedHash,
         string? legacyHash,
-        StartupTelemetryContext startupTelemetryContext,
+        StartupTelemetryContext? startupTelemetryContext,
         CancellationToken cancellationToken)
     {
         Process childProcess;
 
-        try
+        using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs.Count, "run", startupTelemetryContext))
         {
-            childProcess = DetachedProcessLauncher.Start(
-                executablePath,
-                childArgs,
-                executionContext.WorkingDirectory.FullName,
-                IsExtensionEnvironmentVariable,
-                CreateDetachedChildEnvironment(startupTelemetryContext));
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to start child CLI process");
-            return new LaunchResult(null, null, null, false, 0);
+            try
+            {
+                childProcess = DetachedProcessLauncher.Start(
+                    executablePath,
+                    childArgs,
+                    executionContext.WorkingDirectory.FullName,
+                    IsExtensionEnvironmentVariable,
+                    CreateDetachedChildEnvironment(startupTelemetryContext));
+                spawnActivity.SetProcessId(childProcess.Id);
+            }
+            catch (Exception ex)
+            {
+                spawnActivity.SetError(ex.Message);
+                logger.LogError(ex, "Failed to start child CLI process");
+                return new LaunchResult(null, null, null, false, 0);
+            }
         }
 
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
 
         var startTime = timeProvider.GetUtcNow();
         var timeout = TimeSpan.FromSeconds(120);
+        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHash is not null, startupTelemetryContext);
+        var scanCount = 0;
 
         while (timeProvider.GetUtcNow() - startTime < timeout)
         {
@@ -293,24 +301,34 @@ internal sealed class AppHostLauncher(
             if (childProcess.HasExited)
             {
                 var exitCode = childProcess.ExitCode;
+                waitForBackchannelActivity.SetProcessExitCode(exitCode);
+                waitForBackchannelActivity.SetError($"Child CLI exited with code {exitCode}.");
                 logger.LogWarning("Child CLI process exited with code {ExitCode}", exitCode);
                 return new LaunchResult(childProcess, null, null, true, exitCode);
             }
 
             await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+            scanCount++;
 
             var connection = backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault()
                 ?? (legacyHash is not null ? backchannelMonitor.GetConnectionsByHash(legacyHash).FirstOrDefault() : null);
             if (connection is not null)
             {
+                waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
+                waitForBackchannelActivity.AddStartAppHostBackchannelConnectedEvent();
                 DashboardUrlsState? dashboardUrls = null;
-                try
+                using (var getDashboardUrlsActivity = profilingTelemetry.StartDetachedGetDashboardUrls(startupTelemetryContext))
                 {
-                    dashboardUrls = await connection.GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogDebug(ex, "Failed to retrieve dashboard URLs from backchannel connection. Continuing without dashboard URLs.");
+                    try
+                    {
+                        dashboardUrls = await connection.GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
+                        getDashboardUrlsActivity.SetAppHostDashboardUrls(dashboardUrls);
+                    }
+                    catch (Exception ex)
+                    {
+                        getDashboardUrlsActivity.SetError(ex.Message);
+                        logger.LogDebug(ex, "Failed to retrieve dashboard URLs from backchannel connection. Continuing without dashboard URLs.");
+                    }
                 }
 
                 return new LaunchResult(childProcess, connection, dashboardUrls, false, 0);
@@ -326,6 +344,8 @@ internal sealed class AppHostLauncher(
             }
         }
 
+        waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
+        waitForBackchannelActivity.SetError("Timed out waiting for AppHost backchannel.");
         return new LaunchResult(childProcess, null, null, false, 0);
     }
 

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.Extensions.Configuration;
 using OpenTelemetry;
@@ -48,6 +49,7 @@ internal sealed class TelemetryManager : IDisposable
 #if DEBUG
         var useOtlpExporter = !string.IsNullOrEmpty(configuration[AspireCliTelemetry.OtlpExporterEndpointConfigKey]);
         var consoleExporterLevel = configuration.GetEnum<ConsoleExporterLevel>(AspireCliTelemetry.ConsoleExporterLevelConfigKey, defaultValue: null);
+        var startupProfilingEnabled = configuration.GetBool(KnownConfigNames.StartupProfilingEnabled, defaultValue: false);
 #else
         var useOtlpExporter = false;
         ConsoleExporterLevel? consoleExporterLevel = null;
@@ -96,6 +98,11 @@ internal sealed class TelemetryManager : IDisposable
                 .AddSource(AspireCliTelemetry.DiagnosticsActivitySourceName)
                 .AddSource(AspireCliTelemetry.ReportedActivitySourceName)
                 .SetResourceBuilder(resource);
+
+            if (startupProfilingEnabled)
+            {
+                diagnosticBuilder.AddSource(ProfilingTelemetry.ActivitySourceName);
+            }
 
             if (consoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {

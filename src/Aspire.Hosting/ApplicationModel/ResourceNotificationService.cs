@@ -3,7 +3,6 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -140,8 +139,7 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilHealthyAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependency");
-        SetDependencyWaitTags(activity, resource, dependency, WaitType.WaitUntilHealthy, waitBehavior);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(resource, dependency, WaitType.WaitUntilHealthy, waitBehavior);
 
         try
         {
@@ -156,7 +154,8 @@ public class ResourceNotificationService : IDisposable
                         dependency.Name,
                         re => re.ResourceId == resourceId && re.Snapshot.HealthStatus == HealthStatus.Healthy,
                         $"Resource '{displayName}' failed to become healthy before the operation was cancelled.",
-                        cancellationToken).ConfigureAwait(false);
+                        waitCondition: "healthy",
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
 
                 // Now wait for the resource ready event to be executed.
@@ -165,6 +164,7 @@ public class ResourceNotificationService : IDisposable
                     dependency.Name,
                     re => re.ResourceId == resourceId && re.Snapshot.ResourceReadyEvent is not null,
                     $"Resource '{displayName}' failed to execute the resource ready event before the operation was cancelled.",
+                    waitCondition: "resource_ready",
                     cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 // Observe the result of the resource ready event task
@@ -175,7 +175,7 @@ public class ResourceNotificationService : IDisposable
         }
         catch (Exception ex)
         {
-            StartupTracing.SetError(activity, ex);
+            activity.SetError(ex);
             throw;
         }
     }
@@ -239,6 +239,7 @@ public class ResourceNotificationService : IDisposable
             resourceName,
             re => ShouldYieldHealthyWait(waitBehavior, re.Snapshot),
             $"Resource '{resourceName}' failed to become healthy before the operation was cancelled.",
+            waitCondition: "healthy",
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
@@ -253,6 +254,7 @@ public class ResourceNotificationService : IDisposable
             resourceName,
             re => re.ResourceId == resourceEvent.ResourceId && re.Snapshot.ResourceReadyEvent is not null,
             $"Resource '{resourceName}' failed to execute the resource ready event before the operation was cancelled.",
+            waitCondition: "resource_ready",
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Observe the result of the resource ready event task
@@ -277,9 +279,8 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilCompletionAsync(IResource resource, IResource dependency, int exitCode, CancellationToken cancellationToken)
     {
-        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependency");
-        SetDependencyWaitTags(activity, resource, dependency, WaitType.WaitForCompletion, waitBehavior: null);
-        activity?.SetTag("aspire.resource.wait.expected_exit_code", exitCode);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(resource, dependency, WaitType.WaitForCompletion, waitBehavior: null);
+        activity.SetResourceWaitExpectedExitCode(exitCode);
 
         var names = dependency.GetResolvedResourceNames();
         var tasks = new Task[names.Length];
@@ -310,7 +311,7 @@ public class ResourceNotificationService : IDisposable
         }
         catch (Exception ex)
         {
-            StartupTracing.SetError(activity, ex);
+            activity.SetError(ex);
             throw;
         }
 
@@ -320,6 +321,7 @@ public class ResourceNotificationService : IDisposable
                 dependency.Name,
                 re => re.ResourceId == resourceId && IsKnownTerminalState(re.Snapshot),
                 $"Resource '{displayName}' failed to reach a terminal state before the operation was cancelled.",
+                waitCondition: "terminal",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             var snapshot = resourceEvent.Snapshot;
 
@@ -389,6 +391,7 @@ public class ResourceNotificationService : IDisposable
                 dependency.Name,
                 re => re.ResourceId == resourceId && IsContinuableState(waitBehavior, re.Snapshot),
                 $"Resource '{displayName}' failed to reach the 'Running' state before the operation was cancelled.",
+                waitCondition: "running",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             var snapshot = resourceEvent.Snapshot;
 
@@ -438,8 +441,7 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilStartedAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependency");
-        SetDependencyWaitTags(activity, resource, dependency, WaitType.WaitUntilStarted, waitBehavior);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(resource, dependency, WaitType.WaitUntilStarted, waitBehavior);
 
         try
         {
@@ -453,7 +455,7 @@ public class ResourceNotificationService : IDisposable
         }
         catch (Exception ex)
         {
-            StartupTracing.SetError(activity, ex);
+            activity.SetError(ex);
             throw;
         }
     }
@@ -478,9 +480,7 @@ public class ResourceNotificationService : IDisposable
             return;
         }
 
-        using var activity = StartupTracing.StartActivity("aspire.hosting.resource.wait_for_dependencies");
-        StartupTracing.SetResourceTags(activity, resource);
-        activity?.SetTag("aspire.resource.wait.dependency_count", waitAnnotationList.Length);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependencies(resource, waitAnnotationList.Length);
 
         try
         {
@@ -507,18 +507,9 @@ public class ResourceNotificationService : IDisposable
         }
         catch (Exception ex)
         {
-            StartupTracing.SetError(activity, ex);
+            activity.SetError(ex);
             throw;
         }
-    }
-
-    private static void SetDependencyWaitTags(Activity? activity, IResource resource, IResource dependency, WaitType waitType, WaitBehavior? waitBehavior)
-    {
-        StartupTracing.SetResourceTags(activity, resource);
-        activity?.SetTag("aspire.resource.wait.type", waitType.ToString());
-        activity?.SetTag("aspire.resource.wait.dependency.name", dependency.Name);
-        activity?.SetTag("aspire.resource.wait.dependency.type", dependency.GetType().Name);
-        activity?.SetTag("aspire.resource.wait.behavior", waitBehavior?.ToString());
     }
 
     /// <summary>
@@ -548,29 +539,43 @@ public class ResourceNotificationService : IDisposable
         return resourceEvent;
     }
 
-    private async Task<ResourceEvent> WaitForResourceCoreAsync(string resourceName, Func<ResourceEvent, bool> predicate, string cancellationMessage, CancellationToken cancellationToken = default)
+    private async Task<ResourceEvent> WaitForResourceCoreAsync(string resourceName, Func<ResourceEvent, bool> predicate, string cancellationMessage, CancellationToken cancellationToken = default, string waitCondition = "predicate")
     {
+        // Waits can run under non-profiling activities; don't attach high-cardinality
+        // resource wait tags/events unless startup profiling was explicitly enabled.
+        var activity = ProfilingTelemetry.CurrentActivity;
+        activity.SetResourceWaitTarget(resourceName, waitCondition);
+
         try
         {
             using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(_disposing.Token, cancellationToken);
             var watchToken = watchCts.Token;
             await foreach (var resourceEvent in WatchAsync(watchToken).ConfigureAwait(false))
             {
-                if (string.Equals(resourceName, resourceEvent.Resource.Name, StringComparisons.ResourceName) && predicate(resourceEvent))
+                if (!string.Equals(resourceName, resourceEvent.Resource.Name, StringComparisons.ResourceName))
                 {
+                    continue;
+                }
+
+                activity.AddResourceWaitObserved(resourceEvent, waitCondition);
+
+                if (predicate(resourceEvent))
+                {
+                    activity.AddResourceWaitCompleted(resourceEvent, waitCondition);
                     return resourceEvent;
                 }
             }
         }
         catch (OperationCanceledException ex)
         {
+            activity.AddResourceWaitCancelled(resourceName, waitCondition);
+
             var errorMessage = BuildCancellationErrorMessage(cancellationMessage, resourceName);
             throw new OperationCanceledException(errorMessage, ex, ex.CancellationToken);
         }
 
         throw new OperationCanceledException(BuildCancellationErrorMessage(cancellationMessage, resourceName));
     }
-
     private readonly object _onResourceUpdatedLock = new();
 
     /// <summary>

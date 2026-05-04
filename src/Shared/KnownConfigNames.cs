@@ -43,6 +43,11 @@ internal static class KnownConfigNames
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
     public const string MsBuildTerminalLogger = "MSBUILDTERMINALLOGGER";
+    public const string StartupProfilingEnabled = "ASPIRE_STARTUP_PROFILING_ENABLED";
+    public const string StartupOperationId = "ASPIRE_STARTUP_OPERATION_ID";
+    public const string StartupTraceParent = "ASPIRE_STARTUP_TRACEPARENT";
+    public const string StartupTraceState = "ASPIRE_STARTUP_TRACESTATE";
+    public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
 
     public const string ExtensionEndpoint = "ASPIRE_EXTENSION_ENDPOINT";
     public const string ExtensionPromptEnabled = "ASPIRE_EXTENSION_PROMPT_ENABLED";

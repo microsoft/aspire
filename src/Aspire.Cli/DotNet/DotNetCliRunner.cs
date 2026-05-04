@@ -65,6 +65,7 @@ internal sealed class DotNetCliRunner(
     ILogger<DotNetCliRunner> logger,
     IServiceProvider serviceProvider,
     AspireCliTelemetry telemetry,
+    ProfilingTelemetry profilingTelemetry,
     IConfiguration configuration,
     IDiskCache diskCache,
     IFeatures features,
@@ -76,6 +77,7 @@ internal sealed class DotNetCliRunner(
 
     // Retry configuration for NuGet package search operations
     private const int MaxSearchRetries = 3;
+    private static long s_binlogSequence;
     private static readonly TimeSpan[] s_searchRetryDelays = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
 
     private string GetMsBuildServerValue()
@@ -97,18 +99,30 @@ internal sealed class DotNetCliRunner(
         ProcessInvocationOptions options,
         CancellationToken cancellationToken)
     {
+        var dotnetCommand = args.Length > 0 ? args[0] : "execute";
+        using var processActivity = profilingTelemetry.StartDotNetProcess(dotnetCommand, projectFile, workingDirectory, options);
+
         // Build the final environment variables by merging caller-provided env with dotnet-specific settings.
         var finalEnv = env?.ToDictionary() ?? new Dictionary<string, string>();
         ConfigureDotNetEnvironment(finalEnv);
 
         // Resolve the dotnet executable path, preferring the private SDK installation if available.
         var dotnetPath = ResolveDotNetPath(finalEnv);
+        processActivity.SetDotNetResolvedExecutable(
+            dotnetPath,
+            finalEnv.TryGetValue("DOTNET_CLI_USE_MSBUILD_SERVER", out var msBuildServerValue) ? msBuildServerValue : null);
+
+        var effectiveArgs = AddBinlogArgumentIfConfigured(args, dotnetCommand, projectFile, workingDirectory, processActivity);
+        processActivity.SetDotNetArgsCount(effectiveArgs.Length);
+
+        var outputCounters = new ProcessOutputCounters();
+        var instrumentedOptions = CreateInstrumentedProcessOptions(options, processActivity, outputCounters);
 
         // Do not use 'using' here: StartBackchannelAsync runs fire-and-forget and
         // accesses execution.HasExited / ExitCode after this method returns. Disposing
         // the underlying Process while the backchannel task is still polling would
         // cause ObjectDisposedException. Let the GC handle cleanup instead.
-        var execution = executionFactory.CreateExecution(dotnetPath, args, finalEnv, workingDirectory, options);
+        var execution = executionFactory.CreateExecution(dotnetPath, effectiveArgs, finalEnv, workingDirectory, instrumentedOptions);
 
         // Get socket path from env if present
         string? socketPath = null;
@@ -135,9 +149,11 @@ internal sealed class DotNetCliRunner(
         }
 
         var started = execution.Start();
+        processActivity.AddDotNetProcessStartResult(started, started ? execution.ProcessId : null);
 
         if (!started)
         {
+            processActivity.SetError("Process failed to start.");
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
 
@@ -146,7 +162,112 @@ internal sealed class DotNetCliRunner(
             _ = StartBackchannelAsync(execution, socketPath, backchannelCompletionSource, cancellationToken);
         }
 
-        return await execution.WaitForExitAsync(cancellationToken);
+        var exitCode = await execution.WaitForExitAsync(cancellationToken);
+        processActivity.SetDotNetCompleted(exitCode, outputCounters.StdoutLineCount, outputCounters.StderrLineCount);
+
+        return exitCode;
+    }
+
+    private string[] AddBinlogArgumentIfConfigured(
+        string[] args,
+        string dotnetCommand,
+        FileInfo? projectFile,
+        DirectoryInfo workingDirectory,
+        ProfilingTelemetry.ActivityScope processActivity)
+    {
+        var binlogDirectory = configuration[KnownConfigNames.CliDotnetBinlogDirectory];
+        if (string.IsNullOrWhiteSpace(binlogDirectory))
+        {
+            return args;
+        }
+
+        if (!SupportsBinlog(dotnetCommand))
+        {
+            // Some dotnet subcommands are not MSBuild entry points and reject /bl.
+            processActivity.SetDotNetBinlogSkippedUnsupportedCommand();
+            return args;
+        }
+
+        var fullBinlogDirectory = Path.IsPathFullyQualified(binlogDirectory)
+            ? binlogDirectory
+            : Path.GetFullPath(Path.Combine(workingDirectory.FullName, binlogDirectory));
+
+        Directory.CreateDirectory(fullBinlogDirectory);
+
+        var binlogPath = Path.Combine(fullBinlogDirectory, CreateBinlogFileName(dotnetCommand, projectFile, workingDirectory));
+        processActivity.SetDotNetBinlogPath(binlogPath);
+
+        return [.. args, $"/bl:{binlogPath}"];
+    }
+
+    private static bool SupportsBinlog(string dotnetCommand)
+    {
+        return dotnetCommand is "build" or "msbuild" or "restore" or "publish" or "test";
+    }
+
+    private static string CreateBinlogFileName(string dotnetCommand, FileInfo? projectFile, DirectoryInfo workingDirectory)
+    {
+        var sequence = Interlocked.Increment(ref s_binlogSequence);
+        var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMddTHHmmssfff", CultureInfo.InvariantCulture);
+        var scope = projectFile is not null ? Path.GetFileNameWithoutExtension(projectFile.Name) : workingDirectory.Name;
+
+        return $"{timestamp}-{Environment.ProcessId}-{sequence:D4}-{SanitizeFileNamePart(dotnetCommand)}-{SanitizeFileNamePart(scope)}.binlog";
+    }
+
+    private static string SanitizeFileNamePart(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            builder.Append(char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '-');
+        }
+
+        var sanitized = builder.ToString().Trim('-');
+        if (string.IsNullOrEmpty(sanitized))
+        {
+            return "dotnet";
+        }
+
+        return sanitized.Length <= 80 ? sanitized : sanitized[..80];
+    }
+
+    private static ProcessInvocationOptions CreateInstrumentedProcessOptions(
+        ProcessInvocationOptions options,
+        ProfilingTelemetry.ActivityScope activity,
+        ProcessOutputCounters outputCounters)
+    {
+        return new ProcessInvocationOptions
+        {
+            NoLaunchProfile = options.NoLaunchProfile,
+            StartDebugSession = options.StartDebugSession,
+            NoExtensionLaunch = options.NoExtensionLaunch,
+            Debug = options.Debug,
+            SuppressLogging = options.SuppressLogging,
+            StandardOutputCallback = line =>
+            {
+                var lineCount = Interlocked.Increment(ref outputCounters.StdoutLineCount);
+                if (lineCount == 1)
+                {
+                    activity.AddDotNetFirstStdoutEvent();
+                }
+                options.StandardOutputCallback?.Invoke(line);
+            },
+            StandardErrorCallback = line =>
+            {
+                var lineCount = Interlocked.Increment(ref outputCounters.StderrLineCount);
+                if (lineCount == 1)
+                {
+                    activity.AddDotNetFirstStderrEvent();
+                }
+                options.StandardErrorCallback?.Invoke(line);
+            }
+        };
+    }
+
+    private sealed class ProcessOutputCounters
+    {
+        public int StdoutLineCount;
+        public int StderrLineCount;
     }
 
     internal static int GetCurrentProcessId() => Environment.ProcessId;
@@ -222,7 +343,7 @@ internal sealed class DotNetCliRunner(
 
     private async Task StartBackchannelAsync(IProcessExecution? execution, string socketPath, TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource, CancellationToken cancellationToken)
     {
-        using var activity = telemetry.StartDiagnosticActivity();
+        using var activity = profilingTelemetry.StartBackchannelConnect(socketPath);
 
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(50));
 
@@ -238,7 +359,13 @@ internal sealed class DotNetCliRunner(
             try
             {
                 logger.LogTrace("Attempting to connect to AppHost backchannel at {SocketPath} (attempt {Attempt})", socketPath, connectionAttempts);
+                if (connectionAttempts == 0 || connectionAttempts % 10 == 0)
+                {
+                    activity.AddBackchannelConnectAttemptEvent(connectionAttempts);
+                }
                 await backchannel.ConnectAsync(socketPath, connectionAttempts, cancellationToken).ConfigureAwait(false);
+                activity.SetBackchannelRetryCount(connectionAttempts);
+                activity.AddBackchannelConnectedEvent();
                 backchannelCompletionSource.SetResult(backchannel);
                 // Note: We intentionally do not call Environment.Exit when the backchannel disconnects.
                 // The CLI should complete normally and return the appropriate exit code based on the

@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -42,7 +43,8 @@ internal sealed class AppHostConnectionResolver(
     IInteractionService interactionService,
     IProjectLocator projectLocator,
     CliExecutionContext executionContext,
-    ILogger logger)
+    ILogger logger,
+    ProfilingTelemetry? profilingTelemetry = null)
 {
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
@@ -143,7 +145,7 @@ internal sealed class AppHostConnectionResolver(
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, cancellationToken).ConfigureAwait(false);
+                        socketPath, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
                     if (connection is not null)
                     {
                         return new AppHostConnectionResult { Connection = connection };

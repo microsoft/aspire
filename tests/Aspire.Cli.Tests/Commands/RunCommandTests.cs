@@ -1675,6 +1675,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     {
         var context = StartupTelemetryContext.FromEnvironment(name => name switch
         {
+            StartupTelemetryContext.EnabledEnvironmentVariable => "true",
             StartupTelemetryContext.OperationIdEnvironmentVariable => "operation-1",
             StartupTelemetryContext.TraceParentEnvironmentVariable => "00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01",
             StartupTelemetryContext.TraceStateEnvironmentVariable => "state-1",
@@ -1686,9 +1687,22 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var environment = AppHostLauncher.CreateDetachedChildEnvironment(context);
 
         Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.Equal("true", environment[StartupTelemetryContext.EnabledEnvironmentVariable]);
         Assert.Equal("operation-1", environment[StartupTelemetryContext.OperationIdEnvironmentVariable]);
         Assert.Equal("00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01", environment[StartupTelemetryContext.TraceParentEnvironmentVariable]);
         Assert.Equal("state-1", environment[StartupTelemetryContext.TraceStateEnvironmentVariable]);
+    }
+
+    [Fact]
+    public void DetachedChildEnvironment_AllowsMissingStartupTelemetryContext()
+    {
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.False(environment.ContainsKey(StartupTelemetryContext.EnabledEnvironmentVariable));
+        Assert.False(environment.ContainsKey(StartupTelemetryContext.OperationIdEnvironmentVariable));
+        Assert.False(environment.ContainsKey(StartupTelemetryContext.TraceParentEnvironmentVariable));
+        Assert.False(environment.ContainsKey(StartupTelemetryContext.TraceStateEnvironmentVariable));
     }
 
     [Theory]

@@ -30,6 +30,11 @@ internal interface IProcessExecution : IDisposable
     bool Start();
 
     /// <summary>
+    /// Gets the process ID. Only valid after <see cref="Start"/> returns <c>true</c>.
+    /// </summary>
+    int ProcessId { get; }
+
+    /// <summary>
     /// Waits for the process to exit asynchronously.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
