@@ -429,6 +429,7 @@ public class AddNodeAppTests
         : ExecutableResource(name, command, workingDirectory), IResourceWithContainerFiles;
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
     [Fact]
     public void NodeApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
@@ -589,4 +590,5 @@ public class AddNodeAppTests
     }
 
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning restore ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 }

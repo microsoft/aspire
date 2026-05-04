@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is experimental; used to wire migration-bundle pipeline steps.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
