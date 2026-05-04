@@ -34,4 +34,20 @@ internal interface IDcpObjectFactory
     /// and updates them with the allocated address information.
     /// </summary>
     Task UpdateWithEffectiveAddressInfo(IEnumerable<Service> services, CancellationToken cancellationToken, TimeSpan? timeout = null);
+
+    /// <summary>
+    /// Waits until each of the provided DCP objects reports a state that is contained in <paramref name="finalStates"/>,
+    /// or until <paramref name="timeout"/> elapses.
+    /// </summary>
+    /// <returns>
+    /// The latest observed instance for each input object (with <c>Status</c> populated when available).
+    /// Callers can inspect the returned objects to determine which ones reached a final state and which did not.
+    /// </returns>
+    Task<IReadOnlyList<TDcpResource>> WaitForStateAsync<TDcpResource>(
+        IEnumerable<TDcpResource> objects,
+        Func<TDcpResource, string?> stateSelector,
+        IReadOnlyCollection<string> finalStates,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+        where TDcpResource : CustomResource, IKubernetesStaticMetadata;
 }

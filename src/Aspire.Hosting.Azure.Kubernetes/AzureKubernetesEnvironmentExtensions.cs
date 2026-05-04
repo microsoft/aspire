@@ -377,14 +377,6 @@ public static class AzureKubernetesEnvironmentExtensions
     {
         var aksResource = (AzureKubernetesEnvironmentResource)infrastructure.AspireResource;
 
-        var skuTier = aksResource.SkuTier switch
-        {
-            AksSkuTier.Free => ManagedClusterSkuTier.Free,
-            AksSkuTier.Standard => ManagedClusterSkuTier.Standard,
-            AksSkuTier.Premium => ManagedClusterSkuTier.Premium,
-            _ => ManagedClusterSkuTier.Free
-        };
-
         // Create the AKS managed cluster
         var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier())
         {
@@ -395,7 +387,7 @@ public static class AzureKubernetesEnvironmentExtensions
             Sku = new ManagedClusterSku
             {
                 Name = ManagedClusterSkuName.Base,
-                Tier = skuTier
+                Tier = ManagedClusterSkuTier.Free
             },
             DnsPrefix = $"{aksResource.Name}-dns",
             Tags = { { "aspire-resource-name", aksResource.Name } }

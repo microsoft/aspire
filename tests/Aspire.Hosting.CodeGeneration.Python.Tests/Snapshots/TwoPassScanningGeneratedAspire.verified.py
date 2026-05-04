@@ -1832,10 +1832,14 @@ TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380
 TestConfigs.UnicodeGreeting = "你好こんにちは"
 
 WellKnownPipelineSteps = types.SimpleNamespace()
+# The step that runs before the application starts.
+WellKnownPipelineSteps.BeforeStart = "before-start"
 # The well-known step for building resources.
 WellKnownPipelineSteps.Build = "build"
 # The prerequisite step that runs before any build operations.
 WellKnownPipelineSteps.BuildPrereq = "build-prereq"
+# The step that checks whether the container runtime (e.g., Docker or Podman) is running. Build steps that need a container runtime should depend on this step.
+WellKnownPipelineSteps.CheckContainerRuntime = "check-container-runtime"
 # Aggregation step for all deploy operations. All deploy steps should be required by this step.
 WellKnownPipelineSteps.Deploy = "deploy"
 # The prerequisite step that runs before any deploy operations.

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
 
@@ -435,12 +434,47 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         await CreateTunnelProxyResourceAsync(tunnels, cancellationToken).ConfigureAwait(false);
 
         // Create all ContainerNetworkTunnelProxy objects that have been prepared.
-        var tunnelProxies = _appResources.Get().OfType<AppResource<ContainerNetworkTunnelProxy>>().Select(r => r.DcpResource);
+        var tunnelProxies = _appResources.Get().OfType<AppResource<ContainerNetworkTunnelProxy>>().Select(r => r.DcpResource).ToArray();
         await factory.CreateDcpObjectsAsync(tunnelProxies, cancellationToken).ConfigureAwait(false);
 
+        // Wait for each tunnel proxy to reach a stable state (Running or Failed).
         // Container tunnel initialization can take a while if the container tunnel image needs to be built,
         // especially if the required image pull is slow, hence 10 minute timeout here.
-        await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+        var observedProxies = await factory.WaitForStateAsync(
+            tunnelProxies,
+            p => p.Status?.State,
+            [ContainerNetworkTunnelProxyState.Running, ContainerNetworkTunnelProxyState.Failed],
+            TimeSpan.FromMinutes(10),
+            cancellationToken).ConfigureAwait(false);
+
+        var failedProxies = observedProxies
+            .Where(p => string.Equals(p.Status?.State, ContainerNetworkTunnelProxyState.Failed, StringComparison.Ordinal))
+            .ToArray();
+        var pendingProxies = observedProxies
+            .Where(p => !string.Equals(p.Status?.State, ContainerNetworkTunnelProxyState.Running, StringComparison.Ordinal)
+                     && !string.Equals(p.Status?.State, ContainerNetworkTunnelProxyState.Failed, StringComparison.Ordinal))
+            .ToArray();
+
+        const string noDetailsAvailable = "(no additional error details available)";
+        foreach (var proxy in failedProxies)
+        {
+            _logger.LogError(
+                "Container network tunnel proxy '{Name}' failed: {Details}",
+                proxy.Metadata.Name,
+                proxy.Status?.Message ?? noDetailsAvailable);
+        }
+
+        if (failedProxies.Length > 0 || pendingProxies.Length > 0)
+        {
+            var failedDetails = failedProxies.Select(p => $"'{p.Metadata.Name}': {p.Status?.Message ?? noDetailsAvailable}");
+            var unstableDetails = pendingProxies.Select(p => $"'{p.Metadata.Name}': did not reach a stable state (current state: '{p.Status?.State ?? "(unknown)"}')");
+            var allDetails = string.Join("; ", failedDetails.Concat(unstableDetails));
+            throw new DistributedApplicationException(
+                $"One or more container network tunnel proxies did not start successfully: {allDetails}");
+        }
+
+        // All tunnel proxies are running, so service address allocation should be quick.
+        await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
     }
 
     internal async Task<IEnumerable<HostResourceWithEndpoints>> GetHostDependenciesAsync(IResource resource, CancellationToken cancellationToken)

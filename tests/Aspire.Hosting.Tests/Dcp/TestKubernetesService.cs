@@ -78,6 +78,16 @@ internal sealed class TestKubernetesService : IKubernetesService
             svc.Status.EffectivePort = svc.Spec.Port ?? Interlocked.Increment(ref _nextPort);
         }
 
+        // Simulate proxy startup by marking it as running immediately.
+        if (res is ContainerNetworkTunnelProxy proxy)
+        {
+            if (proxy.Status is null)
+            {
+                proxy.Status = new ContainerNetworkTunnelProxyStatus();
+            }
+            proxy.Status.State = ContainerNetworkTunnelProxyState.Running;
+        }
+
         lock (CreatedResources)
         {
             CreatedResources.Enqueue(res);

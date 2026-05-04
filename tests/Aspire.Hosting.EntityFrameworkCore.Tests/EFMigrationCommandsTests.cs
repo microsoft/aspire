@@ -132,7 +132,7 @@ public class EFMigrationCommandsTests
         var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
 
         // Verify the context type name is stored on the resource
-        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.ContextTypeName);
+        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
     [Fact]
