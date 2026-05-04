@@ -155,19 +155,39 @@ internal sealed class UpdateCommand : BaseCommand
             var project = _projectFactory.GetProject(projectFile);
             var isProjectReferenceMode = project.IsUsingProjectReferences(projectFile);
 
-            // Check if channel or quality option was provided (channel takes precedence)
+            // Resolve the channel using the documented precedence:
+            //   1. explicit --channel / hidden --quality
+            //   2. local app config "channel"
+            //   3. global config "channel"
+            //   4. interactive channel prompt when appropriate (PR hives present)
+            //   5. implicit/default channel as the documented fallback
+            // Local-vs-global precedence for steps 2 and 3 is honored implicitly:
+            // ConfigurationHelper.RegisterSettingsFiles loads the global settings file before the
+            // local one, so IConfiguration (and therefore GetConfigurationAsync) returns local first.
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+            var channelFromConfig = false;
+            if (string.IsNullOrWhiteSpace(channelName))
+            {
+                channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
+                channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
+            }
+
             PackageChannel channel;
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
                 async () => await _packagingService.GetChannelsAsync(cancellationToken));
 
-            if (!string.IsNullOrEmpty(channelName))
+            if (!string.IsNullOrWhiteSpace(channelName))
             {
                 // Try to find a channel matching the provided channel/quality
                 channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
                     ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+
+                if (channelFromConfig)
+                {
+                    _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
+                }
             }
             else if (isProjectReferenceMode)
             {
