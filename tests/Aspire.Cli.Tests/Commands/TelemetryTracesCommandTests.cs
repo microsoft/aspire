@@ -3,6 +3,8 @@
 
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -31,6 +33,201 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_WithDevLocalhostDashboardApiUrl_UsesLocalhost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var requestedHosts = new List<string>();
+        var resourcesJson = JsonSerializer.Serialize(
+            new ResourceInfoJson[] { new() { Name = "frontend", InstanceId = null } },
+            OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+
+        var resourceSpans = new OtlpResourceSpansJson[]
+        {
+            new()
+            {
+                Resource = TelemetryTestHelper.CreateOtlpResource("frontend", null),
+                ScopeSpans =
+                [
+                    new OtlpScopeSpansJson
+                    {
+                        Spans =
+                        [
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "span001",
+                                Name = "GET /home",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(50)),
+                                Status = new OtlpSpanStatusJson { Code = 1 }
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        var tracesResponse = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+            TotalCount = 1,
+            ReturnedCount = 1
+        };
+        var tracesJson = JsonSerializer.Serialize(tracesResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            DashboardInfoResponse = new GetDashboardInfoResponse
+            {
+                ApiBaseUrl = "https://nextapp1.dev.localhost:64876",
+                ApiToken = "test-token",
+                DashboardUrls = ["https://nextapp1.dev.localhost:64876/login?t=test"],
+                IsHealthy = true
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            requestedHosts.Add(request.RequestUri!.Host);
+
+            return request.RequestUri.AbsolutePath switch
+            {
+                "/api/telemetry/resources" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(resourcesJson, System.Text.Encoding.UTF8, "application/json")
+                },
+                "/api/telemetry/traces" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(tracesJson, System.Text.Encoding.UTF8, "application/json")
+                },
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            };
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --format json -n 5");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.All(requestedHosts, host => Assert.Equal("localhost", host));
+
+        var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
+        var items = JsonNode.Parse(jsonLine)!.AsArray();
+        Assert.Single(items);
+
+        var item = items[0]!;
+        Assert.Equal("abc1234567890def", item["traceId"]!.GetValue<string>());
+
+        var dashboardUrl = item["dashboardUrl"]!.GetValue<string>();
+        Assert.Equal("https://nextapp1.dev.localhost:64876/traces/detail/abc1234567890def", dashboardUrl);
+    }
+
+    [Fact]
+    public async Task TelemetryTracesCommand_WithDevLocalhostDashboardUrlArg_PreservesDisplayUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var requestedHosts = new List<string>();
+
+        var resourceSpans = new OtlpResourceSpansJson[]
+        {
+            new()
+            {
+                Resource = TelemetryTestHelper.CreateOtlpResource("frontend", null),
+                ScopeSpans =
+                [
+                    new OtlpScopeSpansJson
+                    {
+                        Spans =
+                        [
+                            new OtlpSpanJson
+                            {
+                                TraceId = "abc1234567890def",
+                                SpanId = "span001",
+                                Name = "GET /home",
+                                StartTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime),
+                                EndTimeUnixNano = TelemetryTestHelper.DateTimeToUnixNanoseconds(s_testTime.AddMilliseconds(50)),
+                                Status = new OtlpSpanStatusJson { Code = 1 }
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        var tracesResponse = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = resourceSpans },
+            TotalCount = 1,
+            ReturnedCount = 1
+        };
+        var tracesJson = JsonSerializer.Serialize(tracesResponse, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            requestedHosts.Add(request.RequestUri!.Host);
+
+            return request.RequestUri.AbsolutePath switch
+            {
+                "/api/telemetry/resources" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                },
+                "/api/telemetry/traces" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(tracesJson, System.Text.Encoding.UTF8, "application/json")
+                },
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            };
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel traces --format json -n 5 --dashboard-url http://dashboard.dev.localhost:18888");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // HTTP requests should be normalized to localhost
+        Assert.All(requestedHosts, host => Assert.Equal("localhost", host));
+
+        var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
+        var items = JsonNode.Parse(jsonLine)!.AsArray();
+        Assert.Single(items);
+
+        // The display URL in JSON output should preserve the original *.dev.localhost hostname
+        var dashboardUrl = items[0]!["dashboardUrl"]!.GetValue<string>();
+        Assert.Equal("http://dashboard.dev.localhost:18888/traces/detail/abc1234567890def", dashboardUrl);
     }
 
     [Theory]

@@ -205,7 +205,8 @@ internal static class TelemetryCommandHelpers
             var loginToken = McpToolHelpers.ExtractLoginToken(dashboardUrl);
 
             // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
-            dashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+            var displayDashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+            dashboardUrl = McpToolHelpers.NormalizeDashboardUrl(displayDashboardUrl);
 
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
@@ -229,10 +230,10 @@ internal static class TelemetryCommandHelpers
                     var errorInfo = exchangeResult.FailureKind switch
                     {
                         TokenExchangeFailureKind.ConnectionError => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardConnectionFailedHint),
                         TokenExchangeFailureKind.ApiNotEnabled => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardApiNotEnabledHint),
                         _ => new TelemetryErrorInfo(
                             TelemetryCommandStrings.DashboardLoginTokenFailed,
@@ -247,7 +248,7 @@ internal static class TelemetryCommandHelpers
             }
 
             var token = apiKey ?? string.Empty;
-            return new DashboardApiResult(true, null, dashboardUrl, token, dashboardUrl, 0);
+            return new DashboardApiResult(true, null, dashboardUrl, token, displayDashboardUrl, 0);
         }
 
         var result = await connectionResolver.ResolveConnectionAsync(
@@ -282,10 +283,13 @@ internal static class TelemetryCommandHelpers
             return new DashboardApiResult(true, connection, null, null, null, 0);
         }
 
-        // Extract dashboard base URL (without /login path) for hyperlinks
+        var apiBaseUrl = McpToolHelpers.NormalizeDashboardUrl(dashboardInfo.ApiBaseUrl);
+
+        // Extract dashboard base URL (without /login path) for hyperlinks.
+        // Preserve the original hostname (e.g. *.dev.localhost) for display URLs.
         var extractedDashboardUrl = ExtractDashboardBaseUrl(dashboardInfo.DashboardUrls?.FirstOrDefault());
 
-        return new DashboardApiResult(true, connection, dashboardInfo.ApiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
+        return new DashboardApiResult(true, connection, apiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
     }
 
     /// <summary>
