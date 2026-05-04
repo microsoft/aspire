@@ -56,7 +56,7 @@ Keep these points in mind:
   - `consolelogs/` — one plain-text file per resource with raw console output lines.
   - `structuredlogs/` — one JSON file per resource with structured log entries in OTLP format.
   - `traces/` — one JSON file per resource with distributed traces and spans in OTLP format.
-- When extracting the export for analysis, look at `resources/` first for an overview, then drill into `structuredlogs/` and `traces/` for detailed diagnostics.
+- When extracting the export for analysis, look at `resources/` first for an overview, then drill into `consolelogs/`, `structuredlogs/` and `traces/` for detailed diagnostics.
 
 ## Dashboard Links
 
