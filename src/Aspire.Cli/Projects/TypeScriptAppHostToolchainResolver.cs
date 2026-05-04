@@ -220,7 +220,7 @@ internal static class TypeScriptAppHostToolchainResolver
                 Command = "bun",
                 Args =
                 [
-                    "x",
+                    "run",
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
