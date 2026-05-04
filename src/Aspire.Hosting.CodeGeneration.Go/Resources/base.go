@@ -729,7 +729,7 @@ func decodeStructFields[T any](raw any) (T, bool) {
 	}
 
 	targetType := reflect.TypeOf((*T)(nil)).Elem()
-	isPointer := targetType.Kind() == reflect.Pointer
+	isPointer := targetType.Kind() == reflect.Ptr
 	if isPointer {
 		targetType = targetType.Elem()
 	}

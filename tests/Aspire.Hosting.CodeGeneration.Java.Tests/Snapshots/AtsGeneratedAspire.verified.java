@@ -370,24 +370,32 @@ public class AspireClient {
         try {
             if ("invokeCallback".equals(method)) {
                 String callbackId = getCallbackId(params);
-                List<Object> args = getCallbackArgs(params);
-                
-                Function<Object[], Object> callback = callbacks.get(callbackId);
-                if (callback != null) {
-                    Object[] unwrappedArgs = args.stream()
-                        .map(this::unwrapResult)
-                        .toArray();
-                    result = awaitValue(callback.apply(unwrappedArgs));
+                if (callbackId == null) {
+                    error = createError(-32602, "Invalid params: callbackId is required.");
                 } else {
-                    error = createError(-32601, "Callback not found: " + callbackId);
+                    List<Object> args = getCallbackArgs(params);
+
+                    Function<Object[], Object> callback = callbacks.get(callbackId);
+                    if (callback != null) {
+                        Object[] unwrappedArgs = args.stream()
+                            .map(this::unwrapResult)
+                            .toArray();
+                        result = awaitValue(callback.apply(unwrappedArgs));
+                    } else {
+                        error = createError(-32601, "Callback not found: " + callbackId);
+                    }
                 }
             } else if ("cancel".equals(method)) {
                 String cancellationId = getCancellationId(params);
-                Consumer<Void> handler = cancellations.get(cancellationId);
-                if (handler != null) {
-                    handler.accept(null);
+                if (cancellationId == null) {
+                    error = createError(-32602, "Invalid params: cancellationId is required.");
+                } else {
+                    Consumer<Void> handler = cancellations.get(cancellationId);
+                    if (handler != null) {
+                        handler.accept(null);
+                    }
+                    result = true;
                 }
-                result = true;
             } else {
                 error = createError(-32601, "Unknown method: " + method);
             }
@@ -411,11 +419,11 @@ public class AspireClient {
     @SuppressWarnings("unchecked")
     private String getCallbackId(Object params) {
         if (params instanceof List<?> list && !list.isEmpty()) {
-            return (String) list.get(0);
+            return asString(list.get(0));
         }
 
         if (params instanceof Map<?, ?> map) {
-            return (String) map.get("callbackId");
+            return asString(map.get("callbackId"));
         }
 
         return null;
@@ -452,14 +460,18 @@ public class AspireClient {
 
     private String getCancellationId(Object params) {
         if (params instanceof List<?> list && !list.isEmpty()) {
-            return (String) list.get(0);
+            return asString(list.get(0));
         }
 
         if (params instanceof Map<?, ?> map) {
-            return (String) map.get("cancellationId");
+            return asString(map.get("cancellationId"));
         }
 
         return null;
+    }
+
+    private String asString(Object value) {
+        return value instanceof String string ? string : null;
     }
 
     private Map<String, Object> createError(int code, String message) {
