@@ -370,9 +370,19 @@ previous entries. A companion feedback issue collects editorial comments.
 
 ## Important: available tools
 
-All shell commands are available via the `bash` tool. Prefer `cat` and `jq` for
-JSON processing (parsing, filtering, counting, transforming). Do **not** `cat`
-large JSON files in their entirety — use `jq` to extract only the fields you need.
+Only the commands in the `bash` allow list above are available — **not** all shell
+commands. Prefer `cat` and `jq` for JSON processing (parsing, filtering, counting,
+transforming). Do **not** `cat` large JSON files in their entirety — use `jq` to
+extract only the fields you need.
+
+**Shell syntax restriction:** The bash tool does **not** support shell builtins or
+syntax constructs like `for`, `while`, `if`, function definitions, or heredocs.
+These will be denied. To perform batch operations (e.g., writing multiple files),
+use one of these patterns:
+- Pipe data through `xargs` (e.g., `echo '...' | xargs -I{} sh -c '...'` is NOT
+  allowed — instead issue one `bash` call per file)
+- Use `python3 -c '...'` for complex batch logic
+- Issue separate `bash` tool calls for each file (preferred for clarity)
 
 ## Configuration
 
@@ -445,7 +455,7 @@ unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry conta
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
    - `app/copilot-swe-agent` — makes product changes on behalf of developers.
-   - **Backport PRs** — PRs whose body contains the word `backport` or `port`
+   - **Backport PRs** — PRs whose body contains the word `backport`
      and, upon inspection, appears to be a backport of another PR (e.g.,
      references an original PR number). These are created by backport bots
      and contain the same meaningful changes as their source PRs, just
@@ -463,16 +473,18 @@ total number of changed lines (additions + deletions).
 ### 3a. Processing backport PRs
 
 Backport PRs are identified by checking whether the PR body contains the word
-`backport` or `port` (case-insensitive). If either word is present, inspect the
-body text to determine whether the PR is actually a backport of another PR —
-look for references to an original PR number (e.g., "Backport of #1234",
-"port of #5678", a markdown link to another PR, etc.). Their body typically
+`backport` (case-insensitive). Do **not** match on the standalone word `port` —
+it appears too frequently in non-backport contexts (e.g., "containerPort",
+"port binding", "transport"). If `backport` is present, inspect the body text
+to determine whether the PR is actually a backport of another PR — look for
+references to an original PR number (e.g., "Backport of #1234", a markdown
+link to another PR, etc.). Their body typically
 contains only this backport reference plus a shiproom template that may be unfilled
 or partially filled. To process them:
 
 1. **Extract the original PR number** from the body by inspecting the text for
-   a reference to the source PR (e.g., "Backport of #1234", "#1234", or a
-   full URL like `https://github.com/${REPO}/pull/1234`).
+   a reference to the source PR (e.g., "Backport of #1234", or a full URL
+   like `https://github.com/${REPO}/pull/1234`).
 2. **Fetch the original PR** using `pull_request_read` to get its full title,
    body/description, labels, and changed file paths. Use the original PR's
    content as the primary source for generating the changelog entry.
