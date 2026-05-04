@@ -878,6 +878,9 @@ public static class AtsCapabilityScanner
             .Where(c => c.ExpandedTargetTypes.Count > 0)
             .SelectMany(c => c.ExpandedTargetTypes.Select(t => (Target: t.TypeId, Capability: c)))
             .ToList();
+        var capabilitiesWithExpandedTargets = capabilitiesWithTargets
+            .Select(t => t.Capability)
+            .ToHashSet();
 
         var collisionGroups = capabilitiesWithTargets
             .GroupBy(x => (x.Target, x.Capability.MethodName))
@@ -932,7 +935,7 @@ public static class AtsCapabilityScanner
                 .ToArray();
         }
 
-        capabilities.RemoveAll(c => c.ExpandedTargetTypes.Count == 0);
+        capabilities.RemoveAll(c => c.ExpandedTargetTypes.Count == 0 && capabilitiesWithExpandedTargets.Contains(c));
 
         static bool IsDirectTarget(AtsCapabilityInfo capability, string targetTypeId)
         {

@@ -457,6 +457,9 @@ public class AtsCapabilityScannerTests
             diagnostic.Message.Contains("testConcreteCollision", StringComparison.Ordinal) &&
             diagnostic.Location is not null &&
             diagnostic.Location.EndsWith("/testGenericCollision", StringComparison.Ordinal));
+
+        Assert.Contains(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testGlobalCapability", StringComparison.Ordinal));
     }
 
     #endregion
@@ -610,6 +613,12 @@ public class AtsCapabilityScannerTests
         public static IResourceBuilder<OtherTestResource> TestOtherResource(IResourceBuilder<OtherTestResource> builder)
         {
             return builder;
+        }
+
+        [AspireExport]
+        public static string TestGlobalCapability()
+        {
+            return "value";
         }
 
     }
