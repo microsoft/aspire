@@ -134,7 +134,7 @@ public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
         }
         else
         {
-            output.WriteLine("Skipping Redis webfrontend endpoint check because the installed Aspire CLI does not support resource commands.");
+            Assert.Fail($"Expected 'resource' or 'command' subcommand support; the installed Aspire CLI reported: '{resourceCommandName}'.");
         }
 
         var apiJsonPath = await auto.CaptureJsonOutputAsync(
