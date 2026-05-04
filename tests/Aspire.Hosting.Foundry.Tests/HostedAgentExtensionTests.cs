@@ -3,7 +3,9 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -175,10 +177,40 @@ public class HostedAgentExtensionTests
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+        await ExecuteBeforeStartHooksAsync(app, default);
 
         var registryTargets = container.Resource.Annotations.OfType<RegistryTargetAnnotation>().ToList();
         var registryTarget = Assert.Single(registryTargets);
         Assert.Same(registry.Resource, registryTarget.Registry);
     }
+
+    [Fact]
+    public async Task PublishAsHostedAgent_AddsProjectRoleAssignmentToTargetIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .PublishAsHostedAgent(project);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = Assert.Single(model.Resources.OfType<ContainerResource>(), r => r.Name == "agent");
+        var appIdentity = Assert.Single(target.Annotations.OfType<AppIdentityAnnotation>());
+        var identityResource = Assert.IsType<AzureUserAssignedIdentityResource>(appIdentity.IdentityResource);
+        Assert.Equal("agent-identity", identityResource.Name);
+
+        var roleAssignment = Assert.Single(target.Annotations.OfType<RoleAssignmentAnnotation>());
+        Assert.Same(project.Resource, roleAssignment.Target);
+        var role = Assert.Single(roleAssignment.Roles);
+        Assert.Equal("Azure AI User", role.Name);
+        Assert.Equal("53ca6127-db72-4b80-b1b0-d745d6d5456d", role.Id);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }
