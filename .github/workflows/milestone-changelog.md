@@ -125,7 +125,7 @@ jobs:
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,author,mergedAt,labels,additions,deletions,changedFiles \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-milestone-prs.json"
 
@@ -428,20 +428,23 @@ The pre-computation step (in the frontmatter) has already:
   file present)
 - Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
 
-Each entry in `batch-prs.json` contains: `number`, `title`, `author` (object with
-`login` and `is_bot`), `mergedAt`, `labels` (array of objects with `name`), `additions`,
-`deletions`, `changedFiles`.
+Each entry in `batch-prs.json` contains: `number`, `title`, `body`, `author` (object
+with `login` and `is_bot`), `mergedAt`, `labels` (array of objects with `name`),
+`additions`, `deletions`, `changedFiles`.
 
 ## Step 3: Process the batch PRs
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
 unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
-`number`, `title`, `author` (object with `login` and `is_bot`), `mergedAt`, `labels`
-(array of objects with `name`), `additions`, `deletions`, `changedFiles`.
+`number`, `title`, `body`, `author` (object with `login` and `is_bot`), `mergedAt`,
+`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`.
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
-   **except** `app/copilot-swe-agent` which makes product changes on behalf of
-   developers and should be processed normally.
+   **except** these cases which should be processed normally:
+   - `app/copilot-swe-agent` — makes product changes on behalf of developers.
+   - **Backport PRs** — PRs whose body contains "Backport of #XXXX" (linking
+     to the original PR). These are created by backport bots and contain the
+     same meaningful changes as their source PRs, just targeting a release branch.
    Record each excluded bot PR as an individual tracker file in `prs/` with
    `status: "excluded"` in Step 6b so they are not re-processed on future runs.
 2. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
@@ -452,7 +455,32 @@ full body/description and changed file paths. Collect: number, title, author,
 `author_association`, body/description, labels, the list of changed files, and the
 total number of changed lines (additions + deletions).
 
-### 3a. Read the PR diff when needed
+### 3a. Processing backport PRs
+
+Backport PRs are identified by their body containing "Backport of #XXXX"
+(a link to the original source PR). Their body typically contains only this
+backport reference plus a shiproom template that may be unfilled or partially
+filled. To process them:
+
+1. **Extract the original PR number** from the body (parse "Backport of #XXXX").
+2. **Fetch the original PR** using `pull_request_read` to get its full title,
+   body/description, labels, and changed file paths. Use the original PR's
+   content as the primary source for generating the changelog entry.
+3. **Use the backport PR's title** (stripping any branch prefix, such as
+   `[release/...]`, if present) as the display name if the original PR's title
+   is identical. Otherwise prefer the clearer of the two.
+4. **Use the backport PR's number** (not the original) in the `Changes:` line
+   and in `prs` arrays, since the backport is the PR that was merged into the
+   milestone.
+5. **Use the original PR author's `author_association`** for the community
+   contribution flag (Step 5b), since the backport bot is not a meaningful author.
+   Set the `author` field in the PR tracker to the original PR's author, not the
+   bot.
+
+If the original PR number cannot be parsed from the body, fall back to processing
+the backport PR using its own title, labels, and changed files (same as a normal PR).
+
+### 3b. Read the PR diff when needed
 
 For PRs with **5,000 or fewer** total changed lines, read the diff if **any** of these
 conditions are true:
@@ -653,6 +681,7 @@ Schema:
 {
   "area": "CLI",
   "areaEmoji": "💻",
+  "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": ["@contributor"],
@@ -669,6 +698,7 @@ Schema:
 Field definitions:
 - **area**: Product area name (see Step 5a area table)
 - **areaEmoji**: Emoji for the product area (see Step 5a area table)
+- **backport**: `true` if this entry was generated from a backport PR (Step 3a), `false` otherwise
 - **breaking**: `true` if this is a breaking change, `false` otherwise
 - **changeType**: One of `"New features"`, `"Improvements"`, or `"Bug fixes"`
 - **communityContributors**: Array of GitHub usernames (prefixed with `@`) of
