@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -1201,20 +1201,18 @@ class BeforeStartEventImpl implements BeforeStartEvent {
 export interface CommandArgumentsValidationContext {
     toJSON(): MarshalledHandle;
     /** Gets the Arguments property */
-    arguments: {
-        get: () => Promise<InteractionInputCollection>;
-        set: (value: Awaitable<InteractionInputCollection>) => Promise<void>;
-    };
+    arguments(): Promise<InteractionInputCollection>;
     /** Gets the CancellationToken property */
-    cancellationToken: {
-        get: () => Promise<CancellationToken>;
-        set: (value: AbortSignal | CancellationToken) => Promise<void>;
-    };
+    cancellationToken(): Promise<CancellationToken>;
     /** Invokes the AddValidationError method */
     addValidationError(argumentName: string, errorMessage: string): CommandArgumentsValidationContextPromise;
 }
 
 export interface CommandArgumentsValidationContextPromise extends PromiseLike<CommandArgumentsValidationContext> {
+    /** Gets the Arguments property */
+    arguments(): Promise<InteractionInputCollection>;
+    /** Gets the CancellationToken property */
+    cancellationToken(): Promise<CancellationToken>;
     /** Invokes the AddValidationError method */
     addValidationError(argumentName: string, errorMessage: string): CommandArgumentsValidationContextPromise;
 }
@@ -1232,37 +1230,20 @@ class CommandArgumentsValidationContextImpl implements CommandArgumentsValidatio
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    arguments = {
-        get: async (): Promise<InteractionInputCollection> => {
-            return await this._client.invokeCapability<InteractionInputCollection>(
-                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments',
-                { context: this._handle }
-            );
-        },
-        set: async (value: Awaitable<InteractionInputCollection>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setArguments',
-                { context: this._handle, value }
-            );
-        }
-    };
+    async arguments(): Promise<InteractionInputCollection> {
+        return await this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments',
+            { context: this._handle }
+        );
+    }
 
-    cancellationToken = {
-        get: async (): Promise<CancellationToken> => {
-            const result = await this._client.invokeCapability<string | null>(
-                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken',
-                { context: this._handle }
-            );
-            return CancellationToken.fromValue(result);
-        },
-        set: async (value: AbortSignal | CancellationToken): Promise<void> => {
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken',
-                { context: this._handle, value: CancellationToken.fromValue(value) }
-            );
-        }
-    };
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
 
     /** @internal */
     async _addValidationErrorInternal(argumentName: string, errorMessage: string): Promise<CommandArgumentsValidationContext> {
@@ -1293,6 +1274,14 @@ class CommandArgumentsValidationContextPromiseImpl implements CommandArgumentsVa
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    arguments(): Promise<InteractionInputCollection> {
+        return this._promise.then(obj => obj.arguments());
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
     }
 
     addValidationError(argumentName: string, errorMessage: string): CommandArgumentsValidationContextPromise {
@@ -1558,20 +1547,11 @@ class ContainerImagePushOptionsImpl implements ContainerImagePushOptions {
 export interface ContainerImagePushOptionsCallbackContext {
     toJSON(): MarshalledHandle;
     /** Gets the Resource property */
-    resource: {
-        get: () => Promise<Resource>;
-        set: (value: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>) => Promise<void>;
-    };
+    resource(): ResourcePromise;
     /** Gets the CancellationToken property */
-    cancellationToken: {
-        get: () => Promise<CancellationToken>;
-        set: (value: AbortSignal | CancellationToken) => Promise<void>;
-    };
+    cancellationToken(): Promise<CancellationToken>;
     /** Gets the Options property */
-    options: {
-        get: () => Promise<ContainerImagePushOptions>;
-        set: (value: Awaitable<ContainerImagePushOptions>) => Promise<void>;
-    };
+    options(): Promise<ContainerImagePushOptions>;
 }
 
 // ============================================================================
@@ -1587,55 +1567,32 @@ class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePush
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    resource = {
-        get: async (): Promise<Resource> => {
+    resource(): ResourcePromise {
+        const promise = (async () => {
             const handle = await this._client.invokeCapability<IResourceHandle>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.resource',
                 { context: this._handle }
             );
             return new ResourceImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource',
-                { context: this._handle, value }
-            );
-        }
-    };
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
 
-    cancellationToken = {
-        get: async (): Promise<CancellationToken> => {
-            const result = await this._client.invokeCapability<string | null>(
-                'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken',
-                { context: this._handle }
-            );
-            return CancellationToken.fromValue(result);
-        },
-        set: async (value: AbortSignal | CancellationToken): Promise<void> => {
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setCancellationToken',
-                { context: this._handle, value: CancellationToken.fromValue(value) }
-            );
-        }
-    };
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
 
-    options = {
-        get: async (): Promise<ContainerImagePushOptions> => {
-            const handle = await this._client.invokeCapability<ContainerImagePushOptionsHandle>(
-                'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.options',
-                { context: this._handle }
-            );
-            return new ContainerImagePushOptionsImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<ContainerImagePushOptions>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions',
-                { context: this._handle, value }
-            );
-        }
-    };
+    async options(): Promise<ContainerImagePushOptions> {
+        const handle = await this._client.invokeCapability<ContainerImagePushOptionsHandle>(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.options',
+            { context: this._handle }
+        );
+        return new ContainerImagePushOptionsImpl(handle, this._client);
+    }
 
 }
 
@@ -2431,10 +2388,7 @@ export interface EndpointReference {
     /** Gets the EndpointName property */
     endpointName(): Promise<string>;
     /** Gets the ErrorMessage property */
-    errorMessage: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
-    };
+    errorMessage(): Promise<string>;
     /** Gets the IsAllocated property */
     isAllocated(): Promise<boolean>;
     /** Gets the Exists property */
@@ -2472,6 +2426,8 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     resource(): ResourceWithEndpointsPromise;
     /** Gets the EndpointName property */
     endpointName(): Promise<string>;
+    /** Gets the ErrorMessage property */
+    errorMessage(): Promise<string>;
     /** Gets the IsAllocated property */
     isAllocated(): Promise<boolean>;
     /** Gets the Exists property */
@@ -2535,20 +2491,12 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    errorMessage = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
-                'Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage',
-                { context: this._handle }
-            );
-        },
-        set: async (value: string): Promise<void> => {
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/EndpointReference.setErrorMessage',
-                { context: this._handle, value }
-            );
-        }
-    };
+    async errorMessage(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage',
+            { context: this._handle }
+        );
+    }
 
     async isAllocated(): Promise<boolean> {
         return await this._client.invokeCapability<boolean>(
@@ -2683,6 +2631,10 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
 
     endpointName(): Promise<string> {
         return this._promise.then(obj => obj.endpointName());
+    }
+
+    errorMessage(): Promise<string> {
+        return this._promise.then(obj => obj.errorMessage());
     }
 
     isAllocated(): Promise<boolean> {
@@ -3295,30 +3247,15 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
     /** Gets the ServiceProvider property */
-    serviceProvider: {
-        get: () => Promise<ServiceProvider>;
-        set: (value: Awaitable<ServiceProvider>) => Promise<void>;
-    };
+    serviceProvider(): ServiceProviderPromise;
     /** Gets the ResourceName property */
-    resourceName: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
-    };
+    resourceName(): Promise<string>;
     /** Gets the CancellationToken property */
-    cancellationToken: {
-        get: () => Promise<CancellationToken>;
-        set: (value: AbortSignal | CancellationToken) => Promise<void>;
-    };
+    cancellationToken(): Promise<CancellationToken>;
     /** Gets the Logger property */
-    logger: {
-        get: () => Promise<Logger>;
-        set: (value: Awaitable<Logger>) => Promise<void>;
-    };
+    logger(): LoggerPromise;
     /** Gets the Arguments property */
-    arguments: {
-        get: () => Promise<InteractionInputCollection>;
-        set: (value: Awaitable<InteractionInputCollection>) => Promise<void>;
-    };
+    arguments(): Promise<InteractionInputCollection>;
 }
 
 // ============================================================================
@@ -3334,86 +3271,49 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    serviceProvider = {
-        get: async (): Promise<ServiceProvider> => {
+    serviceProvider(): ServiceProviderPromise {
+        const promise = (async () => {
             const handle = await this._client.invokeCapability<IServiceProviderHandle>(
                 'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
                 { context: this._handle }
             );
             return new ServiceProviderImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<ServiceProvider>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setServiceProvider',
-                { context: this._handle, value }
-            );
-        }
-    };
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
 
-    resourceName = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName',
-                { context: this._handle }
-            );
-        },
-        set: async (value: string): Promise<void> => {
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setResourceName',
-                { context: this._handle, value }
-            );
-        }
-    };
+    async resourceName(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName',
+            { context: this._handle }
+        );
+    }
 
-    cancellationToken = {
-        get: async (): Promise<CancellationToken> => {
-            const result = await this._client.invokeCapability<string | null>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken',
-                { context: this._handle }
-            );
-            return CancellationToken.fromValue(result);
-        },
-        set: async (value: AbortSignal | CancellationToken): Promise<void> => {
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken',
-                { context: this._handle, value: CancellationToken.fromValue(value) }
-            );
-        }
-    };
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
 
-    logger = {
-        get: async (): Promise<Logger> => {
+    logger(): LoggerPromise {
+        const promise = (async () => {
             const handle = await this._client.invokeCapability<ILoggerHandle>(
                 'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger',
                 { context: this._handle }
             );
             return new LoggerImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<Logger>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger',
-                { context: this._handle, value }
-            );
-        }
-    };
+        })();
+        return new LoggerPromiseImpl(promise, this._client, false);
+    }
 
-    arguments = {
-        get: async (): Promise<InteractionInputCollection> => {
-            return await this._client.invokeCapability<InteractionInputCollection>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments',
-                { context: this._handle }
-            );
-        },
-        set: async (value: Awaitable<InteractionInputCollection>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setArguments',
-                { context: this._handle, value }
-            );
-        }
-    };
+    async arguments(): Promise<InteractionInputCollection> {
+        return await this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments',
+            { context: this._handle }
+        );
+    }
 
 }
 
@@ -4060,15 +3960,9 @@ class PipelineStepPromiseImpl implements PipelineStepPromise {
 export interface PipelineStepContext {
     toJSON(): MarshalledHandle;
     /** Gets the PipelineContext property */
-    pipelineContext: {
-        get: () => Promise<PipelineContext>;
-        set: (value: Awaitable<PipelineContext>) => Promise<void>;
-    };
+    pipelineContext(): Promise<PipelineContext>;
     /** Gets the ReportingStep property */
-    reportingStep: {
-        get: () => Promise<ReportingStep>;
-        set: (value: Awaitable<ReportingStep>) => Promise<void>;
-    };
+    reportingStep(): ReportingStepPromise;
     /** Gets the Model property */
     model(): DistributedApplicationModelPromise;
     /** Gets the ExecutionContext property */
@@ -4096,39 +3990,24 @@ class PipelineStepContextImpl implements PipelineStepContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    pipelineContext = {
-        get: async (): Promise<PipelineContext> => {
-            const handle = await this._client.invokeCapability<PipelineContextHandle>(
-                'Aspire.Hosting.Pipelines/PipelineStepContext.pipelineContext',
-                { context: this._handle }
-            );
-            return new PipelineContextImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<PipelineContext>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.Pipelines/PipelineStepContext.setPipelineContext',
-                { context: this._handle, value }
-            );
-        }
-    };
+    async pipelineContext(): Promise<PipelineContext> {
+        const handle = await this._client.invokeCapability<PipelineContextHandle>(
+            'Aspire.Hosting.Pipelines/PipelineStepContext.pipelineContext',
+            { context: this._handle }
+        );
+        return new PipelineContextImpl(handle, this._client);
+    }
 
-    reportingStep = {
-        get: async (): Promise<ReportingStep> => {
+    reportingStep(): ReportingStepPromise {
+        const promise = (async () => {
             const handle = await this._client.invokeCapability<IReportingStepHandle>(
                 'Aspire.Hosting.Pipelines/PipelineStepContext.reportingStep',
                 { context: this._handle }
             );
             return new ReportingStepImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<ReportingStep>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.Pipelines/PipelineStepContext.setReportingStep',
-                { context: this._handle, value }
-            );
-        }
-    };
+        })();
+        return new ReportingStepPromiseImpl(promise, this._client, false);
+    }
 
     model(): DistributedApplicationModelPromise {
         const promise = (async () => {
@@ -4199,15 +4078,9 @@ class PipelineStepContextImpl implements PipelineStepContext {
 export interface PipelineStepFactoryContext {
     toJSON(): MarshalledHandle;
     /** Gets the PipelineContext property */
-    pipelineContext: {
-        get: () => Promise<PipelineContext>;
-        set: (value: Awaitable<PipelineContext>) => Promise<void>;
-    };
+    pipelineContext(): Promise<PipelineContext>;
     /** Gets the Resource property */
-    resource: {
-        get: () => Promise<Resource>;
-        set: (value: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>) => Promise<void>;
-    };
+    resource(): ResourcePromise;
 }
 
 // ============================================================================
@@ -4223,39 +4096,24 @@ class PipelineStepFactoryContextImpl implements PipelineStepFactoryContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    pipelineContext = {
-        get: async (): Promise<PipelineContext> => {
-            const handle = await this._client.invokeCapability<PipelineContextHandle>(
-                'Aspire.Hosting.Pipelines/PipelineStepFactoryContext.pipelineContext',
-                { context: this._handle }
-            );
-            return new PipelineContextImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<PipelineContext>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setPipelineContext',
-                { context: this._handle, value }
-            );
-        }
-    };
+    async pipelineContext(): Promise<PipelineContext> {
+        const handle = await this._client.invokeCapability<PipelineContextHandle>(
+            'Aspire.Hosting.Pipelines/PipelineStepFactoryContext.pipelineContext',
+            { context: this._handle }
+        );
+        return new PipelineContextImpl(handle, this._client);
+    }
 
-    resource = {
-        get: async (): Promise<Resource> => {
+    resource(): ResourcePromise {
+        const promise = (async () => {
             const handle = await this._client.invokeCapability<IResourceHandle>(
                 'Aspire.Hosting.Pipelines/PipelineStepFactoryContext.resource',
                 { context: this._handle }
             );
             return new ResourceImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setResource',
-                { context: this._handle, value }
-            );
-        }
-    };
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
 
 }
 
@@ -5636,10 +5494,7 @@ class TestResourceContextPromiseImpl implements TestResourceContextPromise {
 export interface UpdateCommandStateContext {
     toJSON(): MarshalledHandle;
     /** Gets the ServiceProvider property */
-    serviceProvider: {
-        get: () => Promise<ServiceProvider>;
-        set: (value: Awaitable<ServiceProvider>) => Promise<void>;
-    };
+    serviceProvider(): ServiceProviderPromise;
 }
 
 // ============================================================================
@@ -5655,22 +5510,16 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    serviceProvider = {
-        get: async (): Promise<ServiceProvider> => {
+    serviceProvider(): ServiceProviderPromise {
+        const promise = (async () => {
             const handle = await this._client.invokeCapability<IServiceProviderHandle>(
                 'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider',
                 { context: this._handle }
             );
             return new ServiceProviderImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<ServiceProvider>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.setServiceProvider',
-                { context: this._handle, value }
-            );
-        }
-    };
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
 
 }
 

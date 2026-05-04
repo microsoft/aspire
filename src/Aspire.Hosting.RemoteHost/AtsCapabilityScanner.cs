@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -1591,7 +1592,7 @@ public static class AtsCapabilityScanner
 
                 // Generate setter capability if property is writable
                 // Naming: {TypeName}.set{PropertyName} (keep "set" prefix, PascalCase property name)
-                if (property.CanWrite)
+                if (CanWriteAfterInitialization(property))
                 {
                     var setterMethodNameSuffix = methodNameOverride is { Length: > 0 }
                         ? char.ToUpperInvariant(methodNameOverride[0]) + methodNameOverride[1..]
@@ -2392,6 +2393,12 @@ public static class AtsCapabilityScanner
         }
 
         return null;
+    }
+
+    private static bool CanWriteAfterInitialization(PropertyInfo property)
+    {
+        return property.CanWrite &&
+            property.SetMethod?.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(IsExternalInit)) != true;
     }
 
     /// <summary>

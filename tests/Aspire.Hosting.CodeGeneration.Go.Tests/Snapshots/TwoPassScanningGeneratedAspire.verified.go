@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -4181,8 +4181,6 @@ type CommandArgumentsValidationContext interface {
 	AddValidationError(argumentName string, errorMessage string) error
 	Arguments() InteractionInputCollection
 	CancellationToken() (*CancellationToken, error)
-	SetArguments(value InteractionInputCollection) CommandArgumentsValidationContext
-	SetCancellationToken(options ...*SetCancellationTokenOptions) CommandArgumentsValidationContext
 	Err() error
 }
 
@@ -4241,43 +4239,6 @@ func (s *commandArgumentsValidationContext) CancellationToken() (*CancellationTo
 		return zero, err
 	}
 	return decodeAs[*CancellationToken](result)
-}
-
-// SetArguments sets the Arguments property
-func (s *commandArgumentsValidationContext) SetArguments(value InteractionInputCollection) CommandArgumentsValidationContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setArguments", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetCancellationToken sets the CancellationToken property
-func (s *commandArgumentsValidationContext) SetCancellationToken(options ...*SetCancellationTokenOptions) CommandArgumentsValidationContext {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &SetCancellationTokenOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Value != nil {
-			ctx = merged.Value.Context()
-			if id := s.client.registerCancellation(merged.Value); id != "" {
-				reqArgs["value"] = id
-			}
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // CommandLineArgsCallbackContext is the public interface for handle type CommandLineArgsCallbackContext.
@@ -4646,9 +4607,6 @@ type ContainerImagePushOptionsCallbackContext interface {
 	CancellationToken() (*CancellationToken, error)
 	Options() ContainerImagePushOptions
 	Resource() Resource
-	SetCancellationToken(options ...*SetCancellationTokenOptions) ContainerImagePushOptionsCallbackContext
-	SetOptions(value ContainerImagePushOptions) ContainerImagePushOptionsCallbackContext
-	SetResource(value Resource) ContainerImagePushOptionsCallbackContext
 	Err() error
 }
 
@@ -4711,56 +4669,6 @@ func (s *containerImagePushOptionsCallbackContext) Resource() Resource {
 		return nil
 	}
 	return typed
-}
-
-// SetCancellationToken sets the CancellationToken property
-func (s *containerImagePushOptionsCallbackContext) SetCancellationToken(options ...*SetCancellationTokenOptions) ContainerImagePushOptionsCallbackContext {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &SetCancellationTokenOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Value != nil {
-			ctx = merged.Value.Context()
-			if id := s.client.registerCancellation(merged.Value); id != "" {
-				reqArgs["value"] = id
-			}
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setCancellationToken", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetOptions sets the Options property
-func (s *containerImagePushOptionsCallbackContext) SetOptions(value ContainerImagePushOptions) ContainerImagePushOptionsCallbackContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetResource sets the Resource property
-func (s *containerImagePushOptionsCallbackContext) SetResource(value Resource) ContainerImagePushOptionsCallbackContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // ContainerImageReference is the public interface for handle type ContainerImageReference.
@@ -10323,7 +10231,6 @@ type EndpointReference interface {
 	Property(property EndpointProperty) EndpointReferenceExpression
 	Resource() ResourceWithEndpoints
 	Scheme() (string, error)
-	SetErrorMessage(value string) EndpointReference
 	TargetPort() (float64, error)
 	TlsEnabled() (bool, error)
 	Url() (string, error)
@@ -10589,18 +10496,6 @@ func (s *endpointReference) Scheme() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
-}
-
-// SetErrorMessage sets the ErrorMessage property
-func (s *endpointReference) SetErrorMessage(value string) EndpointReference {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.setErrorMessage", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // TargetPort gets the TargetPort property
@@ -12741,11 +12636,6 @@ type ExecuteCommandContext interface {
 	Logger() Logger
 	ResourceName() (string, error)
 	ServiceProvider() ServiceProvider
-	SetArguments(value InteractionInputCollection) ExecuteCommandContext
-	SetCancellationToken(options ...*SetCancellationTokenOptions) ExecuteCommandContext
-	SetLogger(value Logger) ExecuteCommandContext
-	SetResourceName(value string) ExecuteCommandContext
-	SetServiceProvider(value ServiceProvider) ExecuteCommandContext
 	Err() error
 }
 
@@ -12844,81 +12734,6 @@ func (s *executeCommandContext) ServiceProvider() ServiceProvider {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// SetArguments sets the Arguments property
-func (s *executeCommandContext) SetArguments(value InteractionInputCollection) ExecuteCommandContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setArguments", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetCancellationToken sets the CancellationToken property
-func (s *executeCommandContext) SetCancellationToken(options ...*SetCancellationTokenOptions) ExecuteCommandContext {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &SetCancellationTokenOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Value != nil {
-			ctx = merged.Value.Context()
-			if id := s.client.registerCancellation(merged.Value); id != "" {
-				reqArgs["value"] = id
-			}
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetLogger sets the Logger property
-func (s *executeCommandContext) SetLogger(value Logger) ExecuteCommandContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetResourceName sets the ResourceName property
-func (s *executeCommandContext) SetResourceName(value string) ExecuteCommandContext {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setResourceName", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetServiceProvider sets the ServiceProvider property
-func (s *executeCommandContext) SetServiceProvider(value ServiceProvider) ExecuteCommandContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setServiceProvider", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // ExecutionConfigurationBuilder is the public interface for handle type ExecutionConfigurationBuilder.
@@ -15533,8 +15348,6 @@ type PipelineStepContext interface {
 	PipelineContext() PipelineContext
 	ReportingStep() ReportingStep
 	Services() ServiceProvider
-	SetPipelineContext(value PipelineContext) PipelineStepContext
-	SetReportingStep(value ReportingStep) PipelineStepContext
 	Summary() PipelineSummary
 	Err() error
 }
@@ -15678,32 +15491,6 @@ func (s *pipelineStepContext) Services() ServiceProvider {
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// SetPipelineContext sets the PipelineContext property
-func (s *pipelineStepContext) SetPipelineContext(value PipelineContext) PipelineStepContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStepContext.setPipelineContext", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetReportingStep sets the ReportingStep property
-func (s *pipelineStepContext) SetReportingStep(value ReportingStep) PipelineStepContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStepContext.setReportingStep", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // Summary gets the Summary property
 func (s *pipelineStepContext) Summary() PipelineSummary {
 	if s.err != nil { return &pipelineSummary{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
@@ -15728,8 +15515,6 @@ type PipelineStepFactoryContext interface {
 	handleReference
 	PipelineContext() PipelineContext
 	Resource() Resource
-	SetPipelineContext(value PipelineContext) PipelineStepFactoryContext
-	SetResource(value Resource) PipelineStepFactoryContext
 	Err() error
 }
 
@@ -15777,32 +15562,6 @@ func (s *pipelineStepFactoryContext) Resource() Resource {
 		return nil
 	}
 	return typed
-}
-
-// SetPipelineContext sets the PipelineContext property
-func (s *pipelineStepFactoryContext) SetPipelineContext(value PipelineContext) PipelineStepFactoryContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setPipelineContext", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetResource sets the Resource property
-func (s *pipelineStepFactoryContext) SetResource(value Resource) PipelineStepFactoryContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setResource", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // PipelineSummary is the public interface for handle type PipelineSummary.
@@ -22723,7 +22482,6 @@ func (s *testResourceContext) Value() (float64, error) {
 type UpdateCommandStateContext interface {
 	handleReference
 	ServiceProvider() ServiceProvider
-	SetServiceProvider(value ServiceProvider) UpdateCommandStateContext
 	Err() error
 }
 
@@ -22754,19 +22512,6 @@ func (s *updateCommandStateContext) ServiceProvider() ServiceProvider {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// SetServiceProvider sets the ServiceProvider property
-func (s *updateCommandStateContext) SetServiceProvider(value ServiceProvider) UpdateCommandStateContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.setServiceProvider", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // UserSecretsManager is the public interface for handle type UserSecretsManager.

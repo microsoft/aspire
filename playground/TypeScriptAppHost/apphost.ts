@@ -53,7 +53,7 @@ await cache.withCommand(
     "set-prefix",
     "Set prefix",
     async (context: ExecuteCommandContext) => {
-        const args = await context.arguments.get();
+        const args = await context.arguments();
         const prefix = await args.requiredValue("prefix");
         const countValue = await args.requiredValue("count");
         const count = Number(countValue);
@@ -82,7 +82,7 @@ await cache.withCommand(
                 }
             ],
             validateArguments: async (context: CommandArgumentsValidationContext) => {
-                const args = await context.arguments.get();
+                const args = await context.arguments();
                 const prefix = await args.requiredValue("prefix");
                 const countValue = await args.requiredValue("count");
                 const count = Number(countValue);

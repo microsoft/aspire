@@ -422,7 +422,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                     location);
             }
 
-            if (property.SetMethod is not null)
+            if (property.SetMethod is { IsInitOnly: false })
             {
                 var setterMethodNameSuffix = methodNameOverride is { Length: > 0 }
                     ? char.ToUpperInvariant(methodNameOverride[0]) + methodNameOverride.Substring(1)
