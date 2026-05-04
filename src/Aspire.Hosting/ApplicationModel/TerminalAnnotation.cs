@@ -6,39 +6,47 @@ using System.Diagnostics;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents terminal configuration for a resource that supports interactive terminal sessions.
+/// Marks a resource as having an interactive terminal session.
 /// </summary>
 /// <remarks>
-/// When this annotation is present on a resource, the orchestrator will allocate a pseudo-terminal (PTY)
-/// for the resource's process and make it available for interactive access via a Unix domain socket.
+/// <para>
+/// When this annotation is present on a resource, the orchestrator (DCP) allocates a
+/// pseudo-terminal (PTY) per replica and a hidden <see cref="TerminalHostResource"/> bridges
+/// the PTY traffic over Hex1b's HMP v1 protocol so that the Aspire Dashboard and the
+/// <c>aspire terminal</c> CLI command can attach to live sessions.
+/// </para>
+/// <para>
+/// The set of Unix domain socket paths used to wire DCP, the host, and viewers together is
+/// described by <see cref="TerminalHostResource.Layout"/> on the resource referenced by
+/// <see cref="TerminalHost"/>.
+/// </para>
 /// </remarks>
-[DebuggerDisplay("Type = {GetType().Name,nq}, SocketPath = {SocketPath}")]
+[DebuggerDisplay("Type = {GetType().Name,nq}, TerminalHost = {TerminalHost.Name}")]
 public sealed class TerminalAnnotation : IResourceAnnotation
 {
     /// <summary>
-    /// Gets or sets the path to the Unix domain socket used for terminal I/O.
+    /// Initializes a new instance of the <see cref="TerminalAnnotation"/> class.
     /// </summary>
-    /// <remarks>
-    /// This path is set by the orchestrator when the terminal host is started,
-    /// or resolved from <see cref="SocketPathProvider"/> for custom terminal resources.
-    /// Clients connect to this socket to interact with the resource's terminal session.
-    /// </remarks>
-    public string? SocketPath { get; set; }
+    /// <param name="terminalHost">The hidden terminal host resource that bridges PTY traffic for the annotated resource.</param>
+    /// <param name="options">The terminal options for this annotation.</param>
+    public TerminalAnnotation(TerminalHostResource terminalHost, TerminalOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(terminalHost);
+        ArgumentNullException.ThrowIfNull(options);
+
+        TerminalHost = terminalHost;
+        Options = options;
+    }
 
     /// <summary>
-    /// Gets or sets an optional callback that provides the UDS socket path.
+    /// Gets the hidden terminal host resource that bridges PTY traffic for the annotated resource.
     /// </summary>
-    /// <remarks>
-    /// Used by custom terminal resources that manage their own terminal server.
-    /// When set, the orchestrator calls this during resource initialization to obtain the socket path
-    /// instead of creating a hidden terminal host resource.
-    /// </remarks>
-    public Func<CancellationToken, Task<string>>? SocketPathProvider { get; set; }
+    public TerminalHostResource TerminalHost { get; }
 
     /// <summary>
     /// Gets the terminal options for this annotation.
     /// </summary>
-    public TerminalOptions Options { get; init; } = new();
+    public TerminalOptions Options { get; }
 }
 
 /// <summary>

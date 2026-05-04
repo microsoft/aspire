@@ -174,6 +174,16 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         return Task.FromResult(DashboardInfoResponse);
     }
 
+    /// <summary>
+    /// Gets or sets the terminal info response to return from GetTerminalInfoAsync.
+    /// </summary>
+    public GetTerminalInfoResponse TerminalInfoResponse { get; set; } = new GetTerminalInfoResponse { IsAvailable = false };
+
+    public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(TerminalInfoResponse);
+    }
+
     public void Dispose()
     {
         // Nothing to dispose in the test implementation

@@ -51,14 +51,10 @@ internal sealed class DashboardServiceData : IDisposable
                             new ResourcePropertySnapshot(KnownProperties.Terminal.Enabled, "true") { IsSensitive = false })
                     };
 
-                    if (terminalAnnotation.SocketPath is not null)
-                    {
-                        snapshot = snapshot with
-                        {
-                            Properties = snapshot.Properties.Add(
-                                new ResourcePropertySnapshot(KnownProperties.Terminal.SocketPath, terminalAnnotation.SocketPath) { IsSensitive = false })
-                        };
-                    }
+                    // Phase 7 of WithTerminal replaces this single-socket property with
+                    // a per-replica view sourced from TerminalAnnotation.TerminalHost.Layout
+                    // and routed through the dashboard backchannel; the snapshot just
+                    // signals availability for now.
                 }
 
                 return new GenericResourceSnapshot(snapshot)

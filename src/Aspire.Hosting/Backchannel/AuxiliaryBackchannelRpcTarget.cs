@@ -264,8 +264,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetTerminalInfoResponse
         {
-            IsAvailable = !string.IsNullOrEmpty(terminalAnnotation.SocketPath),
-            SocketPath = terminalAnnotation.SocketPath,
+            // Phase 5 of WithTerminal will populate per-replica info (consumer UDS
+            // paths from TerminalAnnotation.TerminalHost.Layout) over the host's
+            // control UDS. Until that work lands the response shape only carries
+            // the legacy single-socket fields, so we report unavailable rather than
+            // mis-route a stale path that the new host design no longer publishes.
+            IsAvailable = false,
             Columns = terminalAnnotation.Options.Columns,
             Rows = terminalAnnotation.Options.Rows
         });

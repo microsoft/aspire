@@ -105,7 +105,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
 
-        // Configure terminal spec if the resource has a TerminalAnnotation
+        // Configure terminal spec if the resource has a TerminalAnnotation.
+        // Phase 4 of WithTerminal will populate per-replica TerminalSpec values from
+        // TerminalAnnotation.TerminalHost.Layout.ProducerUdsPaths[replicaIndex]; the
+        // current ExecutableSpec.Terminal shape (single SocketPath) is being replaced
+        // with per-replica routing in DCP, so we leave the spec unset here for now.
         if (er.ModelResource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
         {
             var terminalAnnotation = terminalAnnotations.FirstOrDefault();
@@ -114,7 +118,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 spec.Terminal = new TerminalSpec
                 {
                     Enabled = true,
-                    SocketPath = terminalAnnotation.SocketPath,
                     Columns = terminalAnnotation.Options.Columns,
                     Rows = terminalAnnotation.Options.Rows
                 };

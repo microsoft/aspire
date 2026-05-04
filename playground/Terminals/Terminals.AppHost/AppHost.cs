@@ -1,16 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Terminals.AppHost;
-
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Add a terminal demo resource that runs a Hex1b-hosted shell session.
-// The terminal host process receives the UDS path via environment variable,
-// creates a Hex1b terminal with a custom presentation adapter, and bridges
-// client connections over the socket to the shell's PTY.
-// This demonstrates the full WithTerminal flow without requiring DCP PTY support.
-builder.AddTerminalDemo("demo-shell");
+// Phase 8 of the WithTerminal work will rewrite this playground to demonstrate
+// the new DCP-driven terminal flow against both an executable and a container.
+// For now this is a no-op placeholder so the playground keeps building during
+// Phase 1 (app-model refactor).
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
