@@ -6,7 +6,9 @@ FROM aspire-e2e-polyglot-base
 ARG UBUNTU_APT_MIRROR=
 
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+COPY tests/Shared/Docker/apt-retry.sh /usr/local/bin/apt-retry
+RUN chmod +x /usr/local/bin/apt-retry
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
-RUN apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
-    apt-get install -y --no-install-recommends openjdk-25-jdk && \
+
+RUN apt-retry install openjdk-25-jdk && \
     rm -rf /var/lib/apt/lists/*

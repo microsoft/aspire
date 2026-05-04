@@ -22,12 +22,14 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG SKIP_SOURCE_BUILD=false
 ARG UBUNTU_APT_MIRROR=
 
+COPY tests/Shared/Docker/apt-retry.sh /usr/local/bin/apt-retry
+RUN chmod +x /usr/local/bin/apt-retry
+
 # Install native AOT build toolchain.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
 RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
-      apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
-      apt-get install -y --no-install-recommends clang zlib1g-dev && \
+      apt-retry install clang zlib1g-dev && \
       rm -rf /var/lib/apt/lists/*; \
     fi
 
@@ -54,23 +56,24 @@ ARG UBUNTU_APT_MIRROR=
 
 # --- Common tooling (shared between dotnet and polyglot variants) ---
 
+COPY tests/Shared/Docker/apt-retry.sh /usr/local/bin/apt-retry
+RUN chmod +x /usr/local/bin/apt-retry
+
 # Install gh CLI (needed by get-aspire-cli-pr.sh to download PR artifacts).
 # Install Docker CLI plus the buildx/compose plugins used by publish and deploy flows.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
-RUN apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
-    apt-get install -y --no-install-recommends gpg docker.io docker-buildx docker-compose-v2 unzip && \
+RUN apt-retry install gpg docker.io docker-buildx docker-compose-v2 unzip && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list && \
-    apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
-    apt-get install -y --no-install-recommends gh && \
+    apt-retry install gh && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Node.js plus supported TypeScript AppHost toolchains.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
+    apt-retry install nodejs && \
     npm install -g yarn@1.22.22 pnpm@10 && \
     for attempt in 1 2 3 4 5; do \
       curl -fsSL https://bun.sh/install | bash && break; \
@@ -82,15 +85,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python and uv (needed for Python templates).
-RUN apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
-    apt-get install -y --no-install-recommends python3 python3-pip python3-venv && \
+RUN apt-retry install python3 python3-pip python3-venv && \
     rm -rf /var/lib/apt/lists/*
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
 # Install Java (needed for Java AppHost tests).
-RUN apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any update -qq && \
-    apt-get install -y --no-install-recommends openjdk-21-jdk && \
+RUN apt-retry install openjdk-21-jdk && \
     rm -rf /var/lib/apt/lists/*
 
 # --- Aspire CLI setup ---
