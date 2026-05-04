@@ -424,6 +424,20 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         cctx.ContainerServicesSpecReady.Wait(cancellationToken);
         cctx.ContainerServicesChan.Writer.Complete();
 
+        if (!_options.Value.EnableAspireContainerTunnel)
+        {
+            // Legacy (Docker Desktop bridge) mode: container network services for host resources are
+            // created up-front in PrepareServices(). We must not create a ContainerNetworkTunnelProxy
+            // here, otherwise it would join the container network and alias itself as
+            // host.docker.internal (or whatever GetContainerHostNameAsync returns), intercepting traffic
+            // that should reach the host directly via the container runtime's host bridge.
+            // Drain the channel so the underlying enumerator/reader is disposed cleanly.
+            await foreach (var _ in cctx.ContainerServicesChan.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+            }
+            return;
+        }
+
         // Now create the container network services for the host resources, update the tunnel, and advertise AllocatedEndpoints.
         var containerNetworkServices = cctx.ContainerServicesChan.Reader.ReadAllAsync(cancellationToken).ToBlockingEnumerable(cancellationToken).ToArray();
         _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));

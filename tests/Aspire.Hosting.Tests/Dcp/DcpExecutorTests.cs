@@ -3029,6 +3029,108 @@ public class DcpExecutorTests
         Assert.Single(createdContainers, c => c.AppModelResourceName == "tunnelIndependent");
     }
 
+    // Regression test for https://github.com/microsoft/aspire/issues/16640.
+    // When ASPIRE_ENABLE_CONTAINER_TUNNEL=false, the legacy (Docker Desktop bridge) mode must be honored.
+    // No ContainerNetworkTunnelProxy should be created; otherwise it joins the container network and
+    // aliases itself as host.docker.internal, intercepting traffic that should reach the host directly.
+    [Fact]
+    public async Task NoTunnelProxyCreated_WhenContainerTunnelDisabled()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        // A host executable with an endpoint that the container will reference (creates tunnel-dependent container).
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("aContainer", "image")
+            .WithEnvironment("EXEC_URL", executable.GetEndpoint("http"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = false,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+
+        // The executable endpoint should still be resolvable from the container, via the container-network
+        // entry that PrepareServices() / AddAllocatedEndpointInfo populated with host.docker.internal.
+        await AssertEndpoint(executable.Resource, "http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork, KnownHostNames.DockerDesktopHostBridge, 5678);
+
+        static async ValueTask AssertEndpoint(IResourceWithEndpoints resource, string name, NetworkIdentifier network, string address, int port)
+        {
+            var endpoint = resource.GetEndpoint(name).EndpointAnnotation;
+            var allocatedEndpoint = await endpoint.AllAllocatedEndpoints.Single(x => x.NetworkID == network).Snapshot.GetValueAsync().DefaultTimeout();
+            Assert.Equal(address, allocatedEndpoint.Address);
+            Assert.Equal(port, allocatedEndpoint.Port);
+        }
+    }
+
+    // Regression test for https://github.com/microsoft/aspire/issues/16640.
+    // Reproduces the user's manual-AllocatedEndpoint scenario: a custom IResourceWithEndpoints publishes
+    // its own AllocatedEndpoints for both LocalhostNetwork and DefaultAspireContainerNetwork. A container
+    // resource referencing the endpoint must resolve the container-network value, not the localhost one.
+    [Fact]
+    public async Task ManuallyAllocatedEndpoints_ResolveToContainerNetworkValue_ForContainerConsumer()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        // Custom resource (not container, not executable). User-managed lifecycle, like the MetricsResource
+        // in issue #16640.
+        var serverResource = new ManualEndpointResource("metrics");
+        var server = builder.AddResource(serverResource).WithHttpEndpoint();
+
+        // The endpoint annotation must exist so we can populate AllAllocatedEndpoints below.
+        var endpointAnnotation = serverResource.Annotations.OfType<EndpointAnnotation>().Single();
+
+        // A container resource that consumes the endpoint via env var.
+        var container = builder.AddContainer("curl", "image")
+            .WithEnvironment("URL", server.GetEndpoint("http"))
+            .WaitFor(server);
+
+        // Simulate what the user does inside OnInitializeResource — manually populate both networks.
+        const int userPort = 56123;
+        var hostEndpoint = new AllocatedEndpoint(endpointAnnotation, "127.0.0.1", userPort,
+            EndpointBindingMode.SingleAddress,
+            targetPortExpression: userPort.ToString(CultureInfo.InvariantCulture),
+            networkID: KnownNetworkIdentifiers.LocalhostNetwork);
+
+        var containerEndpoint = new AllocatedEndpoint(endpointAnnotation, KnownHostNames.DockerDesktopHostBridge, userPort,
+            EndpointBindingMode.SingleAddress,
+            targetPortExpression: userPort.ToString(CultureInfo.InvariantCulture),
+            networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+
+        endpointAnnotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.LocalhostNetwork, hostEndpoint);
+        endpointAnnotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, containerEndpoint);
+
+        // Resolve the env var value the way the container creator would, in the context of the container caller.
+        var endpointReference = server.GetEndpoint("http");
+        var resolvedUrl = await endpointReference.GetValueAsync(new ValueProviderContext { Caller = container.Resource }, CancellationToken.None);
+
+        // Container consumer should receive the container-network URL (host.docker.internal),
+        // not the host-loopback URL (127.0.0.1).
+        Assert.Equal($"http://{KnownHostNames.DockerDesktopHostBridge}:{userPort}", resolvedUrl);
+
+        // And no rogue tunnel proxy should be created when the container tunnel is disabled.
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions { EnableAspireContainerTunnel = false };
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+    }
+
+    private sealed class ManualEndpointResource(string name) : Resource(name), IResourceWithEndpoints
+    {
+    }
+
     [Fact]
     public async Task EnvironmentCallbackThrows_OtherResourcesStillStart()
     {
