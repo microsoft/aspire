@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of API review breaking changes: AKS SKU tier defaults to Free, AksSkuTier made internal, EFMigrationResource.ContextTypeName renamed to DbContextTypeName, ASPIREEXTENSION001 renamed to ASPIREJAVASCRIPT001",
+  "mergedAt": "2026-05-04T17:53:48Z",
+  "number": 16674,
+  "runDate": "2026-05-04T18:43:45Z",
+  "status": "included",
+  "title": "[release/13.3] API Review Feedback"
+}

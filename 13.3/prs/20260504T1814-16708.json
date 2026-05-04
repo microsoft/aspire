@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: normalize *.dev.localhost dashboard URLs to localhost for CLI HTTP requests in aspire otel and aspire agent mcp commands",
+  "mergedAt": "2026-05-04T18:14:25Z",
+  "number": 16708,
+  "runDate": "2026-05-04T18:43:45Z",
+  "status": "included",
+  "title": "[release/13.3] Normalize *.localhost dashboard URLs to localhost for CLI HTTP requests"
+}

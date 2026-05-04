@@ -1,0 +1,17 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "AKS SKU tier now defaults to Free instead of Standard. The `AksSkuTier` enum has been made internal; use the `WithFreeAksSkuTier()` and `WithStandardAksSkuTier()` extension methods to configure the tier. The EFMigrationResource `ContextTypeName` property has been renamed to `DbContextTypeName`. The JavaScript/TypeScript experimental diagnostic ID has been renamed from `ASPIREEXTENSION001` to `ASPIREJAVASCRIPT001`.",
+  "docsRequired": true,
+  "emoji": "🔑",
+  "firstMergedAt": "2026-05-04T17:53:48Z",
+  "lastMergedAt": "2026-05-04T17:53:48Z",
+  "name": "API review breaking changes (AKS, EF Core, JavaScript)",
+  "prs": [
+    16674
+  ]
+}

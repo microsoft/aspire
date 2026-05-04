@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The `aspire otel` and `aspire agent mcp` commands now work correctly when the dashboard is configured with a `*.dev.localhost` URL. The CLI normalizes `*.localhost` subdomains to `localhost` for HTTP requests while preserving the original hostname in display URLs.",
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-05-04T18:14:25Z",
+  "lastMergedAt": "2026-05-04T18:14:25Z",
+  "name": "Fix CLI commands with *.dev.localhost dashboard URLs",
+  "prs": [
+    16708
+  ]
+}
