@@ -86,6 +86,7 @@ internal sealed class ResourceCommand : BaseCommand
             return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
         }
 
+        var connection = result.Connection!;
         var commandArguments = capturedArguments.Length > 0
             ? JsonSerializer.SerializeToElement(capturedArguments, JsonSourceGenerationContext.Default.StringArray)
             : (JsonElement?)null;
@@ -94,7 +95,7 @@ internal sealed class ResourceCommand : BaseCommand
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
         {
             return await ResourceCommandHelper.ExecuteResourceCommandAsync(
-                result.Connection!,
+                connection,
                 _interactionService,
                 _logger,
                 resourceName,
@@ -107,7 +108,7 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         return await ResourceCommandHelper.ExecuteGenericCommandAsync(
-            result.Connection!,
+            connection,
             _interactionService,
             _logger,
             resourceName,

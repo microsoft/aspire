@@ -430,7 +430,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetCapabilitiesAsyncReturnsV1AndV2()
+    public async Task GetCapabilitiesAsyncReturnsCurrentCapabilities()
     {
         // This test verifies that GetCapabilitiesAsync returns both v1 and v2 capabilities
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);

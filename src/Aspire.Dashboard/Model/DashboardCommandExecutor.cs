@@ -317,19 +317,19 @@ public sealed class DashboardCommandExecutor(
                 }
 
                 var arguments = CreateCommandArguments(submittedInteraction.InputsDialog.InputItems);
-                var validationResponse = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, validateOnly: true, CancellationToken.None).ConfigureAwait(false);
+                var validationResponse = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, validateOnly: true, CancellationToken.None).ConfigureAwait(true);
                 if (validationResponse.Kind == ResourceCommandResponseKind.ValidationFailed)
                 {
                     submittedInteraction.InputsDialog.InputItems.Clear();
                     submittedInteraction.InputsDialog.InputItems.AddRange(validationResponse.ArgumentInputs);
-                    await viewModel!.UpdateInteractionAsync(submittedInteraction).ConfigureAwait(false);
+                    await viewModel!.UpdateInteractionAsync(submittedInteraction).ConfigureAwait(true);
                     return;
                 }
 
                 completion.TrySetResult(submittedInteraction.InputsDialog.InputItems.ToList());
                 if (dialogReference is not null)
                 {
-                    await dialogReference.CloseAsync().ConfigureAwait(false);
+                    await dialogReference.CloseAsync().ConfigureAwait(true);
                 }
             }
         };

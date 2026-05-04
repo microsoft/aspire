@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.ApplicationModel;
 
 #pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
@@ -33,11 +35,12 @@ public class CommandOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Each input name maps to a value in <see cref="ExecuteCommandContext.Arguments"/> when the command is executed.
-    /// Dashboard clients can render these inputs before invoking the command, while non-interactive clients can use the
-    /// metadata to supply the same values directly.
+    /// The list order is part of the command contract. CLI positional arguments are mapped to this list by index before the
+    /// command executes. Clients that submit named argument payloads, such as Dashboard and MCP clients, map values by
+    /// <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IReadOnlyList<InteractionInput> Arguments
     {
         get => _arguments;
@@ -54,6 +57,7 @@ public class CommandOptions
     /// errors to callers.
     /// </para>
     /// </remarks>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Func<CommandArgumentsValidationContext, Task>? ValidateArguments { get; set; }
 
     /// <summary>
