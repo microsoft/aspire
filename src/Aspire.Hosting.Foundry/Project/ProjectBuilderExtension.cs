@@ -50,7 +50,7 @@ public static class AzureCognitiveServicesProjectExtensions
 
         var project = builder.ApplicationBuilder.AddResource(new AzureCognitiveServicesProjectResource(name, ConfigureInfrastructure, builder.Resource));
         project.Resource.DefaultContainerRegistry = CreateDefaultRegistry(builder.ApplicationBuilder, $"{name}-acr");
-        return project;
+        return project.WithAnnotation(new DefaultRoleAssignmentsAnnotation(FoundryProjectRoleHelpers.CreateDefaultRoleDefinitions()));
     }
 
     /// <summary>

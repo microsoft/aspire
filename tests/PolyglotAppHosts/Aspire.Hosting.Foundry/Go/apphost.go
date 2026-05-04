@@ -135,7 +135,8 @@ server.listen(port, '127.0.0.1');
 		},
 	})
 
-	_ = builder.AddContainer("api", "nginx")
+	api := builder.AddContainer("api", "nginx")
+	api.WithReference(project)
 	_, _ = chat.DeploymentName()
 	_, _ = chat.ModelName()
 	_, _ = chat.Format()

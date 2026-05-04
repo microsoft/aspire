@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Azure;
 using Azure.Provisioning.CognitiveServices;
 
 namespace Aspire.Hosting;
@@ -49,4 +50,15 @@ internal static class FoundryRoleHelpers
 
         return builtInRoles;
     }
+}
+
+internal static class FoundryProjectRoleHelpers
+{
+    private const string AzureAIUserRoleId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+    private const string AzureAIUserRoleName = "Azure AI User";
+
+    internal static HashSet<RoleDefinition> CreateDefaultRoleDefinitions() =>
+    [
+        new RoleDefinition(AzureAIUserRoleId, AzureAIUserRoleName)
+    ];
 }

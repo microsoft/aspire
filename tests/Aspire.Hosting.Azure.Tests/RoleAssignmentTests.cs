@@ -72,6 +72,23 @@ public class RoleAssignmentTests()
     }
 
     [Fact]
+    public Task AzureFoundryProjectDefaultSupport()
+    {
+        return RoleAssignmentTest("project",
+            builder =>
+            {
+                var env = builder.CreateResourceBuilder(
+                    builder.Resources.OfType<IComputeEnvironmentResource>().Single(r => r.Name == "env"));
+                var project = builder.AddFoundry("ai")
+                    .AddProject("project");
+
+                builder.AddProject<Project>("api", launchProfileName: null)
+                    .WithReference(project)
+                    .WithComputeEnvironment(env);
+            });
+    }
+
+    [Fact]
     public Task EventHubsSupport()
     {
         return RoleAssignmentTest("eventhubs",
