@@ -55,7 +55,7 @@ internal sealed class PythonLanguageSupport : ILanguageSupport
     /// <param name="request">The scaffold request containing project details such as the project name and an optional port seed.</param>
     /// <returns>
     /// A dictionary mapping relative file paths to their contents. The generated files include
-    /// <c>apphost.py</c>, <c>pylock.toml</c>, and <c>apphost.run.json</c>.
+    /// <c>.gitignore</c>, <c>apphost.py</c>, <c>pylock.toml</c>, and <c>apphost.run.json</c>.
     /// </returns>
     /// <remarks>
     /// The <c>apphost.run.json</c> file is generated with randomly assigned port numbers unless
@@ -64,6 +64,14 @@ internal sealed class PythonLanguageSupport : ILanguageSupport
     public Dictionary<string, string> Scaffold(ScaffoldRequest request)
     {
         var files = new Dictionary<string, string>();
+
+        files[".gitignore"] = """
+            .venv/
+            __pycache__/
+            *.pyc
+            .modules/
+            .aspire/
+            """;
 
         // Create apphost.py
         files["apphost.py"] = """
