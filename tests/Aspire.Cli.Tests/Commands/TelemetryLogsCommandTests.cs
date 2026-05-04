@@ -869,4 +869,36 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expected, formattedJson, ignoreLineEndingDifferences: true);
     }
+
+    [Fact]
+    public async Task TelemetryLogsCommand_WithDevLocalhostUrl_ConnectionRefused_ErrorMessageShowsOriginalUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            throw new HttpRequestException("Connection refused");
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel logs --dashboard-url http://dashboard.dev.localhost:18888/login?t=sometoken");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
+        // The error message should show the original *.dev.localhost URL the user typed,
+        // not the normalized localhost URL used for HTTP requests.
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://dashboard.dev.localhost:18888"), errorMessage);
+    }
 }
