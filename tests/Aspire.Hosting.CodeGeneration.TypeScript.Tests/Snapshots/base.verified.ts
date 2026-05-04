@@ -370,16 +370,22 @@ export interface InteractionInput {
 
 type InteractionInputCollectionHandle = Handle<typeof interactionInputCollectionTypeId>;
 
+const interactionInputCollectionState = new WeakMap<InteractionInputCollection, {
+    handle: InteractionInputCollectionHandle;
+    client: AspireClientRpc;
+    inputsPromise?: Promise<InteractionInput[]>;
+}>();
+
 /**
  * Provides access to interaction inputs by name.
  */
 export class InteractionInputCollection {
-    private _inputsPromise?: Promise<InteractionInput[]>;
-
-    constructor(private readonly _handle: InteractionInputCollectionHandle, private readonly _client: AspireClientRpc) {}
+    constructor(handle: InteractionInputCollectionHandle, client: AspireClientRpc) {
+        interactionInputCollectionState.set(this, { handle, client });
+    }
 
     toJSON(): MarshalledHandle {
-        return this._handle.toJSON();
+        return getInteractionInputCollectionState(this).handle.toJSON();
     }
 
     toTransportValue(): MarshalledHandle {
@@ -387,13 +393,13 @@ export class InteractionInputCollection {
     }
 
     async toArray(): Promise<InteractionInput[]> {
-        const inputs = await this._getInputs();
+        const inputs = await getInteractionInputs(this);
         return [...inputs];
     }
 
     async get(name: string): Promise<InteractionInput | undefined> {
         const normalizedName = normalizeInteractionInputName(name);
-        const inputs = await this._getInputs();
+        const inputs = await getInteractionInputs(this);
 
         return inputs.find(input => normalizeInteractionInputName(input.name) === normalizedName);
     }
@@ -421,19 +427,30 @@ export class InteractionInputCollection {
 
         return value;
     }
-
-    private async _getInputs(): Promise<InteractionInput[]> {
-        this._inputsPromise ??= this._client.invokeCapability<InteractionInput[]>(
-            'Aspire.Hosting/InteractionInputCollection.toArray',
-            { context: this._handle }
-        );
-
-        return this._inputsPromise;
-    }
 }
 
 function normalizeInteractionInputName(name: string | undefined): string | undefined {
     return name?.toLowerCase();
+}
+
+function getInteractionInputCollectionState(collection: InteractionInputCollection) {
+    const state = interactionInputCollectionState.get(collection);
+
+    if (!state) {
+        throw new Error('InteractionInputCollection was not initialized correctly.');
+    }
+
+    return state;
+}
+
+async function getInteractionInputs(collection: InteractionInputCollection): Promise<InteractionInput[]> {
+    const state = getInteractionInputCollectionState(collection);
+    state.inputsPromise ??= state.client.invokeCapability<InteractionInput[]>(
+        'Aspire.Hosting/InteractionInputCollection.toArray',
+        { context: state.handle }
+    );
+
+    return state.inputsPromise;
 }
 
 registerHandleWrapper(interactionInputCollectionTypeId, (handle, client) =>

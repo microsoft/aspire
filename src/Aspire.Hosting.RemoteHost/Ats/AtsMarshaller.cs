@@ -388,11 +388,6 @@ internal sealed class AtsMarshaller
         var capabilityId = context.CapabilityId ?? "unknown";
         var paramName = context.ParameterName ?? "unknown";
 
-        if (targetType == typeof(object))
-        {
-            return node.Deserialize<object?>(s_jsonOptions);
-        }
-
         // Check for handle reference
         var handleRef = HandleRef.FromJsonNode(node);
         if (handleRef != null)
@@ -411,6 +406,11 @@ internal sealed class AtsMarshaller
         if (exprRef != null)
         {
             return exprRef.ToReferenceExpression(_handles, capabilityId, paramName);
+        }
+
+        if (targetType == typeof(object))
+        {
+            return node is JsonValue value ? ConvertPrimitive(value, targetType) : node;
         }
 
         // Handle callbacks - any delegate type is treated as a callback
