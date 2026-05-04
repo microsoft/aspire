@@ -24,8 +24,8 @@ ARG UBUNTU_APT_MIRROR=
 
 # Install native AOT build toolchain.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
-RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR" && \
-    if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
+RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
+      sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR" && \
       apt-get update -qq && \
       apt-get install -y --no-install-recommends clang zlib1g-dev && \
       rm -rf /var/lib/apt/lists/*; \
