@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of #16580 - bug fix for race condition in multi-environment compute startup",
+  "mergedAt": "2026-04-30T17:01:50Z",
+  "number": 16583,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "included",
+  "title": "[release/13.3] Ensure compute environment prepare waits for validation"
+}

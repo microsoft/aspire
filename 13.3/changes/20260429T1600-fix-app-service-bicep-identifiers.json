@@ -8,9 +8,10 @@
   "docsRequired": false,
   "emoji": "🐛",
   "firstMergedAt": "2026-04-29T16:00:20Z",
-  "lastMergedAt": "2026-04-29T16:00:20Z",
+  "lastMergedAt": "2026-04-30T17:02:46Z",
   "name": "Fix Bicep identifier generation for hyphenated App Service environment names",
   "prs": [
-    16539
+    16539,
+    16564
   ]
 }

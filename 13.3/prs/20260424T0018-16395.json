@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Dependency version bump (Hex1b packages)",
+  "mergedAt": "2026-04-24T00:18:01Z",
+  "number": 16395,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "excluded",
+  "title": "Update Hex1b packages to 0.133.0"
+}

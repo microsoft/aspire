@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal revert of AzureResourcePreparer changes - test fix only",
+  "mergedAt": "2026-04-28T17:23:23Z",
+  "number": 16528,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "excluded",
+  "title": "Revert AzureResourcePreparer changes from TryGetByName"
+}

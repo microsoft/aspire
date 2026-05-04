@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test-only fix for Windows CI",
+  "mergedAt": "2026-04-24T23:38:09Z",
+  "number": 16427,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "excluded",
+  "title": "Fix InitCommand_WithSingleFileAppHost test failing on Windows CI"
+}

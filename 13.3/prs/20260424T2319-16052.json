@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test-only changes - disabling failing tests",
+  "mergedAt": "2026-04-24T23:19:40Z",
+  "number": 16052,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "excluded",
+  "title": "Disable deterministically failing tests #14993 and #15831"
+}

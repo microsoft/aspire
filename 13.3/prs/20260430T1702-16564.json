@@ -1,0 +1,9 @@
+{
+  "author": "Copilot",
+  "comment": "Backport of #16539 - fix for Bicep identifier generation with hyphenated App Service names",
+  "mergedAt": "2026-04-30T17:02:46Z",
+  "number": 16564,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "included",
+  "title": "[release/13.3] Normalize App Service Application Insights Bicep identifiers"
+}

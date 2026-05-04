@@ -1,0 +1,17 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes duplicate capability ID collisions in the Kubernetes and AKS hosting packages that caused ATS (AppHost Type Schema) generation to fail with diagnostic errors, preventing correct polyglot AppHost code generation for TypeScript, Java, and Python.",
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-04-28T16:32:58Z",
+  "lastMergedAt": "2026-04-28T16:32:58Z",
+  "name": "Fix duplicate capability ID exports in Kubernetes and AKS integrations",
+  "prs": [
+    16498
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Bug fix for duplicate capability ID exports in Kubernetes/AKS causing ATS generation failure",
+  "mergedAt": "2026-04-28T16:32:58Z",
+  "number": 16498,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "included",
+  "title": "Fix Kubernetes ATS duplicate capability exports"
+}

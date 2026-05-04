@@ -1,0 +1,17 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes a race condition where compute-environment preparation steps could run before validation completed, causing resource ownership conflicts when multiple compute environments (such as Foundry Projects and Azure Container Apps) were used together in the same application.",
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-04-30T17:01:50Z",
+  "lastMergedAt": "2026-04-30T17:01:50Z",
+  "name": "Fix race condition in multi-environment compute startup",
+  "prs": [
+    16583
+  ]
+}

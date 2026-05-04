@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal CI tooling improvement - no user-facing changes",
+  "mergedAt": "2026-04-27T20:48:42Z",
+  "number": 16421,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "excluded",
+  "title": "Repo Pulse v2: deterministic pre-fetch + disable integrity filter"
+}

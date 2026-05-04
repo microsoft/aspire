@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI workflow maintenance - fetch release refs in docs check",
+  "mergedAt": "2026-04-28T02:09:45Z",
+  "number": 16495,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "excluded",
+  "title": "Fetch release/* refs in pr-docs-check checkout"
+}

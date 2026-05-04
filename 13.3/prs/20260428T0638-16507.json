@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Build infrastructure change - internal Yarn feed",
+  "mergedAt": "2026-04-28T06:38:03Z",
+  "number": 16507,
+  "runDate": "2026-05-04T08:51:34Z",
+  "status": "excluded",
+  "title": "Use internal feed for extension Yarn tarballs"
+}
