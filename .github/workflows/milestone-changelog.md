@@ -853,8 +853,8 @@ After the Table of Contents, add a **What's New** section that lists the
 of their most recent PR.
 Each item is a link to the area heading, using the format:
 `- [<date> — <change-emoji> <Name>](#<area-slug>)`
-where `<date>` is the merge date of the last PR in `YYYY-M-D HH:mm` format
-(no leading zeroes on month/day, 24-hour UTC time), `<change-emoji>` is the
+where `<date>` is the merge date of the last PR in `YYYY-MM-DD HH:mm` format
+(zero-padded month/day, 24-hour UTC time), `<change-emoji>` is the
 entry's individual emoji, `<Name>` is the changelog entry name, and
 `<area-slug>` is the GitHub-generated slug for that area's `##` heading
 (e.g., `-apphost`, `-cli`, `-dashboard`). The `#` before the slug is mandatory
@@ -881,9 +881,9 @@ Use this exact format:
 
 ## What's New
 
-- [2026-4-22 22:48 — 🧭 Feature name](#-apphost)
-- [2026-4-21 07:30 — 🆕 New CLI command](#-cli)
-- [2026-4-20 23:05 — 🚀 Another feature](#-apphost)
+- [2026-04-22 22:48 — 🧭 Feature name](#-apphost)
+- [2026-04-21 07:30 — 🆕 New CLI command](#-cli)
+- [2026-04-20 23:05 — 🚀 Another feature](#-apphost)
 
 ## 🏠 AppHost
 
@@ -891,20 +891,20 @@ Use this exact format:
 
 #### New features
 
-- **🧭 Feature name**  
+1. **🧭 Feature name**  
   Brief user-facing description  
   Changes: [#1234](https://github.com/${REPO}/pull/1234), [#1235](https://github.com/${REPO}/pull/1235)  
   ⚠️ **Breaking change**  
   📝 **Documentation required**  
 
-- **🚀 Another feature**  
+1. **🚀 Another feature**  
   What this means for users  
   Changes: [#1236](https://github.com/${REPO}/pull/1236)  
   📝 **Documentation required**  
 
 #### Improvements
 
-- **⚡ Performance boost**  
+1. **⚡ Performance boost**  
   Faster startup for container resources  
   Changes: [#1238](https://github.com/${REPO}/pull/1238)  
 
@@ -914,13 +914,13 @@ Use this exact format:
 
 #### New features
 
-- **🆕 New CLI command**  
+1. **🆕 New CLI command**  
   Added a new command for scaffolding resources  
   Changes: [#1240](https://github.com/${REPO}/pull/1240)  
 
 #### Bug fixes
 
-- **🐛 Fix crash on init**  
+1. **🐛 Fix crash on init**  
   Resolved a crash when running init in an empty directory  
   Changes: [#1239](https://github.com/${REPO}/pull/1239)  
   ⚠️ **Breaking change**  
@@ -932,7 +932,7 @@ Use this exact format:
 
 #### Improvements
 
-- **🎨 Dashboard improvement**  
+1. **🎨 Dashboard improvement**  
   Description of the change  
   Changes: [#1237](https://github.com/${REPO}/pull/1237)  
 
@@ -944,7 +944,7 @@ Use this exact format:
 
 **PRs processed:** ✅ 6 included · ❌ 1 excluded · ⏳ 93 unprocessed · 100 total merged in milestone
 ([View full PR tracker](https://github.com/${REPO}/blob/memory/milestone-changelog/${MILESTONE}/prs/))
-**PRs analyzed through:** [#<number>](https://github.com/${REPO}/pull/<number>) merged <merge date of the newest PR processed in this run, in UTC>
+**PRs analyzed through:** [#<number>](https://github.com/${REPO}/pull/<number>) merged <YYYY-MM-DD HH:mm> UTC
 ```
 
 At the bottom of the page (after the footer), include a **PRs processed** summary
@@ -954,7 +954,7 @@ through** line showing the newest PR processed in this run:
 ```
 **PRs processed:** ✅ <N> included · ❌ <N> excluded · ⏳ <N> unprocessed · <N> total merged in milestone
 ([View full PR tracker](https://github.com/${REPO}/blob/memory/milestone-changelog/${MILESTONE}/prs/))
-**PRs analyzed through:** [#<number>](https://github.com/${REPO}/pull/<number>) merged <date>
+**PRs analyzed through:** [#<number>](https://github.com/${REPO}/pull/<number>) merged <YYYY-MM-DD HH:mm> UTC
 ```
 
 Compute the counts:
