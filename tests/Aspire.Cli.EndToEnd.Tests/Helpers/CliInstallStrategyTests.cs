@@ -159,6 +159,34 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void ConfigureContainer_AddsUbuntuAptMirrorBuildArgWhenEnvironmentVariableIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
+
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        strategy.ConfigureContainer(options);
+
+        Assert.Equal("http://azure.archive.ubuntu.com/ubuntu/", options.BuildArgs[CliInstallStrategy.UbuntuAptMirrorBuildArgName]);
+    }
+
+    [Fact]
+    public void ConfigureContainer_DoesNotAddUbuntuAptMirrorBuildArgWhenEnvironmentVariableIsEmpty()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, null));
+
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        strategy.ConfigureContainer(options);
+
+        Assert.DoesNotContain(CliInstallStrategy.UbuntuAptMirrorBuildArgName, options.BuildArgs.Keys);
+    }
+
+    [Fact]
     public void Detect_DotnetTool_WhenEnvironmentVariableIsSet()
     {
         using var environment = new EnvironmentVariableScope(
