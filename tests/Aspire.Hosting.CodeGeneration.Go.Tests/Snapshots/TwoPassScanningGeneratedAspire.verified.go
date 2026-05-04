@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -356,6 +356,7 @@ type CommandOptions struct {
 	Description string `json:"Description,omitempty"`
 	Parameter any `json:"Parameter,omitempty"`
 	Arguments []any `json:"Arguments,omitempty"`
+	ValidateArguments any `json:"ValidateArguments,omitempty"`
 	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
@@ -370,6 +371,7 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m["Description"] = serializeValue(d.Description)
 	if d.Parameter != nil { m["Parameter"] = serializeValue(d.Parameter) }
 	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
+	if d.ValidateArguments != nil { m["ValidateArguments"] = serializeValue(d.ValidateArguments) }
 	m["Visibility"] = serializeValue(d.Visibility)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)
@@ -4114,6 +4116,97 @@ func (s *cSharpAppResource) WithoutHttpsCertificate() CSharpAppResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withoutHttpsCertificate", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// CommandArgumentsValidationContext is the public interface for handle type CommandArgumentsValidationContext.
+type CommandArgumentsValidationContext interface {
+	handleReference
+	CancellationToken() (*CancellationToken, error)
+	Services() ServiceProvider
+	SetCancellationToken(options ...*SetCancellationTokenOptions) CommandArgumentsValidationContext
+	SetServices(value ServiceProvider) CommandArgumentsValidationContext
+	Err() error
+}
+
+// commandArgumentsValidationContext is the unexported impl of CommandArgumentsValidationContext.
+type commandArgumentsValidationContext struct {
+	*resourceBuilderBase
+}
+
+// newCommandArgumentsValidationContextFromHandle wraps an existing handle as CommandArgumentsValidationContext.
+func newCommandArgumentsValidationContextFromHandle(h *handle, c *client) CommandArgumentsValidationContext {
+	return &commandArgumentsValidationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets the CancellationToken property
+func (s *commandArgumentsValidationContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// Services gets the Services property
+func (s *commandArgumentsValidationContext) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetCancellationToken sets the CancellationToken property
+func (s *commandArgumentsValidationContext) SetCancellationToken(options ...*SetCancellationTokenOptions) CommandArgumentsValidationContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &SetCancellationTokenOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.Value != nil {
+			ctx = merged.Value.Context()
+			if id := s.client.registerCancellation(merged.Value); id != "" {
+				reqArgs["value"] = id
+			}
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetServices sets the Services property
+func (s *commandArgumentsValidationContext) SetServices(value ServiceProvider) CommandArgumentsValidationContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23681,6 +23774,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource", func(h *handle, c *client) any {
 		return newCSharpAppResourceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext", func(h *handle, c *client) any {
+		return newCommandArgumentsValidationContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", func(h *handle, c *client) any {
 		return newCommandLineArgsCallbackContextFromHandle(h, c)

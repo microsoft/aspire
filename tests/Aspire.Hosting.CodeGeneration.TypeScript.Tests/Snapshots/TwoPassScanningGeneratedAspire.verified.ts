@@ -70,6 +70,9 @@ type BeforeResourceStartedEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ap
 /** Handle to BeforeStartEvent */
 type BeforeStartEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent'>;
 
+/** Handle to CommandArgumentsValidationContext */
+type CommandArgumentsValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext'>;
+
 /** Handle to CommandLineArgsCallbackContext */
 type CommandLineArgsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext'>;
 
@@ -458,6 +461,7 @@ export interface CommandOptions {
     description?: string;
     parameter?: any;
     arguments?: any[];
+    validateArguments?: any;
     visibility?: ResourceCommandVisibility;
     confirmationMessage?: string;
     iconName?: string;
@@ -1144,6 +1148,72 @@ class BeforeStartEventImpl implements BeforeStartEvent {
         );
         return new DistributedApplicationModelImpl(handle, this._client);
     }
+
+}
+
+// ============================================================================
+// CommandArgumentsValidationContext
+// ============================================================================
+
+export interface CommandArgumentsValidationContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the Services property */
+    services: {
+        get: () => Promise<ServiceProvider>;
+        set: (value: Awaitable<ServiceProvider>) => Promise<void>;
+    };
+    /** Gets the CancellationToken property */
+    cancellationToken: {
+        get: () => Promise<CancellationToken>;
+        set: (value: AbortSignal | CancellationToken) => Promise<void>;
+    };
+}
+
+// ============================================================================
+// CommandArgumentsValidationContextImpl
+// ============================================================================
+
+/**
+ * Type class for CommandArgumentsValidationContext.
+ */
+class CommandArgumentsValidationContextImpl implements CommandArgumentsValidationContext {
+    constructor(private _handle: CommandArgumentsValidationContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    services = {
+        get: async (): Promise<ServiceProvider> => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<ServiceProvider>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    cancellationToken = {
+        get: async (): Promise<CancellationToken> => {
+            const result = await this._client.invokeCapability<string | null>(
+                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken',
+                { context: this._handle }
+            );
+            return CancellationToken.fromValue(result);
+        },
+        set: async (value: AbortSignal | CancellationToken): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken',
+                { context: this._handle, value: CancellationToken.fromValue(value) }
+            );
+        }
+    };
 
 }
 
@@ -32106,6 +32176,7 @@ process.on('uncaughtException', (error: Error) => {
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent', (handle, client) => new AfterResourcesCreatedEventImpl(handle as AfterResourcesCreatedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent', (handle, client) => new BeforeResourceStartedEventImpl(handle as BeforeResourceStartedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent', (handle, client) => new BeforeStartEventImpl(handle as BeforeStartEventHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext', (handle, client) => new CommandArgumentsValidationContextImpl(handle as CommandArgumentsValidationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext', (handle, client) => new CommandLineArgsCallbackContextImpl(handle as CommandLineArgsCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor', (handle, client) => new CommandLineArgsEditorImpl(handle as CommandLineArgsEditorHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent', (handle, client) => new ConnectionStringAvailableEventImpl(handle as ConnectionStringAvailableEventHandle, client));

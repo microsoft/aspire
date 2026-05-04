@@ -1,4 +1,4 @@
-//! aspire.rs - Capability-based Aspire SDK
+﻿//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -670,6 +670,8 @@ pub struct CommandOptions {
     pub parameter: Value,
     #[serde(rename = "Arguments")]
     pub arguments: Vec<Value>,
+    #[serde(rename = "ValidateArguments")]
+    pub validate_arguments: Value,
     #[serde(rename = "Visibility")]
     pub visibility: ResourceCommandVisibility,
     #[serde(rename = "ConfirmationMessage")]
@@ -690,6 +692,7 @@ impl CommandOptions {
         map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
         map.insert("Parameter".to_string(), serde_json::to_value(&self.parameter).unwrap_or(Value::Null));
         map.insert("Arguments".to_string(), serde_json::to_value(&self.arguments).unwrap_or(Value::Null));
+        map.insert("ValidateArguments".to_string(), serde_json::to_value(&self.validate_arguments).unwrap_or(Value::Null));
         map.insert("Visibility".to_string(), serde_json::to_value(&self.visibility).unwrap_or(Value::Null));
         map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
         map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));
@@ -2243,6 +2246,73 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRouteMiddleware", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext
+pub struct CommandArgumentsValidationContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for CommandArgumentsValidationContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl CommandArgumentsValidationContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the Services property
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
+    /// Sets the Services property
+    pub fn set_services(&self, value: &IServiceProvider) -> Result<CommandArgumentsValidationContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CommandArgumentsValidationContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the CancellationToken property
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Sets the CancellationToken property
+    pub fn set_cancellation_token(&self, value: Option<&CancellationToken>) -> Result<CommandArgumentsValidationContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        if let Some(token) = value {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("value".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CommandArgumentsValidationContext::new(handle, self.client.clone()))
     }
 }
 

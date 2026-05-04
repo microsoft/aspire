@@ -1717,6 +1717,7 @@ class CommandOptions(typing.TypedDict, total=False):
     Description: str
     Parameter: typing.Any
     Arguments: typing.Iterable[typing.Any]
+    ValidateArguments: typing.Any
     Visibility: ResourceCommandVisibility
     ConfirmationMessage: str
     IconName: str
@@ -3064,6 +3065,47 @@ class BeforeStartEvent:
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationModel, result)
+
+
+class CommandArgumentsValidationContext:
+    """Type class for CommandArgumentsValidationContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"CommandArgumentsValidationContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def services(self) -> AbstractServiceProvider:
+        """Gets the Services property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceProvider, result)
+
+    @services.setter
+    def services(self, value: AbstractServiceProvider) -> None:
+        """Sets the Services property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices',
+            {'context': self._handle, 'value': value}
+        )
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
 
 
 class CommandLineArgsCallbackContext:
@@ -10562,6 +10604,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", Ab
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", AfterResourcesCreatedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", BeforeResourceStartedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", BeforeStartEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext", CommandArgumentsValidationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", CommandLineArgsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor", CommandLineArgsEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", ConnectionStringAvailableEvent)

@@ -1230,6 +1230,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", (h, c) -> new ReferenceExpressionBuilder(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", (h, c) -> new UpdateCommandStateContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", (h, c) -> new ExecuteCommandContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext", (h, c) -> new CommandArgumentsValidationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", (h, c) -> new ResourceEndpointsAllocatedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", (h, c) -> new ResourceReadyEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", (h, c) -> new ResourceStoppedEvent(h, c));
@@ -3023,6 +3024,58 @@ public enum CertificateTrustScope implements WireValueEnum {
     }
 }
 
+// ===== CommandArgumentsValidationContext.java =====
+// CommandArgumentsValidationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext. */
+public class CommandArgumentsValidationContext extends HandleWrapperBase {
+    CommandArgumentsValidationContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Services property */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services", reqArgs);
+    }
+
+    /** Sets the Services property */
+    public CommandArgumentsValidationContext setServices(IServiceProvider value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (CommandArgumentsValidationContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices", reqArgs);
+    }
+
+    public CommandArgumentsValidationContext setServices(HandleWrapperBase value) {
+        return setServices(new IServiceProvider(value.getHandle(), value.getClient()));
+    }
+
+    /** Gets the CancellationToken property */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken", reqArgs);
+    }
+
+    /** Sets the CancellationToken property */
+    public CommandArgumentsValidationContext setCancellationToken(CancellationToken value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        if (value != null) {
+            reqArgs.put("value", getClient().registerCancellation(value));
+        }
+        return (CommandArgumentsValidationContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken", reqArgs);
+    }
+
+}
+
 // ===== CommandLineArgsCallbackContext.java =====
 // CommandLineArgsCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -3136,6 +3189,7 @@ public class CommandOptions {
     private String description;
     private Object parameter;
     private Object[] arguments;
+    private Object validateArguments;
     private ResourceCommandVisibility visibility;
     private String confirmationMessage;
     private String iconName;
@@ -3149,6 +3203,8 @@ public class CommandOptions {
     public void setParameter(Object value) { this.parameter = value; }
     public Object[] getArguments() { return arguments; }
     public void setArguments(Object[] value) { this.arguments = value; }
+    public Object getValidateArguments() { return validateArguments; }
+    public void setValidateArguments(Object value) { this.validateArguments = value; }
     public ResourceCommandVisibility getVisibility() { return visibility; }
     public void setVisibility(ResourceCommandVisibility value) { this.visibility = value; }
     public String getConfirmationMessage() { return confirmationMessage; }
@@ -3167,6 +3223,7 @@ public class CommandOptions {
         map.put("Description", AspireClient.serializeValue(description));
         map.put("Parameter", AspireClient.serializeValue(parameter));
         map.put("Arguments", AspireClient.serializeValue(arguments));
+        map.put("ValidateArguments", AspireClient.serializeValue(validateArguments));
         map.put("Visibility", AspireClient.serializeValue(visibility));
         map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
         map.put("IconName", AspireClient.serializeValue(iconName));
@@ -22587,6 +22644,7 @@ public final class WithVolumeOptions {
 .modules/CertificateTrustExecutionConfigurationContext.java
 .modules/CertificateTrustExecutionConfigurationExportData.java
 .modules/CertificateTrustScope.java
+.modules/CommandArgumentsValidationContext.java
 .modules/CommandLineArgsCallbackContext.java
 .modules/CommandLineArgsEditor.java
 .modules/CommandOptions.java
