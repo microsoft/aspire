@@ -12,10 +12,17 @@
 
   <ItemGroup>
     <PackageReference Include="Hex1b" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="StreamJsonRpc" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\Shared\Terminal\*.cs" Link="Terminal\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\TerminalHost\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.TerminalHost.Tests" />
   </ItemGroup>
 
 </Project>
