@@ -501,7 +501,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Start guest apphost - it will connect to AppHost server, define resources.
             // If launcher is an ExtensionGuestLauncher, it delegates to the VS Code extension.
             var (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
-                appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, cancellationToken);
+                appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, context.UnmatchedTokens, cancellationToken);
 
             if (launcher is ExtensionGuestLauncher)
             {
@@ -1447,6 +1447,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         bool watchMode,
         IAppHostRpcClient rpcClient,
         IGuestProcessLauncher launcher,
+        string[] runArgs,
         CancellationToken cancellationToken)
     {
         await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1457,7 +1458,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (ExitCodeConstants.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken);
+        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, runArgs, cancellationToken);
     }
 
     /// <summary>

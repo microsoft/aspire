@@ -140,7 +140,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
 
         Assert.Equal("publish-cmd", launcher.LastCommand);
-        Assert.Contains(launcher.LastArgs, a => a.Contains("--output") && a.Contains("/out"));
+        Assert.Equal([appHostFile.FullName, "--output", "/out"], launcher.LastArgs);
     }
 
     [Fact]
@@ -233,6 +233,56 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
 
         Assert.Equal(new[] { "--dir", directory.FullName }, launcher.LastArgs);
+    }
+
+    [Fact]
+    public async Task RunAsync_AppendsRunArgsWhenNoPlaceholder()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec
+        {
+            Command = "test-cmd",
+            Args = ["{appHostFile}"]
+        });
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            runArgs: ["arg1=value1", "--flag"],
+            CancellationToken.None);
+
+        Assert.Equal([appHostFile.FullName, "arg1=value1", "--flag"], launcher.LastArgs);
+    }
+
+    [Fact]
+    public async Task RunAsync_ExpandsArgsPlaceholderAsSeparateArguments()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec
+        {
+            Command = "test-cmd",
+            Args = ["{appHostFile}", "{args}"]
+        });
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            runArgs: ["arg1=value1", "--flag", "--", "literal"],
+            CancellationToken.None);
+
+        Assert.Equal([appHostFile.FullName, "arg1=value1", "--flag", "--", "literal"], launcher.LastArgs);
     }
 
     [Fact]
