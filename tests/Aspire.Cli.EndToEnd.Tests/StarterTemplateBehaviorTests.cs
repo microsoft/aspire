@@ -148,6 +148,11 @@ public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
         var containerWeatherPath = CliE2ETestHelpers.ToContainerPath(hostWeatherPath, workspace);
         CliE2ETestHelpers.RegisterCaptureFile("weather.json", hostWeatherPath);
 
+        await auto.TypeAsync("aspire wait apiservice --status up --timeout 300");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("is up (running).", timeout: TimeSpan.FromMinutes(6));
+        await auto.WaitForSuccessPromptAsync(counter);
+
         await auto.TypeAsync($"curl -ksSL {Quote($"{apiUrl.TrimEnd('/')}/weatherforecast")} > {Quote(containerWeatherPath)}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));

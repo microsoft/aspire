@@ -62,10 +62,10 @@ steps:
     - pwsh: |
         $ErrorActionPreference = 'Stop'
         $archiveDir = "${{ parameters.repoArtifactsPath }}/signed-archives/${{ parameters.buildConfig }}"
-        $archive = Get-ChildItem -Path $archiveDir -Filter "aspire-cli-win-x64-*.zip" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        $archive = Get-ChildItem -Path $archiveDir -Filter "aspire-cli-win-x64-*.zip" -Recurse | Select-Object -First 1
         if (-not $archive) {
-          Write-Host "##[warning]No win-x64 CLI archive found - skipping verification"
-          exit 0
+          Write-Error "No win-x64 CLI archive found under '$archiveDir'"
+          exit 1
         }
         Write-Host "Found archive: $($archive.FullName)"
         & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.ps1" -ArchivePath $archive.FullName
@@ -243,6 +243,8 @@ steps:
     # Publish Windows CLI archives as separate artifacts so the Prepare Installers
     # stage can download them by name (matching the native_archives_<rid> pattern
     # used by build_sign_native for macOS/Linux).
+    # win-arm64 archives are staged for downstream consumers; runtime verification is
+    # intentionally skipped because these win-x64 build agents cannot execute them.
     - ${{ if eq(parameters.isWindows, 'true') }}:
       - ${{ each targetRid in parameters.targetRids }}:
         - pwsh: |

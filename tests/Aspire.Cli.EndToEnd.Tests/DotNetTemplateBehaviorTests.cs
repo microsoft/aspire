@@ -70,6 +70,7 @@ public sealed class DotNetTemplateLocalhostTldTests(ITestOutputHelper output)
 public sealed class DotNetSingleFileAppHostTemplateTests(ITestOutputHelper output)
 {
     [Fact]
+    [Trait("azdo-template-coverage", "true")]
     [CaptureWorkspaceOnFailure]
     public async Task SingleFileAppHostTemplateBuildsAndStarts()
     {
@@ -231,6 +232,7 @@ public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper out
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    [Trait("azdo-template-coverage", "true")]
     [CaptureWorkspaceOnFailure]
     public async Task DotNetTemplateWithExplicitSdkReferenceBuildsAndStarts(bool includeAspireHostingAppHostPackageReference)
     {
@@ -271,12 +273,20 @@ public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper out
         await pendingRun;
     }
 
+    [Fact]
+    [Trait("azdo-template-coverage", "true")]
+    [CaptureWorkspaceOnFailure]
+    public Task DotNetAppHostTemplateBuildsWithAppHostPackageVersionOverride_8_1_0()
+        => DotNetAppHostTemplateBuildsWithAppHostPackageVersionOverride("8.1.0");
+
     [Theory]
-    [InlineData("8.1.0")]
     [InlineData("9.*-*")]
     [InlineData("[9.0.0]")]
     [CaptureWorkspaceOnFailure]
-    public async Task DotNetAppHostTemplateBuildsWithAppHostPackageVersionOverride(string version)
+    public Task DotNetAppHostTemplateBuildsWithAppHostPackageVersionOverride(string version)
+        => DotNetAppHostTemplateBuildsWithAppHostPackageVersionOverrideCore(version);
+
+    private async Task DotNetAppHostTemplateBuildsWithAppHostPackageVersionOverrideCore(string version)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -319,6 +329,7 @@ public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper out
     }
 
     [Fact]
+    [Trait("azdo-template-coverage", "true")]
     [CaptureWorkspaceOnFailure]
     public async Task DotNetTemplateWithCentralPackageManagementBuildsAndStarts()
     {

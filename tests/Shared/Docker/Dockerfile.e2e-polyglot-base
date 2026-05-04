@@ -78,7 +78,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-retry install nodejs && \
     npm install -g yarn@1.22.22 pnpm@10 && \
     for attempt in 1 2 3 4 5; do \
-      curl -fsSL https://bun.sh/install | bash && break; \
+      if curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh && \
+         bash /tmp/bun-install.sh && \
+         [ -x /root/.bun/bin/bun ]; then \
+        rm -f /tmp/bun-install.sh; \
+        break; \
+      fi; \
+      rm -f /tmp/bun-install.sh; \
       if [ "$attempt" = "5" ]; then exit 1; fi; \
       sleep 10; \
     done && \
