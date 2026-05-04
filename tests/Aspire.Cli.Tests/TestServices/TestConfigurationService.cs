@@ -47,6 +47,18 @@ public sealed class TestConfigurationService : IConfigurationService
         return Task.FromResult(result);
     }
 
+    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+    {
+        // Tests that don't care about directory-scoped lookups can reuse OnGetConfiguration.
+        // Tests that DO care should set OnGetConfigurationFromDirectory directly.
+        var result = OnGetConfigurationFromDirectory is not null
+            ? OnGetConfigurationFromDirectory.Invoke(key, startDirectory)
+            : OnGetConfiguration?.Invoke(key);
+        return Task.FromResult(result);
+    }
+
+    public Func<string, DirectoryInfo, string?>? OnGetConfigurationFromDirectory { get; set; }
+
     public string SettingsFilePath { get; set; } = string.Empty;
 
     public string GetSettingsFilePath(bool isGlobal)

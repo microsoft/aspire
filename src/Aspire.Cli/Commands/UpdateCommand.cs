@@ -157,18 +157,20 @@ internal sealed class UpdateCommand : BaseCommand
 
             // Resolve the channel using the documented precedence:
             //   1. explicit --channel / hidden --quality
-            //   2. local app config "channel"
+            //   2. local app config "channel" (relative to the resolved AppHost project, NOT cwd)
             //   3. global config "channel"
             //   4. interactive channel prompt when appropriate (PR hives present)
             //   5. implicit/default channel as the documented fallback
-            // Local-vs-global precedence for steps 2 and 3 is honored implicitly:
-            // ConfigurationHelper.RegisterSettingsFiles loads the global settings file before the
-            // local one, so IConfiguration (and therefore GetConfigurationAsync) returns local first.
+            // The directory-scoped lookup is critical: `aspire update --apphost <elsewhere>`
+            // must consult the project's directory tree, not the user's launch cwd. The
+            // process-wide IConfiguration is rooted at the launch cwd at startup, so using
+            // it here would silently read the wrong app's local config (issue #16650).
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
             var channelFromConfig = false;
             if (string.IsNullOrWhiteSpace(channelName))
             {
-                channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
+                var configLookupDirectory = projectFile.Directory ?? ExecutionContext.WorkingDirectory;
+                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", configLookupDirectory, cancellationToken);
                 channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
             }
 
