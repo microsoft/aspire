@@ -33,13 +33,16 @@ internal sealed class TestDetachedProcess : IDetachedProcess
 
     public bool Killed { get; private set; }
 
+    public bool KilledEntireProcessTree { get; private set; }
+
     public async Task WaitForExitAsync(CancellationToken cancellationToken)
     {
         await Task.Delay(1, cancellationToken);
     }
 
-    public void Kill()
+    public void Kill(bool entireProcessTree)
     {
         Killed = true;
+        KilledEntireProcessTree = entireProcessTree;
     }
 }

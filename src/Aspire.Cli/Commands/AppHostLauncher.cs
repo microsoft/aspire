@@ -347,7 +347,7 @@ internal sealed class AppHostLauncher(
             {
                 try
                 {
-                    result.ChildProcess.Kill();
+                    result.ChildProcess.Kill(entireProcessTree: true);
                 }
                 catch
                 {

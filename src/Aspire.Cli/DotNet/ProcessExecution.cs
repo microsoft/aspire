@@ -92,7 +92,7 @@ internal sealed class ProcessExecution : IProcessExecution
             if (!_process.HasExited)
             {
                 _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, killing it", FileName, _process.Id);
-                _process.Kill(entireProcessTree: true);
+                TryKillProcessTree();
             }
 
             throw;
@@ -213,5 +213,17 @@ internal sealed class ProcessExecution : IProcessExecution
     private void RecordForwarderActivity()
     {
         Interlocked.Exchange(ref _lastForwarderActivityTimestamp, Stopwatch.GetTimestamp());
+    }
+
+    private void TryKillProcessTree()
+    {
+        try
+        {
+            _process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "{FileName}({ProcessId}) failed to kill process tree after wait cancellation", FileName, _process.Id);
+        }
     }
 }

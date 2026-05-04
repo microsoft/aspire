@@ -145,6 +145,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.True(detachedProcessLauncher.Process.Killed);
+        Assert.True(detachedProcessLauncher.Process.KilledEntireProcessTree);
         Assert.DoesNotContain("--timeout", detachedProcessLauncher.Arguments);
         Assert.Equal(
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37),

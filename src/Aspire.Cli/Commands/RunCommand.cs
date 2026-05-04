@@ -68,7 +68,10 @@ internal sealed class RunCommand : BaseCommand
     private readonly AppHostLauncher _appHostLauncher;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly TimeProvider _timeProvider;
     private bool _isDetachMode;
+
+    private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
 
@@ -97,7 +100,8 @@ internal sealed class RunCommand : BaseCommand
         IAppHostProjectFactory projectFactory,
         AppHostLauncher appHostLauncher,
         FileLoggerProvider fileLoggerProvider,
-        ICliHostEnvironment hostEnvironment)
+        ICliHostEnvironment hostEnvironment,
+        TimeProvider timeProvider)
         : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _runner = runner;
@@ -112,6 +116,7 @@ internal sealed class RunCommand : BaseCommand
         _appHostLauncher = appHostLauncher;
         _fileLoggerProvider = fileLoggerProvider;
         _hostEnvironment = hostEnvironment;
+        _timeProvider = timeProvider;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -262,6 +267,7 @@ internal sealed class RunCommand : BaseCommand
             };
 
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
+            var startupStartTimestamp = _timeProvider.GetTimestamp();
             using var runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // Start the project run as a pending task - we'll handle UX while it runs
@@ -271,13 +277,13 @@ internal sealed class RunCommand : BaseCommand
             bool buildSuccess;
             try
             {
-                buildSuccess = await buildCompletionSource.Task.WaitAsync(startupTimeout, cancellationToken);
+                buildSuccess = await buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken);
             }
             catch (TimeoutException)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                CancelAppHostStartup(runCancellationTokenSource);
                 DisplayStartupTimeout(timeoutSeconds);
+                await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun);
                 return ExitCodeConstants.FailedToDotnetRunAppHost;
             }
 
@@ -305,13 +311,13 @@ internal sealed class RunCommand : BaseCommand
             {
                 backchannel = await InteractionService.ShowStatusAsync(
                     RunCommandStrings.ConnectingToAppHost,
-                    async () => await backchannelCompletionSource.Task.WaitAsync(startupTimeout, cancellationToken));
+                    async () => await backchannelCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken));
             }
             catch (TimeoutException)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                CancelAppHostStartup(runCancellationTokenSource);
                 DisplayStartupTimeout(timeoutSeconds);
+                await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun);
                 return ExitCodeConstants.FailedToDotnetRunAppHost;
             }
 
@@ -711,9 +717,44 @@ internal sealed class RunCommand : BaseCommand
             cancellationToken);
     }
 
-    private static void CancelAppHostStartup(CancellationTokenSource runCancellationTokenSource)
+    private TimeSpan GetRemainingStartupTimeout(long startupStartTimestamp, TimeSpan startupTimeout)
+    {
+        var elapsed = _timeProvider.GetElapsedTime(startupStartTimestamp);
+        return elapsed >= startupTimeout ? TimeSpan.Zero : startupTimeout - elapsed;
+    }
+
+    private async Task CancelAppHostStartupAsync(CancellationTokenSource runCancellationTokenSource, Task<int> pendingRun)
     {
         runCancellationTokenSource.Cancel();
+
+        try
+        {
+            await pendingRun.WaitAsync(s_appHostStartupCancellationTimeout, _timeProvider).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (runCancellationTokenSource.IsCancellationRequested)
+        {
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogDebug(ex, "Timed out waiting for AppHost startup cancellation to complete.");
+            _ = ObserveAppHostRunFailureAsync(pendingRun);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "AppHost run failed after startup cancellation.");
+        }
+    }
+
+    private async Task ObserveAppHostRunFailureAsync(Task<int> pendingRun)
+    {
+        try
+        {
+            await pendingRun.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "AppHost run failed after startup cancellation timeout.");
+        }
     }
 
     private void DisplayStartupTimeout(int timeoutSeconds)

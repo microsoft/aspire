@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -105,6 +106,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.True(detachedProcessLauncher.Process.Killed);
+        Assert.True(detachedProcessLauncher.Process.KilledEntireProcessTree);
         Assert.DoesNotContain("--timeout", detachedProcessLauncher.Arguments);
         Assert.Equal(
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37),
@@ -115,6 +117,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     public async Task RunCommand_WhenAppHostStartupTimesOut_DisplaysTimeoutGuidance()
     {
         var interactionService = new TestInteractionService();
+        var runCancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var runnerFactory = (IServiceProvider sp) =>
         {
@@ -123,7 +126,17 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
             {
-                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    await Task.Delay(50, CancellationToken.None);
+                    runCancellationObserved.SetResult();
+                    throw;
+                }
+
                 return 0;
             };
 
@@ -148,6 +161,57 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.Equal(
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 1),
+            Assert.Single(interactionService.DisplayedErrors));
+        Assert.True(runCancellationObserved.Task.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
+    {
+        var interactionService = new TestInteractionService();
+        var timeProvider = new FakeTimeProvider();
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
+            {
+                timeProvider.Advance(TimeSpan.FromSeconds(2));
+                return 0;
+            };
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return 0;
+            };
+
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = runnerFactory;
+        });
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(timeProvider);
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run --timeout 2");
+
+        var stopwatch = Stopwatch.StartNew();
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        stopwatch.Stop();
+
+        Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Expected startup timeout to use the remaining budget, but the command took {stopwatch.Elapsed}.");
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2),
             Assert.Single(interactionService.DisplayedErrors));
     }
 

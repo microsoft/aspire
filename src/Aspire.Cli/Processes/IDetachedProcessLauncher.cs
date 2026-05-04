@@ -49,7 +49,8 @@ internal interface IDetachedProcess
     /// <summary>
     /// Kills the process.
     /// </summary>
-    void Kill();
+    /// <param name="entireProcessTree">When <c>true</c>, kills the entire process tree; otherwise kills only the root process.</param>
+    void Kill(bool entireProcessTree);
 }
 
 /// <summary>
@@ -79,6 +80,6 @@ internal sealed class DefaultDetachedProcessLauncher : IDetachedProcessLauncher
 
         public Task WaitForExitAsync(CancellationToken cancellationToken) => process.WaitForExitAsync(cancellationToken);
 
-        public void Kill() => process.Kill();
+        public void Kill(bool entireProcessTree) => process.Kill(entireProcessTree);
     }
 }
