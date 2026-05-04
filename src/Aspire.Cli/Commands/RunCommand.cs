@@ -120,7 +120,7 @@ internal sealed class RunCommand : BaseCommand
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
-        AppHostLauncher.AddLaunchOptions(this, includeTimeout: true);
+        AppHostLauncher.AddLaunchOptions(this);
 
         if (ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
         {
@@ -142,7 +142,6 @@ internal sealed class RunCommand : BaseCommand
         var noBuild = parseResult.GetValue(s_noBuildOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
-        var timeoutSeconds = parseResult.GetValue(AppHostLauncher.s_timeoutOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
         var startDebugSession = false;
         if (isExtensionHost)
@@ -158,17 +157,17 @@ internal sealed class RunCommand : BaseCommand
             return ExitCodeConstants.InvalidCommand;
         }
 
-        if (!WaitCommand.ValidateTimeout(timeoutSeconds, InteractionService))
-        {
-            return ExitCodeConstants.InvalidCommand;
-        }
-
         // Validate that --no-build is not used when watch mode would be enabled
         // Watch mode is enabled when DefaultWatchEnabled feature is true, or when running under extension host (not in debug session)
         var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !startDebugSession);
         if (noBuild && watchModeEnabled)
         {
             InteractionService.DisplayError(RunCommandStrings.NoBuildNotSupportedWithWatchMode);
+            return ExitCodeConstants.InvalidCommand;
+        }
+
+        if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
+        {
             return ExitCodeConstants.InvalidCommand;
         }
 
@@ -759,7 +758,7 @@ internal sealed class RunCommand : BaseCommand
 
     private void DisplayStartupTimeout(int timeoutSeconds)
     {
-        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds));
+        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeoutSeconds));
         InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
     }
 

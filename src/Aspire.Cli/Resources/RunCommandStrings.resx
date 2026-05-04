@@ -227,7 +227,12 @@
     <value>AppHost failed to build.</value>
   </data>
   <data name="TimeoutWaitingForAppHost" xml:space="preserve">
-    <value>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, try again with a higher --timeout value.</value>
+    <value>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</value>
+    <comment>Do not localize the {1} placeholder. It is an environment variable name.</comment>
+  </data>
+  <data name="InvalidAppHostStartupTimeoutEnvironmentVariable" xml:space="preserve">
+    <value>The {0} environment variable must be a positive number of seconds.</value>
+    <comment>Do not localize the {0} placeholder. It is an environment variable name.</comment>
   </data>
   <data name="CheckLogsForDetails" xml:space="preserve">
     <value>Check logs for details: {0}</value>

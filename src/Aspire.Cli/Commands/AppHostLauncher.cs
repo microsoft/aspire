@@ -54,21 +54,15 @@ internal sealed class AppHostLauncher(
         Description = SharedCommandStrings.IsolatedOptionDescription
     };
 
-    internal static readonly Option<int> s_timeoutOption = WaitCommand.CreateTimeoutOption();
-
     /// <summary>
     /// Adds the shared AppHost launch options to a command so they appear in --help.
     /// Called by both RunCommand and StartCommand to keep shared options in sync.
     /// </summary>
-    internal static void AddLaunchOptions(Command command, bool includeTimeout = false)
+    internal static void AddLaunchOptions(Command command)
     {
         command.Options.Add(s_appHostOption);
         command.Options.Add(s_formatOption);
         command.Options.Add(s_isolatedOption);
-        if (includeTimeout)
-        {
-            command.Options.Add(s_timeoutOption);
-        }
     }
 
     /// <summary>
@@ -341,7 +335,7 @@ internal sealed class AppHostLauncher(
         }
         else
         {
-            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds));
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeoutSeconds));
 
             if (!result.ChildProcess.HasExited)
             {

@@ -45,41 +45,33 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_AcceptsTimeoutOption()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run --timeout 240 --help");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-    }
-
-    [Fact]
-    public async Task RunCommand_RejectsInvalidTimeoutOption()
+    public async Task RunCommand_RejectsInvalidStartupTimeoutEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
+            options.ConfigurationCallback += config =>
+            {
+                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "0";
+            };
         });
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run --timeout 0");
+        var result = command.Parse("run");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
-        Assert.Equal(WaitCommandStrings.TimeoutMustBePositive, Assert.Single(interactionService.DisplayedErrors));
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeoutSeconds),
+            Assert.Single(interactionService.DisplayedErrors));
     }
 
     [Fact]
-    public async Task RunCommand_DetachedUsesTimeoutOption()
+    public async Task RunCommand_DetachedUsesStartupTimeoutEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -88,6 +80,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.ConfigurationCallback += config =>
+            {
+                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "37";
+            };
         });
         services.RemoveAll<IDetachedProcessLauncher>();
         services.AddSingleton<IDetachedProcessLauncher>(detachedProcessLauncher);
@@ -100,16 +96,15 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run --detach --timeout 37");
+        var result = command.Parse("run --detach");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.True(detachedProcessLauncher.Process.Killed);
         Assert.True(detachedProcessLauncher.Process.KilledEntireProcessTree);
-        Assert.DoesNotContain("--timeout", detachedProcessLauncher.Arguments);
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 37, CliConfigNames.AppHostStartupTimeoutSeconds),
             Assert.Single(interactionService.DisplayedErrors));
     }
 
@@ -149,18 +144,22 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
             options.DotNetCliRunnerFactory = runnerFactory;
+            options.ConfigurationCallback += config =>
+            {
+                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "1";
+            };
         });
 
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run --timeout 1");
+        var result = command.Parse("run");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 1),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 1, CliConfigNames.AppHostStartupTimeoutSeconds),
             Assert.Single(interactionService.DisplayedErrors));
         Assert.True(runCancellationObserved.Task.IsCompletedSuccessfully);
     }
@@ -195,6 +194,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
             options.DotNetCliRunnerFactory = runnerFactory;
+            options.ConfigurationCallback += config =>
+            {
+                config[CliConfigNames.AppHostStartupTimeoutSeconds] = "2";
+            };
         });
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(timeProvider);
@@ -202,7 +205,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run --timeout 2");
+        var result = command.Parse("run");
 
         var stopwatch = Stopwatch.StartNew();
         var exitCode = await result.InvokeAsync().DefaultTimeout();
@@ -211,7 +214,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Expected startup timeout to use the remaining budget, but the command took {stopwatch.Elapsed}.");
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2),
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeoutSeconds),
             Assert.Single(interactionService.DisplayedErrors));
     }
 

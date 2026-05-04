@@ -7,4 +7,5 @@ namespace Aspire.Cli;
 internal static class CliConfigNames
 {
     public const string NoLogo = "ASPIRE_CLI_NOLOGO";
+    public const string AppHostStartupTimeoutSeconds = "ASPIRE_CLI_START_TIMEOUT_SECONDS";
 }

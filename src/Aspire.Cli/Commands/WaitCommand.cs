@@ -38,7 +38,7 @@ internal sealed class WaitCommand : BaseCommand
 
     private static readonly Option<int> s_timeoutOption = CreateTimeoutOption();
 
-    internal static Option<int> CreateTimeoutOption() => new("--timeout")
+    private static Option<int> CreateTimeoutOption() => new("--timeout")
     {
         Description = WaitCommandStrings.TimeoutOptionDescription,
         DefaultValueFactory = _ => DefaultTimeoutSeconds

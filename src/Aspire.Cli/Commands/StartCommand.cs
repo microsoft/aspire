@@ -7,6 +7,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Commands;
 
@@ -15,6 +16,7 @@ internal sealed class StartCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     private readonly AppHostLauncher _appHostLauncher;
+    private readonly IConfiguration _configuration;
 
     private static readonly Option<bool> s_noBuildOption = new("--no-build")
     {
@@ -27,14 +29,16 @@ internal sealed class StartCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry,
-        AppHostLauncher appHostLauncher)
+        AppHostLauncher appHostLauncher,
+        IConfiguration configuration)
         : base("start", StartCommandStrings.Description,
                features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _appHostLauncher = appHostLauncher;
+        _configuration = configuration;
 
         Options.Add(s_noBuildOption);
-        AppHostLauncher.AddLaunchOptions(this, includeTimeout: true);
+        AppHostLauncher.AddLaunchOptions(this);
 
         TreatUnmatchedTokensAsErrors = false;
     }
@@ -44,7 +48,6 @@ internal sealed class StartCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
-        var timeoutSeconds = parseResult.GetValue(AppHostLauncher.s_timeoutOption);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // `aspire start` is always user-initiated — the VS Code extension only invokes
@@ -60,7 +63,7 @@ internal sealed class StartCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
-        if (!WaitCommand.ValidateTimeout(timeoutSeconds, InteractionService))
+        if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
         {
             return ExitCodeConstants.InvalidCommand;
         }
