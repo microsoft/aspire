@@ -103,7 +103,12 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
     /// </remarks>
     internal static string GetResourceStateTooltip(ResourceViewModel resource, IStringLocalizer<Columns> loc)
     {
-        if (resource.IsStopped())
+        if (resource.IsFailedToStart())
+        {
+            // Resource failed to start. It was never running, so "no longer running" would be misleading.
+            return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ResourceType);
+        }
+        else if (resource.IsStopped())
         {
             if (resource.TryGetExitCode(out var exitCode) && exitCode is not 0)
             {
