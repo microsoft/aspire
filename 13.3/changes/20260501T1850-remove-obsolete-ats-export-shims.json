@@ -1,0 +1,17 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Obsolete compatibility shim methods in the Aspire TypeScript SDK (ATS) polyglot code generation have been removed. Generated SDKs for TypeScript, Python, Java, Rust, and Go now expose only the unified withEnvironment and addRoute methods instead of deprecated aliases.",
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-05-01T18:50:02Z",
+  "lastMergedAt": "2026-05-01T18:50:02Z",
+  "name": "Remove obsolete polyglot SDK export shims",
+  "prs": [
+    16628
+  ]
+}

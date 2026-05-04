@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Backport of #16612: Fallback to junctions if either creating OR evaluating symlinks fails",
+  "mergedAt": "2026-05-01T16:17:49Z",
+  "number": 16618,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Fallback to junctions if either creating OR evaluating symlinks fails"
+}

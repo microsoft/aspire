@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Backport of #16625: Fix Python starter TypeScript health check build",
+  "mergedAt": "2026-05-01T21:39:34Z",
+  "number": 16647,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Fix Python starter TypeScript health check build"
+}

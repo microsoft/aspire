@@ -1,0 +1,17 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the Python starter template's TypeScript AppHost failing to build because it used a removed string overload for withHttpHealthCheck. The template now uses the supported options-object signature.",
+  "docsRequired": false,
+  "emoji": "🐍",
+  "firstMergedAt": "2026-05-01T21:39:34Z",
+  "lastMergedAt": "2026-05-01T21:39:34Z",
+  "name": "Fix Python starter template TypeScript health check build",
+  "prs": [
+    16647
+  ]
+}

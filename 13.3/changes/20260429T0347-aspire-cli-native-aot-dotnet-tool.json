@@ -8,9 +8,10 @@
   "docsRequired": true,
   "emoji": "🛠️",
   "firstMergedAt": "2026-04-29T03:47:51Z",
-  "lastMergedAt": "2026-04-29T03:47:51Z",
+  "lastMergedAt": "2026-04-30T22:31:23Z",
   "name": "Aspire CLI available as a dotnet tool",
   "prs": [
-    16496
+    16496,
+    16611
   ]
 }

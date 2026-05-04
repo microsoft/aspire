@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Backport of #16565: Add BrowserLogs tracked browser sessions with CDP pipe - grouped with BrowserLogs entry",
+  "mergedAt": "2026-05-01T18:57:57Z",
+  "number": 16637,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Add BrowserLogs tracked browser sessions"
+}

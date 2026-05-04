@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Backport of #16570: Publish native CLI tool packages - grouped with dotnet tool entry",
+  "mergedAt": "2026-04-30T22:31:23Z",
+  "number": 16611,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Publish native Aspire CLI tool packages"
+}

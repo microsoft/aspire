@@ -4,13 +4,14 @@
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "CLI bundle installs and upgrades now use symlinks (or junctions on Windows without Developer Mode) to point public directories at versioned bundle payloads. This enables safe atomic upgrades where the active version stays available while the new version is being installed, and locked files are handled gracefully.",
+  "description": "CLI bundle installs and upgrades now use symlinks (or junctions on Windows without Developer Mode) to point public directories at versioned bundle payloads. The fallback to directory junctions now also triggers when symlink evaluation fails, not just creation, ensuring users with restricted symlink policies remain unaffected.",
   "docsRequired": false,
   "emoji": "🔗",
   "firstMergedAt": "2026-04-28T18:25:42Z",
-  "lastMergedAt": "2026-04-28T18:25:42Z",
+  "lastMergedAt": "2026-05-01T16:17:49Z",
   "name": "Atomic CLI bundle upgrades with symlinks and junctions",
   "prs": [
-    16408
+    16408,
+    16618
   ]
 }

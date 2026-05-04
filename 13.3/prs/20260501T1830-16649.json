@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of #16629: Fix TypeScript AppHost generated port ranges",
+  "mergedAt": "2026-05-01T18:30:30Z",
+  "number": 16649,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Fix TypeScript AppHost generated port ranges"
+}

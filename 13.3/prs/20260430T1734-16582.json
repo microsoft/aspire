@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of #16541: Validate build-only container references in the pipeline",
+  "mergedAt": "2026-04-30T17:34:27Z",
+  "number": 16582,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Validate build-only container references in the pipeline"
+}

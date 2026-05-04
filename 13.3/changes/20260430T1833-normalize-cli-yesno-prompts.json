@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "All CLI boolean prompts now use a consistent [y/N] or [Y/n] confirmation style with single-keypress input instead of a mix of selection lists and confirmation dialogs. The default casing communicates the Enter default, and the NuGet.config prompt was also normalized.",
+  "docsRequired": false,
+  "emoji": "📝",
+  "firstMergedAt": "2026-04-30T18:33:14Z",
+  "lastMergedAt": "2026-04-30T18:33:14Z",
+  "name": "Consistent yes/no prompts throughout the CLI",
+  "prs": [
+    16597
+  ]
+}

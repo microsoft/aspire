@@ -1,0 +1,17 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a sticky 'Finding apphosts...' toast notification in the VS Code extension that remained visible indefinitely after AppHost discovery completed. The search status is now shown in the auto-dismissing progress indicator instead.",
+  "docsRequired": false,
+  "emoji": "🔔",
+  "firstMergedAt": "2026-05-01T21:39:54Z",
+  "lastMergedAt": "2026-05-01T21:39:54Z",
+  "name": "Fix sticky 'Finding apphosts' notification in VS Code extension",
+  "prs": [
+    16665
+  ]
+}

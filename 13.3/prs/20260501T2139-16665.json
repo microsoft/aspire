@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Backport of #16664: Fix sticky Finding apphosts notification in VS Code extension",
+  "mergedAt": "2026-05-01T21:39:54Z",
+  "number": 16665,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Fix sticky 'Finding apphosts' notification in VS Code extension"
+}

@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an issue on Windows where detached AppHost processes launched by aspire start or aspire run --detach could be terminated when the launching shell exited. The fix adds the DETACHED_PROCESS creation flag alongside the existing CREATE_NEW_PROCESS_GROUP so the child stays alive independently.",
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-04-30T17:08:07Z",
+  "lastMergedAt": "2026-04-30T17:08:07Z",
+  "name": "Fix Windows detached AppHost launcher",
+  "prs": [
+    16572
+  ]
+}

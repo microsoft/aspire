@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed TypeScript AppHost package manager detection incorrectly choosing Yarn when a distant ancestor directory contains a Yarn marker. The resolver now limits probing to the AppHost directory and one eligible parent, skipping the filesystem root and user home.",
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-04-30T17:04:20Z",
+  "lastMergedAt": "2026-04-30T17:04:20Z",
+  "name": "Fix TypeScript AppHost package manager detection",
+  "prs": [
+    16598
+  ]
+}

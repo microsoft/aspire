@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed TypeScript AppHost scaffolding generating dashboard, OTLP, and resource-service ports in the Windows ephemeral range, which caused the dashboard to fail to bind without any visible error. Port generation now uses the same non-ephemeral bands as other CLI paths.",
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-05-01T18:30:30Z",
+  "lastMergedAt": "2026-05-01T18:30:30Z",
+  "name": "Fix TypeScript AppHost generated port ranges",
+  "prs": [
+    16649
+  ]
+}

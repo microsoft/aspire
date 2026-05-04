@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #16551: Gateway TLS without hostname (FQDN discovery) + TS AppHost endpoint fix - grouped with Kubernetes entry",
+  "mergedAt": "2026-05-01T20:54:15Z",
+  "number": 16585,
+  "runDate": "2026-05-04T09:10:38Z",
+  "status": "included",
+  "title": "[release/13.3] Gateway TLS without hostname (FQDN discovery) + TS AppHost endpoint fix"
+}

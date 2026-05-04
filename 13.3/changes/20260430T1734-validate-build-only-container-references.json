@@ -1,0 +1,17 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "A new pipeline validation step now detects build-only container resources (JavaScript/TypeScript frontends) that are not wired up to a deployable resource via container-files annotations. A clear error is raised at publish time rather than silently producing a broken deployment.",
+  "docsRequired": false,
+  "emoji": "🏗️",
+  "firstMergedAt": "2026-04-30T17:34:27Z",
+  "lastMergedAt": "2026-04-30T17:34:27Z",
+  "name": "Validation for unpublished build-only container resources",
+  "prs": [
+    16582
+  ]
+}
