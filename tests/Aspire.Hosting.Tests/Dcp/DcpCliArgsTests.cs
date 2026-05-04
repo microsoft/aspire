@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.Dcp;
 using Aspire.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -70,8 +71,7 @@ public class DcpCliArgsTests
 
         builder.Configuration[BundleDiscovery.DcpPathEnvVar] = Path.Combine("bundle", "dcp");
         builder.Configuration[BundleDiscovery.DashboardPathEnvVar] = Path.Combine("bundle", "dashboard");
-        builder.Configuration["DcpPublisher:CliPath"] = explicitDcpPath;
-        builder.Configuration["DcpPublisher:DashboardPath"] = explicitDashboardPath;
+        AddDcpPublisherPathConfigurationOverride(builder.Configuration, explicitDcpPath, explicitDashboardPath);
 
         using var app = builder.Build();
         var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
@@ -90,6 +90,7 @@ public class DcpCliArgsTests
 
         builder.Configuration[BundleDiscovery.DcpPathEnvVar] = bundleDcpPath;
         builder.Configuration[BundleDiscovery.DashboardPathEnvVar] = bundleDashboardPath;
+        AddDcpPublisherPathConfigurationOverride(builder.Configuration, string.Empty, string.Empty);
 
         using var app = builder.Build();
         var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
@@ -97,5 +98,48 @@ public class DcpCliArgsTests
         Assert.Equal(BundleDiscovery.GetDcpExecutablePath(bundleDcpPath), dcpOptions.CliPath);
         Assert.Equal(Path.Combine(bundleDcpPath, "ext"), dcpOptions.ExtensionsPath);
         Assert.Equal(bundleDashboardPath, dcpOptions.DashboardPath);
+    }
+
+    [Fact]
+    public void WhitespaceDcpPublisherPathConfigurationFallsBackToBundlePaths()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var bundleDcpPath = Path.Combine("bundle", "dcp");
+        var bundleDashboardPath = Path.Combine("bundle", "dashboard");
+
+        builder.Configuration[BundleDiscovery.DcpPathEnvVar] = bundleDcpPath;
+        builder.Configuration[BundleDiscovery.DashboardPathEnvVar] = bundleDashboardPath;
+        AddDcpPublisherPathConfigurationOverride(builder.Configuration, " ", "\t");
+
+        using var app = builder.Build();
+        var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
+
+        Assert.Equal(BundleDiscovery.GetDcpExecutablePath(bundleDcpPath), dcpOptions.CliPath);
+        Assert.Equal(Path.Combine(bundleDcpPath, "ext"), dcpOptions.ExtensionsPath);
+        Assert.Equal(bundleDashboardPath, dcpOptions.DashboardPath);
+    }
+
+    [Fact]
+    public void DcpOptionsValidationFailsForWhitespacePaths()
+    {
+        var validator = new ValidateDcpOptions();
+        var result = validator.Validate(null, new DcpOptions
+        {
+            CliPath = " ",
+            DashboardPath = "\t",
+        });
+
+        Assert.True(result.Failed);
+        Assert.Contains("The path to the DCP executable used for Aspire orchestration is required.", result.FailureMessage);
+        Assert.Contains("The path to the Aspire Dashboard binaries is missing.", result.FailureMessage);
+    }
+
+    private static void AddDcpPublisherPathConfigurationOverride(ConfigurationManager configuration, string cliPath, string dashboardPath)
+    {
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["DcpPublisher:CliPath"] = cliPath,
+            ["DcpPublisher:DashboardPath"] = dashboardPath,
+        });
     }
 }
