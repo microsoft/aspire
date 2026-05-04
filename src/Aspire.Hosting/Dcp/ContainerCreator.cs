@@ -220,7 +220,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         static bool IsContainerTunnelContainerName(string name)
-            => name.ToLowerInvariant() == ContainerTunnelContainerName;
+            => string.Equals(name, ContainerTunnelContainerName, StringComparison.OrdinalIgnoreCase);
     }
 
     public bool IsReadyToCreate(RenderedModelResource<Container> resource, ContainerCreationContext cctx)
