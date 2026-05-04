@@ -112,8 +112,8 @@ server.listen(port, '127.0.0.1');
                 configuration.setDescription("Validation hosted agent");
                 configuration.setCpu(1);
                 configuration.setMemory(2);
-                configuration.setMetadata(null);
-                configuration.setEnvironmentVariables(null);
+                configuration.metadata().put("scenario", "validation");
+                configuration.environmentVariables().put("VALIDATION_MODE", "true");
             }));
 
         var api = builder.addContainer("api", "nginx");

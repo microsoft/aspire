@@ -116,8 +116,10 @@ await hostedAgent.publishAsHostedAgent({
         await configuration.description.set('Validation hosted agent');
         await configuration.cpu.set(1);
         await configuration.memory.set(2);
-        await configuration.metadata.set('scenario', 'validation');
-        await configuration.environmentVariables.set('VALIDATION_MODE', 'true');
+        const metadata = await configuration.metadata();
+        await metadata.set('scenario', 'validation');
+        const environmentVariables = await configuration.environmentVariables();
+        await environmentVariables.set('VALIDATION_MODE', 'true');
     }
 });
 
