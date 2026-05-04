@@ -268,6 +268,7 @@ internal sealed class ExecuteResourceCommandRequest
 
     /// <summary>
     /// Gets optional invocation arguments to pass to the resource command.
+    /// Arrays are matched to declared command arguments by order. Objects are matched by argument name.
     /// </summary>
     public JsonElement? Arguments { get; init; }
 

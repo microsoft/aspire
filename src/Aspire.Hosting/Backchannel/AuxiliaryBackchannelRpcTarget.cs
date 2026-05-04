@@ -249,8 +249,19 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentNullException.ThrowIfNull(request);
 
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
-        var argumentValues = ConvertArgumentValues(request.Arguments);
-        var arguments = resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, argumentValues);
+        var (arguments, argumentErrorMessage) = CreateCommandArguments(resourceCommandService, request);
+        if (argumentErrorMessage is not null)
+        {
+            return new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = argumentErrorMessage,
+#pragma warning disable CS0618 // Type or member is obsolete
+                ErrorMessage = argumentErrorMessage,
+#pragma warning restore CS0618 // Type or member is obsolete
+            };
+        }
+
         var result = request.ValidateOnly
             ? await ValidateResourceCommandAsync(resourceCommandService, request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false)
             : await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false);
@@ -279,6 +290,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 },
                 DisplayImmediately = v.DisplayImmediately
             } : null
+        };
+    }
+
+    private static (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(ResourceCommandService resourceCommandService, ExecuteResourceCommandRequest request)
+    {
+        if (request.Arguments is null)
+        {
+            return (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, argumentValues: null), null);
+        }
+
+        var arguments = request.Arguments.Value;
+        return arguments.ValueKind switch
+        {
+            JsonValueKind.Object => (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertObjectArgumentValues(arguments)), null),
+            JsonValueKind.Array => resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertOrderedArgumentValues(arguments)),
+            _ => throw new InvalidOperationException("Resource command arguments must be a JSON object or array.")
         };
     }
 
@@ -311,32 +338,34 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 .ToArray();
     }
 
-    private static IReadOnlyDictionary<string, string?>? ConvertArgumentValues(JsonElement? arguments)
+    private static IReadOnlyDictionary<string, string?> ConvertObjectArgumentValues(JsonElement arguments)
     {
-        if (arguments is null)
-        {
-            return null;
-        }
-
         // ExecuteResourceCommandRequest arguments are encoded as a JSON object in the auxiliary backchannel protocol:
         // {
         //   "resourceName": "web-browser-logs",
         //   "commandName": "click",
         //   "arguments": { "selector": "#submit" }
         // }
-        var objectArguments = arguments.Value;
-        if (objectArguments.ValueKind != JsonValueKind.Object)
-        {
-            throw new InvalidOperationException("Resource command arguments must be a JSON object.");
-        }
-
         var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
-        foreach (var property in objectArguments.EnumerateObject())
+        foreach (var property in arguments.EnumerateObject())
         {
             values[property.Name] = ConvertArgumentValue(property.Name, property.Value);
         }
 
         return values;
+    }
+
+    private static string?[] ConvertOrderedArgumentValues(JsonElement arguments)
+    {
+        // ExecuteResourceCommandRequest arguments can be encoded as a JSON array in the auxiliary backchannel protocol:
+        // {
+        //   "resourceName": "web-browser-logs",
+        //   "commandName": "click",
+        //   "arguments": [ "#submit" ]
+        // }
+        return arguments.EnumerateArray()
+            .Select((value, index) => ConvertArgumentValue($"[{index}]", value))
+            .ToArray();
     }
 
     private static string? ConvertArgumentValue(string name, JsonElement value)

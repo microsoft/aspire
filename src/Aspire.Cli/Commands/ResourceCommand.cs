@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
@@ -32,12 +31,6 @@ internal sealed class ResourceCommand : BaseCommand
     private static readonly Argument<string> s_commandArgument = new("command")
     {
         Description = ResourceCommandStrings.CommandNameArgumentDescription
-    };
-
-    private static readonly Argument<string[]> s_commandArgumentsArgument = new("arguments")
-    {
-        Description = ResourceCommandStrings.CommandArgumentsArgumentDescription,
-        Arity = ArgumentArity.ZeroOrMore
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
@@ -70,8 +63,8 @@ internal sealed class ResourceCommand : BaseCommand
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_commandArgument);
-        Arguments.Add(s_commandArgumentsArgument);
         Options.Add(s_appHostOption);
+        TreatUnmatchedTokensAsErrors = false;
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -79,7 +72,7 @@ internal sealed class ResourceCommand : BaseCommand
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
-        var capturedArguments = parseResult.GetValue(s_commandArgumentsArgument) ?? [];
+        var capturedArguments = parseResult.UnmatchedTokens.ToArray();
 
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
@@ -93,24 +86,9 @@ internal sealed class ResourceCommand : BaseCommand
             return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
         }
 
-        JsonElement? commandArguments = null;
-        if (capturedArguments.Length > 0)
-        {
-            var parsedArguments = await CreateArgumentsFromCapturedArgumentsAsync(
-                result.Connection!,
-                resourceName,
-                commandName,
-                capturedArguments,
-                cancellationToken).ConfigureAwait(false);
-
-            if (parsedArguments.ParseError is { } capturedArgumentsError)
-            {
-                _interactionService.DisplayError(capturedArgumentsError);
-                return ExitCodeConstants.InvalidCommand;
-            }
-
-            commandArguments = parsedArguments.Arguments;
-        }
+        var commandArguments = capturedArguments.Length > 0
+            ? JsonSerializer.SerializeToElement(capturedArguments, JsonSourceGenerationContext.Default.StringArray)
+            : (JsonElement?)null;
 
         // Map well-known friendly names (start/stop/restart) to their display metadata
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
@@ -138,258 +116,4 @@ internal sealed class ResourceCommand : BaseCommand
             cancellationToken);
     }
 
-    private static async Task<(JsonElement? Arguments, string? ParseError)> CreateArgumentsFromCapturedArgumentsAsync(
-        IAppHostAuxiliaryBackchannel connection,
-        string resourceName,
-        string commandName,
-        string[] capturedArguments,
-        CancellationToken cancellationToken)
-    {
-        var firstArgument = capturedArguments[0].TrimStart();
-        if (capturedArguments.Length == 1 && firstArgument.StartsWith('{'))
-        {
-            return ParseArguments(capturedArguments[0]);
-        }
-
-        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-        var resolvedResources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
-        var resource = resolvedResources.Count > 0 ? resolvedResources[0] : null;
-        var command = resource?.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName) && IsCommandVisibleToApi(c.Visibility));
-        if (command?.ArgumentInputs.Length is not > 0)
-        {
-            return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsNoMetadata, commandName, resourceName));
-        }
-
-        return CreateArgumentsFromInputs(commandName, command.ArgumentInputs, capturedArguments);
-
-        static bool IsCommandVisibleToApi(string visibility)
-        {
-            return visibility.Split(',').Any(static value => string.Equals(value.Trim(), "Api", StringComparison.OrdinalIgnoreCase));
-        }
-    }
-
-    private static (JsonElement? Arguments, string? ParseError) CreateArgumentsFromInputs(
-        string commandName,
-        ResourceSnapshotCommandArgument[] inputs,
-        string[] capturedArguments)
-    {
-        var inputsByName = inputs.ToDictionary(i => i.Name, StringComparers.InteractionInputName);
-        if (capturedArguments.Length > inputs.Length)
-        {
-            return (null, string.Format(
-                CultureInfo.CurrentCulture,
-                ResourceCommandStrings.CommandArgumentsTooMany,
-                commandName,
-                inputs.Length,
-                string.Join(", ", inputs.Select(i => i.Name))));
-        }
-
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-        {
-            writer.WriteStartObject();
-            var positionalIndex = 0;
-            var providedInputs = new HashSet<string>(StringComparers.InteractionInputName);
-            foreach (var capturedArgument in capturedArguments)
-            {
-                ResourceSnapshotCommandArgument input;
-                string value;
-                if (TryGetNamedArgument(capturedArgument, inputsByName, out var namedInput, out var namedValue))
-                {
-                    input = namedInput;
-                    value = namedValue;
-                }
-                else
-                {
-                    if (GetNamedArgumentError(capturedArgument, inputs) is { } namedArgumentError)
-                    {
-                        return (null, namedArgumentError);
-                    }
-
-                    while (positionalIndex < inputs.Length && providedInputs.Contains(inputs[positionalIndex].Name))
-                    {
-                        positionalIndex++;
-                    }
-
-                    if (positionalIndex >= inputs.Length)
-                    {
-                        return (null, string.Format(
-                            CultureInfo.CurrentCulture,
-                            ResourceCommandStrings.CommandArgumentsTooMany,
-                            commandName,
-                            inputs.Length,
-                            string.Join(", ", inputs.Select(i => i.Name))));
-                    }
-
-                    input = inputs[positionalIndex++];
-                    value = capturedArgument;
-                }
-
-                if (!providedInputs.Add(input.Name))
-                {
-                    return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsDuplicate, input.Name));
-                }
-
-                if (WriteArgumentValue(writer, input, value) is { } error)
-                {
-                    return (null, error);
-                }
-            }
-
-            writer.WriteEndObject();
-
-            if (FindMissingRequiredInput(inputs, providedInputs) is { } missingRequiredInput)
-            {
-                return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsMissingRequired, missingRequiredInput.Name));
-            }
-        }
-
-        return ParseArgumentsObject(stream);
-    }
-
-    private static bool TryGetNamedArgument(
-        string argument,
-        Dictionary<string, ResourceSnapshotCommandArgument> inputsByName,
-        [NotNullWhen(true)] out ResourceSnapshotCommandArgument? input,
-        [NotNullWhen(true)] out string? value)
-    {
-        input = null;
-        value = null;
-
-        var separatorIndex = argument.IndexOf('=');
-        if (separatorIndex <= 0)
-        {
-            return false;
-        }
-
-        if (!inputsByName.TryGetValue(argument[..separatorIndex], out input))
-        {
-            return false;
-        }
-
-        value = argument[(separatorIndex + 1)..];
-        return true;
-    }
-
-    private static string? GetNamedArgumentError(string argument, ResourceSnapshotCommandArgument[] inputs)
-    {
-        var separatorIndex = argument.IndexOf('=');
-        if (separatorIndex <= 0)
-        {
-            return null;
-        }
-
-        var name = argument[..separatorIndex];
-        if (!IsLikelyNamedArgumentName(name))
-        {
-            return null;
-        }
-
-        return string.Format(
-            CultureInfo.CurrentCulture,
-            ResourceCommandStrings.CommandArgumentsUnknownNamed,
-            name,
-            string.Join(", ", inputs.Select(i => i.Name)));
-    }
-
-    private static bool IsLikelyNamedArgumentName(string value)
-    {
-        if (!char.IsAsciiLetter(value[0]) && value[0] is not '_')
-        {
-            return false;
-        }
-
-        foreach (var c in value[1..])
-        {
-            if (!char.IsAsciiLetterOrDigit(c) && c is not '_' and not '-')
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static ResourceSnapshotCommandArgument? FindMissingRequiredInput(ResourceSnapshotCommandArgument[] inputs, HashSet<string> providedInputs)
-    {
-        return inputs.FirstOrDefault(i => i.Required && !providedInputs.Contains(i.Name) && string.IsNullOrEmpty(i.Value));
-    }
-
-    private static string? WriteArgumentValue(Utf8JsonWriter writer, ResourceSnapshotCommandArgument input, string value)
-    {
-        if (input.MaxLength is { } maxLength && value.Length > maxLength)
-        {
-            return string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsInvalidTextLength, input.Name, maxLength);
-        }
-
-        switch (input.InputType)
-        {
-            case "Boolean":
-                if (!bool.TryParse(value, out var boolValue))
-                {
-                    return string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsInvalidBoolean, value, input.Name);
-                }
-
-                writer.WriteBoolean(input.Name, boolValue);
-                return null;
-
-            case "Number":
-                if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numberValue))
-                {
-                    return string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsInvalidNumber, value, input.Name);
-                }
-
-                writer.WriteNumber(input.Name, numberValue);
-                return null;
-
-            case "Choice":
-                if (input.Options is { Count: > 0 } options && !input.AllowCustomChoice && !options.ContainsKey(value))
-                {
-                    return string.Format(
-                        CultureInfo.CurrentCulture,
-                        ResourceCommandStrings.CommandArgumentsInvalidChoice,
-                        value,
-                        input.Name,
-                        string.Join(", ", options.Keys));
-                }
-
-                writer.WriteString(input.Name, value);
-                return null;
-
-            default:
-                writer.WriteString(input.Name, value);
-                return null;
-        }
-    }
-
-    private static (JsonElement? Arguments, string? ParseError) ParseArgumentsObject(MemoryStream stream)
-    {
-        stream.Position = 0;
-        using var document = JsonDocument.Parse(stream);
-        return (document.RootElement.Clone(), null);
-    }
-
-    private static (JsonElement? Arguments, string? ParseError) ParseArguments(string? argumentsJson)
-    {
-        if (string.IsNullOrWhiteSpace(argumentsJson))
-        {
-            return (null, null);
-        }
-
-        try
-        {
-            // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
-            using var document = JsonDocument.Parse(argumentsJson);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return (null, ResourceCommandStrings.CommandArgumentsJsonInvalidObject);
-            }
-
-            return (document.RootElement.Clone(), null);
-        }
-        catch (JsonException ex)
-        {
-            return (null, string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.CommandArgumentsJsonInvalid, ex.Message));
-        }
-    }
 }

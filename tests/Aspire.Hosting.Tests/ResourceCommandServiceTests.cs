@@ -511,6 +511,82 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task CreateCommandArguments_WithOrderedArgumentValues_MapsArgumentsByOrder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        },
+                        new InteractionInput
+                        {
+                            Name = "clickCount",
+                            InputType = InputType.Number,
+                            Value = "1"
+                        },
+                        new InteractionInput
+                        {
+                            Name = "snapshotAfter",
+                            InputType = InputType.Boolean,
+                            Value = "true"
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        IReadOnlyList<string?> argumentValues = ["#submit", "2"];
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Null(errorMessage);
+        Assert.Equal("#submit", arguments.GetString("selector"));
+        Assert.Equal(2, arguments.GetInt32("clickCount"));
+        Assert.True(arguments.GetBoolean("snapshotAfter"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_TooManyOrderedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        IReadOnlyList<string?> argumentValues = ["#submit", "extra"];
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Command 'mycommand' accepts 1 argument(s), but 2 were provided.", errorMessage);
+        Assert.Null(arguments.GetString("selector"));
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_NoArguments_PassesEmptyArgumentsToCommand()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

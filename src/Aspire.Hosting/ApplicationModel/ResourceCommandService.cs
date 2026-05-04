@@ -188,6 +188,28 @@ public class ResourceCommandService
         return CreateArguments(annotation?.Arguments ?? [], argumentValues);
     }
 
+    internal (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(string resourceId, string commandName, IReadOnlyList<string?>? orderedArgumentValues)
+    {
+        if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
+        {
+            return (CreateArguments([], orderedArgumentValues), null);
+        }
+
+        var resolvedCommandName = commandName;
+        var annotation = ResolveCommandAnnotation(resourceEvent.Resource, ref resolvedCommandName);
+        if (annotation is null)
+        {
+            return (CreateArguments([], orderedArgumentValues), null);
+        }
+
+        if (orderedArgumentValues is { Count: var argumentCount } && argumentCount > annotation.Arguments.Count)
+        {
+            return (CreateArguments(annotation.Arguments, orderedArgumentValues: null), $"Command '{resolvedCommandName}' accepts {annotation.Arguments.Count} argument(s), but {argumentCount} were provided.");
+        }
+
+        return (CreateArguments(annotation.Arguments, orderedArgumentValues), null);
+    }
+
     internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
     {
         var logger = _resourceLoggerService.GetLogger(resourceId);
@@ -395,6 +417,27 @@ public class ResourceCommandService
             {
                 value = argumentValue;
             }
+
+            inputs[i] = CloneInput(input, value);
+        }
+
+        return new InteractionInputCollection(inputs);
+    }
+
+    private static InteractionInputCollection CreateArguments(IReadOnlyList<InteractionInput> commandArguments, IReadOnlyList<string?>? orderedArgumentValues)
+    {
+        if (commandArguments is not { Count: > 0 })
+        {
+            return new InteractionInputCollection([]);
+        }
+
+        var inputs = new InteractionInput[commandArguments.Count];
+        for (var i = 0; i < commandArguments.Count; i++)
+        {
+            var input = commandArguments[i];
+            var value = orderedArgumentValues is not null && i < orderedArgumentValues.Count
+                ? orderedArgumentValues[i]
+                : input.Value;
 
             inputs[i] = CloneInput(input, value);
         }

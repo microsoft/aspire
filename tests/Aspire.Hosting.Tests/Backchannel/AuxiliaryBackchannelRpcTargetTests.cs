@@ -862,8 +862,112 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("#submit", capturedArguments.GetString("selector"));
         Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
         Assert.True(capturedArguments.GetBoolean("snapshotAfter"));
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_MapsJsonArrayArgumentsToInteractionInputsByOrder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    },
+                    new InteractionInput
+                    {
+                        Name = "clickCount",
+                        InputType = InputType.Number
+                    },
+                    new InteractionInput
+                    {
+                        Name = "snapshotAfter",
+                        InputType = InputType.Boolean
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "click",
+            Arguments = JsonSerializer.SerializeToElement(new object[] { "#submit", 2, true })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
+        Assert.True(capturedArguments.GetBoolean("snapshotAfter"));
 
         await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_TooManyJsonArrayArguments_ReturnsFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: context =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "click",
+            Arguments = JsonSerializer.SerializeToElement(new[] { "#submit", "extra" })
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.False(executed);
+        Assert.Equal("Command 'click' accepts 1 argument(s), but 2 were provided.", response.Message);
     }
 
     [Fact]
