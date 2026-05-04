@@ -420,6 +420,213 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithStalePrHive_NoExplicitChannel_DoesNotWritePrHiveNuGetConfig()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16648
+        // A stale ~/.aspire/hives/pr-XXX directory must NOT cause `aspire new` (without an
+        // explicit --channel pr-*) to silently bind a fresh stable project's nuget.config
+        // to the local PR hive. The PackageChannel.PromptToCreateOrUpdateNuGetConfigAsync
+        // call only writes a nuget.config for explicit (non-implicit) channels — so as long
+        // as the silent path resolves to the implicit channel, the file must NOT exist.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        hivesDir.Create();
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        string? selectedVersion = null;
+        FileInfo? installNuGetConfigFile = null;
+        string? newProjectOutputPath = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                    throw new InvalidOperationException("Should not prompt for version when only the implicit channel is in scope.");
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                var packagingService = new TestPackagingService();
+                packagingService.GetChannelsAsyncCallback = (ct) =>
+                {
+                    var implicitCache = new FakeNuGetPackageCache();
+                    implicitCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "https://api.nuget.org/v3/index.json", Version = cliVersion };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                    };
+
+                    var prHiveCache = new FakeNuGetPackageCache();
+                    prHiveCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        // The PR hive happens to have a same-version template — exactly the conflict in #16648.
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = cliVersion };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                    };
+
+                    var prHivePath = Path.Combine(hivesDir.FullName, "pr-12345", "packages").Replace('\\', '/');
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache);
+                    var prHiveChannel = PackageChannel.CreateExplicitChannel(
+                        "pr-12345",
+                        PackageChannelQuality.Both,
+                        new[]
+                        {
+                            new PackageMapping("Aspire*", prHivePath),
+                            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
+                        },
+                        prHiveCache);
+
+                    return Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel, prHiveChannel]);
+                };
+
+                return packagingService;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
+                {
+                    selectedVersion = version;
+                    installNuGetConfigFile = nugetConfigFile;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    newProjectOutputPath = outputPath;
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(cliVersion, selectedVersion);
+
+        // The implicit channel does not need a temporary nuget.config for `dotnet new install`.
+        Assert.Null(installNuGetConfigFile);
+
+        // Critical: the project's directory must NOT contain a nuget.config that maps Aspire*
+        // to the PR hive path. The implicit channel skips PromptToCreateOrUpdateNuGetConfigAsync.
+        Assert.NotNull(newProjectOutputPath);
+        var nugetConfigPath = Path.Combine(newProjectOutputPath!, "nuget.config");
+        Assert.False(File.Exists(nugetConfigPath),
+            $"NewCommand wrote a nuget.config when no explicit channel was specified. Contents: {(File.Exists(nugetConfigPath) ? File.ReadAllText(nugetConfigPath) : "<n/a>")}");
+    }
+
+    [Fact]
+    public async Task NewCommandWithExplicitPrHiveChannel_WritesPrHiveNuGetConfig()
+    {
+        // Confirms the legitimate developer workflow still works: when the user explicitly
+        // names a PR hive channel via --channel pr-XXX, the resulting project IS configured
+        // with the PR hive nuget.config. This is the contract that #16648 must not break.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        hivesDir.Create();
+        var prHiveDir = hivesDir.CreateSubdirectory("pr-12345");
+        prHiveDir.CreateSubdirectory("packages");
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        string? selectedVersion = null;
+        string? newProjectOutputPath = null;
+
+        var prHivePath = Path.Combine(hivesDir.FullName, "pr-12345", "packages").Replace('\\', '/');
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                return new TestNewCommandPrompter(interactionService);
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                var packagingService = new TestPackagingService();
+                packagingService.GetChannelsAsyncCallback = (ct) =>
+                {
+                    var implicitCache = new FakeNuGetPackageCache();
+                    implicitCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "https://api.nuget.org/v3/index.json", Version = cliVersion };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                    };
+
+                    var prHiveCache = new FakeNuGetPackageCache();
+                    prHiveCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = cliVersion };
+                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                    };
+
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache);
+                    var prHiveChannel = PackageChannel.CreateExplicitChannel(
+                        "pr-12345",
+                        PackageChannelQuality.Both,
+                        new[]
+                        {
+                            new PackageMapping("Aspire*", prHivePath),
+                            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
+                        },
+                        prHiveCache);
+
+                    return Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel, prHiveChannel]);
+                };
+
+                return packagingService;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
+                {
+                    selectedVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    newProjectOutputPath = outputPath;
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-starter --channel pr-12345 --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(cliVersion, selectedVersion);
+
+        // The explicit PR hive channel must produce a nuget.config that maps Aspire* to the hive path.
+        Assert.NotNull(newProjectOutputPath);
+        var nugetConfigPath = Path.Combine(newProjectOutputPath!, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath),
+            "NewCommand should write a nuget.config when --channel pr-12345 is explicitly specified.");
+        var nugetConfigContent = await File.ReadAllTextAsync(nugetConfigPath);
+        Assert.Contains(prHivePath, nugetConfigContent, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     // Quarantined due to flakiness. See linked issue for details.
     public async Task NewCommandDoesNotPromptForTemplateIfSpecifiedOnCommandLine()
     {

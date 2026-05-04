@@ -160,9 +160,6 @@ internal sealed class TemplateNuGetConfigService(
             channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
         }
 
-        // Honor PR hives only when the caller opts in. Init suppresses this so a developer
-        // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
-        var hasPrHives = query.IncludePrHives && executionContext.GetPrHiveCount() > 0;
         var hasChannelSetting = !string.IsNullOrEmpty(channelName);
 
         IEnumerable<PackageChannel> channels;
@@ -177,12 +174,19 @@ internal sealed class TemplateNuGetConfigService(
         }
         else
         {
-            // If there are hives (PR build directories), include all channels.
-            // Otherwise, only use the implicit/default channel to avoid prompting.
-            channels = hasPrHives
-                ? allChannels
-                : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
+            // Only use the implicit/default channel when no explicit channel is named. PR hive
+            // channels are intentionally NOT auto-included here even when ~/.aspire/hives/pr-* exists,
+            // so that a stale local hive can't silently bind a fresh stable app to a PR feed (see
+            // https://github.com/microsoft/aspire/issues/16648). Users opt into a PR hive explicitly
+            // via `--channel pr-XXX` or `aspire config set channel pr-XXX`.
+            channels = allChannels.Where(c => c.Type is PackageChannelType.Implicit);
         }
+
+        // CLI-version-exact match is only meaningful when the caller is targeting a local-build
+        // channel (pr-* / run-*) — i.e. when `channelName` is set to such a channel name. The
+        // silent (no --channel) path no longer considers PR hives, so passing `hasPrHives: false`
+        // here keeps the silent path on the highest-version selection logic.
+        var hasPrHives = VersionHelper.IsLocalBuildChannel(channelName);
 
         var packagesFromChannels = await interactionService.ShowStatusAsync(Resources.TemplatingStrings.SearchingForAvailableTemplateVersions, async () =>
         {
@@ -309,7 +313,14 @@ internal sealed class TemplateNuGetConfigService(
 /// <param name="ChannelOverride">Optional channel name override (e.g. from <c>--channel</c>). When null, the global <c>channel</c> configuration is consulted.</param>
 /// <param name="VersionOverride">Optional explicit template version (e.g. from <c>--version</c>).</param>
 /// <param name="SourceOverride">Optional source override carried for symmetry with <see cref="TemplateInputs"/>; not consulted by resolution today.</param>
-/// <param name="IncludePrHives">When true (e.g. for <c>aspire new</c>), local PR hive directories under <c>~/.aspire/hives</c> participate in channel discovery; when false (e.g. for <c>aspire init</c>), they are ignored.</param>
+/// <param name="IncludePrHives">
+/// Reserved. Today, PR hive channels are only used when the caller explicitly names one via
+/// <see cref="ChannelOverride"/> or the global <c>channel</c> configuration; the silent (no
+/// override) path always picks the implicit channel so a stale <c>~/.aspire/hives/pr-*</c>
+/// directory never leaks PR feed mappings into a fresh stable project. See
+/// <see href="https://github.com/microsoft/aspire/issues/16648"/>. Callers should pass
+/// <see langword="false"/>; the parameter is retained for backward compatibility.
+/// </param>
 internal sealed record TemplatePackageQuery(
     string? ChannelOverride,
     string? VersionOverride,

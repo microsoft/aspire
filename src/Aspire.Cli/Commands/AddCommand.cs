@@ -131,11 +131,15 @@ internal sealed class AddCommand : BaseCommand
                         allChannels = allChannels.Where(c => string.Equals(c.Name, configuredChannel, StringComparison.OrdinalIgnoreCase));
                     }
 
-                    // If there are hives (PR build directories), include all channels.
-                    // If a channel is configured in settings.json, use that (already filtered above).
-                    // Otherwise, only use the implicit/default channel to avoid prompting.
-                    var hasHives = ExecutionContext.GetPrHiveCount() > 0;
-                    var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
+                    // If a channel is configured (e.g. polyglot apphost stored `pr-XXX` in
+                    // aspire.config.json), use that single channel. Otherwise only consider the
+                    // implicit/default channel — PR hive directories that happen to exist under
+                    // ~/.aspire/hives/* are intentionally NOT auto-included so a stale local hive
+                    // can't silently force `aspire add` to resolve from a PR feed (see
+                    // https://github.com/microsoft/aspire/issues/16648). For .NET projects the
+                    // ambient nuget.config (which the user explicitly set up via `aspire new
+                    // --channel pr-XXX`) governs `dotnet add package` regardless.
+                    var channels = !string.IsNullOrEmpty(configuredChannel)
                         ? allChannels
                         : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
 

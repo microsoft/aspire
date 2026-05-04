@@ -1421,8 +1421,13 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommand_WithPrHive_PrefersCurrentCliVersion()
+    public async Task AddCommand_WithStalePrHive_NoExplicitChannel_DoesNotInjectPrHiveSource()
     {
+        // Regression test for https://github.com/microsoft/aspire/issues/16648
+        // A stale ~/.aspire/hives/pr-XXX directory must NOT cause `aspire add` to silently
+        // pick the PR hive channel — that channel writes a nuget.config that maps Aspire*
+        // to the local PR hive path. The user did not opt into a PR channel, so resolution
+        // must use the implicit channel only.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
@@ -1433,6 +1438,15 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var selectedPackageVersion = string.Empty;
         var promptedForVersion = false;
 
+        // Place the AppHost in a real subdirectory under the workspace so we can observe
+        // whether AddCommand wrote a nuget.config for the PR hive.
+        var appHostDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost"));
+        appHostDir.Create();
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "<Project />");
+
+        var nugetConfigPath = Path.Combine(appHostDir.FullName, "nuget.config");
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AddCommandPrompterFactory = (sp) =>
@@ -1442,36 +1456,33 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in a PR hive.");
+                    throw new InvalidOperationException("Should not prompt when only the implicit channel is in scope.");
                 };
 
                 return prompter;
             };
 
-            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new Aspire.Cli.Projects.AppHostProjectSearchResult(appHostProjectFile, [appHostProjectFile]))
+            };
 
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
                 runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
                 {
+                    // The implicit channel returns the stable package at the same version as the CLI.
+                    // The PR hive channel would also return cliVersion; we must not pick it.
                     var implicitPackage = new NuGetPackage
                     {
                         Id = "Aspire.Hosting.Redis",
-                        Source = "implicit",
-                        Version = "13.2.2"
-                    };
-
-                    var prHivePackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "pr-hive",
+                        Source = "https://api.nuget.org/v3/index.json",
                         Version = cliVersion
                     };
 
-                    return nugetSource is null
-                        ? (0, new[] { implicitPackage })
-                        : (0, new[] { prHivePackage });
+                    return (0, new[] { implicitPackage });
                 };
 
                 runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
@@ -1493,6 +1504,11 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(promptedForVersion);
         Assert.Equal(cliVersion, selectedPackageVersion);
+
+        // Critical assertion: AddCommand must not have written a nuget.config that pins
+        // Aspire* packages to a PR hive path under the user's profile.
+        Assert.False(File.Exists(nugetConfigPath),
+            $"AddCommand wrote nuget.config when no PR hive channel was selected. Contents: {(File.Exists(nugetConfigPath) ? File.ReadAllText(nugetConfigPath) : "<n/a>")}");
     }
 }
 
