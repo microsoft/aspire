@@ -217,6 +217,14 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 throw new DistributedApplicationException($"Container resource '{container.Name}' uses container name '{containerNameAnnotation.Name}', which conflicts with the Aspire container tunnel container name '{ContainerTunnelContainerName}'. Rename the container or disable the Aspire container tunnel.");
             }
+
+            foreach (var aliasAnnotation in container.Annotations.OfType<ContainerNetworkAliasAnnotation>())
+            {
+                if (IsContainerTunnelContainerName(aliasAnnotation.Alias))
+                {
+                    throw new DistributedApplicationException($"Container resource '{container.Name}' uses network alias '{aliasAnnotation.Alias}', which conflicts with the Aspire container tunnel container name '{ContainerTunnelContainerName}'. Rename the alias or disable the Aspire container tunnel.");
+                }
+            }
         }
 
         static bool IsContainerTunnelContainerName(string name)
