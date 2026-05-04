@@ -391,7 +391,12 @@ internal class ConsoleInteractionService : IInteractionService
         {
             var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
             target.Write(renderable);
-            target.WriteLine();
+
+            // A row automatically includes a newline, so we don't need to call WriteLine after writing the renderable.
+            if (renderable is not Rows)
+            {
+                target.WriteLine();
+            }
         }
         finally
         {
