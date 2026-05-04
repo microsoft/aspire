@@ -228,7 +228,8 @@ permissions:
 network: defaults
 
 tools:
-  bash: [":*"]
+  # Default safe commands + commands observed in actual workflow runs
+  bash: ["cat", "cd", "cp", "date", "echo", "gh", "grep", "head", "jq", "ls", "mkdir", "mv", "python3", "pwd", "rm", "sort", "tail", "uniq", "wc", "xargs", "xxd"]
   github:
     toolsets: [repos, issues, pull_requests, search]
     # Allow reading PR data from external contributors. These PRs have already
