@@ -802,11 +802,13 @@ public class ResourceNotificationService : IDisposable
             var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = serviceProvider });
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
+#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
             return new ResourceCommandSnapshot(annotation.Name, state, annotation.DisplayName, annotation.DisplayDescription, annotation.Parameter, annotation.ConfirmationMessage, annotation.IconName, annotation.IconVariant, annotation.IsHighlighted)
             {
                 Arguments = annotation.Arguments,
                 Visibility = annotation.Visibility
             };
+#pragma warning restore ASPIREINTERACTION001
 #pragma warning restore CS0618
         }
     }

@@ -3,23 +3,31 @@
 // Run with: aspire run
 // Publish with: aspire publish
 
-import { createBuilder, refExpr, EnvironmentCallbackContext, ContainerLifetime } from './.modules/aspire.js';
+import {
+    createBuilder,
+    refExpr,
+    EnvironmentCallbackContext,
+    ContainerLifetime,
+    ExecuteCommandContext,
+    CommandArgumentsValidationContext,
+    InputType
+} from './.modules/aspire.js';
 
 console.log("Aspire TypeScript AppHost starting...\n");
 
 // Create the distributed application builder
 const builder = await createBuilder();
 
-const ec = await builder.executionContext.get();
+const ec = await builder.executionContext();
 
-const isPublishMode = await ec.isPublishMode.get();
-console.log(`isRunMode: ${await ec.isRunMode.get()}`);
+const isPublishMode = await ec.isPublishMode();
+console.log(`isRunMode: ${await ec.isRunMode()}`);
 console.log(`isPublishMode: ${isPublishMode}`);
 
 // Add Docker Compose environment for publishing
 await builder.addDockerComposeEnvironment("compose");
 
-const dir = await builder.appHostDirectory.get();
+const dir = await builder.appHostDirectory();
 console.log(`AppHost directory: ${dir}`);
 
 // Add PostgreSQL server and database
@@ -41,6 +49,54 @@ console.log("Added Express API with reference to PostgreSQL database");
 // Redis
 const cache = await builder.addRedis("cache");
 await cache.withLifetime(ContainerLifetime.Persistent);
+await cache.withCommand(
+    "set-prefix",
+    "Set prefix",
+    async (context: ExecuteCommandContext) => {
+        const args = await context.arguments.get();
+        const prefix = await args.requiredValue("prefix");
+        const countValue = await args.requiredValue("count");
+        const count = Number(countValue);
+
+        return {
+            success: true,
+            message: `Validated prefix '${prefix}' with count ${count}.`
+        };
+    },
+    {
+        commandOptions: {
+            description: "Validates ordered command arguments from the CLI and Dashboard.",
+            arguments: [
+                {
+                    name: "prefix",
+                    label: "Prefix",
+                    inputType: InputType.Text,
+                    required: true,
+                    maxLength: 20
+                },
+                {
+                    name: "count",
+                    label: "Count",
+                    inputType: InputType.Number,
+                    required: true
+                }
+            ],
+            validateArguments: async (context: CommandArgumentsValidationContext) => {
+                const args = await context.arguments.get();
+                const prefix = await args.requiredValue("prefix");
+                const countValue = await args.requiredValue("count");
+                const count = Number(countValue);
+
+                if (prefix.toLowerCase() === "bad") {
+                    await context.addValidationError("prefix", "Prefix cannot be 'bad'.");
+                }
+
+                if (!Number.isFinite(count) || count < 1) {
+                    await context.addValidationError("count", "Count must be greater than or equal to 1.");
+                }
+            }
+        }
+    });
 
 console.log("Added Redis cache");
 
@@ -53,7 +109,7 @@ await builder
     .withEnvironmentCallback(async (ctx: EnvironmentCallbackContext) => {
         // await needed here because getEndpoint returns a value we use
         const ep = await api.getEndpoint("http");
-        await ctx.environmentVariables.set("API_ENDPOINT", refExpr`${ep}`);
+        await ctx.environment().set("API_ENDPOINT", refExpr`${ep}`);
     });
 
 console.log("Added Vite frontend with reference to API");

@@ -1,4 +1,4 @@
-﻿#   -------------------------------------------------------------
+#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1511,11 +1511,15 @@ IconVariant = typing.Literal["Regular", "Filled"]
 
 ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
 
+InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number"]
+
 OtlpProtocol = typing.Literal["Grpc", "HttpProtobuf", "HttpJson"]
 
 ProbeType = typing.Literal["Startup", "Readiness", "Liveness"]
 
 ProtocolType = typing.Literal["IP", "IPv6HopByHopOptions", "Unspecified", "Icmp", "Igmp", "Ggp", "IPv4", "Tcp", "Pup", "Udp", "Idp", "IPv6", "IPv6RoutingHeader", "IPv6FragmentHeader", "IPSecEncapsulatingSecurityPayload", "IPSecAuthenticationHeader", "IcmpV6", "IPv6NoNextHeader", "IPv6DestinationOptions", "ND", "Raw", "Ipx", "Spx", "SpxII", "Unknown"]
+
+ResourceCommandState = typing.Literal["Enabled", "Disabled", "Hidden"]
 
 ResourceCommandVisibility = typing.Literal["None", "Dashboard", "Api"]
 
@@ -1716,14 +1720,14 @@ class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=F
 class CommandOptions(typing.TypedDict, total=False):
     Description: str
     Parameter: typing.Any
-    Arguments: typing.Iterable[typing.Any]
-    ValidateArguments: typing.Any
+    Arguments: typing.Iterable[InteractionInput]
+    ValidateArguments: typing.Callable
     Visibility: ResourceCommandVisibility
     ConfirmationMessage: str
     IconName: str
     IconVariant: IconVariant
     IsHighlighted: bool
-    UpdateState: typing.Any
+    UpdateState: typing.Callable
 
 class CommandResultData(typing.TypedDict, total=False):
     Value: str
@@ -1787,6 +1791,21 @@ class HttpsCertificateInfo(typing.TypedDict, total=False):
     Subject: str
     Issuer: str
     Thumbprint: str
+
+class InteractionInput(typing.TypedDict, total=False):
+    Name: str
+    Label: str
+    Description: str
+    EnableDescriptionMarkdown: bool
+    InputType: InputType
+    Required: bool
+    Options: typing.Iterable[typing.Any]
+    DynamicLoading: typing.Any
+    Value: str
+    Placeholder: str
+    AllowCustomChoice: bool
+    Disabled: bool
+    MaxLength: int
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool
@@ -2403,6 +2422,12 @@ class AbstractDistributedApplicationPipeline:
 class AbstractDistributedApplicationResourceEvent(abc.ABC):
     """Abstract base class for AbstractDistributedApplicationResourceEvent."""
 
+class AbstractEnumerable(abc.ABC):
+    """Abstract base class for AbstractEnumerable."""
+
+class AbstractEnumerableT(abc.ABC):
+    """Abstract base class for AbstractEnumerableT."""
+
 class AbstractExecutionConfigurationBuilder:
     """Type class for AbstractExecutionConfigurationBuilder."""
 
@@ -2654,6 +2679,12 @@ class AbstractLoggerFactory:
         )
         return typing.cast(AbstractLogger, result)
 
+
+class AbstractReadOnlyCollectionT(abc.ABC):
+    """Abstract base class for AbstractReadOnlyCollectionT."""
+
+class AbstractReadOnlyListT(abc.ABC):
+    """Abstract base class for AbstractReadOnlyListT."""
 
 class AbstractReportingStep:
     """Type class for AbstractReportingStep."""
@@ -3083,19 +3114,19 @@ class CommandArgumentsValidationContext:
         return self._handle
 
     @_uncached_property
-    def services(self) -> AbstractServiceProvider:
-        """Gets the Services property"""
+    def arguments(self) -> InteractionInputCollection:
+        """Gets the Arguments property"""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services',
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments',
             {'context': self._handle}
         )
-        return typing.cast(AbstractServiceProvider, result)
+        return typing.cast(InteractionInputCollection, result)
 
-    @services.setter
-    def services(self, value: AbstractServiceProvider) -> None:
-        """Sets the Services property"""
+    @arguments.setter
+    def arguments(self, value: InteractionInputCollection) -> None:
+        """Sets the Arguments property"""
         self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices',
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setArguments',
             {'context': self._handle, 'value': value}
         )
 
@@ -3106,6 +3137,16 @@ class CommandArgumentsValidationContext:
             {'context': self._handle}
         )
         token.cancel()
+
+    def add_validation_error(self, argument_name: str, error_message: str) -> None:
+        """Invokes the AddValidationError method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['argumentName'] = argument_name
+        rpc_args['errorMessage'] = error_message
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError',
+            rpc_args
+        )
 
 
 class CommandLineArgsCallbackContext:
@@ -4379,6 +4420,23 @@ class ExecuteCommandContext:
             {'context': self._handle, 'value': value}
         )
 
+    @_uncached_property
+    def arguments(self) -> InteractionInputCollection:
+        """Gets the Arguments property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
+    @arguments.setter
+    def arguments(self, value: InteractionInputCollection) -> None:
+        """Sets the Arguments property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setArguments',
+            {'context': self._handle, 'value': value}
+        )
+
 
 class InitializeResourceEvent:
     """Type class for InitializeResourceEvent."""
@@ -4439,6 +4497,31 @@ class InitializeResourceEvent:
             {'context': self._handle}
         )
         return typing.cast(AbstractServiceProvider, result)
+
+
+class InteractionInputCollection:
+    """Type class for InteractionInputCollection."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"InteractionInputCollection(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def to_array(self) -> typing.Iterable[InteractionInput]:
+        """Invokes the ToArray method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/InteractionInputCollection.toArray',
+            rpc_args,
+        )
+        return result
 
 
 class LogFacade:
@@ -10625,6 +10708,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environ
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", EventingSubscriberRegistrationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", InteractionInputCollection)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", LogFacade)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", PipelineConfigurationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", PipelineContext)

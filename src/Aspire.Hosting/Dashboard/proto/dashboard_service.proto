@@ -51,8 +51,8 @@ message ResourceCommand {
     // The state of the command. Controls whether the command is enabled, disabled,
     // or hidden in the UI.
     ResourceCommandState state = 9;
-    // Static input metadata that describes the invocation arguments accepted by the command.
-    // Dashboard clients can render these inputs and send values in ResourceCommandRequest.arguments.
+    // Static, ordered input metadata that describes the invocation arguments accepted by the command.
+    // Dashboard clients can render these inputs and send object-shaped values in ResourceCommandRequest.arguments.
     repeated InteractionInput argument_inputs = 10;
 }
 
@@ -79,6 +79,7 @@ message ResourceCommandRequest {
     optional google.protobuf.Value parameter = 4 [deprecated = true];
     // Optional invocation arguments to pass to the command.
     // Unlike parameter, this value is supplied by the client for this execution.
+    // Dashboard requests encode arguments as an object-valued google.protobuf.Value keyed by InteractionInput.name.
     optional google.protobuf.Value arguments = 5;
     // When true, validate the supplied arguments without executing the command.
     bool validate_only = 6;

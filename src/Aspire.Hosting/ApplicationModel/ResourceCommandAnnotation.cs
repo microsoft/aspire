@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -17,6 +18,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceCommandAnnotation"/> class.
     /// </summary>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ResourceCommandAnnotation(
         string name,
         string displayName,
@@ -112,14 +114,18 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Each input name maps to a value in <see cref="ExecuteCommandContext.Arguments"/> when the command is executed.
+    /// The list order is part of the command contract. CLI positional arguments are mapped to this list by index before the
+    /// command executes. Clients that submit named argument payloads, such as Dashboard and MCP clients, map values by
+    /// <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IReadOnlyList<InteractionInput> Arguments { get; }
 
     /// <summary>
     /// Gets the callback that validates invocation arguments before the command callback is executed.
     /// </summary>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Func<CommandArgumentsValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
@@ -359,8 +365,8 @@ public sealed class ExecuteCommandContext
     /// <remarks>
     /// <para>
     /// The collection contains the arguments described by <see cref="ResourceCommandAnnotation.Arguments"/> with their
-    /// submitted values populated. The dashboard, CLI, and API all use the same input metadata to collect values before the
-    /// command callback is invoked.
+    /// submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
+    /// named-payload clients are mapped by <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
     public required InteractionInputCollection Arguments { get; init; }
@@ -371,6 +377,7 @@ public sealed class ExecuteCommandContext
 /// Context for validating resource command invocation arguments.
 /// </summary>
 [AspireExport(ExposeProperties = true)]
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class CommandArgumentsValidationContext
 {
     internal bool HasErrors { get; private set; }
@@ -383,6 +390,7 @@ public sealed class CommandArgumentsValidationContext
     /// <summary>
     /// Gets the service provider for resolving services during validation.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>
@@ -406,6 +414,17 @@ public sealed class CommandArgumentsValidationContext
 
         argument.ValidationErrors.Add(errorMessage);
         HasErrors = true;
+    }
+
+    /// <summary>
+    /// Adds a validation error for the argument with the specified name.
+    /// </summary>
+    /// <param name="argumentName">The name of the argument to add a validation error for.</param>
+    /// <param name="errorMessage">The error message to add.</param>
+    [AspireExport("CommandArgumentsValidationContext.addValidationError", MethodName = "addValidationError")]
+    public void AddValidationError(string argumentName, string errorMessage)
+    {
+        AddValidationError(Arguments[argumentName], errorMessage);
     }
 }
 

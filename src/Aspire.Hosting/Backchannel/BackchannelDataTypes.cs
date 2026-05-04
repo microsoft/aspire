@@ -43,6 +43,7 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Version 2 capabilities (13.2+): Request objects, new methods.
     /// </summary>
     public const string V2 = "aux.v2";
+
 }
 
 #endregion
@@ -927,7 +928,7 @@ internal sealed class ResourceSnapshotCommand
     public string? Description { get; init; }
 
     /// <summary>
-    /// Gets the inputs that describe the invocation arguments accepted by the command.
+    /// Gets the ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];
 

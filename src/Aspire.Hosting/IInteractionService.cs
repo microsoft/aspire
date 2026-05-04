@@ -257,6 +257,7 @@ public sealed class LoadInputContext
 /// Represents an input for an interaction.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 [DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
 public sealed class InteractionInput
 {
@@ -349,6 +350,7 @@ public sealed class InteractionInput
 /// A collection of interaction inputs that supports both indexed and name-based access.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 [DebuggerDisplay("Count = {Count}")]
 public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
 {
@@ -475,6 +477,16 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     public double GetDouble(string name)
     {
         return double.Parse(GetRequiredString(name), NumberStyles.Float, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Gets all inputs in declaration order.
+    /// </summary>
+    /// <returns>A copy of the inputs in declaration order.</returns>
+    [AspireExport("InteractionInputCollection.toArray", MethodName = "toArray")]
+    public InteractionInput[] ToArray()
+    {
+        return [.. _inputs];
     }
 
     /// <summary>

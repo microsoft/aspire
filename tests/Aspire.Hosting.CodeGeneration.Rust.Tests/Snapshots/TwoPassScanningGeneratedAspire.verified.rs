@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -315,6 +315,34 @@ impl std::fmt::Display for EndpointProperty {
     }
 }
 
+/// InputType
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InputType {
+    #[default]
+    #[serde(rename = "Text")]
+    Text,
+    #[serde(rename = "SecretText")]
+    SecretText,
+    #[serde(rename = "Choice")]
+    Choice,
+    #[serde(rename = "Boolean")]
+    Boolean,
+    #[serde(rename = "Number")]
+    Number,
+}
+
+impl std::fmt::Display for InputType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text => write!(f, "Text"),
+            Self::SecretText => write!(f, "SecretText"),
+            Self::Choice => write!(f, "Choice"),
+            Self::Boolean => write!(f, "Boolean"),
+            Self::Number => write!(f, "Number"),
+        }
+    }
+}
+
 /// ResourceCommandVisibility
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResourceCommandVisibility {
@@ -333,6 +361,28 @@ impl std::fmt::Display for ResourceCommandVisibility {
             Self::None => write!(f, "None"),
             Self::Dashboard => write!(f, "Dashboard"),
             Self::Api => write!(f, "Api"),
+        }
+    }
+}
+
+/// ResourceCommandState
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ResourceCommandState {
+    #[default]
+    #[serde(rename = "Enabled")]
+    Enabled,
+    #[serde(rename = "Disabled")]
+    Disabled,
+    #[serde(rename = "Hidden")]
+    Hidden,
+}
+
+impl std::fmt::Display for ResourceCommandState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Enabled => write!(f, "Enabled"),
+            Self::Disabled => write!(f, "Disabled"),
+            Self::Hidden => write!(f, "Hidden"),
         }
     }
 }
@@ -453,6 +503,57 @@ impl std::fmt::Display for TestResourceStatus {
 // ============================================================================
 // DTOs
 // ============================================================================
+
+/// InteractionInput
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InteractionInput {
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Label")]
+    pub label: String,
+    #[serde(rename = "Description")]
+    pub description: String,
+    #[serde(rename = "EnableDescriptionMarkdown")]
+    pub enable_description_markdown: bool,
+    #[serde(rename = "InputType")]
+    pub input_type: InputType,
+    #[serde(rename = "Required")]
+    pub required: bool,
+    #[serde(rename = "Options")]
+    pub options: Vec<Value>,
+    #[serde(rename = "DynamicLoading")]
+    pub dynamic_loading: Value,
+    #[serde(rename = "Value")]
+    pub value: String,
+    #[serde(rename = "Placeholder")]
+    pub placeholder: String,
+    #[serde(rename = "AllowCustomChoice")]
+    pub allow_custom_choice: bool,
+    #[serde(rename = "Disabled")]
+    pub disabled: bool,
+    #[serde(rename = "MaxLength")]
+    pub max_length: f64,
+}
+
+impl InteractionInput {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("Name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
+        map.insert("Label".to_string(), serde_json::to_value(&self.label).unwrap_or(Value::Null));
+        map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
+        map.insert("EnableDescriptionMarkdown".to_string(), serde_json::to_value(&self.enable_description_markdown).unwrap_or(Value::Null));
+        map.insert("InputType".to_string(), serde_json::to_value(&self.input_type).unwrap_or(Value::Null));
+        map.insert("Required".to_string(), serde_json::to_value(&self.required).unwrap_or(Value::Null));
+        map.insert("Options".to_string(), serde_json::to_value(&self.options).unwrap_or(Value::Null));
+        map.insert("DynamicLoading".to_string(), serde_json::to_value(&self.dynamic_loading).unwrap_or(Value::Null));
+        map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
+        map.insert("Placeholder".to_string(), serde_json::to_value(&self.placeholder).unwrap_or(Value::Null));
+        map.insert("AllowCustomChoice".to_string(), serde_json::to_value(&self.allow_custom_choice).unwrap_or(Value::Null));
+        map.insert("Disabled".to_string(), serde_json::to_value(&self.disabled).unwrap_or(Value::Null));
+        map.insert("MaxLength".to_string(), serde_json::to_value(&self.max_length).unwrap_or(Value::Null));
+        map
+    }
+}
 
 /// AddContainerOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -669,7 +770,7 @@ pub struct CommandOptions {
     #[serde(rename = "Parameter")]
     pub parameter: Value,
     #[serde(rename = "Arguments")]
-    pub arguments: Vec<Value>,
+    pub arguments: Vec<InteractionInput>,
     #[serde(rename = "ValidateArguments")]
     pub validate_arguments: Value,
     #[serde(rename = "Visibility")]
@@ -2274,21 +2375,21 @@ impl CommandArgumentsValidationContext {
         &self.client
     }
 
-    /// Gets the Services property
-    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+    /// Gets the Arguments property
+    pub fn arguments(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments", args)?;
         let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceProvider::new(handle, self.client.clone()))
+        Ok(InteractionInputCollection::new(handle, self.client.clone()))
     }
 
-    /// Sets the Services property
-    pub fn set_services(&self, value: &IServiceProvider) -> Result<CommandArgumentsValidationContext, Box<dyn std::error::Error>> {
+    /// Sets the Arguments property
+    pub fn set_arguments(&self, value: &InteractionInputCollection) -> Result<CommandArgumentsValidationContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), value.handle().to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setArguments", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(CommandArgumentsValidationContext::new(handle, self.client.clone()))
     }
@@ -2313,6 +2414,16 @@ impl CommandArgumentsValidationContext {
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(CommandArgumentsValidationContext::new(handle, self.client.clone()))
+    }
+
+    /// Invokes the AddValidationError method
+    pub fn add_validation_error(&self, argument_name: &str, error_message: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("argumentName".to_string(), serde_json::to_value(&argument_name).unwrap_or(Value::Null));
+        args.insert("errorMessage".to_string(), serde_json::to_value(&error_message).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError", args)?;
+        Ok(())
     }
 }
 
@@ -7871,6 +7982,25 @@ impl ExecuteCommandContext {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecuteCommandContext::new(handle, self.client.clone()))
     }
+
+    /// Gets the Arguments property
+    pub fn arguments(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(InteractionInputCollection::new(handle, self.client.clone()))
+    }
+
+    /// Sets the Arguments property
+    pub fn set_arguments(&self, value: &InteractionInputCollection) -> Result<ExecuteCommandContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setArguments", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecuteCommandContext::new(handle, self.client.clone()))
+    }
 }
 
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ExternalServiceResource
@@ -10122,6 +10252,40 @@ impl InitializeResourceEvent {
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.services", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
+pub struct InteractionInputCollection {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for InteractionInputCollection {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl InteractionInputCollection {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Invokes the ToArray method
+    pub fn to_array(&self) -> Result<Vec<InteractionInput>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/InteractionInputCollection.toArray", args)?;
+        Ok(serde_json::from_value(result)?)
     }
 }
 

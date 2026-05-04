@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -138,6 +138,17 @@ const (
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
 )
 
+// InputType represents InputType.
+type InputType string
+
+const (
+	InputTypeText InputType = "Text"
+	InputTypeSecretText InputType = "SecretText"
+	InputTypeChoice InputType = "Choice"
+	InputTypeBoolean InputType = "Boolean"
+	InputTypeNumber InputType = "Number"
+)
+
 // ResourceCommandVisibility represents ResourceCommandVisibility.
 type ResourceCommandVisibility string
 
@@ -145,6 +156,15 @@ const (
 	ResourceCommandVisibilityNone ResourceCommandVisibility = "None"
 	ResourceCommandVisibilityDashboard ResourceCommandVisibility = "Dashboard"
 	ResourceCommandVisibilityApi ResourceCommandVisibility = "Api"
+)
+
+// ResourceCommandState represents ResourceCommandState.
+type ResourceCommandState string
+
+const (
+	ResourceCommandStateEnabled ResourceCommandState = "Enabled"
+	ResourceCommandStateDisabled ResourceCommandState = "Disabled"
+	ResourceCommandStateHidden ResourceCommandState = "Hidden"
 )
 
 // HttpCommandResultMode represents HttpCommandResultMode.
@@ -196,6 +216,42 @@ const (
 // ============================================================================
 // DTOs
 // ============================================================================
+
+// InteractionInput represents InteractionInput.
+type InteractionInput struct {
+	Name string `json:"Name,omitempty"`
+	Label string `json:"Label,omitempty"`
+	Description string `json:"Description,omitempty"`
+	EnableDescriptionMarkdown bool `json:"EnableDescriptionMarkdown,omitempty"`
+	InputType InputType `json:"InputType,omitempty"`
+	Required bool `json:"Required,omitempty"`
+	Options []any `json:"Options,omitempty"`
+	DynamicLoading any `json:"DynamicLoading,omitempty"`
+	Value string `json:"Value,omitempty"`
+	Placeholder string `json:"Placeholder,omitempty"`
+	AllowCustomChoice bool `json:"AllowCustomChoice,omitempty"`
+	Disabled bool `json:"Disabled,omitempty"`
+	MaxLength float64 `json:"MaxLength,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionInput) ToMap() map[string]any {
+	m := map[string]any{}
+	m["Name"] = serializeValue(d.Name)
+	m["Label"] = serializeValue(d.Label)
+	m["Description"] = serializeValue(d.Description)
+	m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown)
+	m["InputType"] = serializeValue(d.InputType)
+	m["Required"] = serializeValue(d.Required)
+	if d.Options != nil { m["Options"] = serializeValue(d.Options) }
+	if d.DynamicLoading != nil { m["DynamicLoading"] = serializeValue(d.DynamicLoading) }
+	m["Value"] = serializeValue(d.Value)
+	m["Placeholder"] = serializeValue(d.Placeholder)
+	m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice)
+	m["Disabled"] = serializeValue(d.Disabled)
+	m["MaxLength"] = serializeValue(d.MaxLength)
+	return m
+}
 
 // AddContainerOptions represents AddContainerOptions.
 type AddContainerOptions struct {
@@ -355,14 +411,14 @@ func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
 type CommandOptions struct {
 	Description string `json:"Description,omitempty"`
 	Parameter any `json:"Parameter,omitempty"`
-	Arguments []any `json:"Arguments,omitempty"`
-	ValidateArguments any `json:"ValidateArguments,omitempty"`
+	Arguments []*InteractionInput `json:"Arguments,omitempty"`
+	ValidateArguments func(...any) any `json:"ValidateArguments,omitempty"`
 	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
 	IconVariant IconVariant `json:"IconVariant,omitempty"`
 	IsHighlighted bool `json:"IsHighlighted,omitempty"`
-	UpdateState any `json:"UpdateState,omitempty"`
+	UpdateState func(...any) any `json:"UpdateState,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -4122,10 +4178,11 @@ func (s *cSharpAppResource) WithoutHttpsCertificate() CSharpAppResource {
 // CommandArgumentsValidationContext is the public interface for handle type CommandArgumentsValidationContext.
 type CommandArgumentsValidationContext interface {
 	handleReference
+	AddValidationError(argumentName string, errorMessage string) error
+	Arguments() InteractionInputCollection
 	CancellationToken() (*CancellationToken, error)
-	Services() ServiceProvider
+	SetArguments(value InteractionInputCollection) CommandArgumentsValidationContext
 	SetCancellationToken(options ...*SetCancellationTokenOptions) CommandArgumentsValidationContext
-	SetServices(value ServiceProvider) CommandArgumentsValidationContext
 	Err() error
 }
 
@@ -4137,6 +4194,38 @@ type commandArgumentsValidationContext struct {
 // newCommandArgumentsValidationContextFromHandle wraps an existing handle as CommandArgumentsValidationContext.
 func newCommandArgumentsValidationContextFromHandle(h *handle, c *client) CommandArgumentsValidationContext {
 	return &commandArgumentsValidationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AddValidationError invokes the AddValidationError method
+func (s *commandArgumentsValidationContext) AddValidationError(argumentName string, errorMessage string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["argumentName"] = serializeValue(argumentName)
+	reqArgs["errorMessage"] = serializeValue(errorMessage)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError", reqArgs)
+	return err
+}
+
+// Arguments gets the Arguments property
+func (s *commandArgumentsValidationContext) Arguments() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // CancellationToken gets the CancellationToken property
@@ -4154,23 +4243,17 @@ func (s *commandArgumentsValidationContext) CancellationToken() (*CancellationTo
 	return decodeAs[*CancellationToken](result)
 }
 
-// Services gets the Services property
-func (s *commandArgumentsValidationContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+// SetArguments sets the Arguments property
+func (s *commandArgumentsValidationContext) SetArguments(value InteractionInputCollection) CommandArgumentsValidationContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services", reqArgs)
-	if err != nil {
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.services returned unexpected type %T", result)
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setArguments", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // SetCancellationToken sets the CancellationToken property
@@ -4194,19 +4277,6 @@ func (s *commandArgumentsValidationContext) SetCancellationToken(options ...*Set
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setCancellationToken", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetServices sets the Services property
-func (s *commandArgumentsValidationContext) SetServices(value ServiceProvider) CommandArgumentsValidationContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.setServices", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12666,10 +12736,12 @@ func (s *executableResource) WithoutHttpsCertificate() ExecutableResource {
 // ExecuteCommandContext is the public interface for handle type ExecuteCommandContext.
 type ExecuteCommandContext interface {
 	handleReference
+	Arguments() InteractionInputCollection
 	CancellationToken() (*CancellationToken, error)
 	Logger() Logger
 	ResourceName() (string, error)
 	ServiceProvider() ServiceProvider
+	SetArguments(value InteractionInputCollection) ExecuteCommandContext
 	SetCancellationToken(options ...*SetCancellationTokenOptions) ExecuteCommandContext
 	SetLogger(value Logger) ExecuteCommandContext
 	SetResourceName(value string) ExecuteCommandContext
@@ -12685,6 +12757,25 @@ type executeCommandContext struct {
 // newExecuteCommandContextFromHandle wraps an existing handle as ExecuteCommandContext.
 func newExecuteCommandContextFromHandle(h *handle, c *client) ExecuteCommandContext {
 	return &executeCommandContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Arguments gets the Arguments property
+func (s *executeCommandContext) Arguments() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // CancellationToken gets the CancellationToken property
@@ -12753,6 +12844,19 @@ func (s *executeCommandContext) ServiceProvider() ServiceProvider {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetArguments sets the Arguments property
+func (s *executeCommandContext) SetArguments(value InteractionInputCollection) ExecuteCommandContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setArguments", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // SetCancellationToken sets the CancellationToken property
@@ -14017,6 +14121,38 @@ func (s *initializeResourceEvent) Services() ServiceProvider {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// InteractionInputCollection is the public interface for handle type InteractionInputCollection.
+type InteractionInputCollection interface {
+	handleReference
+	ToArray() ([]*InteractionInput, error)
+	Err() error
+}
+
+// interactionInputCollection is the unexported impl of InteractionInputCollection.
+type interactionInputCollection struct {
+	*resourceBuilderBase
+}
+
+// newInteractionInputCollectionFromHandle wraps an existing handle as InteractionInputCollection.
+func newInteractionInputCollectionFromHandle(h *handle, c *client) InteractionInputCollection {
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// ToArray invokes the ToArray method
+func (s *interactionInputCollection) ToArray() ([]*InteractionInput, error) {
+	if s.err != nil { var zero []*InteractionInput; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/InteractionInputCollection.toArray", reqArgs)
+	if err != nil {
+		var zero []*InteractionInput
+		return zero, err
+	}
+	return decodeAs[[]*InteractionInput](result)
 }
 
 // LogFacade is the public interface for handle type LogFacade.
@@ -23894,6 +24030,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", func(h *handle, c *client) any {
 		return newInitializeResourceEventFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", func(h *handle, c *client) any {
+		return newInteractionInputCollectionFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", func(h *handle, c *client) any {
 		return newLogFacadeFromHandle(h, c)
