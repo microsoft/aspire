@@ -274,7 +274,7 @@ await container.withRemoteImageTag("latest");
 
 // withImagePushOptions
 await container.withImagePushOptions(async (context) => {
-    const options = await context.options.get();
+    const options = await context.options();
     await options.remoteImageName.set("myregistry.azurecr.io/myapp");
     await options.remoteImageTag.set("latest");
 });
@@ -315,7 +315,7 @@ await tool.publishAsDockerFile(async (_container) => {
 // ===================================================================
 
 await container.withPipelineStepFactory("custom-build-step", async (stepContext) => {
-    const pipelineContext = await stepContext.pipelineContext.get();
+    const pipelineContext = await stepContext.pipelineContext();
     const pipelineModel = await pipelineContext.model();
     const _pipelineResources = await pipelineModel.getResources();
     const _pipelineContainer = await pipelineModel.findResourceByName("mycontainer");
@@ -336,7 +336,7 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
     await stepLogger.logInformation("Pipeline step context logger");
     const stepSummary = await stepContext.summary();
     await stepSummary.add("PipelineStepContext", "Validated");
-    const reportingStep = await stepContext.reportingStep.get();
+    const reportingStep = await stepContext.reportingStep();
     await reportingStep.logStep("information", "Reporting step log");
     await reportingStep.logStepMarkdown("information", "**Reporting step markdown log**");
     const reportingTask = await reportingStep.createTask("Task created");
