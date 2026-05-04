@@ -224,6 +224,21 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
+    public async Task AddProject_WithPublishAsExistingFoundry_GeneratesDefaultRoleAssignmentOnParentFoundry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var foundry = builder.AddFoundry("foundry")
+            .PublishAsExisting("existing-foundry", "existing-rg");
+        var project = foundry.AddProject("project");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await VerifyProjectBicepAsync(model, project.Resource);
+    }
+
+    [Fact]
     public async Task AddProject_WithRoleAssignments_ReplacesDefaultRoleAssignmentsOnParentFoundry()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -245,7 +260,7 @@ public class FoundryExtensionsTests
 
         var foundry = builder.AddFoundry("foundry");
         var project = foundry.AddProject("project")
-            .WithRoleAssignments(foundry);
+            .WithRoleAssignments(foundry, Array.Empty<CognitiveServicesBuiltInRole>());
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

@@ -61,6 +61,24 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="target">The parent Microsoft Foundry resource.</param>
     /// <param name="roles">The built-in Cognitive Services roles to assign to the project identity.</param>
     /// <returns>The updated <see cref="IResourceBuilder{AzureCognitiveServicesProjectResource}"/> with the applied role assignments.</returns>
+    /// <remarks>
+    /// <para>
+    /// Microsoft Foundry projects are assigned <see cref="CognitiveServicesBuiltInRole.CognitiveServicesUser"/> on their parent
+    /// Microsoft Foundry resource by default. Use this method to replace the default roles, or pass no roles to remove the
+    /// default role assignment.
+    /// </para>
+    /// <example>
+    /// The following example assigns the <see cref="CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser"/> role to a
+    /// Microsoft Foundry project identity on its parent Microsoft Foundry resource.
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// var foundry = builder.AddFoundry("foundry");
+    /// var project = foundry.AddProject("project")
+    ///     .WithRoleAssignments(foundry, CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser);
+    /// </code>
+    /// </example>
+    /// </remarks>
     [AspireExportIgnore(Reason = "CognitiveServicesBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the FoundryRole-based overload instead.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithRoleAssignments(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
