@@ -1315,9 +1315,96 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.FailedToUpgradeProject, exitCode);
     }
 
-    private async Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunUpdateAndCaptureChannelAsync(
+    [Fact]
+    public async Task UpdateCommand_ProjectInOtherDirectory_UsesProjectLocalConfiguredChannel()
+    {
+        // The CLI runs with `cwd == workspace.WorkspaceRoot` and we point --apphost at a project
+        // file living in a sibling directory inside the workspace. The configured channel must
+        // come from the project's directory tree, NOT from the cwd's. The cwd has no config.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
+        var projectConfigPath = Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(projectConfigPath, """{ "channel": "staging" }""");
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
+            projectDirectory: projectDirectory);
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally to the project");
+        Assert.Equal("staging", updatedWithChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_ProjectInOtherDirectory_PrefersProjectLocalConfigOverCwdConfig()
+    {
+        // Cwd has its own aspire.config.json with a different channel; the project's directory
+        // tree has the user's intended channel. The project-relative config must win, otherwise
+        // the user's stated intent (per --apphost) is silently overridden by an unrelated cwd.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{ "channel": "daily" }""");
+
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
+        File.WriteAllText(
+            Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName),
+            """{ "channel": "staging" }""");
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
+            projectDirectory: projectDirectory);
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally to the project");
+        Assert.Equal("staging", updatedWithChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_ProjectInOtherDirectory_ProjectLocalConfigWithoutChannel_FallsBackToGlobalConfig()
+    {
+        // The project-relative config exists but does not set a "channel" key. Channel resolution
+        // must fall back to the global settings file rather than the cwd-based process config.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{ "channel": "daily" }""");
+
+        var globalDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(globalDir);
+        File.WriteAllText(Path.Combine(globalDir, "settings.global.json"), """{ "channel": "staging" }""");
+
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
+        File.WriteAllText(
+            Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName),
+            """{ "language": "csharp" }""");
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
+            projectDirectory: projectDirectory);
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured globally");
+        Assert.Equal("staging", updatedWithChannel);
+    }
+
+    private Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunUpdateAndCaptureChannelAsync(
         TemporaryWorkspace workspace,
         string updateArgs)
+    {
+        return RunUpdateAndCaptureChannelAsync(workspace, updateArgs, projectDirectory: workspace.WorkspaceRoot);
+    }
+
+    private async Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunUpdateAndCaptureChannelAsync(
+        TemporaryWorkspace workspace,
+        string updateArgs,
+        DirectoryInfo projectDirectory)
     {
         var promptForSelectionInvoked = false;
         var updatedWithChannel = string.Empty;
@@ -1328,7 +1415,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
                 {
-                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(projectDirectory.FullName, "AppHost.csproj")));
                 }
             };
 

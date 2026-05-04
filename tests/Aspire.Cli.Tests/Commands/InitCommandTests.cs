@@ -710,6 +710,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
             => Task.FromResult<string?>(string.Equals(key, "channel", StringComparison.Ordinal) ? channelValue : null);
 
+        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+            => GetConfigurationAsync(key, cancellationToken);
+
         public Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
