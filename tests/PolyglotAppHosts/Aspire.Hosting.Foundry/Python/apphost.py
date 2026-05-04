@@ -33,6 +33,11 @@ with create_builder() as builder:
     search = builder.add_azure_search("search")
 
     project = foundry.add_project("project")
+    project.with_role_assignments(foundry, [
+        "CognitiveServicesOpenAIContributor",
+        "CognitiveServicesOpenAIUser",
+        "CognitiveServicesUser",
+    ])
     project.with_container_registry(registry)
     project.with_key_vault(key_vault)
     project.with_app_insights(app_insights)

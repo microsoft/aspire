@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, type FoundryModel, createBuilder } from './.modules/aspire.js';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -29,6 +29,11 @@ const storage = await builder.addAzureStorage('storage');
 const search = await builder.addAzureSearch('search');
 
 const project = await foundry.addProject('project');
+await project.withRoleAssignments(foundry, [
+    FoundryRole.CognitiveServicesOpenAIContributor,
+    FoundryRole.CognitiveServicesOpenAIUser,
+    FoundryRole.CognitiveServicesUser
+]);
 await project.withContainerRegistry(registry);
 await project.withKeyVault(keyVault);
 await project.withAppInsights(appInsights);

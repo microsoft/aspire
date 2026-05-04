@@ -30,6 +30,11 @@ void main() throws Exception {
         var search = builder.addAzureSearch("search");
 
         var project = foundry.addProject("project");
+        project.withRoleAssignments(foundry, new FoundryRole[] {
+            FoundryRole.COGNITIVE_SERVICES_OPEN_AICONTRIBUTOR,
+            FoundryRole.COGNITIVE_SERVICES_OPEN_AIUSER,
+            FoundryRole.COGNITIVE_SERVICES_USER
+        });
         project.withContainerRegistry(registry);
         project.withKeyVault(keyVault);
         project.withAppInsights(appInsights);

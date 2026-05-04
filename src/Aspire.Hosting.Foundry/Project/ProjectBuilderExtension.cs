@@ -54,6 +54,53 @@ public static class AzureCognitiveServicesProjectExtensions
     }
 
     /// <summary>
+    /// Assigns the specified roles to the Microsoft Foundry project identity on the parent Microsoft Foundry resource.
+    /// This replaces the default project role assignments.
+    /// </summary>
+    /// <param name="builder">The Microsoft Foundry project resource builder.</param>
+    /// <param name="target">The parent Microsoft Foundry resource.</param>
+    /// <param name="roles">The built-in Cognitive Services roles to assign to the project identity.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{AzureCognitiveServicesProjectResource}"/> with the applied role assignments.</returns>
+    [AspireExportIgnore(Reason = "CognitiveServicesBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the FoundryRole-based overload instead.")]
+    public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithRoleAssignments(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        IResourceBuilder<FoundryResource> target,
+        params CognitiveServicesBuiltInRole[] roles)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(target);
+
+        if (!ReferenceEquals(builder.Resource.Parent, target.Resource))
+        {
+            throw new ArgumentException($"The target Microsoft Foundry resource must be the parent of project resource '{builder.Resource.Name}'.", nameof(target));
+        }
+
+        builder.Resource.ParentAccountRoleAssignments = roles is null || roles.Length == 0
+            ? []
+            : roles.Distinct().ToArray();
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the Microsoft Foundry project identity on the parent Microsoft Foundry resource.
+    /// This replaces the default project role assignments.
+    /// </summary>
+    /// <param name="builder">The Microsoft Foundry project resource builder.</param>
+    /// <param name="target">The parent Microsoft Foundry resource.</param>
+    /// <param name="roles">The Microsoft Foundry roles to assign to the project identity.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{AzureCognitiveServicesProjectResource}"/> with the applied role assignments.</returns>
+    /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
+    [AspireExport("withFoundryProjectRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Microsoft Foundry roles to a project identity.")]
+    internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithRoleAssignments(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        IResourceBuilder<FoundryResource> target,
+        params FoundryRole[] roles)
+    {
+        return builder.WithRoleAssignments(target, FoundryRoleHelpers.ToCognitiveServicesBuiltInRoles(roles));
+    }
+
+    /// <summary>
     /// Adds a reference to a Microsoft Foundry project resource to the destination resource.
     /// </summary>
     /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
@@ -401,6 +448,13 @@ public static class AzureCognitiveServicesProjectExtensions
         {
             Value = projectPrincipalId
         });
+
+        foreach (var role in aspireResource.ParentAccountRoleAssignments)
+        {
+            var roleAssignment = account.CreateRoleAssignment(role, RoleManagementPrincipalType.ServicePrincipal, projectPrincipalId);
+            roleAssignment.Name = BicepFunction.CreateGuid(account.Id, project.Id, roleAssignment.RoleDefinitionId);
+            infra.Add(roleAssignment);
+        }
 
         /*
          * Container registry for hosted agents

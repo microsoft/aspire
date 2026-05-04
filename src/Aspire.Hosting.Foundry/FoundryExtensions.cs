@@ -253,24 +253,7 @@ public static class FoundryExtensions
         params FoundryRole[] roles)
         where T : IResource
     {
-        if (roles is null || roles.Length == 0)
-        {
-            return builder.WithRoleAssignments(target, Array.Empty<CognitiveServicesBuiltInRole>());
-        }
-
-        var builtInRoles = new CognitiveServicesBuiltInRole[roles.Length];
-        for (var i = 0; i < roles.Length; i++)
-        {
-            builtInRoles[i] = roles[i] switch
-            {
-                FoundryRole.CognitiveServicesOpenAIContributor => CognitiveServicesBuiltInRole.CognitiveServicesOpenAIContributor,
-                FoundryRole.CognitiveServicesOpenAIUser => CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser,
-                FoundryRole.CognitiveServicesUser => CognitiveServicesBuiltInRole.CognitiveServicesUser,
-                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(FoundryRole)} value.", nameof(roles))
-            };
-        }
-
-        return builder.WithRoleAssignments(target, builtInRoles);
+        return builder.WithRoleAssignments(target, FoundryRoleHelpers.ToCognitiveServicesBuiltInRoles(roles));
     }
 
     private static IResourceBuilder<FoundryResource> WithInitializer(this IResourceBuilder<FoundryResource> builder)

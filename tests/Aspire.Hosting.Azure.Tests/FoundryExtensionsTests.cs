@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Utils;
+using Azure.Provisioning.CognitiveServices;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -209,6 +210,50 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
+    public async Task AddProject_GeneratesDefaultRoleAssignmentOnParentFoundry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var foundry = builder.AddFoundry("foundry");
+        var project = foundry.AddProject("project");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await VerifyProjectBicepAsync(model, project.Resource);
+    }
+
+    [Fact]
+    public async Task AddProject_WithRoleAssignments_ReplacesDefaultRoleAssignmentsOnParentFoundry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var foundry = builder.AddFoundry("foundry");
+        var project = foundry.AddProject("project")
+            .WithRoleAssignments(foundry, CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await VerifyProjectBicepAsync(model, project.Resource);
+    }
+
+    [Fact]
+    public async Task AddProject_WithEmptyRoleAssignments_RemovesDefaultRoleAssignmentsOnParentFoundry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var foundry = builder.AddFoundry("foundry");
+        var project = foundry.AddProject("project")
+            .WithRoleAssignments(foundry);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await VerifyProjectBicepAsync(model, project.Resource);
+    }
+
+    [Fact]
     public async Task AddProject_WithPublishAsExistingFoundry_GeneratesBicepThatReferencesExistingParent()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -263,4 +308,10 @@ public class FoundryExtensionsTests
         Assert.Same(firstResult, secondResult);
     }
 
+    private static async Task VerifyProjectBicepAsync(DistributedApplicationModel model, AzureCognitiveServicesProjectResource project)
+    {
+        var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, project);
+
+        await Verify(bicepText, extension: "bicep");
+    }
 }
