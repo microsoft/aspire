@@ -259,7 +259,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             throw;
         }
 
-        var watch = !isSingleFileAppHost && (_features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !context.StartDebugSession));
+        var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
         try
         {
@@ -338,7 +338,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Start the apphost - the runner will signal the backchannel when ready
         try
         {
-            // noBuild: true if either watch mode is off (we already built above) or --no-build was passed
+            // noBuild: true if watch mode is off (we already built above). dotnet watch does not support --no-build.
             // noRestore: only relevant when noBuild is false (since --no-build implies --no-restore)
             var noBuild = !watch || context.NoBuild;
             return await _runner.RunAsync(
