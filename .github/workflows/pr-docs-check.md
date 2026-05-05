@@ -421,8 +421,41 @@ the PR details.
 ## Step 2: Identify the Subject-Matter Expert (SME)
 
 Determine which human is the best fit to review the drafted documentation PR. The
-SME is the person who reviewed/approved the source `microsoft/aspire` PR — not the
-PR author. Use the GitHub tools to list pull request reviews for the source PR
+SME is the person most familiar with the change in the source `microsoft/aspire`
+PR — typically the human who reviewed/approved it, except when the PR was
+authored by GitHub Copilot Coding Agent (in which case the SME is the human who
+**initiated the Copilot session**, not whoever happened to approve the bot's
+output).
+
+### Step 2a: If the source PR was authored by Copilot Coding Agent
+
+Fetch the source PR's `user.login` and `user.type`. If the PR was authored by a
+Copilot bot — that is, `user.type == "Bot"` AND `user.login` matches `Copilot`,
+`copilot-swe-agent`, or any login containing `copilot` and ending in `[bot]` —
+then the **human session originator** (the person who assigned `@copilot` to
+an issue and therefore initiated the session) is recorded in the PR's
+`assignees[]` field alongside the `Copilot` bot itself. This person is the SME
+because they framed the original problem and have the deepest context for the
+change, even though they didn't author the code.
+
+Apply the following logic:
+
+1. Read `pull_request.assignees[]` from the source PR.
+2. Filter out bot accounts: any login matching `Copilot`, `copilot-swe-agent`,
+   anything ending in `[bot]`, or matching `dependabot`, `github-actions`,
+   `aspire-bot`.
+3. If exactly one human assignee remains, set `SME_LOGIN` = that login and
+   **skip the rest of Step 2**. That person initiated the Copilot session and
+   is the subject-matter expert.
+4. If multiple human assignees remain, prefer the assignee whose latest review
+   state on the source PR is `APPROVED`. If still ambiguous, pick the one whose
+   login appears earliest in `assignees[]`. **Skip the rest of Step 2.**
+5. If no human assignees remain (unusual — Copilot Coding Agent normally
+   assigns the originator), fall through to Step 2b.
+
+### Step 2b: For human-authored PRs (or as a fallback from Step 2a)
+
+Use the GitHub tools to list pull request reviews for the source PR
 (`GET /repos/microsoft/aspire/pulls/{N}/reviews`) and apply the following logic:
 
 1. **Collapse reviews by reviewer.** For each unique reviewer login, keep only their
