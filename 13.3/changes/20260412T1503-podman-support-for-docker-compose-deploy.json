@@ -5,6 +5,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "aspire deploy now supports Podman as a container runtime for Docker Compose deployments, with automatic runtime detection that prefers the running runtime and falls back to Docker. The IContainerRuntime abstraction is unified and callers now resolve IContainerRuntimeResolver instead of IContainerRuntime directly.",
+  "docsPrs": [
+    644
+  ],
   "docsRequired": true,
   "emoji": "🐳",
   "firstMergedAt": "2026-04-12T15:03:31Z",

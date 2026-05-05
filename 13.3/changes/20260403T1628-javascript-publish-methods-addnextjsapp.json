@@ -1,1 +1,19 @@
-{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"New features","communityContributors":[],"description":"New publish methods — `PublishAsStaticWebsite`, `PublishAsNodeServer`, and `PublishAsNpmScript` — let developers deploy JavaScript and TypeScript apps to containers or static site hosts. The new `AddNextJsApp` method provides a dedicated Next.js integration with standalone output support. YARP is used for static site serving with optional API reverse proxy via service discovery.","docsRequired":true,"emoji":"🌐","firstMergedAt":"2026-04-03T16:28:57Z","lastMergedAt":"2026-04-03T16:28:57Z","name":"JavaScript publish methods and AddNextJsApp","prs":[15736]}
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "New publish methods — `PublishAsStaticWebsite`, `PublishAsNodeServer`, and `PublishAsNpmScript` — let developers deploy JavaScript and TypeScript apps to containers or static site hosts. The new `AddNextJsApp` method provides a dedicated Next.js integration with standalone output support. YARP is used for static site serving with optional API reverse proxy via service discovery.",
+  "docsPrs": [
+    643
+  ],
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-04-03T16:28:57Z",
+  "lastMergedAt": "2026-04-03T16:28:57Z",
+  "name": "JavaScript publish methods and AddNextJsApp",
+  "prs": [
+    15736
+  ]
+}

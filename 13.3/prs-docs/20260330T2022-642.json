@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Revert of infrastructure PR #641, not product feature documentation",
+  "mergedAt": "2026-03-30T20:22:34Z",
+  "number": 642,
+  "runDate": "2026-05-05T23:33:43Z",
+  "status": "excluded",
+  "title": "Revert \"Add an AppHost and PreviewHost for serving site previews\""
+}

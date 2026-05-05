@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Infrastructure change to .gitattributes, not product feature documentation",
+  "mergedAt": "2026-04-02T17:54:45Z",
+  "number": 664,
+  "runDate": "2026-05-05T23:33:43Z",
+  "status": "excluded",
+  "title": "Simplify .gitattributes to use text=auto without forcing eol=lf"
+}

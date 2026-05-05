@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Infrastructure fix for docs site commit SHA resolution, not product feature documentation",
+  "mergedAt": "2026-03-30T19:26:57Z",
+  "number": 628,
+  "runDate": "2026-05-05T23:33:43Z",
+  "status": "excluded",
+  "title": "Revert commit SHA resolution to git merge-base"
+}

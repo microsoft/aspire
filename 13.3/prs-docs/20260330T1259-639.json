@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Adds TypeScript samples to container registry docs; no confident match to a specific changelog entry with docsRequired=true",
+  "mergedAt": "2026-03-30T12:59:49Z",
+  "number": 639,
+  "runDate": "2026-05-05T23:33:43Z",
+  "status": "excluded",
+  "title": "Add TypeScript samples to container registry docs"
+}

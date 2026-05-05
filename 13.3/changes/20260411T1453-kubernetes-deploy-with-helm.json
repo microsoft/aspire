@@ -5,6 +5,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "aspire deploy now supports Kubernetes environments using an annotation-driven architecture with Helm as the default engine, supporting namespace and release name configuration via AddKubernetesEnvironment().WithHelm().",
+  "docsPrs": [
+    644
+  ],
   "docsRequired": true,
   "emoji": "☸️",
   "firstMergedAt": "2026-04-11T14:53:33Z",

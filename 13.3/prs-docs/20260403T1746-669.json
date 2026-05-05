@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Refactors analytics scripts paths for the docs site, not product feature documentation",
+  "mergedAt": "2026-04-03T17:46:44Z",
+  "number": 669,
+  "runDate": "2026-05-05T23:33:43Z",
+  "status": "excluded",
+  "title": "fix: Refactor analytics scripts: update paths"
+}
