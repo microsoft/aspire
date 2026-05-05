@@ -725,7 +725,7 @@ function isSevereRuntimeOutputLine(line: string): boolean {
   // Typed exception — `Namespace.Type.NameException: message` (also matches plain `System.Exception:`).
   return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
     // JavaScript / Node.js error shapes — `Uncaught TypeError: ...`, `Error [CODE]: ...`.
-    || /(?:^|\s)(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
+    || /^(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
     // Anchored fatal-marker prefixes only — bare word matches like `\bfailed\b` produced
     // false positives on user stdout (`"Failed payment retry queued"`, file paths
     // containing "error", etc.).
