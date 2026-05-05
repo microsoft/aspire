@@ -770,9 +770,9 @@ any cross-references. Match by:
    (e.g., a docs PR titled "Document Redis clustering" matches a changelog
    entry named "Redis clustering support").
 3. **No match** — if the docs PR cannot be confidently matched to any
-   changelog entry with `docsRequired: true`, record it as `"included"` in
-   the docs PR tracker (Step 6d) with an empty `matchedChanges` array so it
-   is not re-processed.
+   changelog entry with `docsRequired: true`, record it as `"excluded"` in
+   the docs PR tracker (Step 6d) with an empty `matchedChanges` array and a
+   comment explaining why (e.g., "No matching changelog entry found").
 
 When a match is found:
 - Add the docs PR number to the matched change file’s `docsPrs` array.
