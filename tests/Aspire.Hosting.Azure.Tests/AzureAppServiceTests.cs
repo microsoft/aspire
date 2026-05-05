@@ -804,6 +804,34 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("webSiteSuffix", output.Name);
     }
 
+    [Theory]
+    [InlineData(EndpointProperty.Url, "https://project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.Host, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.IPV4Host, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.Port, "443")]
+    [InlineData(EndpointProperty.TargetPort, "5000")]
+    [InlineData(EndpointProperty.Scheme, "https")]
+    [InlineData(EndpointProperty.HostAndPort, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.TlsEnabled, "False")]
+    public async Task GetEndpointPropertyExpression_ReturnsAppServiceEndpointPropertyExpression(EndpointProperty property, string expected)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureAppServiceEnvironment("env");
+        env.Resource.Outputs["webSiteSuffix"] = "website123";
+        env.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        var project = builder
+            .AddProject<Project>("project1", launchProfileName: null)
+            .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(expected, await expression.GetValueAsync(default));
+    }
+
     [Fact]
     public async Task AddAppServiceWithApplicationInsightsLocation()
     {
