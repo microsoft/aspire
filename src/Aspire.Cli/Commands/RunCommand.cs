@@ -515,11 +515,22 @@ internal sealed class RunCommand : BaseCommand
 
         grid.Columns[0].Width = longestLabelLength;
 
+        // In the extension's debug console, right-aligned labels and the surrounding padding
+        // render as visible left indentation, and the empty separator rows show up as blank
+        // lines that just push real content further down. Use a flush, single-spaced layout
+        // for the extension and keep the spaced-out look only for direct terminal output.
+        IRenderable LabelMarkup(string label)
+        {
+            var markup = new Markup($"[bold green]{label}[/]:");
+            return isExtensionHost ? markup : new Align(markup, HorizontalAlignment.Right);
+        }
+
         // AppHost row
-        grid.AddRow(
-            new Align(new Markup($"[bold green]{appHostLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(appHostRelativePath));
-        grid.AddRow(Text.Empty, Text.Empty);
+        grid.AddRow(LabelMarkup(appHostLabel), new Text(appHostRelativePath));
+        if (!isExtensionHost)
+        {
+            grid.AddRow(Text.Empty, Text.Empty);
+        }
 
         if (!isExtensionHost)
         {
@@ -527,7 +538,7 @@ internal sealed class RunCommand : BaseCommand
             if (!string.IsNullOrEmpty(dashboardUrl))
             {
                 grid.AddRow(
-                    new Align(new Markup($"[bold green]{dashboardLabel}[/]:"), HorizontalAlignment.Right),
+                    LabelMarkup(dashboardLabel),
                     new Markup($"[link={dashboardUrl}]{dashboardUrl}[/]"));
 
                 // Codespaces URL (if available)
@@ -539,28 +550,27 @@ internal sealed class RunCommand : BaseCommand
             else
             {
                 grid.AddRow(
-                    new Align(new Markup($"[bold green]{dashboardLabel}[/]:"), HorizontalAlignment.Right),
+                    LabelMarkup(dashboardLabel),
                     new Markup("[dim]N/A[/]"));
             }
             grid.AddRow(Text.Empty, Text.Empty);
         }
 
         // Logs row
-        grid.AddRow(
-            new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(logFilePath));
+        grid.AddRow(LabelMarkup(logsLabel), new Text(logFilePath));
 
         // PID row (if provided)
         if (pid.HasValue)
         {
-            grid.AddRow(Text.Empty, Text.Empty);
-            grid.AddRow(
-                new Align(new Markup($"[bold green]{pidLabel}[/]:"), HorizontalAlignment.Right),
-                new Text(pid.Value.ToString(CultureInfo.InvariantCulture)));
+            if (!isExtensionHost)
+            {
+                grid.AddRow(Text.Empty, Text.Empty);
+            }
+            grid.AddRow(LabelMarkup(pidLabel), new Text(pid.Value.ToString(CultureInfo.InvariantCulture)));
         }
 
-        var padder = new Padder(grid, new Padding(3, 0));
-        console.DisplayRenderable(padder);
+        IRenderable summary = isExtensionHost ? grid : new Padder(grid, new Padding(3, 0));
+        console.DisplayRenderable(summary);
 
         return longestLabelLength;
     }
