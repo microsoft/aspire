@@ -4,6 +4,8 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
+    <meta name="aspire-version" content="@VersionHelpers.DashboardDisplayVersion" />
+    <meta name="dotnet-runtime-version" content="@System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription" />
     <base href="/" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
@@ -34,7 +36,14 @@
         But in .NET 10 and later the Blazor JS file is an asset. We can rely on Blazor JS always being available. Remove and use asset file in the future once .NET 10 is the minimum version.
         This file is copied from .NET 10 P4.
     *@
-    <script src="framework/blazor.web.js"></script>
+    @if (Environment.Version.Major >= 10)
+    {
+        <script src="_framework/blazor.web.js"></script>
+    }
+    else
+    {
+        <script src="framework/blazor.web.js"></script>
+    }
     <script src="js/app.js"></script>
     <script src="js/app-reconnect.js"></script>
 

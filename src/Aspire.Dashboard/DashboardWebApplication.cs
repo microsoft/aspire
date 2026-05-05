@@ -262,7 +262,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 // Only loopback proxies are allowed by default. Clear that restriction because forwarders are
                 // being enabled by explicit configuration.
+#pragma warning disable ASPDEPR005 // Type or member is obsolete
                 options.KnownNetworks.Clear();
+#pragma warning restore ASPDEPR005 // Type or member is obsolete
                 options.KnownProxies.Clear();
             });
         }
@@ -510,6 +512,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
+
+        // MapStaticAssets is available in .NET 10+. Use reflection because the dashboard targets .NET 8.
+        // MapStaticAssets correctly serves Blazor's static assets from the _framework path.
+        TryMapStaticAssets(_app);
 
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
@@ -967,4 +973,35 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Calls MapStaticAssets via reflection. Available in .NET 10 and later.
+    /// The dashboard targets .NET 8 so this API isn't directly available.
+    /// This is used to correctly serve Blazor's static assets from the _framework path.
+    /// It's required because blazor.web.js are loaded from assets in .NET 10 and later.
+    /// </summary>
+    private static bool TryMapStaticAssets(WebApplication app)
+    {
+        if (Environment.Version.Major < 10)
+        {
+            return false;
+        }
+
+        // MapStaticAssets is an extension method on StaticAssetsEndpointRouteBuilderExtensions.
+        var type = Type.GetType("Microsoft.AspNetCore.Builder.StaticAssetsEndpointRouteBuilderExtensions, Microsoft.AspNetCore.StaticAssets");
+        if (type is null)
+        {
+            return false;
+        }
+
+        var method = type.GetMethod("MapStaticAssets", BindingFlags.Public | BindingFlags.Static);
+        if (method is null)
+        {
+            return false;
+        }
+
+        // MapStaticAssets(IEndpointRouteBuilder endpoints, string? staticAssetsManifestPath = null)
+        method.Invoke(null, [app, null]);
+        return true;
+    }
 }
