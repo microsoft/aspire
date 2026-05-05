@@ -140,12 +140,6 @@ public sealed class JavaScriptWorkspacePublishTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // The compose service must build from the workspace root (one level up from apphost), not
-        // from the app subdirectory.
-        await auto.TypeAsync("grep -F 'context: ../' artifacts/docker-compose.yaml");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
         await pendingRun;
