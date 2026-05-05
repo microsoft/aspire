@@ -12,7 +12,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Aspire.TypeSystem;
+using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
 using Spectre.Console;

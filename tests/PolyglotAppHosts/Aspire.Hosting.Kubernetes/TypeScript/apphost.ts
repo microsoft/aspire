@@ -4,7 +4,9 @@ const builder = await createBuilder();
 
 const helmNamespace = await builder.addParameter('helm-namespace');
 const helmReleaseName = await builder.addParameter('helm-release-name');
+const helmChartName = await builder.addParameter('helm-chart-name');
 const helmChartVersion = await builder.addParameter('helm-chart-version');
+const helmChartDescription = await builder.addParameter('helm-chart-description');
 
 const kubernetes = await builder.addKubernetesEnvironment('kube');
 
@@ -12,23 +14,18 @@ await kubernetes.withHelm({
     configure: async (helm) => {
         await helm.withNamespace('validation-namespace');
         await helm.withReleaseName('validation-release');
+        await helm.withChartName('validation-kubernetes');
         await helm.withChartVersion('1.2.3');
+        await helm.withChartDescription('Validation Helm Chart');
         await helm.withNamespace(helmNamespace);
         await helm.withReleaseName(helmReleaseName);
+        await helm.withChartName(helmChartName);
         await helm.withChartVersion(helmChartVersion);
+        await helm.withChartDescription(helmChartDescription);
     },
 });
 
 await kubernetes.withProperties(async (environment) => {
-    await environment.helmChartName.set('validation-kubernetes');
-    const _configuredHelmChartName: string = await environment.helmChartName.get();
-
-    await environment.helmChartVersion.set('1.2.3');
-    const _configuredHelmChartVersion: string = await environment.helmChartVersion.get();
-
-    await environment.helmChartDescription.set('Validation Helm Chart');
-    const _configuredHelmChartDescription: string = await environment.helmChartDescription.get();
-
     await environment.defaultStorageType.set('pvc');
     const _configuredDefaultStorageType: string = await environment.defaultStorageType.get();
 
@@ -48,7 +45,6 @@ await kubernetes.withProperties(async (environment) => {
     const _configuredDefaultServiceType: string = await environment.defaultServiceType.get();
 });
 
-const _resolvedHelmChartName: string = await kubernetes.helmChartName.get();
 const _resolvedDefaultStorageClassName: string | undefined = await kubernetes.defaultStorageClassName.get();
 const _resolvedDefaultServiceType: string = await kubernetes.defaultServiceType.get();
 
@@ -63,8 +59,7 @@ await ingress.withTls('ingress-tls');
 const serviceContainer = await builder.addContainer('kube-service', 'redis:alpine');
 await serviceContainer.publishAsKubernetesService(async (service) => {
     const _serviceName: string = await service.name();
-    const serviceParent = await service.parent();
-    const _serviceParentChartName: string = await serviceParent.helmChartName.get();
+    const _serviceParent = await service.parent();
 });
 
 await builder.build().run();
