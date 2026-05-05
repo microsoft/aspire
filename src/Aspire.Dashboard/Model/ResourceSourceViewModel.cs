@@ -53,6 +53,19 @@ internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument
                 return null;
             }
 
+            // For non-project executables, prefer effective args (post-DCP resolution) which have DCP template
+            // expressions resolved to actual values (e.g., {{- portForServing "exe" -}} -> "64731").
+            // Fall back to app args if effective args are not yet available (e.g., before the process has started).
+            if (!resourceViewModel.IsProject()
+                && resourceViewModel.TryGetExecutableArguments(out var effectiveArguments)
+                && !effectiveArguments.IsDefaultOrEmpty)
+            {
+                var effectiveArgumentList = effectiveArguments.Select(arg => new LaunchArgument(arg, true)).ToList();
+                var effectiveArgsString = string.Join(" ", effectiveArgumentList.Select(a => a.Value));
+
+                return new CommandLineInfo(Arguments: effectiveArgumentList, ArgumentsString: effectiveArgsString, TooltipString: effectiveArgsString);
+            }
+
             var argumentsString = string.Join(" ", launchArguments);
             if (resourceViewModel.TryGetAppArgsSensitivity(out var areArgumentsSensitive))
             {
