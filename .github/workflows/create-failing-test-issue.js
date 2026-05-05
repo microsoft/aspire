@@ -15,6 +15,7 @@ function parseCommand(body, defaultSourceUrl = null) {
 
     const result = {
         success: true,
+        testQueries: [],
         testQuery: '',
         sourceUrl: defaultSourceUrl,
         workflow: 'ci',
@@ -24,6 +25,9 @@ function parseCommand(body, defaultSourceUrl = null) {
 
     const hasFlags = tokens.some(token => token.startsWith('--'));
     if (hasFlags) {
+        let hasTestFlag = false;
+        const positionals = [];
+
         for (let index = 0; index < tokens.length; index++) {
             const token = tokens[index];
 
@@ -33,14 +37,15 @@ function parseCommand(body, defaultSourceUrl = null) {
                         return { success: false, errorMessage: 'Missing value for --test.' };
                     }
 
-                    if (result.testQuery) {
+                    if (positionals.length > 0) {
                         return {
                             success: false,
                             errorMessage: 'Positional input is ambiguous. Use /create-issue --test "<test-name>" [--url <pr|run|job-url>] [--workflow <selector>] [--force-new].',
                         };
                     }
 
-                    result.testQuery = tokens[++index];
+                    hasTestFlag = true;
+                    result.testQueries.push(tokens[++index]);
                     break;
 
                 case '--url':
@@ -71,22 +76,27 @@ function parseCommand(body, defaultSourceUrl = null) {
                         };
                     }
 
-                    if (result.testQuery) {
+                    if (hasTestFlag) {
                         return {
                             success: false,
                             errorMessage: 'Positional input is ambiguous. Use /create-issue --test "<test-name>" [--url <pr|run|job-url>] [--workflow <selector>] [--force-new].',
                         };
                     }
 
-                    result.testQuery = token;
+                    positionals.push(token);
                     break;
             }
         }
 
-        if (!result.testQuery) {
+        if (positionals.length > 0) {
+            result.testQueries.push(...positionals);
+        }
+
+        if (result.testQueries.length === 0) {
             result.listOnly = true;
         }
 
+        result.testQuery = result.testQueries[0] ?? '';
         return result;
     }
 
@@ -96,6 +106,7 @@ function parseCommand(body, defaultSourceUrl = null) {
     }
 
     if (tokens.length === 1) {
+        result.testQueries = [tokens[0]];
         result.testQuery = tokens[0];
         return result;
     }
@@ -103,14 +114,15 @@ function parseCommand(body, defaultSourceUrl = null) {
     const candidateUrl = tokens[tokens.length - 1];
     if (isSupportedSourceUrl(candidateUrl)) {
         result.sourceUrl = candidateUrl;
-        result.testQuery = tokens.slice(0, -1).join(' ');
+        const testNames = tokens.slice(0, -1);
+        result.testQueries = testNames;
+        result.testQuery = testNames[0];
         return result;
     }
 
-    return {
-        success: false,
-        errorMessage: 'Positional input is ambiguous. Use /create-issue --test "<test-name>" [--url <pr|run|job-url>] [--workflow <selector>] [--force-new].',
-    };
+    result.testQueries = [...tokens];
+    result.testQuery = tokens[0];
+    return result;
 }
 
 function formatListResponse(resolverOutcome, resultJson) {
