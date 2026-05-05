@@ -46,4 +46,20 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     /// </summary>
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Action<DockerfileStage>? InitializeDockerBuildStage { get; init; }
+
+    /// <summary>
+    /// When set, builds the argv for invoking a script on a single workspace member using this package
+    /// manager's native workspace filter syntax. Inputs: workspace name, script name, script args.
+    /// Returns the full argv including the executable name.
+    /// </summary>
+    /// <remarks>
+    /// Examples:
+    /// <list type="bullet">
+    ///   <item><description>pnpm: <c>pnpm --filter &lt;name&gt; run &lt;script&gt; [args]</c></description></item>
+    ///   <item><description>yarn: <c>yarn workspace &lt;name&gt; run &lt;script&gt; [args]</c></description></item>
+    ///   <item><description>npm: <c>npm run &lt;script&gt; --workspace=&lt;name&gt; [-- args]</c></description></item>
+    ///   <item><description>bun: <c>bun --filter &lt;name&gt; run &lt;script&gt; [args]</c></description></item>
+    /// </list>
+    /// </remarks>
+    internal Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>>? WorkspaceCommandFactory { get; init; }
 }

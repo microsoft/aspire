@@ -158,8 +158,14 @@ public static class JavaScriptHostingExtensions
                     return;
                 }
 
+                // Workspace mode: WithWorkspaceRoot is called AFTER PublishAsDockerFile in the user's
+                // chain, so we can't read it eagerly here. We default the build context to the app
+                // directory; if WithWorkspaceRoot is later invoked, it will replace the
+                // DockerfileBuildAnnotation with one whose ContextPath is the workspace root.
                 c.WithDockerfileBuilder(resource.WorkingDirectory, dockerfileContext =>
                 {
+                    dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptWorkspaceAnnotation>(out var workspace);
+
                     var defaultBaseImage = new Lazy<string>(() => GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services));
 
                     // Get custom base image from annotation, if present
@@ -181,9 +187,13 @@ public static class JavaScriptHostingExtensions
                         var copiedAllSource = false;
                         if (resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {
-                            // Copy package files first for better layer caching
-                            if (packageManager.PackageFilesPatterns.Count > 0)
+                            if (workspace is not null)
                             {
+                                EmitWorkspaceManifestLayer(builderStage, workspace);
+                            }
+                            else if (packageManager.PackageFilesPatterns.Count > 0)
+                            {
+                                // Copy package files first for better layer caching
                                 foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
                                 {
                                     builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
@@ -206,16 +216,8 @@ public static class JavaScriptHostingExtensions
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
                             builderStage.EmptyLine()
-                                .Run(string.Join(' ', commandArgs));
+                                .Run(string.Join(' ', BuildPackageManagerCommand(packageManager, buildCommand.ScriptName, buildCommand.Args, workspace)));
                         }
                     }
                     else
@@ -228,10 +230,11 @@ public static class JavaScriptHostingExtensions
                     dockerfileContext.Builder.AddContainerFilesStages(dockerfileContext.Resource, logger);
 
                     var baseRuntimeImage = baseImageAnnotation?.RuntimeImage ?? defaultBaseImage.Value;
+                    var runtimeWorkDir = workspace is not null ? $"/app/{workspace.AppRelativePath}" : "/app";
                     var runtimeBuilder = dockerfileContext.Builder
                         .From(baseRuntimeImage, "runtime")
                             .EmptyLine()
-                            .WorkDir("/app")
+                            .WorkDir(runtimeWorkDir)
                             .CopyFrom("build", "/app", "/app")
                             .AddContainerFiles(dockerfileContext.Resource, "/app", logger)
                             .EmptyLine()
@@ -655,6 +658,48 @@ public static class JavaScriptHostingExtensions
         }
     }
 
+    private static void EmitWorkspaceManifestLayer(DockerfileStage stage, JavaScriptWorkspaceAnnotation workspace)
+    {
+        // Workspace-root manifests (package.json, lockfile, .npmrc, pnpm-workspace.yaml, .yarnrc.yml, ...).
+        foreach (var rootFile in workspace.RootFiles)
+        {
+            stage.Copy(rootFile, "./" + rootFile);
+        }
+
+        // Workspace-root directories (e.g. Yarn Berry's .yarn).
+        foreach (var rootDir in workspace.RootDirs)
+        {
+            stage.Copy(rootDir, "./" + rootDir);
+        }
+
+        // Each workspace member's package.json so install can resolve workspace:* dependencies.
+        foreach (var dir in workspace.WorkspaceDirs)
+        {
+            stage.Copy($"{dir}/package.json", $"./{dir}/package.json");
+        }
+    }
+
+    private static IReadOnlyList<string> BuildPackageManagerCommand(
+        JavaScriptPackageManagerAnnotation packageManager,
+        string scriptName,
+        IReadOnlyList<string> scriptArgs,
+        JavaScriptWorkspaceAnnotation? workspace)
+    {
+        if (workspace is not null && packageManager.WorkspaceCommandFactory is { } factory)
+        {
+            return factory(workspace.AppName, scriptName, scriptArgs);
+        }
+
+        var commandArgs = new List<string> { packageManager.ExecutableName };
+        if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
+        {
+            commandArgs.Add(packageManager.ScriptCommand);
+        }
+        commandArgs.Add(scriptName);
+        commandArgs.AddRange(scriptArgs);
+        return commandArgs;
+    }
+
     private static IResourceBuilder<TResource> CreateDefaultJavaScriptAppBuilder<TResource>(
         this IDistributedApplicationBuilder builder,
         TResource resource,
@@ -694,12 +739,30 @@ public static class JavaScriptHostingExtensions
                     return;
                 }
 
+                // Workspace mode: WithWorkspaceRoot is called AFTER PublishAsDockerFile in the user's
+                // chain, so we can't read it eagerly here. We default the build context to the app
+                // directory; if WithWorkspaceRoot is later invoked, it will replace the
+                // DockerfileBuildAnnotation with one whose ContextPath is the workspace root.
                 c.WithDockerfileBuilder(appDirectory, dockerfileContext =>
                 {
+                    dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptWorkspaceAnnotation>(out var workspace);
                     dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out var publishMode);
 
                     if (c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                     {
+                        // pnpm + workspace + PublishAsNpmScript is unsupported in v1: pnpm uses symlinks
+                        // rather than hoisting, so the prod-deps overlay (`COPY --from=prod-deps /app/node_modules ./`)
+                        // does not produce a runnable layout.
+                        if (workspace is not null && publishMode?.Mode == JavaScriptPublishMode.NpmScript &&
+                            string.Equals(packageManager.ExecutableName, "pnpm", StringComparison.Ordinal))
+                        {
+                            throw new DistributedApplicationException(
+                                "PublishAsNpmScript is not supported with pnpm in workspace mode. " +
+                                "pnpm relies on symlinks rather than node_modules hoisting, so the production-deps stage " +
+                                "cannot be flattened into a runnable image. Use PublishAsNodeServer with a bundler such as " +
+                                "tsup/esbuild, or remove the workspace annotation.");
+                        }
+
                         // Get custom base image from annotation, if present
                         dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
                         var baseImage = baseImageAnnotation?.BuildImage ?? GetDefaultBaseImage(appDirectory, "slim", dockerfileContext.Services);
@@ -714,9 +777,13 @@ public static class JavaScriptHostingExtensions
 
                         var copiedAllSource = false;
 
-                        // Copy package files first for better layer caching
-                        if (packageManager.PackageFilesPatterns.Count > 0)
+                        if (workspace is not null)
                         {
+                            EmitWorkspaceManifestLayer(dockerBuilder, workspace);
+                        }
+                        else if (packageManager.PackageFilesPatterns.Count > 0)
+                        {
+                            // Copy package files first for better layer caching
                             foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
                             {
                                 dockerBuilder.Copy(packageFilePattern.Source, packageFilePattern.Destination);
@@ -741,23 +808,21 @@ public static class JavaScriptHostingExtensions
 
                         if (c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
-                            dockerBuilder.Run(string.Join(' ', commandArgs));
+                            dockerBuilder.Run(string.Join(' ', BuildPackageManagerCommand(packageManager, buildCommand.ScriptName, buildCommand.Args, workspace)));
                         }
+
+                        // In workspace mode, build outputs land under /app/<AppRelativePath>/...; in single-app
+                        // mode they land directly under /app/...
+                        var workspaceAppDir = workspace is not null ? $"/app/{workspace.AppRelativePath}" : "/app";
 
                         switch (publishMode?.Mode)
                         {
                             case JavaScriptPublishMode.StaticWebsite:
                             {
                                 var runtimeImage = baseImageAnnotation?.RuntimeImage ?? DefaultYarpImage;
-                                var distPath = GetContainerFilesSourcePath(publishMode.OutputPath);
+                                var distPath = workspace is not null
+                                    ? GetWorkspaceContainerFilesSourcePath(publishMode.OutputPath, workspace)
+                                    : GetContainerFilesSourcePath(publishMode.OutputPath);
                                 dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
@@ -768,7 +833,12 @@ public static class JavaScriptHostingExtensions
                             case JavaScriptPublishMode.NodeServer:
                             {
                                 var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services);
-                                var outputPath = GetContainerFilesSourcePath(publishMode.OutputPath);
+                                var outputPath = workspace is not null
+                                    ? GetWorkspaceContainerFilesSourcePath(publishMode.OutputPath, workspace)
+                                    : GetContainerFilesSourcePath(publishMode.OutputPath);
+                                var entrypointPath = workspace is not null
+                                    ? $"{workspace.AppRelativePath}/{NormalizeRelativePath(publishMode.EntryPoint!)}"
+                                    : NormalizeRelativePath(publishMode.EntryPoint!);
 
                                 dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
@@ -776,7 +846,7 @@ public static class JavaScriptHostingExtensions
                                     .CopyFrom("build", outputPath, outputPath)
                                     .Env("NODE_ENV", "production")
                                     .User("node")
-                                    .Entrypoint(["node", NormalizeRelativePath(publishMode.EntryPoint!)]);
+                                    .Entrypoint(["node", entrypointPath]);
                                 break;
                             }
                             case JavaScriptPublishMode.NpmScript:
@@ -790,7 +860,11 @@ public static class JavaScriptHostingExtensions
 
                                 packageManager.InitializeDockerBuildStage?.Invoke(prodDepsStage);
 
-                                if (packageManager.PackageFilesPatterns.Count > 0)
+                                if (workspace is not null)
+                                {
+                                    EmitWorkspaceManifestLayer(prodDepsStage, workspace);
+                                }
+                                else if (packageManager.PackageFilesPatterns.Count > 0)
                                 {
                                     foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
                                     {
@@ -822,15 +896,17 @@ public static class JavaScriptHostingExtensions
                                 }
 
                                 // Runtime stage: copy build output then overlay prod deps
-                                var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
-                                    ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName}"
-                                    : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName} {publishMode.RunScriptArguments}";
+                                IReadOnlyList<string> runArgs = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
+                                    ? Array.Empty<string>()
+                                    : [publishMode.RunScriptArguments];
+                                var runArgv = BuildPackageManagerCommand(packageManager, publishMode.StartScriptName!, runArgs, workspace);
+                                var runCommand = string.Join(' ', runArgv);
 
                                 dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
-                                    .WorkDir("/app")
+                                    .WorkDir(workspaceAppDir)
                                     .CopyFrom("build", "/app", "/app")
-                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules")
+                                    .CopyFrom("prod-deps", "/app/node_modules", "/app/node_modules")
                                     .Env("NODE_ENV", "production")
                                     .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
                                 break;
@@ -845,11 +921,11 @@ public static class JavaScriptHostingExtensions
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
                                     .Env("NODE_ENV", "production")
-                                    .CopyFrom("build", "/app/public", "./public", "node:node")
+                                    .CopyFrom("build", $"{workspaceAppDir}/public", "./public", "node:node")
                                     .Run("mkdir .next")
                                     .Run("chown node:node .next")
-                                    .CopyFrom("build", "/app/.next/standalone", "./", "node:node")
-                                    .CopyFrom("build", "/app/.next/static", "./.next/static", "node:node")
+                                    .CopyFrom("build", $"{workspaceAppDir}/.next/standalone", "./", "node:node")
+                                    .CopyFrom("build", $"{workspaceAppDir}/.next/static", "./.next/static", "node:node")
                                     .User("node")
                                     .Entrypoint(["node", "server.js"]);
                                 break;
@@ -1223,12 +1299,18 @@ public static class JavaScriptHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        installCommand ??= GetDefaultNpmInstallCommand(resource);
+        var workspaceRoot = TryGetWorkspaceRoot(resource.Resource);
+        var effectiveDir = workspaceRoot ?? resource.Resource.WorkingDirectory;
+        installCommand ??= File.Exists(Path.Combine(effectiveDir, "package-lock.json")) &&
+                           resource.ApplicationBuilder.ExecutionContext.IsPublishMode
+            ? "ci"
+            : "install";
 
         resource
             .WithAnnotation(new JavaScriptPackageManagerAnnotation("npm", runScriptCommand: "run", cacheMount: "/root/.npm")
             {
                 PackageFilesPatterns = { new CopyFilePattern("package*.json", "./") },
+                WorkspaceCommandFactory = s_npmWorkspaceCommandFactory,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []])
             {
@@ -1270,18 +1352,19 @@ public static class JavaScriptHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        var workingDirectory = resource.Resource.WorkingDirectory;
-        var hasBunLock = File.Exists(Path.Combine(workingDirectory, "bun.lock")) ||
-            File.Exists(Path.Combine(workingDirectory, "bun.lockb"));
+        var workspaceRoot = TryGetWorkspaceRoot(resource.Resource);
+        var effectiveDir = workspaceRoot ?? resource.Resource.WorkingDirectory;
+        var hasBunLock = File.Exists(Path.Combine(effectiveDir, "bun.lock")) ||
+            File.Exists(Path.Combine(effectiveDir, "bun.lockb"));
 
         installArgs ??= GetDefaultBunInstallArgs(resource, hasBunLock);
 
         var packageFilesSourcePattern = "package.json";
-        if (File.Exists(Path.Combine(workingDirectory, "bun.lock")))
+        if (File.Exists(Path.Combine(effectiveDir, "bun.lock")))
         {
             packageFilesSourcePattern += " bun.lock";
         }
-        if (File.Exists(Path.Combine(workingDirectory, "bun.lockb")))
+        if (File.Exists(Path.Combine(effectiveDir, "bun.lockb")))
         {
             packageFilesSourcePattern += " bun.lockb";
         }
@@ -1292,6 +1375,7 @@ public static class JavaScriptHostingExtensions
                 PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
                 // bun supports passing script flags without the `--` separator.
                 CommandSeparator = null,
+                WorkspaceCommandFactory = s_bunWorkspaceCommandFactory,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -1319,11 +1403,139 @@ public static class JavaScriptHostingExtensions
             ? ["--frozen-lockfile"]
             : [];
 
-    private static string GetDefaultNpmInstallCommand(IResourceBuilder<JavaScriptAppResource> resource) =>
-        resource.ApplicationBuilder.ExecutionContext.IsPublishMode &&
-            File.Exists(Path.Combine(resource.Resource.WorkingDirectory, "package-lock.json"))
-            ? "ci"
-            : "install";
+    private static string? TryGetWorkspaceRoot(IResource resource) =>
+        resource.TryGetLastAnnotation<JavaScriptWorkspaceAnnotation>(out var ws) ? ws.RootPath : null;
+
+    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_npmWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs) =>
+        {
+            var argv = new List<string> { "npm", "run", scriptName, $"--workspace={workspaceName}" };
+            if (scriptArgs.Count > 0)
+            {
+                argv.Add("--");
+                argv.AddRange(scriptArgs);
+            }
+            return argv;
+        };
+
+    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_yarnWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs) =>
+        {
+            var argv = new List<string> { "yarn", "workspace", workspaceName, "run", scriptName };
+            argv.AddRange(scriptArgs);
+            return argv;
+        };
+
+    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_pnpmWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs) =>
+        {
+            var argv = new List<string> { "pnpm", "--filter", workspaceName, "run", scriptName };
+            argv.AddRange(scriptArgs);
+            return argv;
+        };
+
+    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_bunWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs) =>
+        {
+            var argv = new List<string> { "bun", "--filter", workspaceName, "run", scriptName };
+            argv.AddRange(scriptArgs);
+            return argv;
+        };
+
+    /// <summary>
+    /// Re-attaches package manager and install command annotations using the workspace root for lockfile
+    /// detection. Called by <see cref="JavaScriptWorkspaceExtensions.WithWorkspaceRoot"/> when the user
+    /// configured <c>WithWorkspaceRoot</c> after a package manager (or after an auto-attached npm).
+    /// </summary>
+    internal static void ReconfigurePackageManagerForWorkspace<TResource>(IResourceBuilder<TResource> builder, string executableName, string workspaceRoot)
+        where TResource : JavaScriptAppResource
+    {
+        switch (executableName)
+        {
+            case "npm":
+                {
+                    var installCommand = File.Exists(Path.Combine(workspaceRoot, "package-lock.json")) &&
+                                         builder.ApplicationBuilder.ExecutionContext.IsPublishMode
+                        ? "ci"
+                        : "install";
+                    builder
+                        .WithAnnotation(new JavaScriptPackageManagerAnnotation("npm", runScriptCommand: "run", cacheMount: "/root/.npm")
+                        {
+                            PackageFilesPatterns = { new CopyFilePattern("package*.json", "./") },
+                            WorkspaceCommandFactory = s_npmWorkspaceCommandFactory,
+                        })
+                        .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand])
+                        {
+                            ProductionInstallArgs = "--omit=dev"
+                        });
+                    break;
+                }
+            case "yarn":
+                {
+                    var hasYarnLock = File.Exists(Path.Combine(workspaceRoot, "yarn.lock"));
+                    var hasYarnrc = File.Exists(Path.Combine(workspaceRoot, ".yarnrc.yml"));
+                    var hasYarnBerryDir = Directory.Exists(Path.Combine(workspaceRoot, ".yarn"));
+                    var hasYarnBerry = hasYarnrc || hasYarnBerryDir;
+
+                    string[] installArgs = builder.ApplicationBuilder.ExecutionContext.IsPublishMode && hasYarnLock
+                        ? hasYarnBerry ? ["--immutable"] : ["--frozen-lockfile"]
+                        : [];
+
+                    var cacheMount = hasYarnBerry ? ".yarn/cache" : "/root/.cache/yarn";
+                    builder
+                        .WithAnnotation(new JavaScriptPackageManagerAnnotation("yarn", runScriptCommand: "run", cacheMount)
+                        {
+                            CommandSeparator = null,
+                            WorkspaceCommandFactory = s_yarnWorkspaceCommandFactory,
+                        })
+                        .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
+                        {
+                            ProductionInstallArgs = "--production"
+                        });
+                    break;
+                }
+            case "pnpm":
+                {
+                    var hasPnpmLock = File.Exists(Path.Combine(workspaceRoot, "pnpm-lock.yaml"));
+                    string[] installArgs = builder.ApplicationBuilder.ExecutionContext.IsPublishMode && hasPnpmLock
+                        ? ["--frozen-lockfile"]
+                        : [];
+
+                    builder
+                        .WithAnnotation(new JavaScriptPackageManagerAnnotation("pnpm", runScriptCommand: "run", cacheMount: "/pnpm/store")
+                        {
+                            CommandSeparator = null,
+                            InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+                            WorkspaceCommandFactory = s_pnpmWorkspaceCommandFactory,
+                        })
+                        .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
+                        {
+                            ProductionInstallArgs = "--prod"
+                        });
+                    break;
+                }
+            case "bun":
+                {
+                    var hasBunLock = File.Exists(Path.Combine(workspaceRoot, "bun.lock")) ||
+                                     File.Exists(Path.Combine(workspaceRoot, "bun.lockb"));
+                    string[] installArgs = builder.ApplicationBuilder.ExecutionContext.IsPublishMode && hasBunLock
+                        ? ["--frozen-lockfile"]
+                        : [];
+
+                    builder
+                        .WithAnnotation(new JavaScriptPackageManagerAnnotation("bun", runScriptCommand: "run", cacheMount: "/root/.bun/install/cache")
+                        {
+                            CommandSeparator = null,
+                            WorkspaceCommandFactory = s_bunWorkspaceCommandFactory,
+                        })
+                        .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
+                        {
+                            ProductionInstallArgs = "--production"
+                        });
+                    break;
+                }
+        }
+    }
 
     /// <summary>
     /// Configures the Node.js resource to use yarn as the package manager and optionally installs packages before the application starts.
@@ -1337,10 +1549,12 @@ public static class JavaScriptHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        var workingDirectory = resource.Resource.WorkingDirectory;
-        var hasYarnLock = File.Exists(Path.Combine(workingDirectory, "yarn.lock"));
-        var hasYarnrc = File.Exists(Path.Combine(workingDirectory, ".yarnrc.yml"));
-        var hasYarnBerryDir = Directory.Exists(Path.Combine(workingDirectory, ".yarn"));
+        var workspaceRoot = TryGetWorkspaceRoot(resource.Resource);
+        var inWorkspace = workspaceRoot is not null;
+        var effectiveDir = workspaceRoot ?? resource.Resource.WorkingDirectory;
+        var hasYarnLock = File.Exists(Path.Combine(effectiveDir, "yarn.lock"));
+        var hasYarnrc = File.Exists(Path.Combine(effectiveDir, ".yarnrc.yml"));
+        var hasYarnBerryDir = Directory.Exists(Path.Combine(effectiveDir, ".yarn"));
         var hasYarnBerry = hasYarnrc || hasYarnBerryDir;
 
         installArgs ??= GetDefaultYarnInstallArgs(resource, hasYarnLock, hasYarnBerry);
@@ -1352,21 +1566,28 @@ public static class JavaScriptHostingExtensions
             // Yarn v1 strips the separator automatically but produces the warning suggesting to remove it.
             // Later Yarn versions don't strip the separator and pass it to the script as-is, causing Vite to ignore subsequent arguments.
             CommandSeparator = null,
+            WorkspaceCommandFactory = s_yarnWorkspaceCommandFactory,
         };
-        var packageFilesSourcePattern = "package.json";
-        if (hasYarnLock)
-        {
-            packageFilesSourcePattern += " yarn.lock";
-        }
-        if (hasYarnrc)
-        {
-            packageFilesSourcePattern += " .yarnrc.yml";
-        }
-        packageManager.PackageFilesPatterns.Add(new CopyFilePattern(packageFilesSourcePattern, "./"));
 
-        if (hasYarnBerryDir)
+        // Workspace mode uses the workspace annotation's RootFiles/RootDirs for the manifest layer; the
+        // per-app PackageFilesPatterns is only meaningful for single-app mode.
+        if (!inWorkspace)
         {
-            packageManager.PackageFilesPatterns.Add(new CopyFilePattern(".yarn", "./.yarn"));
+            var packageFilesSourcePattern = "package.json";
+            if (hasYarnLock)
+            {
+                packageFilesSourcePattern += " yarn.lock";
+            }
+            if (hasYarnrc)
+            {
+                packageFilesSourcePattern += " .yarnrc.yml";
+            }
+            packageManager.PackageFilesPatterns.Add(new CopyFilePattern(packageFilesSourcePattern, "./"));
+
+            if (hasYarnBerryDir)
+            {
+                packageManager.PackageFilesPatterns.Add(new CopyFilePattern(".yarn", "./.yarn"));
+            }
         }
 
         resource
@@ -1415,8 +1636,9 @@ public static class JavaScriptHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        var workingDirectory = resource.Resource.WorkingDirectory;
-        var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
+        var workspaceRoot = TryGetWorkspaceRoot(resource.Resource);
+        var effectiveDir = workspaceRoot ?? resource.Resource.WorkingDirectory;
+        var hasPnpmLock = File.Exists(Path.Combine(effectiveDir, "pnpm-lock.yaml"));
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -1434,6 +1656,7 @@ public static class JavaScriptHostingExtensions
                 CommandSeparator = null,
                 // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
                 InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+                WorkspaceCommandFactory = s_pnpmWorkspaceCommandFactory,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -1694,9 +1917,15 @@ public static class JavaScriptHostingExtensions
                     throw new InvalidOperationException("JavaScriptPackageManagerAnnotation and JavaScriptInstallCommandAnnotation are required when installing packages.");
                 }
 
+                // In workspace mode, run install at the workspace root so the lockfile and
+                // workspace config (pnpm-workspace.yaml, package.json#workspaces, etc.) are picked up.
+                var installWorkingDirectory = resource.Resource.TryGetLastAnnotation<JavaScriptWorkspaceAnnotation>(out var workspace)
+                    ? workspace.RootPath
+                    : resource.Resource.WorkingDirectory;
+
                 installerBuilder
                     .WithCommand(packageManager.ExecutableName)
-                    .WithWorkingDirectory(resource.Resource.WorkingDirectory)
+                    .WithWorkingDirectory(installWorkingDirectory)
                     .WithArgs(installCommand.Args);
 
                 return Task.CompletedTask;
@@ -1731,6 +1960,52 @@ public static class JavaScriptHostingExtensions
         return string.IsNullOrEmpty(normalizedPath) || normalizedPath == "."
             ? "/app"
             : $"/app/{normalizedPath}";
+    }
+
+    private static string GetWorkspaceContainerFilesSourcePath(string outputPath, JavaScriptWorkspaceAnnotation workspace)
+    {
+        var normalizedPath = NormalizeRelativePath(outputPath);
+        var basePath = $"/app/{workspace.AppRelativePath}";
+        return string.IsNullOrEmpty(normalizedPath) || normalizedPath == "."
+            ? basePath
+            : $"{basePath}/{normalizedPath}";
+    }
+
+    /// <summary>
+    /// Rewrites <see cref="ContainerFilesSourceAnnotation"/> entries that point at <c>/app[/...]</c> so they
+    /// instead point at <c>/app/&lt;AppRelativePath&gt;[/...]</c>. <see cref="ContainerFilesSourceAnnotation"/>
+    /// is captured at registration time (e.g. when <c>PublishAsStaticWebsite</c> runs) before
+    /// <c>WithWorkspaceRoot</c> may have been called, so we fix it up at Dockerfile-generation time.
+    /// </summary>
+    internal static void RewriteContainerFilesSourcesForWorkspace(IResource resource, JavaScriptWorkspaceAnnotation workspace)
+    {
+        var existing = resource.Annotations.OfType<ContainerFilesSourceAnnotation>().ToList();
+        if (existing.Count == 0)
+        {
+            return;
+        }
+
+        var prefix = $"/app/{workspace.AppRelativePath}";
+        foreach (var ann in existing)
+        {
+            var src = ann.SourcePath;
+            string newSrc;
+            if (src == "/app")
+            {
+                newSrc = prefix;
+            }
+            else if (src.StartsWith("/app/", StringComparison.Ordinal))
+            {
+                newSrc = $"{prefix}/{src.Substring("/app/".Length)}";
+            }
+            else
+            {
+                continue;
+            }
+
+            resource.Annotations.Remove(ann);
+            resource.Annotations.Add(new ContainerFilesSourceAnnotation { SourcePath = newSrc });
+        }
     }
 
     private static readonly string[] s_nextConfigFileNames = ["next.config.ts", "next.config.js", "next.config.mjs"];
