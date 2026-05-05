@@ -6,7 +6,7 @@ FROM aspire-e2e-polyglot-base
 ARG UBUNTU_APT_MIRROR=
 
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
-RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR" && \
-    apt-get update -qq && \
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends openjdk-25-jdk && \
     rm -rf /var/lib/apt/lists/*

@@ -24,8 +24,8 @@ ARG UBUNTU_APT_MIRROR=
 
 # Install native AOT build toolchain.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
-RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR" && \
-    if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
       apt-get update -qq && \
       apt-get install -y --no-install-recommends clang zlib1g-dev && \
       rm -rf /var/lib/apt/lists/*; \
@@ -57,8 +57,8 @@ ARG UBUNTU_APT_MIRROR=
 # Install gh CLI (needed by get-aspire-cli-pr.sh to download PR artifacts).
 # Install Docker CLI plus the buildx/compose plugins used by publish and deploy flows.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
-RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR" && \
-    apt-get update -qq && \
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends gpg docker.io docker-buildx docker-compose-v2 unzip && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \

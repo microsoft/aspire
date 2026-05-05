@@ -25,8 +25,8 @@ ARG UBUNTU_APT_MIRROR=
 
 # Install native AOT build toolchain.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
-RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR" && \
-    if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
       apt-get update -qq && \
       apt-get install -y --no-install-recommends clang zlib1g-dev && \
       rm -rf /var/lib/apt/lists/*; \
@@ -55,8 +55,8 @@ ARG UBUNTU_APT_MIRROR=
 
 # Install base tools and Docker CLI.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
-RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR" && \
-    apt-get update -qq && \
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
       ca-certificates curl gpg docker.io git libicu-dev unzip && \
     rm -rf /var/lib/apt/lists/*
