@@ -130,7 +130,7 @@ internal class DotNetTemplateFactory(
         yield return new CallbackTemplate(
             "aspire-starter",
             TemplatingStrings.AspireStarter_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireStarterOptions,
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -139,7 +139,7 @@ internal class DotNetTemplateFactory(
         yield return new CallbackTemplate(
             "aspire-ts-cs-starter",
             TemplatingStrings.AspireJsFrontendStarter_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireJsFrontendStarterOptions,
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireJsFrontendStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -150,7 +150,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 KnownTemplateId.DotNetEmptyAppHost,
                 TemplatingStrings.AspireEmptyDotNetTemplate_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 ApplyDevLocalhostTldOption,
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp,
@@ -160,7 +160,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-apphost",
                 TemplatingStrings.AspireAppHost_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 ApplyDevLocalhostTldOption,
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp
@@ -169,7 +169,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-servicedefaults",
                 TemplatingStrings.AspireServiceDefaults_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 _ => { },
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp
@@ -180,7 +180,7 @@ internal class DotNetTemplateFactory(
         var msTestTemplate = new CallbackTemplate(
             "aspire-mstest",
             TemplatingStrings.AspireMSTest_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             ApplyTemplateWithNoExtraArgsAsync,
             languageId: KnownLanguageId.CSharp
@@ -190,7 +190,7 @@ internal class DotNetTemplateFactory(
         var nunitTemplate = new CallbackTemplate(
             "aspire-nunit",
             TemplatingStrings.AspireNUnit_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             ApplyTemplateWithNoExtraArgsAsync,
             languageId: KnownLanguageId.CSharp
@@ -200,7 +200,7 @@ internal class DotNetTemplateFactory(
         var xunitTemplate = new CallbackTemplate(
             "aspire-xunit",
             TemplatingStrings.AspireXUnit_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireXUnitOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -213,7 +213,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-test",
                 TemplatingStrings.IntegrationTestsTemplate_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 _ => { },
                 async (template, inputs, parseResult, ct) =>
                 {
@@ -234,7 +234,7 @@ internal class DotNetTemplateFactory(
         return new CallbackTemplate(
             "aspire-apphost-singlefile",
             TemplatingStrings.AspireAppHostSingleFile_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyDevLocalhostTldOption,
             (template, inputs, parseResult, ct) => ApplySingleFileTemplate(template, inputs, parseResult, PromptForExtraAspireSingleFileOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp,
@@ -440,8 +440,13 @@ internal class DotNetTemplateFactory(
             return new TemplateResult(ExitCodeConstants.SdkNotInstalled);
         }
 
-        var name = await GetProjectNameAsync(inputs, parseResult, cancellationToken);
+        var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
         var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, parseResult, cancellationToken);
+
+        if (outputPath is null)
+        {
+            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+        }
 
         return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
     }
@@ -551,26 +556,29 @@ internal class DotNetTemplateFactory(
         }
     }
 
-    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, string templateName, ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (inputs.Name is not { } name || !ProjectNameValidator.IsProjectNameValid(name))
         {
-            var defaultName = executionContext.WorkingDirectory.Name;
+            var defaultName = templateName;
             name = await prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
         return name;
     }
 
-    private async Task<string> GetOutputPathAsync(TemplateInputs inputs, Func<string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<string?> GetOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
+        var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
+        var wasExplicitlyProvided = inputs.Output is not null;
+
         if (inputs.Output is not { } outputPath)
         {
-            var defaultPath = pathDeriver(projectName);
-            outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, cancellationToken);
+            var defaultPath = pathDeriver(executionContext, projectName);
+            outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken);
         }
 
-        outputPath = Path.GetFullPath(outputPath);
+        outputPath = Path.GetFullPath(outputPath, executionContext.WorkingDirectory.FullName);
 
         // When running in extension mode (VS Code), the folder picker returns the parent
         // directory the user selected. Append the project name as a subdirectory so the
@@ -588,6 +596,18 @@ internal class DotNetTemplateFactory(
             else
             {
                 outputPath = normalizedOutputPath;
+            }
+        }
+
+        // Validate the resolved output path when --output was explicitly provided.
+        // When the user interactively accepted the default, the prompt validator already ran.
+        if (wasExplicitlyProvided)
+        {
+            var validationError = OutputPathHelper.ValidateOutputPath(outputPath);
+            if (validationError is not null)
+            {
+                interactionService.DisplayError(validationError);
+                return null;
             }
         }
 

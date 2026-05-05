@@ -8,7 +8,7 @@ namespace Aspire.Cli.Templating;
 internal class CallbackTemplate(
     string name,
     string description,
-    Func<string, string> pathDeriverCallback,
+    Func<CliExecutionContext, string, string> pathDeriverCallback,
     Action<Command> applyOptionsCallback,
     Func<CallbackTemplate, TemplateInputs, ParseResult, CancellationToken, Task<TemplateResult>> applyTemplateCallback,
     TemplateRuntime runtime = TemplateRuntime.DotNet,
@@ -28,7 +28,7 @@ internal class CallbackTemplate(
 
     public TemplateRuntime Runtime => runtime;
 
-    public Func<string, string> PathDeriver => pathDeriverCallback;
+    public Func<CliExecutionContext, string, string> PathDeriver => pathDeriverCallback;
 
     public string? LanguageId => languageId;
 

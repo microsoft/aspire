@@ -31,17 +31,15 @@ internal sealed partial class CliTemplateFactory
         var projectName = inputs.Name;
         if (string.IsNullOrWhiteSpace(projectName))
         {
-            var defaultName = _executionContext.WorkingDirectory.Name;
+            var defaultName = _.Name;
             projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
-        var outputPath = inputs.Output;
-        if (string.IsNullOrWhiteSpace(outputPath))
+        var outputPath = await ResolveOutputPathAsync(inputs, _.PathDeriver, projectName, parseResult, cancellationToken);
+        if (outputPath is null)
         {
-            var defaultOutputPath = $"./{projectName}";
-            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, cancellationToken);
+            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
         }
-        outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 
         _logger.LogDebug("Applying empty AppHost template. LanguageId: {LanguageId}, Language: {LanguageDisplayName}, ProjectName: {ProjectName}, OutputPath: {OutputPath}.", languageId, language.DisplayName, projectName, outputPath);
 

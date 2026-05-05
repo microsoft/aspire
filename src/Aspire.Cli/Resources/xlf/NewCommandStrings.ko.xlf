@@ -52,6 +52,11 @@
         <target state="needs-review-translation">프로젝트의 출력 경로입니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="OutputDirectoryNotEmpty">
+        <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
+        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">템플릿 버전을 확인하는 중...</target>

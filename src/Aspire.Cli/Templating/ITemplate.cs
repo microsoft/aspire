@@ -36,9 +36,9 @@ internal interface ITemplate
     TemplateRuntime Runtime { get; }
 
     /// <summary>
-    /// Gets a function that derives the output path from a project name.
+    /// Gets a function that derives the default output path from an execution context and a project name.
     /// </summary>
-    Func<string, string> PathDeriver { get; }
+    Func<CliExecutionContext, string, string> PathDeriver { get; }
 
     /// <summary>
     /// Gets the AppHost language identifier associated with this template.

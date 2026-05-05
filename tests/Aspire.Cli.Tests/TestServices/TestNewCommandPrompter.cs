@@ -6,6 +6,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
+using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -35,7 +36,7 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
         };
     }
 
-    public override Task<string> PromptForOutputPath(string path, ParseResult parseResult, CancellationToken cancellationToken)
+    public override Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
     {
         return PromptForOutputPathCallback switch
         {

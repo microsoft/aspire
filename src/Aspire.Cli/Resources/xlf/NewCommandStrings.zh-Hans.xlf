@@ -52,6 +52,11 @@
         <target state="needs-review-translation">项目的输出路径。</target>
         <note />
       </trans-unit>
+      <trans-unit id="OutputDirectoryNotEmpty">
+        <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
+        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">正在解析模板版本...</target>

@@ -94,9 +94,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
     [Fact]
     // Quarantined due to flakiness. See linked issue for details.
-    public async Task NewCommandDerivesOutputPathFromProjectNameForStarterTemplate()
+    public async Task NewCommandDerivesProjectNameFromTemplateNameForStarterTemplate()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        string? capturedDefaultProjectName = null;
+        string? capturedDefaultOutputPath = null;
         var services = CreateServiceCollection(workspace, options =>
         {
             options.NewCommandPrompterFactory = (sp) =>
@@ -106,12 +108,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
                 prompter.PromptForProjectNameCallback = (defaultName) =>
                 {
+                    capturedDefaultProjectName = defaultName;
                     return "CustomName";
                 };
 
                 prompter.PromptForOutputPathCallback = (path) =>
                 {
-                    Assert.Equal("./CustomName", path);
+                    capturedDefaultOutputPath = path;
                     return path;
                 };
 
@@ -125,6 +128,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal("aspire-starter", capturedDefaultProjectName);
+        Assert.Equal("./CustomName", capturedDefaultOutputPath);
     }
 
     [Fact]
@@ -152,7 +157,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --name MyApp --output . --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-starter --name MyApp --output ./output --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -451,7 +456,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --name MyApp --output . --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-starter --name MyApp --output ./output --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -483,7 +488,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --name MyApp --output . --use-redis-cache --test-framework None --version 9.2.0");
+        var result = command.Parse("new aspire-starter --name MyApp --output ./output --use-redis-cache --test-framework None --version 9.2.0");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -683,7 +688,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --name TestApp --output .");
+        var result = command.Parse("new aspire-starter --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -708,7 +713,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         // This test validates that project names containing Spectre markup characters
         // (like '[' and ']') are properly escaped when displayed as default values in prompts.
         // This prevents crashes when the markup parser encounters malformed markup.
-        
+
         var projectNameWithMarkup = "[27;5;13~";  // Example of input that could crash the markup parser
         var capturedProjectNameDefault = string.Empty;
         var capturedOutputPathDefault = string.Empty;
@@ -735,8 +740,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 prompter.PromptForOutputPathCallback = (path) =>
                 {
                     capturedOutputPathDefault = path;
-                    // Return the path as-is - the escaping is handled internally by PromptForOutputPath
-                    return path;
+                    // Return a path with markup characters to verify it doesn't crash
+                    return projectNameWithMarkup;
                 };
 
                 return prompter;
@@ -746,14 +751,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse($"new aspire-starter --use-redis-cache --test-framework None");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        // Verify that the default output path was derived from the project name with markup characters
-        // The path parameter passed to the callback contains the unescaped markup characters
-        var expectedPath = $"./[27;5;13~";
+        // Verify that the default output path is derived from the project name (which contains markup characters)
+        var expectedPath = $"./{projectNameWithMarkup}";
         Assert.Equal(expectedPath, capturedOutputPathDefault);
     }
 
@@ -806,7 +810,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new --name TestApp --output .");
+        var result = command.Parse("new --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -816,8 +820,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain((KnownTemplateId.TypeScriptEmptyAppHost, "Empty (TypeScript AppHost)"), promptedTemplates);
         Assert.DoesNotContain((KnownTemplateId.JavaEmptyAppHost, "Empty (Java AppHost)"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React, TypeScript AppHost)"), promptedTemplates);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
-        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.ts")));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "aspire.config.json")));
     }
 
     [Fact]
@@ -876,7 +880,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new --name TestApp --output .");
+        var result = command.Parse("new --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -911,7 +915,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -972,7 +976,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -1035,7 +1039,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -1063,12 +1067,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output . --language typescript --localhost-tld false --suppress-agent-init");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(KnownLanguageId.TypeScript, scaffoldedLanguageId);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.ts")));
     }
 
     [Fact]
@@ -1100,12 +1104,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-java-empty --name TestApp --output . --localhost-tld false");
+        var result = command.Parse("new aspire-java-empty --name TestApp --output ./output --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(KnownLanguageId.Java, scaffoldedLanguageId);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.java")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "AppHost.java")));
     }
 
     [Fact]
@@ -1136,12 +1140,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-py-empty --name TestApp --output . --localhost-tld false");
+        var result = command.Parse("new aspire-py-empty --name TestApp --output ./output --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(KnownLanguageId.Python, scaffoldedLanguageId);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.py")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.py")));
     }
 
     [Fact]
@@ -1153,11 +1157,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output . --localhost-tld false");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs")));
     }
 
     [Fact]
@@ -1197,13 +1201,13 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.True(localhostPrompted);
 
-        var runProfilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        var runProfilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", "aspire.config.json");
         Assert.True(File.Exists(runProfilePath));
         var runProfile = await File.ReadAllTextAsync(runProfilePath);
         Assert.Contains("testapp.dev.localhost", runProfile);
@@ -1229,7 +1233,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-ts-empty --name TestApp --output . --localhost-tld false");
+        var result = command.Parse("new aspire-ts-empty --name TestApp --output ./output --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -1277,7 +1281,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-ts-empty --name TestApp --output . --channel stable --localhost-tld false");
+        var result = command.Parse("new aspire-ts-empty --name TestApp --output ./output --channel stable --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -1298,7 +1302,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 var interactionService = sp.GetRequiredService<IInteractionService>();
                 var prompter = new TestNewCommandPrompter(interactionService);
 
-                // Accept the default "./TestApp" path from the prompt
+                // Accept the default path from the prompt
                 prompter.PromptForOutputPathCallback = (path) => path;
 
                 return prompter;
@@ -1317,7 +1321,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        // Do not pass --output so the default "./TestApp" path is used via the prompter
+        // Do not pass --output so the default project-name path is used via the prompter
         var result = command.Parse("new aspire-ts-empty --name TestApp --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
@@ -1396,14 +1400,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-ts-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-ts-empty --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.True(scaffoldingInvoked);
         Assert.True(localhostPrompted);
 
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", "aspire.config.json");
         var configContent = await File.ReadAllTextAsync(configPath);
         Assert.Contains("testapp.dev.localhost", configContent);
         Assert.DoesNotContain("://localhost", configContent);
@@ -1475,7 +1479,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-ts-starter --name TestApp --output . --channel daily --localhost-tld false");
+        var result = command.Parse("new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1483,7 +1487,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
         Assert.Equal("9.2.0", sdkVersionSeenByProject);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".modules", "aspire.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".modules", "aspire.ts")));
     }
 
     [Fact]
@@ -1540,7 +1544,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-ts-starter --name TestApp --output . --channel daily --localhost-tld false");
+        var result = command.Parse("new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1566,7 +1570,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output");
 
         // Before the fix, this would throw InvalidOperationException with
         // "Interactive input is not supported in this environment" because
@@ -1662,10 +1666,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
-        // The default project name is derived from the workspace directory name
-        Assert.Equal(workspace.WorkspaceRoot.Name, capturedProjectName);
-        // The default output path ends with the project name subdirectory
-        Assert.Equal(workspace.WorkspaceRoot.Name, Path.GetFileName(capturedOutputPath));
+        // The default project name is derived from the template name
+        Assert.Equal("aspire-starter", capturedProjectName);
+        // The default output path is derived from the template name
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-starter"), capturedOutputPath);
     }
 
     [Fact]
@@ -1742,14 +1746,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-starter --name MyProject --output {workspace.WorkspaceRoot.FullName} --use-redis-cache --test-framework None --suppress-agent-init");
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var result = command.Parse($"new aspire-starter --name MyProject --output {outputDir} --use-redis-cache --test-framework None --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
         // Agent init should not have run — no skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(outputDir, ".agents", "skills", "aspire", "SKILL.md");
         Assert.False(File.Exists(skillPath));
     }
 
@@ -1828,7 +1833,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-ts-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-ts-empty --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2096,14 +2101,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output . --suppress-agent-init");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --suppress-agent-init");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
         // Agent init should not have run — no skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
         Assert.False(File.Exists(skillPath));
     }
 
@@ -2122,14 +2127,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output . --suppress-agent-init=false");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --suppress-agent-init=false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
         // Agent init should have run — default skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
         Assert.True(File.Exists(skillPath));
     }
 
@@ -2148,14 +2153,99 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output .");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
         // Default is to run agent init
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
         Assert.True(File.Exists(skillPath));
+    }
+
+    [Fact]
+    public async Task NewCommandRejectsExplicitOutputToNonEmptyDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a non-empty directory at the output path
+        var existingDir = workspace.CreateDirectory("existing-output");
+        File.WriteAllText(Path.Combine(existingDir.FullName, "file.txt"), "content");
+
+        TestInteractionService? testInteractionService = null;
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-starter --name TestApp --output {existingDir.FullName} --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.FailedToCreateNewProject, exitCode);
+        Assert.NotNull(testInteractionService);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputDirectoryNotEmpty, existingDir.FullName);
+        var e = Assert.Single(testInteractionService.DisplayedErrors);
+        Assert.Equal(expectedError, e);
+    }
+
+    [Fact]
+    public async Task NewCommandAllowsExplicitOutputToEmptyDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create an empty directory at the output path
+        var emptyDir = workspace.CreateDirectory("empty-output");
+
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-starter --name TestApp --output {emptyDir.FullName} --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task NewCommandDefaultOutputPathUsesUniqueProjectNameWhenDirectoryExists()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a non-empty directory matching the default project name (template name)
+        var existingDir = workspace.CreateDirectory("aspire-starter");
+        File.WriteAllText(Path.Combine(existingDir.FullName, "file.txt"), "content");
+
+        string? capturedDefaultPath = null;
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (path) =>
+                {
+                    capturedDefaultPath = path;
+                    return path;
+                };
+
+                return prompter;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal("./aspire-starter-2", capturedDefaultPath);
     }
 }

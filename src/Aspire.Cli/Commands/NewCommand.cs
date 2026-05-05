@@ -446,7 +446,7 @@ internal interface INewCommandPrompter
 {
     Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
-    Task<string> PromptForOutputPath(string v, ParseResult parseResult, CancellationToken cancellationToken);
+    Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default);
 }
 
 internal interface ITemplateVersionPrompter
@@ -559,10 +559,11 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
         return await topSelection.Action(cancellationToken);
     }
 
-    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, CancellationToken cancellationToken)
+    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
     {
         return await interactionService.PromptForFilePathAsync(
             NewCommandStrings.EnterTheOutputPath,
+            validator: validator,
             binding: PromptBinding.Create(parseResult, NewCommand.s_outputOption, path),
             directory: true,
             cancellationToken: cancellationToken

@@ -154,4 +154,7 @@
   <data name="NonInteractiveTemplateRequired" xml:space="preserve">
     <value>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</value>
   </data>
+  <data name="OutputDirectoryNotEmpty" xml:space="preserve">
+    <value>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</value>
+  </data>
 </root>
