@@ -52,7 +52,7 @@ internal sealed class ResourceLogSource<TResource>(
                 {
                     var line = NormalizeCarriageReturns(rawLine);
                     DateTime? timestamp = null;
-                    var rawContent = line;
+                    var rawContent = rawLine;
 
                     // Parse DCP logs if requested
                     if (parseDcpLogs && DcpLogParser.TryParseDcpLog(line, out var parsedMessage, out _, out var isErrorLevel, out var dcpTimestamp))
@@ -171,8 +171,7 @@ internal sealed class ResourceLogSource<TResource>(
 
     private static string NormalizeCarriageReturns(string line)
     {
-        var carriageReturnIndex = line.IndexOf('\r');
-        if (carriageReturnIndex < 0)
+        if (!line.Contains('\r'))
         {
             return line;
         }
