@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency bump in docs site",
+  "mergedAt": "2026-03-26T20:37:35Z",
+  "number": 612,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "chore(deps): bump smol-toml from 1.5.2 to 1.6.1 in /src/frontend"
+}

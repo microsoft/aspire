@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bulk dependency bump in docs site",
+  "mergedAt": "2026-03-26T20:59:01Z",
+  "number": 595,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "chore(deps): bump the npm-all group across 1 directory with 24 updates"
+}

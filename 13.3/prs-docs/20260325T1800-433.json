@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents container registry configuration matching Private endpoint support for Azure Container Registry entry",
+  "mergedAt": "2026-03-25T18:00:35Z",
+  "number": 433,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "included",
+  "title": "Document container registry resource configuration"
+}

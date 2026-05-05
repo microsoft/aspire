@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Internal skill update for doc writers; not a product changelog entry",
+  "mergedAt": "2026-03-26T23:34:25Z",
+  "number": 614,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Add TypeScript AppHost parity guidance to doc-writer skill"
+}

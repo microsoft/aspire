@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site infrastructure fix",
+  "mergedAt": "2026-03-27T14:47:20Z",
+  "number": 627,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Fix astro-mermaid icon pack serialization"
+}

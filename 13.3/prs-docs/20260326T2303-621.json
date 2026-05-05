@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs CI infrastructure change",
+  "mergedAt": "2026-03-26T23:03:42Z",
+  "number": 621,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Add CI gate check for conditional jobs"
+}

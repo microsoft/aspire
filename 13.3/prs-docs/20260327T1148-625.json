@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Minor clarification in CLI install docs; not tied to a specific 13.3 feature",
+  "mergedAt": "2026-03-27T11:48:31Z",
+  "number": 625,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Clarify commitSHA suffix explanation in install-cli.mdx"
+}

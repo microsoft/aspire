@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency bump in docs site",
+  "mergedAt": "2026-03-26T20:38:22Z",
+  "number": 618,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "chore(deps): bump picomatch from 2.3.1 to 2.3.2 in /src/frontend"
+}

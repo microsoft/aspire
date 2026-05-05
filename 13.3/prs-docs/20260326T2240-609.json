@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Documents TypeScript AppHost + PostgreSQL; no specific matching docsRequired entry in changelog",
+  "mergedAt": "2026-03-26T22:40:25Z",
+  "number": 609,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Add TypeScript AppHost support to PostgreSQL integration docs"
+}

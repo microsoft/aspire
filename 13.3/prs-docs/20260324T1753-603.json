@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Updates to 13.2 what's new page, not 13.3 milestone documentation",
+  "mergedAt": "2026-03-24T17:53:53Z",
+  "number": 603,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Remove certbot section and fix Docker Compose publishing description in what's new 13.2"
+}

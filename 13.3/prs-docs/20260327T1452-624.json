@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs CI workflow improvement; not a product feature",
+  "mergedAt": "2026-03-27T14:52:21Z",
+  "number": 624,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Refine CI gate workflow coverage"
+}

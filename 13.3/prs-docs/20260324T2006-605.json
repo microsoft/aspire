@@ -1,0 +1,9 @@
+{
+  "author": "Meir017",
+  "comment": "Minor doc fix for AddMailDev method; no matching 13.3 changelog entry",
+  "mergedAt": "2026-03-24T20:06:16Z",
+  "number": 605,
+  "runDate": "2026-05-05T23:22:25Z",
+  "status": "excluded",
+  "title": "Add ResourceName attribute to AddMailDev method"
+}
