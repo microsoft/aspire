@@ -43,6 +43,66 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
+  dogfood_comment:
+    name: Post dogfood comment
+    needs: [build_packages]
+    # Post the dogfood comment as soon as packages are built for same-repo PRs.
+    # Fork PRs are handled by dogfood-comment.yml (via workflow_run on CI completion)
+    # because the GITHUB_TOKEN for fork PRs doesn't have pull-requests:write.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Add dogfooding comment
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            const bashScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh';
+            const psScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1';
+
+            // Unique marker to identify dogfooding comments
+            const dogfoodMarker = '<!-- dogfood-pr -->';
+
+            // Skip if comment already exists
+            const comments = await github.rest.issues.listComments({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            if (comments.data.some(c => c.body.includes(dogfoodMarker))) {
+              core.info('Dogfood comment already exists, skipping');
+              return;
+            }
+
+            const comment = `${dogfoodMarker}
+            🚀 **Dogfood this PR with:**
+
+            > **⚠️ WARNING: Do not do this without first carefully reviewing the code of this PR to satisfy yourself it is safe.**
+
+            \`\`\`bash
+            curl -fsSL ${bashScript} | bash -s -- ${prNumber}
+            \`\`\`
+            Or
+            - Run remotely in PowerShell:
+            \`\`\`powershell
+            iex "& { $(irm ${psScript}) } ${prNumber}"
+            \`\`\``;
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
     uses: ./.github/workflows/build-cli-native-archives.yml
