@@ -66,7 +66,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # Install Node.js plus supported TypeScript AppHost toolchains.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    npm install -g yarn@1.22.22 pnpm@10 && \
+    corepack enable yarn && \
+    corepack prepare yarn@4.14.1 --activate && \
+    npm install -g pnpm@10 && \
     curl -fsSL https://bun.sh/install | bash && \
     ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
     ln -s /root/.bun/bin/bunx /usr/local/bin/bunx && \
