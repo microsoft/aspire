@@ -4,6 +4,8 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "Checking prerequisites..."
 
+$requiredYarnVersion = "4.14.1"
+
 # Check for Node.js
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Error "Error: Node.js is not installed. Please install Node.js first."
@@ -16,15 +18,36 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Check for yarn
-if (-not (Get-Command yarn -ErrorAction SilentlyContinue) -and (Get-Command corepack -ErrorAction SilentlyContinue)) {
-    Write-Host "Enabling yarn with corepack..."
+# Activate the pinned yarn version through Corepack when available.
+if (Get-Command corepack -ErrorAction SilentlyContinue) {
+    Write-Host "Activating yarn $requiredYarnVersion with corepack..."
     corepack enable yarn
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "corepack enable yarn failed with exit code $LASTEXITCODE. Continuing to validate the yarn on PATH."
+    }
+
+    corepack prepare "yarn@$requiredYarnVersion" --activate
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "corepack prepare yarn@$requiredYarnVersion failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+    }
 }
 
 if (-not (Get-Command yarn -ErrorAction SilentlyContinue)) {
-    Write-Error "Error: yarn is not installed. Please install yarn first."
-    Write-Host "You can install yarn by running: npm install -g corepack@latest; corepack enable yarn"
+    Write-Error "Error: yarn is not available. Install Corepack and activate yarn $requiredYarnVersion."
+    Write-Host "You can install Corepack by running: npm install -g corepack@0.34.7; corepack prepare yarn@$requiredYarnVersion --activate"
+    exit 1
+}
+
+$yarnVersion = yarn --version
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "yarn --version failed with exit code $LASTEXITCODE"
+    exit $LASTEXITCODE
+}
+
+if ($yarnVersion -ne $requiredYarnVersion) {
+    Write-Error "Error: yarn $requiredYarnVersion is required, but found $yarnVersion."
+    Write-Host "Use Corepack to activate the pinned version: corepack prepare yarn@$requiredYarnVersion --activate"
     exit 1
 }
 
