@@ -343,6 +343,7 @@ jobs:
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # CLI E2E Dockerfiles consume this as a build arg to avoid overloaded default Ubuntu package servers.
+          # azure.archive.ubuntu.com does not serve HTTPS; HTTP is intentional and matches the GitHub-hosted Ubuntu runner fallback mirror.
           ASPIRE_E2E_UBUNTU_APT_MIRROR: ${{ runner.os == 'Linux' && (runner.arch == 'ARM64' && 'https://azure.ports.ubuntu.com/ubuntu-ports/' || 'http://azure.archive.ubuntu.com/ubuntu/') || '' }}
           # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
@@ -431,6 +432,7 @@ jobs:
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # CLI E2E Dockerfiles consume this as a build arg to avoid overloaded default Ubuntu package servers.
+          # azure.archive.ubuntu.com does not serve HTTPS; HTTP is intentional and matches the GitHub-hosted Ubuntu runner fallback mirror.
           ASPIRE_E2E_UBUNTU_APT_MIRROR: ${{ runner.os == 'Linux' && (runner.arch == 'ARM64' && 'https://azure.ports.ubuntu.com/ubuntu-ports/' || 'http://azure.archive.ubuntu.com/ubuntu/') || '' }}
           # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
