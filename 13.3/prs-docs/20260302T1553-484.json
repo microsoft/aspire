@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI workflow fix for Integration Data Updater - not product documentation",
+  "mergedAt": "2026-03-02T15:53:37Z",
+  "number": 484,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "fix: run `corepack install` from `src/frontend` in Integration Data Updater workflow"
+}

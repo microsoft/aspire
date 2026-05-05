@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Azure SQL Server private endpoint docs - no matching 13.3 changelog entry",
+  "mergedAt": "2026-03-02T19:35:06Z",
+  "number": 487,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Update Azure SQL Server docs for private endpoints"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "ASPIREINTERACTION001 pragma note - minor doc improvement, no changelog entry",
+  "mergedAt": "2026-03-06T16:12:21Z",
+  "number": 499,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Add explanatory note about ASPIREINTERACTION001 pragma for WithCustomInput"
+}

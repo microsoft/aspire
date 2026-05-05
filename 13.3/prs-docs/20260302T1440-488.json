@@ -1,0 +1,9 @@
+{
+  "author": "alex-clickhouse",
+  "comment": "ClickHouse integration docs - no matching 13.3 changelog entry found",
+  "mergedAt": "2026-03-02T14:40:48Z",
+  "number": 488,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Add ClickHouse database integration docs"
+}

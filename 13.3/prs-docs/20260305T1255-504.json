@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CLI docs for 13.2 changes (aspire setup/doctor) - documents older version",
+  "mergedAt": "2026-03-05T12:55:04Z",
+  "number": 504,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "CLI docs: aspire setup → doctor, option standardization for 13.2"
+}

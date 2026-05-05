@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Integration Data Updater workflow chore - not product documentation",
+  "mergedAt": "2026-03-06T01:48:59Z",
+  "number": 519,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "chore: update allowed domains in integration data workflow"
+}

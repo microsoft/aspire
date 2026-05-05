@@ -1,0 +1,9 @@
+{
+  "author": "Victor-johnsson",
+  "comment": "Azure Blob Storage code sample fix - minor correction, no changelog entry",
+  "mergedAt": "2026-03-05T12:47:17Z",
+  "number": 509,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Call RunAsEmulator in blob example to match prose"
+}

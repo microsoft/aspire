@@ -1,0 +1,18 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript AppHosts now run `tsc --noEmit` before launching to validate compilation before the dashboard starts. If compile errors are found, startup is aborted with clear TypeScript diagnostic output, preventing a partially broken application from running.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-05-05T16:27:44Z",
+  "lastMergedAt": "2026-05-05T16:27:44Z",
+  "name": "TypeScript AppHost compile-time validation before startup",
+  "prs": [
+    16755
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Removes 9.x publisher model API docs - documents older version content cleanup",
+  "mergedAt": "2026-03-03T16:11:44Z",
+  "number": 491,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Remove 9.x publisher model APIs from conceptual docs"
+}

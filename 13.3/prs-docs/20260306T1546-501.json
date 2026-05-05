@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "WithDataVolume cross-reference - minor doc improvement, no changelog entry",
+  "mergedAt": "2026-03-06T15:46:27Z",
+  "number": 501,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Cross-reference WithDataVolume() from persistent container lifetimes docs"
+}

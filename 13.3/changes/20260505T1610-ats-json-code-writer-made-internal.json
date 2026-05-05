@@ -1,0 +1,18 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`AtsJsonCodeWriter` has been moved from the public API of `Aspire.TypeSystem` to a shared internal helper. This type was only used internally by polyglot code generation projects and the CLI, and was never intended to be part of the public API surface.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-05-05T16:10:08Z",
+  "lastMergedAt": "2026-05-05T16:10:08Z",
+  "name": "`AtsJsonCodeWriter` removed from public API",
+  "prs": [
+    16752
+  ]
+}

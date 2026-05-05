@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #16689: validates TypeScript AppHosts before startup",
+  "mergedAt": "2026-05-05T16:27:44Z",
+  "number": 16755,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "included",
+  "title": "[release/13.3] Validate TypeScript AppHosts before startup"
+}

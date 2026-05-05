@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "WithContainerFiles docs - no matching 13.3 changelog entry found",
+  "mergedAt": "2026-03-04T13:13:02Z",
+  "number": 400,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Add a new documentation page for WithContainerFiles and PublishWithContainerFiles"
+}

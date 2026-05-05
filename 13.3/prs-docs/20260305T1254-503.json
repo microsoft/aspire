@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "aspire otel command reference docs - documents 13.2 feature (PR #14599)",
+  "mergedAt": "2026-03-05T12:54:21Z",
+  "number": 503,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "CLI: Add `aspire otel` command reference docs"
+}

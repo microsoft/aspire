@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "DefaultAzureCredential breaking change docs - references PR #14951, not in 13.3 milestone entries",
+  "mergedAt": "2026-03-06T15:56:29Z",
+  "number": 517,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Document DefaultAzureCredential breaking change in client integrations"
+}

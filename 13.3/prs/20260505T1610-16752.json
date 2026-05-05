@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #16677: makes AtsJsonCodeWriter a shared internal helper (breaking API removal)",
+  "mergedAt": "2026-05-05T16:10:08Z",
+  "number": 16752,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "included",
+  "title": "[release/13.3] Make AtsJsonCodeWriter a shared internal helper"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Sidebar label fixes - minor doc fix, no changelog entry",
+  "mergedAt": "2026-03-06T16:01:54Z",
+  "number": 460,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Fix inconsistent sidebar labels in Frameworks & runtimes"
+}

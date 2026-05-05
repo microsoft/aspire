@@ -1,0 +1,18 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where `aspire init` failed with exit code 103 on projects with `.sln`/`.slnx` files when using a non-stable CLI build (staging, daily, or PR). Template package resolution now uses the same channel-aware logic as `aspire new`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-05-05T16:09:06Z",
+  "lastMergedAt": "2026-05-05T16:09:06Z",
+  "name": "Fix `aspire init` template install for non-stable CLI builds",
+  "prs": [
+    16672
+  ]
+}

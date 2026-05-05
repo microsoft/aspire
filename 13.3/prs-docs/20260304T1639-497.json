@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "AddViteApp endpoint docs - no matching 13.3 changelog entry found",
+  "mergedAt": "2026-03-04T16:39:08Z",
+  "number": 497,
+  "runDate": "2026-05-05T16:30:58Z",
+  "status": "excluded",
+  "title": "Document AddViteApp auto-registered HTTP endpoint"
+}
