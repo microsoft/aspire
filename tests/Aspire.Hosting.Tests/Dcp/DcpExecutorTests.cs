@@ -2193,11 +2193,13 @@ public class DcpExecutorTests
     }
 
     [Fact]
-    public async Task ProjectExecutable_DebugSessionInfoWithoutProjectStillDefaultsToProjectSupport()
+    public async Task ProjectExecutable_DebugSessionInfoWithoutProjectFallsBackToProcess()
     {
-        // Bug #15606/#15647: VS Code extension sends SupportedLaunchConfigurations=["azure-functions"]
-        // (not including "project"). Standard project resources should still get IDE execution because
-        // "project" launch support is implicit in DCP.
+        // When the IDE explicitly advertises a SupportedLaunchConfigurations list that does NOT
+        // include "project", honor it: the IDE cannot launch project resources, so we must run
+        // them as a Process from the AppHost. The VS Code extension behaves this way when the
+        // C# extension is not installed; routing project resources to the extension in that case
+        // would result in them never starting (the extension returns 400 UnsupportedLaunchConfiguration).
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
             AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
@@ -2228,11 +2230,7 @@ public class DcpExecutorTests
         await appExecutor.RunApplicationAsync();
 
         var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "ServiceA");
-        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-
-        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
-        Assert.Single(launchConfigs);
-        Assert.Equal("project", launchConfigs[0].Type);
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
     }
 
     [Fact]
@@ -2440,10 +2438,11 @@ public class DcpExecutorTests
     [Fact]
     public async Task StandardAndCustomProjects_VSCodeScenario_BothRunInIde()
     {
-        // Combined VS Code scenario for bugs #15606/#15647 and class library projects:
-        // VS Code extension sends SupportedLaunchConfigurations=["azure-functions"] (not "project").
-        // A standard project (type "project") should still get IDE (implicit support).
-        // A project with "azure-functions" annotation should also get IDE (explicit match).
+        // Combined VS Code scenario for class library projects:
+        // VS Code extension sends SupportedLaunchConfigurations=["azure-functions"] (without "project").
+        // A standard project (type "project") falls to Process execution because the IDE explicitly
+        // did not advertise project support — the AppHost spawns dotnet itself.
+        // A project with "azure-functions" annotation gets IDE (explicit match).
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
             AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
@@ -2484,14 +2483,11 @@ public class DcpExecutorTests
         var dcpExes = kubernetesService.CreatedResources.OfType<Executable>().ToList();
         Assert.Equal(2, dcpExes.Count);
 
-        // Standard project: IDE via implicit "project" support (bug #15606/#15647 fix)
+        // Standard project: Process execution because the IDE did not advertise "project" support.
         var standardExe = Assert.Single(dcpExes, e => e.AppModelResourceName == "standard-project");
-        Assert.Equal(ExecutionType.IDE, standardExe.Spec.ExecutionType);
-        Assert.True(standardExe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var standardConfigs));
-        Assert.Single(standardConfigs);
-        Assert.Equal("project", standardConfigs[0].Type);
+        Assert.Equal(ExecutionType.Process, standardExe.Spec.ExecutionType);
 
-        // Azure Functions project: IDE via explicit "azure-functions" support
+        // Azure Functions project: IDE via explicit "azure-functions" support.
         var functionsExe = Assert.Single(dcpExes, e => e.AppModelResourceName == "functions-project");
         Assert.Equal(ExecutionType.IDE, functionsExe.Spec.ExecutionType);
     }
