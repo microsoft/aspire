@@ -203,6 +203,23 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void ConfigureContainer_BuildArgsCanBeClearedForPrebuiltImage()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+        CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy);
+
+        Assert.Equal("aspire-cli-e2e-dotnet:prebuilt", options.Image);
+        Assert.Empty(options.BuildArgs);
+    }
+
+    [Fact]
     public void ConfigureDockerContainerSource_FallsBackToDockerfileOutsideCI()
     {
         using var environment = new EnvironmentVariableScope(

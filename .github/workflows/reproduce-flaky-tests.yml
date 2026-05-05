@@ -195,7 +195,6 @@ jobs:
           set -euo pipefail
 
           docker load -i "${{ github.workspace }}/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz"
-          docker tag "aspire-cli-e2e-dotnet:${{ github.sha }}" "aspire-cli-e2e-dotnet:prebuilt"
           docker image inspect "aspire-cli-e2e-dotnet:prebuilt" > /dev/null
           echo "ASPIRE_E2E_DOTNET_IMAGE=aspire-cli-e2e-dotnet:prebuilt" >> "$GITHUB_ENV"
           echo "ASPIRE_E2E_REQUIRE_DOTNET_IMAGE=true" >> "$GITHUB_ENV"

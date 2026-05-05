@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Aspire E2E testing (.NET variant).
 #
 # Includes: .NET SDK 10.0, Docker CLI (via host socket mount), gh CLI,
-#           Node.js, Python, Java, Aspire install scripts.
+#           Node.js, Python, Aspire install scripts.
 #
 # Usage:
 #   Local dev (build from source):
@@ -86,19 +86,6 @@ RUN apt-get update -qq && \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Install Java (needed for Java AppHost tests).
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends openjdk-21-jdk && \
-    rm -rf /var/lib/apt/lists/*
-
-# --- Aspire CLI setup ---
-
-# Copy the install scripts.
-COPY eng/scripts/get-aspire-cli.sh /opt/aspire-scripts/
-COPY eng/scripts/get-aspire-cli-pr.sh /opt/aspire-scripts/
-COPY tests/Shared/Docker/NuGet.DotnetTool.config /opt/aspire-scripts/NuGet.config
-RUN chmod +x /opt/aspire-scripts/*.sh
-
 # Copy the bundle directory from the build stage.
 # When SKIP_SOURCE_BUILD=true the directory is empty; the conditional RUN below handles both cases.
 COPY --from=build /repo/artifacts/bundle /tmp/bundle
@@ -109,6 +96,15 @@ RUN if ls /tmp/bundle/aspire-*-linux-x64.tar.gz 1>/dev/null 2>&1; then \
       tar -xzf /tmp/bundle/aspire-*-linux-x64.tar.gz -C /root/.aspire && \
       rm -f /tmp/bundle/aspire-*-linux-x64.tar.gz; \
     fi
+
+# --- Aspire CLI setup ---
+
+# Keep repository-dependent copies after the expensive toolchain and bundle layers so BuildKit
+# cache hits are preserved when source files or scripts change independently.
+COPY eng/scripts/get-aspire-cli.sh /opt/aspire-scripts/
+COPY eng/scripts/get-aspire-cli-pr.sh /opt/aspire-scripts/
+COPY tests/Shared/Docker/NuGet.DotnetTool.config /opt/aspire-scripts/NuGet.config
+RUN chmod +x /opt/aspire-scripts/*.sh
 
 # Create the workspace mount point.
 RUN mkdir -p /workspace

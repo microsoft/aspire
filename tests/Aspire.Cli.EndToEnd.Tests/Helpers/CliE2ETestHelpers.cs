@@ -214,11 +214,20 @@ internal static class CliE2ETestHelpers
                     }
                 }
 
-                // Delegate all mode-specific Docker config to the strategy
-                strategy.ConfigureContainer(c);
+                ConfigureDockerContainerStrategy(c, strategy);
             });
 
         return builder.Build();
+    }
+
+    internal static void ConfigureDockerContainerStrategy(DockerContainerOptions options, CliInstallStrategy strategy)
+    {
+        // Delegate all mode-specific Docker config to the strategy.
+        strategy.ConfigureContainer(options);
+        if (!string.IsNullOrEmpty(options.Image))
+        {
+            options.BuildArgs.Clear();
+        }
     }
 
     internal static void ConfigureDockerContainerSource(DockerContainerOptions options, string repoRoot, DockerfileVariant variant)

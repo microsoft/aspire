@@ -8,7 +8,8 @@ on:
 
 env:
   CLI_E2E_DOTNET_IMAGE_ARTIFACT: cli-e2e-dotnet-image
-  CLI_E2E_DOTNET_IMAGE_TAG: aspire-cli-e2e-dotnet:${{ github.sha }}
+  CLI_E2E_DOTNET_IMAGE_TAG: aspire-cli-e2e-dotnet:prebuilt
+  CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE: cli-e2e-dotnet
 
 jobs:
   build:
@@ -28,12 +29,34 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker build \
-            --build-arg SKIP_SOURCE_BUILD=true \
-            --build-arg UBUNTU_APT_MIRROR=http://azure.archive.ubuntu.com/ubuntu/ \
-            -f tests/Shared/Docker/Dockerfile.e2e \
-            -t "$CLI_E2E_DOTNET_IMAGE_TAG" \
-            .
+          docker buildx create --name cli-e2e-builder --use
+          docker buildx inspect --bootstrap
+
+          build_image() {
+            local mirror="$1"
+            local -a build_args=(--build-arg SKIP_SOURCE_BUILD=true)
+
+            if [[ -n "$mirror" ]]; then
+              echo "Building with Ubuntu apt mirror: $mirror"
+              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
+            else
+              echo "Building with the default Ubuntu apt sources"
+            fi
+
+            docker buildx build \
+              --load \
+              --cache-from "type=gha,scope=$CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE" \
+              --cache-to "type=gha,scope=$CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE,mode=max,ignore-error=true" \
+              "${build_args[@]}" \
+              -f tests/Shared/Docker/Dockerfile.e2e \
+              -t "$CLI_E2E_DOTNET_IMAGE_TAG" \
+              .
+          }
+
+          if ! build_image "http://azure.archive.ubuntu.com/ubuntu/"; then
+            echo "Build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
+            build_image ""
+          fi
 
           mkdir -p artifacts/cli-e2e-image
           docker save "$CLI_E2E_DOTNET_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
