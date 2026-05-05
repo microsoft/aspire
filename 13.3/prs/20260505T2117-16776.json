@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Backport of #16666; fixes disabled languages shown in picker and Python selection failure",
+  "mergedAt": "2026-05-05T21:17:35Z",
+  "number": 16776,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "included",
+  "title": "[release/13.3] Fix Aspire new empty AppHost language picker"
+}

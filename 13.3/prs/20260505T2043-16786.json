@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Backport of #16684; fixes HostUrl resolution for container resources with container tunnel enabled",
+  "mergedAt": "2026-05-05T20:43:12Z",
+  "number": 16786,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "included",
+  "title": "[release/13.3] Fix HostUrl with container tunnel"
+}

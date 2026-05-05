@@ -1,0 +1,17 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Python resources in the VS Code extension now set the debug working directory to the script or app root instead of the workspace root, matching the behavior of the Aspire CLI and C# Dev Kit.",
+  "docsRequired": false,
+  "emoji": "🐍",
+  "firstMergedAt": "2026-05-05T21:20:08Z",
+  "lastMergedAt": "2026-05-05T21:20:08Z",
+  "name": "Fix Python working directory in VS Code debug sessions",
+  "prs": [
+    16779
+  ]
+}

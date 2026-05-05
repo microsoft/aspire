@@ -1,0 +1,17 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The Aspire dashboard now serves the correct blazor.web.js file when the host application targets .NET 11 preview 4. The dashboard targets .NET 8 and bundles versioned copies of this file as Blazor's JavaScript changes across .NET releases.",
+  "docsRequired": false,
+  "emoji": "🩹",
+  "firstMergedAt": "2026-05-05T21:14:17Z",
+  "lastMergedAt": "2026-05-05T21:14:17Z",
+  "name": "Fix dashboard compatibility with .NET 11 preview 4",
+  "prs": [
+    16761
+  ]
+}

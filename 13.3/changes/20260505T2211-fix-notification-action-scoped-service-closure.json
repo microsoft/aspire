@@ -1,0 +1,17 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard notification actions no longer capture scoped services via closure, preventing disposed service errors when the action is invoked after the originating DI scope has been released.",
+  "docsRequired": false,
+  "emoji": "🔔",
+  "firstMergedAt": "2026-05-05T22:11:37Z",
+  "lastMergedAt": "2026-05-05T22:11:37Z",
+  "name": "Fix notification action closure capturing scoped services",
+  "prs": [
+    16763
+  ]
+}

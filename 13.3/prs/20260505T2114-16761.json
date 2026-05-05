@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Direct fix; serves correct blazor.web.js for .NET 11 preview 4 host apps",
+  "mergedAt": "2026-05-05T21:14:17Z",
+  "number": 16761,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "included",
+  "title": "[release/13.3] Fix dashboard error in .NET 11 preview 4"
+}

@@ -1,0 +1,17 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Container resources using HostUrl that reference app-model host endpoints now resolve correctly when the Aspire container tunnel is enabled. The fix ensures tunnel services are created before container environments are resolved and that unmatched HostUrl values stay on the container host bridge.",
+  "docsRequired": false,
+  "emoji": "\ud83d\udd17",
+  "firstMergedAt": "2026-05-05T20:43:12Z",
+  "lastMergedAt": "2026-05-05T20:43:12Z",
+  "name": "Fix HostUrl resolution with container tunnel",
+  "prs": [
+    16786
+  ]
+}

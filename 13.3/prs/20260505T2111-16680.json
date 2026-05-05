@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Backport of #16653; avoids expensive filesystem scanning when aspire.config.json specifies a valid AppHost path",
+  "mergedAt": "2026-05-05T21:11:57Z",
+  "number": 16680,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "included",
+  "title": "[release/13.3] Avoid AppHost discovery when config path is valid"
+}

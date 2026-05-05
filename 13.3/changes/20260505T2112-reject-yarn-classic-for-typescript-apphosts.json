@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now detects Yarn Classic (v1) from package.json declarations and lockfiles and fails early with guidance to upgrade to Yarn 4+, npm, pnpm, or Bun. Yarn Classic argument-forwarding behavior is incompatible with Aspire publish/deploy and previously caused silent hangs.",
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf6",
+  "firstMergedAt": "2026-05-05T21:12:38Z",
+  "lastMergedAt": "2026-05-05T21:12:38Z",
+  "name": "Reject Yarn Classic (v1) for TypeScript AppHosts",
+  "prs": [
+    16792
+  ]
+}

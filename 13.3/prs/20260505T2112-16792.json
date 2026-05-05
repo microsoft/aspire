@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of #16620; detects Yarn Classic and fails early with guidance instead of hanging during deploy",
+  "mergedAt": "2026-05-05T21:12:38Z",
+  "number": 16792,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "included",
+  "title": "[release/13.3] Reject Yarn Classic for TypeScript AppHosts"
+}

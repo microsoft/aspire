@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Backport of #16668; sets Python debug working directory to script root instead of workspace root",
+  "mergedAt": "2026-05-05T21:20:08Z",
+  "number": 16779,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "included",
+  "title": "[release/13.3] Fix Python debug working directory in VS Code (#16575)"
+}

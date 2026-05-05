@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now uses the AppHost path from aspire.config.json directly when it is valid, avoiding expensive filesystem scanning for TypeScript and Python AppHosts. Stale or invalid configured paths still fall back to discovery.",
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-05-05T21:11:57Z",
+  "lastMergedAt": "2026-05-05T21:11:57Z",
+  "name": "Skip AppHost discovery when config path is valid",
+  "prs": [
+    16680
+  ]
+}

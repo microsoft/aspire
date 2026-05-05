@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Direct fix; notification actions no longer capture scoped services via closure preventing disposed service errors",
+  "mergedAt": "2026-05-05T22:11:37Z",
+  "number": 16763,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "included",
+  "title": "[release/13.3] Fix notification action closure over scoped services"
+}

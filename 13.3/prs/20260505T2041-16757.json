@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Bot dependency update (DCP version bump via Maestro); original PR #16751 also bot-authored",
+  "mergedAt": "2026-05-05T20:41:39Z",
+  "number": 16757,
+  "runDate": "2026-05-05T22:21:45Z",
+  "status": "excluded",
+  "title": "[release/13.3] [main] Update dependencies from microsoft/dcp"
+}

@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The aspire new language picker for empty AppHosts now shows only enabled languages, with a single top-level 'Empty AppHost (Choose language...)' entry. Previously disabled languages appeared as options and selecting Python with default feature flags failed with 'Unknown language: python'.",
+  "docsRequired": false,
+  "emoji": "🛠️",
+  "firstMergedAt": "2026-05-05T21:17:35Z",
+  "lastMergedAt": "2026-05-05T21:17:35Z",
+  "name": "Fix aspire new empty AppHost language picker",
+  "prs": [
+    16776
+  ]
+}
