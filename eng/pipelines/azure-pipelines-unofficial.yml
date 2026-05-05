@@ -333,6 +333,7 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - template: /eng/pipelines/templates/prepare-installer-log-artifact.yml@self
             - task: DownloadPipelineArtifact@2
               displayName: 🟣Download CLI archives
               inputs:
@@ -357,6 +358,7 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - template: /eng/pipelines/templates/prepare-installer-log-artifact.yml@self
             - task: DownloadPipelineArtifact@2
               displayName: 🟣Download CLI archives
               inputs:

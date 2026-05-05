@@ -1,0 +1,20 @@
+# Prepares the standard log artifact directory for installer preparation jobs
+# (WinGet, Homebrew) that do not run MSBuild and therefore do not naturally
+# produce logs at $(Build.ArtifactStagingDirectory)/artifacts/log/$(_BuildConfig).
+#
+# The shared 1ES job template publishes that path as a non-production log
+# artifact, so this template writes a small marker file to ensure the
+# directory exists and the publish step has something to upload.
+
+steps:
+  - pwsh: |
+      $logDir = Join-Path '$(Build.ArtifactStagingDirectory)' 'artifacts/log/$(_BuildConfig)'
+      New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+      $marker = Join-Path $logDir 'installer-job.txt'
+      @(
+        'This installer preparation job does not run MSBuild and produces no build logs.',
+        'This placeholder file exists so the shared job template has a non-empty log',
+        'artifact directory to publish.'
+      ) | Set-Content -Path $marker -Encoding utf8
+      Write-Host "Wrote placeholder log artifact marker: $marker"
+    displayName: 🟣Prepare placeholder log artifact

@@ -448,6 +448,7 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - template: /eng/pipelines/templates/prepare-installer-log-artifact.yml@self
             - task: DownloadPipelineArtifact@2
               displayName: 🟣Download CLI archives (win-x64)
               inputs:
@@ -476,6 +477,7 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - template: /eng/pipelines/templates/prepare-installer-log-artifact.yml@self
             - task: DownloadPipelineArtifact@2
               displayName: 🟣Download CLI archives (osx-x64)
               inputs:
