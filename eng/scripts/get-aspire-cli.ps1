@@ -1237,12 +1237,14 @@ function Install-AspireCli {
             Expand-AspireCliArchive -ArchiveFile $archivePath -DestinationPath $InstallPath -OS $targetOS
 
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
-
-            # Write install-route sidecar so Aspire CLI can identify this as a script-route install
-            $sidecarDir = Split-Path -Parent $InstallPath
-            $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
-            '{ "route": "script" }' | Set-Content -Path $sidecarPath -Encoding UTF8
         }
+
+        # Write install-route sidecar unconditionally so -WhatIf callers can also observe it.
+        # .NET I/O is used directly to bypass WhatIf propagation from the enclosing cmdlet.
+        $sidecarDir = Split-Path -Parent $InstallPath
+        $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+        [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
+        [System.IO.File]::WriteAllText($sidecarPath, '{ "route": "script" }')
 
         # Save the global channel setting if using quality-based download (not version-specific)
         # This allows 'aspire new' and 'aspire init' to use the same channel by default

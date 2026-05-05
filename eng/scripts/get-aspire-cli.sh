@@ -1130,14 +1130,11 @@ main() {
         exit 1
     fi
 
-    # Write install-route sidecar so Aspire CLI can identify this as a script-route install
+    # Write install-route sidecar unconditionally so dry-run callers can also observe it
     local sidecar_dir
     sidecar_dir="$(dirname "$INSTALL_PATH")"
-    if [[ "$DRY_RUN" == true ]]; then
-        say_info "[DRY RUN] Would write { \"route\": \"script\" } to $sidecar_dir/.aspire-install.json"
-    else
-        printf '{ "route": "script" }\n' > "$sidecar_dir/.aspire-install.json"
-    fi
+    mkdir -p "$sidecar_dir"
+    printf '{ "route": "script" }\n' > "$sidecar_dir/.aspire-install.json"
 
     # Skip PATH configuration if --skip-path is set
     if [[ "$SKIP_PATH" != true ]]; then
