@@ -812,7 +812,7 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [InlineData(EndpointProperty.TargetPort, "5000")]
     [InlineData(EndpointProperty.Scheme, "https")]
     [InlineData(EndpointProperty.HostAndPort, "project1-website123.azurewebsites.net")]
-    [InlineData(EndpointProperty.TlsEnabled, "False")]
+    [InlineData(EndpointProperty.TlsEnabled, "True")]
     public async Task GetEndpointPropertyExpression_ReturnsAppServiceEndpointPropertyExpression(EndpointProperty property, string expected)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -23,6 +23,7 @@
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
     <Compile Include="$(RepoRoot)src\Shared\ContainerRegistryInfrastructure.cs" />
+    <Compile Include="$(RepoRoot)src\Aspire.Hosting\Utils\FormattingHelpers.cs" Link="Utils\FormattingHelpers.cs" />
     <Compile Remove="tools\**\*.cs" />
   </ItemGroup>
 

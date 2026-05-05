@@ -6,6 +6,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Utils;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Azure.Identity;
@@ -266,7 +267,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
             if (expression.StringFormats[i] is string stringFormat && args[i] is string value)
             {
-                args[i] = FormatValue(value, stringFormat);
+                args[i] = FormattingHelpers.FormatValue(value, stringFormat);
             }
         }
 
@@ -292,7 +293,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var deploymentTarget = endpointReference.Resource.GetDeploymentTargetAnnotation();
         if (deploymentTarget?.ComputeEnvironment is not { } computeEnvironment)
         {
-            var reason = $"Resource '{endpointReference.Resource.Name}' does not have an ComputeEnvironment deployment target.";
+            var reason = $"Resource '{endpointReference.Resource.Name}' does not have a compute environment deployment target.";
             throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, reason);
         }
 
@@ -321,14 +322,6 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             $"Endpoint '{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}' cannot be used. {reason}");
     }
 
-    private static string FormatValue(string value, string format)
-    {
-        return format.ToLowerInvariant() switch
-        {
-            "uri" => Uri.EscapeDataString(value),
-            _ => throw new NotSupportedException($"The format '{format}' is not supported. Supported formats are 'uri' (encodes a URI)")
-        };
-    }
 }
 
 /// <summary>
