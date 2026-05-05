@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ internal sealed class GuestRuntime
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly Func<string, string?> _commandResolver;
+    private readonly ProfilingTelemetry? _profilingTelemetry;
 
     /// <summary>
     /// Creates a new GuestRuntime for the given runtime specification.
@@ -26,12 +28,14 @@ internal sealed class GuestRuntime
     /// <param name="logger">Logger for debugging output.</param>
     /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
     /// <param name="commandResolver">Optional command resolver used to locate executables on PATH.</param>
-    public GuestRuntime(RuntimeSpec spec, ILogger logger, FileLoggerProvider? fileLoggerProvider = null, Func<string, string?>? commandResolver = null)
+    /// <param name="profilingTelemetry">Optional profiling telemetry for child-process diagnostics.</param>
+    public GuestRuntime(RuntimeSpec spec, ILogger logger, FileLoggerProvider? fileLoggerProvider = null, Func<string, string?>? commandResolver = null, ProfilingTelemetry? profilingTelemetry = null)
     {
         _spec = spec;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _commandResolver = commandResolver ?? PathLookupHelper.FindFullPathFromPath;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <summary>
@@ -73,14 +77,19 @@ internal sealed class GuestRuntime
             var environmentVariables = commandSpec.EnvironmentVariables ?? new Dictionary<string, string>();
 
             var launcher = CreateDefaultLauncher();
+            using var activity = _profilingTelemetry is null
+                ? default
+                : _profilingTelemetry.StartGuestInitializeCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args.Length, directory);
             var (exitCode, output) = await launcher.LaunchAsync(
                 commandSpec.Command,
                 args,
                 directory,
                 environmentVariables,
                 cancellationToken);
+            activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
             {
+                activity.SetError($"{_spec.DisplayName} initialization exited with code {exitCode}.");
                 return (exitCode, output ?? outputCollector);
             }
         }
@@ -108,12 +117,20 @@ internal sealed class GuestRuntime
         var environmentVariables = _spec.InstallDependencies.EnvironmentVariables ?? new Dictionary<string, string>();
 
         var launcher = CreateDefaultLauncher();
+        using var activity = _profilingTelemetry is null
+            ? default
+            : _profilingTelemetry.StartGuestInstallDependencies(_spec.Language, _spec.DisplayName, _spec.InstallDependencies.Command, args.Length, directory);
         var (exitCode, output) = await launcher.LaunchAsync(
             _spec.InstallDependencies.Command,
             args,
             directory,
             environmentVariables,
             cancellationToken);
+        activity.SetProcessExitCode(exitCode);
+        if (exitCode != 0)
+        {
+            activity.SetError($"{_spec.DisplayName} dependency installation exited with code {exitCode}.");
+        }
 
         return (exitCode, output ?? outputCollector);
     }
@@ -203,9 +220,14 @@ internal sealed class GuestRuntime
             var mergedEnvironment = MergeEnvironmentVariables(environmentVariables, commandSpec);
 
             _logger.LogDebug("Launching pre-execution command: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
+            using var activity = _profilingTelemetry is null
+                ? default
+                : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args.Length, directory);
             var (exitCode, output) = await preExecuteLauncher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+            activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
             {
+                activity.SetError($"{_spec.DisplayName} pre-execution exited with code {exitCode}.");
                 return (exitCode, output ?? new OutputCollector());
             }
         }
@@ -227,7 +249,17 @@ internal sealed class GuestRuntime
         var mergedEnvironment = MergeEnvironmentVariables(environmentVariables, commandSpec);
 
         _logger.LogDebug("Launching: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
-        return await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+        using var activity = _profilingTelemetry is null
+            ? default
+            : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args.Length, directory);
+        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+        activity.SetProcessExitCode(exitCode);
+        if (exitCode != 0)
+        {
+            activity.SetError($"{_spec.DisplayName} execution exited with code {exitCode}.");
+        }
+
+        return (exitCode, output);
     }
 
     private static Dictionary<string, string> MergeEnvironmentVariables(

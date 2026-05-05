@@ -81,6 +81,7 @@ foreach (var profilingGroup in profilingGroups)
                 "dcp.executable.manage",
                 "dcp.service.ensure_effective_address",
                 "dcp.container.manage"));
+        var hasAnyDcpStartupSpan = traceSpans.Any(span => span.Scope == "dcp.startup");
         var hasDcpResourceObservedSpan = traceSpans.Any(span =>
             span.Scope == "Aspire.Hosting.Profiling" &&
             span.Name == "aspire.hosting.dcp.resource_observed");
@@ -94,6 +95,7 @@ foreach (var profilingGroup in profilingGroups)
             span.EventNames.Contains("aspire.resource.wait.observed", StringComparer.Ordinal) &&
             span.EventNames.Contains("aspire.resource.wait.completed", StringComparer.Ordinal));
         var hasRequiredDcpSpans = !requireDcpSpans || (hasDcpProcessSpan && hasDcpResourceSpan);
+        var hasRequiredDcpCreateObjectLink = !hasAnyDcpStartupSpan || hasDcpCreateObjectLink;
 
         if (hasStartCommandSpan &&
             hasChildDiagnosticSpan &&
@@ -101,7 +103,7 @@ foreach (var profilingGroup in profilingGroups)
             hasResourceCreateSpan &&
             hasResourceWaitSpan &&
             hasDcpResourceObservedSpan &&
-            hasDcpCreateObjectLink &&
+            hasRequiredDcpCreateObjectLink &&
             hasResourceWaitEvents &&
             hasRequiredDcpSpans)
         {

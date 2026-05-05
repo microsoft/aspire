@@ -15,6 +15,8 @@ internal static class ProfilingTelemetry
 
     internal static class Activities
     {
+        // Activity names describe AppHost/DCP orchestration work. Keep names stable
+        // because profiling exports are queried across CLI and AppHost versions.
         public const string DcpRunApplication = "aspire.hosting.dcp.run_application";
         public const string DcpPrepareServices = "aspire.hosting.dcp.prepare_services";
         public const string DcpPrepareResources = "aspire.hosting.dcp.prepare_resources";
@@ -36,6 +38,8 @@ internal static class ProfilingTelemetry
 
     internal static class Tags
     {
+        // Tags capture dimensions and diagnostics for spans/events, such as resource
+        // identity, DCP object identity, wait conditions, exit codes, and timing data.
         public const string ProfilingSessionId = "aspire.profiling.session_id";
         public const string LegacyStartupOperationId = "aspire.startup.operation_id";
         public const string AppHostName = "aspire.apphost.name";
@@ -89,6 +93,8 @@ internal static class ProfilingTelemetry
 
     internal static class Events
     {
+        // Events mark important moments within longer spans, for example retries,
+        // readiness observations, resource wait completions, and exception details.
         public const string DcpServiceAddressAllocated = "aspire.dcp.service_address_allocated";
         public const string DcpServiceAddressAllocationFailed = "aspire.dcp.service_address_allocation_failed";
         public const string KubernetesApiTimeout = "aspire.hosting.dcp.kubernetes_api.timeout";
@@ -104,6 +110,8 @@ internal static class ProfilingTelemetry
 
     internal static class Annotations
     {
+        // DCP annotations carry profiling trace context through rendered resources so
+        // later watch/reconcile notifications can reconnect to the resource creation span.
         public const string ProfilingSessionId = "aspire-profiling-session-id";
         public const string TraceParent = "aspire-profiling-traceparent";
         public const string TraceState = "aspire-profiling-tracestate";

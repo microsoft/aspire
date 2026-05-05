@@ -12,6 +12,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared.UserSecrets;
@@ -41,6 +42,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly TimeProvider _timeProvider;
     private readonly RunningInstanceManager _runningInstanceManager;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -59,6 +61,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         ILanguageDiscovery languageDiscovery,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
+        ProfilingTelemetry profilingTelemetry,
         TimeProvider? timeProvider = null)
     {
         _resolvedLanguage = language;
@@ -73,6 +76,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _languageDiscovery = languageDiscovery;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
+        _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -237,7 +241,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             appHostServerProject,
             environmentVariables: null,
             debug: false,
-            _logger);
+            _logger,
+            _profilingTelemetry);
 
         // Step 3: Connect to server
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -393,7 +398,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger);
+                _logger,
+                _profilingTelemetry);
             var socketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
@@ -860,7 +866,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger);
+                _logger,
+                _profilingTelemetry);
             var jsonRpcSocketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
@@ -1369,7 +1376,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
             }
 
-            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider);
+            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider, profilingTelemetry: _profilingTelemetry);
 
             _logger.LogDebug("Created GuestRuntime for {RuntimeDisplayName}: Execute={Command} {Args}",
                 runtimeSpec.DisplayName,

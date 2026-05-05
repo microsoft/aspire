@@ -43,10 +43,23 @@ internal static class KnownConfigNames
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
     public const string MsBuildTerminalLogger = "MSBUILDTERMINALLOGGER";
+
+    // Enables Aspire's local profiling telemetry. This is diagnostic telemetry used to correlate
+    // CLI, AppHost, DCP, and child-process spans, and is separate from customer telemetry.
     public const string ProfilingEnabled = "ASPIRE_PROFILING_ENABLED";
+
+    // Stable identifier shared by every process participating in one profiling capture.
     public const string ProfilingSessionId = "ASPIRE_PROFILING_SESSION_ID";
+
+    // W3C trace context propagated from the launching process to child processes so their spans
+    // attach to the same profiling trace.
     public const string ProfilingTraceParent = "ASPIRE_PROFILING_TRACEPARENT";
+
+    // Optional W3C tracestate companion value for ASPIRE_PROFILING_TRACEPARENT.
     public const string ProfilingTraceState = "ASPIRE_PROFILING_TRACESTATE";
+
+    // When set, the CLI adds MSBuild binary log arguments to supported dotnet commands and records
+    // the emitted binlog path on the profiling span.
     public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
 
     public const string ExtensionEndpoint = "ASPIRE_EXTENSION_ENDPOINT";
@@ -86,8 +99,15 @@ internal static class KnownConfigNames
         public const string DependencyCheckTimeout = "DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
         public const string ServiceStartupWatchTimeout = "DOTNET_ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
 
+        // Legacy startup-profiling names are still read and written because DCP consumes them
+        // when correlating AppHost resource lifecycle spans. Keep them until DCP and older
+        // Aspire tools no longer need startup-named profiling correlation.
         public const string StartupProfilingEnabled = "ASPIRE_STARTUP_PROFILING_ENABLED";
+
+        // Legacy profiling session identifier, formerly named for startup-only profiling.
         public const string StartupOperationId = "ASPIRE_STARTUP_OPERATION_ID";
+
+        // Legacy W3C trace context propagated to DCP for resource lifecycle correlation.
         public const string StartupTraceParent = "ASPIRE_STARTUP_TRACEPARENT";
         public const string StartupTraceState = "ASPIRE_STARTUP_TRACESTATE";
     }

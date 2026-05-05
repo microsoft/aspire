@@ -640,7 +640,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
             .AddService(
                 serviceName: "aspire-apphost",
-                serviceVersion: typeof(DistributedApplication).Assembly.GetName().Version?.ToString())
+                serviceVersion: GetAppHostServiceVersion())
             .AddAttributes(ProfilingTelemetry.CreateAppHostResourceAttributes(AppHostPath, ExecutionContext.Operation.ToString()));
 
         _innerBuilder.Services.AddOpenTelemetry()
@@ -678,13 +678,10 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
     private bool ShouldConfigureProfilingTelemetry()
     {
-        if (!ExecutionContext.IsRunMode)
-        {
-            return false;
-        }
-
         // Dashboard OTLP is normally configured for app telemetry. Profiling
         // spans are high-cardinality diagnostics, so only export them when requested.
+        // This intentionally supports publish/deploy/inspect operations as well as
+        // run so profiling can follow the full CLI/AppHost/pipeline operation.
         var profilingEnabled =
             _innerBuilder.Configuration.GetBool(KnownConfigNames.ProfilingEnabled) ??
             _innerBuilder.Configuration.GetBool(KnownConfigNames.Legacy.StartupProfilingEnabled);
@@ -702,6 +699,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var dashboardOtlpHttpUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
 
         return !string.IsNullOrEmpty(dashboardOtlpGrpcUrl) || !string.IsNullOrEmpty(dashboardOtlpHttpUrl);
+    }
+
+    private static string? GetAppHostServiceVersion()
+    {
+        return typeof(DistributedApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
     }
 
     private void MapTransportOptionsFromCustomKeys(TransportOptions options)

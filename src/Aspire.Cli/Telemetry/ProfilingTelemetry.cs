@@ -20,7 +20,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     private bool _profilingTelemetryContextInitialized;
 
     /// <summary>
-    /// Activity names for profiling spans.
+    /// Activity names for profiling spans. These names describe local diagnostic
+    /// work such as CLI orchestration and child-process lifetimes; they are not
+    /// exported through customer telemetry.
     /// </summary>
     internal static class Activities
     {
@@ -43,13 +45,20 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string AppHostBuild = "aspire/cli/apphost.build";
         public const string AppHostCheckCompatibility = "aspire/cli/apphost.check_compatibility";
         public const string AppHostRunDotnetLifetime = "aspire/cli/apphost.run_dotnet.lifetime";
+        public const string AppHostServerLifetime = "aspire/cli/apphost_server.lifetime";
         public const string DotNetRunLifetime = "aspire/cli/dotnet.run.lifetime";
+        public const string GuestInitializeCommand = "aspire/cli/guest.initialize_command";
+        public const string GuestInstallDependencies = "aspire/cli/guest.install_dependencies";
+        public const string GuestExecuteCommand = "aspire/cli/guest.execute_command";
+        public const string NpmCommand = "aspire/cli/npm.command";
 
         public static string DotNetCommand(string command) => $"aspire/cli/dotnet.{command}";
     }
 
     /// <summary>
-    /// Tag names for profiling spans.
+    /// Tag names for profiling spans. Tags capture low-cardinality dimensions
+    /// and useful diagnostics such as process IDs, exit codes, command names,
+    /// output counts, and emitted artifact paths.
     /// </summary>
     internal static class Tags
     {
@@ -67,6 +76,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string DotNetStderrLines = "aspire.cli.dotnet.stderr_lines";
         public const string DotNetBinlogEnabled = "aspire.cli.dotnet.binlog_enabled";
         public const string DotNetBinlogPath = "aspire.cli.dotnet.binlog_path";
+        public const string DotNetBinlogArtifactType = "aspire.cli.dotnet.binlog_artifact_type";
         public const string DotNetBinlogSkipReason = "aspire.cli.dotnet.binlog_skip_reason";
         public const string AppHostProjectFileSpecified = "aspire.cli.apphost.project_file_specified";
         public const string AppHostRunningInstanceResult = "aspire.cli.apphost.running_instance_result";
@@ -95,11 +105,19 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string BackchannelCapabilityCount = "aspire.cli.backchannel.capability_count";
         public const string BackchannelHasBaselineCapability = "aspire.cli.backchannel.has_baseline_capability";
         public const string ChildCommand = "aspire.cli.child.command";
+        public const string AppHostServerImplementation = "aspire.cli.apphost_server.implementation";
+        public const string GuestRuntimeLanguage = "aspire.cli.guest.language";
+        public const string GuestRuntimeDisplayName = "aspire.cli.guest.display_name";
+        public const string GuestCommand = "aspire.cli.guest.command";
+        public const string GuestWorkingDirectory = "aspire.cli.guest.working_directory";
+        public const string NpmCommand = "aspire.cli.npm.command";
+        public const string NpmWorkingDirectory = "aspire.cli.npm.working_directory";
         public const string ProcessCommandArgsCount = "process.command_args.count";
     }
 
     /// <summary>
-    /// Event names for profiling spans.
+    /// Event names for profiling spans. Events mark meaningful points within a
+    /// span, such as process start, first output, retries, and readiness signals.
     /// </summary>
     internal static class Events
     {
@@ -128,11 +146,13 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     }
 
     /// <summary>
-    /// Common profiling tag values.
+    /// Common profiling tag values. Values should be stable strings so trace
+    /// queries can group by them across CLI versions.
     /// </summary>
     internal static class Values
     {
         public const string UnsupportedDotNetCommand = "unsupported_dotnet_command";
+        public const string MsBuildBinlog = "msbuild.binlog";
     }
 
     public bool IsEnabled => ProfilingTelemetryContext.IsEnabled(configuration);
@@ -274,6 +294,38 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return activity;
     }
 
+    internal ActivityScope StartAppHostServerLifetime(string implementationName)
+    {
+        var activity = StartActivity(Activities.AppHostServerLifetime, ActivityKind.Client);
+        activity.SetAppHostServerImplementation(implementationName);
+        return activity;
+    }
+
+    internal ActivityScope StartGuestInitializeCommand(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    {
+        var activity = StartGuestProcessActivity(Activities.GuestInitializeCommand, languageId, displayName, command, argsCount, workingDirectory);
+        return activity;
+    }
+
+    internal ActivityScope StartGuestInstallDependencies(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    {
+        var activity = StartGuestProcessActivity(Activities.GuestInstallDependencies, languageId, displayName, command, argsCount, workingDirectory);
+        return activity;
+    }
+
+    internal ActivityScope StartGuestExecuteCommand(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    {
+        var activity = StartGuestProcessActivity(Activities.GuestExecuteCommand, languageId, displayName, command, argsCount, workingDirectory);
+        return activity;
+    }
+
+    internal ActivityScope StartNpmCommand(string command, int argsCount, string workingDirectory)
+    {
+        var activity = StartActivity(Activities.NpmCommand, ActivityKind.Client);
+        activity.SetNpmInvocation(command, argsCount, workingDirectory);
+        return activity;
+    }
+
     internal ActivityScope StartRunAppHostFindAppHost(FileInfo? passedAppHostProjectFile, ProfilingTelemetryContext? profilingTelemetryContext)
     {
         var activity = StartActivity(Activities.RunAppHostFindAppHost, profilingTelemetryContext: profilingTelemetryContext);
@@ -354,6 +406,13 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         profilingTelemetryContext?.AddTags(activity);
         return new ActivityScope(activity);
+    }
+
+    private ActivityScope StartGuestProcessActivity(string activityName, string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+    {
+        var activity = StartActivity(activityName, ActivityKind.Client);
+        activity.SetGuestInvocation(languageId, displayName, command, argsCount, workingDirectory);
+        return activity;
     }
 
     public void Dispose()
@@ -471,6 +530,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetAppHostDashboardHealthy(bool? healthy) => SetTag(Tags.AppHostDashboardHealthy, healthy);
 
+        public void SetAppHostServerImplementation(string implementationName) => SetTag(Tags.AppHostServerImplementation, implementationName);
+
         public void SetAppHostExtensionHasBuildCapability(bool hasCapability) => SetTag(Tags.AppHostExtensionHasBuildCapability, hasCapability);
 
         public void SetAppHostExtensionHost(bool extensionHost) => SetTag(Tags.AppHostExtensionHost, extensionHost);
@@ -517,6 +578,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         {
             SetTag(Tags.DotNetBinlogEnabled, true);
             SetTag(Tags.DotNetBinlogPath, binlogPath);
+            SetTag(Tags.DotNetBinlogArtifactType, Values.MsBuildBinlog);
         }
 
         public void SetDotNetBinlogSkippedUnsupportedCommand()
@@ -533,6 +595,24 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
             SetTag(Tags.DotNetNoLaunchProfile, options.NoLaunchProfile);
             SetTag(Tags.DotNetStartDebugSession, options.StartDebugSession);
             SetTag(Tags.DotNetDebug, options.Debug);
+        }
+
+        public void SetGuestInvocation(string languageId, string displayName, string command, int argsCount, DirectoryInfo workingDirectory)
+        {
+            SetTag(Tags.GuestRuntimeLanguage, languageId);
+            SetTag(Tags.GuestRuntimeDisplayName, displayName);
+            SetTag(Tags.GuestCommand, command);
+            SetTag(Tags.GuestWorkingDirectory, workingDirectory.FullName);
+            SetProcessExecutableName(Path.GetFileName(command));
+            SetProcessCommandArgsCount(argsCount);
+        }
+
+        public void SetNpmInvocation(string command, int argsCount, string workingDirectory)
+        {
+            SetTag(Tags.NpmCommand, command);
+            SetTag(Tags.NpmWorkingDirectory, workingDirectory);
+            SetProcessExecutableName(Path.GetFileName(command));
+            SetProcessCommandArgsCount(argsCount);
         }
 
         public void SetDotNetMsBuildServer(string? msBuildServer) => SetTag(Tags.DotNetMsBuildServer, msBuildServer);
