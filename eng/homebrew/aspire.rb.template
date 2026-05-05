@@ -16,6 +16,4 @@ cask "aspire" do
   end
 
   binary "aspire"
-
-  zap trash: "~/.aspire"
 end

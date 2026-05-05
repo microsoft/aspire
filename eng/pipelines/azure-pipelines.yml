@@ -389,6 +389,30 @@ extends:
                 name: computeChannel
                 displayName: 🟣Determine installer channel
 
+              # Determine 4-way CLI acquisition channel for sidecar embedding and downstream use.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $reason = '$(Build.Reason)'
+                  $branch = '$(Build.SourceBranch)'
+                  $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
+                  $versionKind = $versionKind.Trim()
+                  Write-Host "Build.Reason: '$reason'  SourceBranch: '$branch'  DotNetFinalVersionKind: '$versionKind'"
+
+                  if ($reason -eq 'PullRequest') {
+                    $aspireCliChannel = 'pr'
+                  } elseif ($versionKind -eq 'release') {
+                    $aspireCliChannel = 'stable'
+                  } elseif ($branch -match 'refs/heads/(internal/)?release/') {
+                    $aspireCliChannel = 'staging'
+                  } else {
+                    $aspireCliChannel = 'daily'
+                  }
+
+                  Write-Host "AspireCliChannel: $aspireCliChannel"
+                  Write-Host "##vso[task.setvariable variable=aspireCliChannel;isOutput=true]$aspireCliChannel"
+                name: computeAspireCliChannel
+                displayName: 🟣Compute AspireCliChannel (pr/stable/staging/daily)
+
       # OneLocBuild is temporarily disabled while we work with the loc team
       # to reconfigure it after the repo migration from dotnet/aspire to microsoft/aspire.
       # - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
@@ -413,6 +437,7 @@ extends:
         aspireVersion: $[ stageDependencies.build.Windows.outputs['computeVersion.aspireVersion'] ]
         aspireArtifactVersion: $[ stageDependencies.build.Windows.outputs['computeArtifactVersion.aspireArtifactVersion'] ]
         installerChannel: $[ stageDependencies.build.Windows.outputs['computeChannel.installerChannel'] ]
+        aspireCliChannel: $[ stageDependencies.build.Windows.outputs['computeAspireCliChannel.aspireCliChannel'] ]
       condition: |
         and(
           succeeded(),

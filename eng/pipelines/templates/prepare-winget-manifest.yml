@@ -29,18 +29,15 @@ steps:
       }
 
       if ([string]::IsNullOrWhiteSpace($channel)) {
-        Write-Error "Channel parameter is required (stable or prerelease)"
+        Write-Error "Channel parameter is required (stable)"
         exit 1
       }
 
       if ($channel -eq 'stable') {
         $templateDir = 'microsoft.aspire'
         $artifactName = 'winget-manifests-stable'
-      } elseif ($channel -eq 'prerelease') {
-        $templateDir = 'microsoft.aspire.prerelease'
-        $artifactName = 'winget-manifests-prerelease'
       } else {
-        Write-Error "Channel must be 'stable' or 'prerelease', got: $channel"
+        Write-Error "Channel must be 'stable', got: $channel"
         exit 1
       }
 

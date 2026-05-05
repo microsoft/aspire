@@ -16,7 +16,6 @@ winget install Microsoft.Aspire              # stable
 | Directory / File               | Description                                                                      |
 |--------------------------------|----------------------------------------------------------------------------------|
 | `microsoft.aspire/`            | Manifest templates for stable releases                                           |
-| `microsoft.aspire.prerelease/` | Manifest templates for prerelease builds                                         |
 | `generate-manifests.ps1`       | Downloads installers, computes SHA256 hashes, generates manifests from templates |
 
 Each manifest set contains three YAML files following the [WinGet manifest schema v1.10](https://learn.microsoft.com/windows/package-manager/package/manifest):

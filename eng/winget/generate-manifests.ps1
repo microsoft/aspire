@@ -15,7 +15,7 @@
 
 .PARAMETER TemplateDir
     The directory containing the manifest templates to use.
-    Use "microsoft.aspire" for release builds or "microsoft.aspire.prerelease" for prerelease builds.
+    Use "microsoft.aspire" for stable release builds.
 
 .PARAMETER Rids
     Comma-separated list of Runtime Identifiers for the installer architectures.
@@ -39,10 +39,6 @@
     When specified, skips all URL operations: both the HEAD-request validation and downloading
     installer files to compute SHA256 hashes. Placeholder hashes are used instead.
     This is useful for PR validation where the installer URLs have not been published yet.
-
-.EXAMPLE
-    ./generate-manifests.ps1 -Version "13.3.0-preview.1.26111.5" `
-        -TemplateDir "./eng/winget/microsoft.aspire.prerelease"
 
 .EXAMPLE
     ./generate-manifests.ps1 -Version "13.2.0" `

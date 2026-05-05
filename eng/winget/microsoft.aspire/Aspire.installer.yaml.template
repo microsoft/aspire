@@ -11,6 +11,7 @@ Commands:
 - aspire
 InstallModes:
 - silent
+Scope: user
 UpgradeBehavior: uninstallPrevious
 ReleaseDate: ${RELEASE_DATE}
 ${INSTALLERS}
