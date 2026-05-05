@@ -165,7 +165,7 @@ public sealed class DashboardCommandExecutor(
             if (response.Result is not null)
             {
                 toastParameters.PrimaryAction = loc[nameof(Dashboard.Resources.Resources.ResourceCommandViewResponse)];
-                toastParameters.OnPrimaryAction = EventCallback.Factory.Create<ToastResult>(this, () => OpenViewResponseDialogAsync(command, response));
+                toastParameters.OnPrimaryAction = EventCallback.Factory.Create<ToastResult>(this, () => OpenViewResponseDialogAsync(dialogService, command, response));
             }
 
             notificationService.ReplaceNotification(progressNotificationId, new NotificationEntry
@@ -173,12 +173,12 @@ public sealed class DashboardCommandExecutor(
                 Title = successTitle,
                 Body = response.Message,
                 Intent = MessageIntent.Success,
-                PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(command, response) : null
+                PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(loc, command, response) : null
             });
 
             if (response.Result?.DisplayImmediately == true)
             {
-                await OpenViewResponseDialogAsync(command, response).ConfigureAwait(false);
+                await OpenViewResponseDialogAsync(dialogService, command, response).ConfigureAwait(false);
             }
         }
         else if (response.Kind == ResourceCommandResponseKind.Cancelled)
@@ -206,7 +206,7 @@ public sealed class DashboardCommandExecutor(
             if (response.Result is not null)
             {
                 toastParameters.SecondaryAction = loc[nameof(Dashboard.Resources.Resources.ResourceCommandViewResponse)];
-                toastParameters.OnSecondaryAction = EventCallback.Factory.Create<ToastResult>(this, () => OpenViewResponseDialogAsync(command, response));
+                toastParameters.OnSecondaryAction = EventCallback.Factory.Create<ToastResult>(this, () => OpenViewResponseDialogAsync(dialogService, command, response));
             }
 
             notificationService.ReplaceNotification(progressNotificationId, new NotificationEntry
@@ -214,12 +214,12 @@ public sealed class DashboardCommandExecutor(
                 Title = failedTitle,
                 Body = response.Message,
                 Intent = MessageIntent.Error,
-                PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(command, response) : null
+                PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(loc, command, response) : null
             });
 
             if (response.Result?.DisplayImmediately == true)
             {
-                await OpenViewResponseDialogAsync(command, response).ConfigureAwait(false);
+                await OpenViewResponseDialogAsync(dialogService, command, response).ConfigureAwait(false);
             }
         }
 
@@ -261,16 +261,22 @@ public sealed class DashboardCommandExecutor(
         };
     }
 
-    private NotificationAction CreateViewResponseNotificationAction(CommandViewModel command, ResourceCommandResponseViewModel response)
+    private static NotificationAction CreateViewResponseNotificationAction(IStringLocalizer<Dashboard.Resources.Resources> loc, CommandViewModel command, ResourceCommandResponseViewModel response)
     {
         return new NotificationAction
         {
             Text = loc[nameof(Dashboard.Resources.Resources.ResourceCommandViewResponse)],
-            OnClick = () => OpenViewResponseDialogAsync(command, response)
+            OnClick = (services) =>
+            {
+                // Get dialog service from passed in services since this data is long lived.
+                // Using the dialog service from executor could cause closure over scoped services.
+                var dialogService = services.GetRequiredService<DashboardDialogService>();
+                return OpenViewResponseDialogAsync(dialogService, command, response);
+            }
         };
     }
 
-    private async Task OpenViewResponseDialogAsync(CommandViewModel command, ResourceCommandResponseViewModel response)
+    private static async Task OpenViewResponseDialogAsync(DashboardDialogService dialogService, CommandViewModel command, ResourceCommandResponseViewModel response)
     {
         var fixedFormat = response.Result!.Format switch
         {
