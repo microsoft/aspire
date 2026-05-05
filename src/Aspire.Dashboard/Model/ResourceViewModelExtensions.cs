@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Dashboard.Utils;
 
 namespace Aspire.Dashboard.Model;
@@ -108,11 +109,44 @@ internal static class ResourceViewModelExtensions
     }
 
     /// <summary>
-    /// Tries to get the terminal socket path for the resource.
+    /// Tries to get the per-replica terminal info: the stable replica index and the
+    /// total replica count for the parent resource. Both values are stamped onto
+    /// each replica snapshot by the AppHost when the resource has
+    /// <c>WithTerminal()</c> applied. The pair is sufficient for the dashboard to
+    /// build a <c>?resource=&lt;name&gt;&amp;replica=&lt;index&gt;</c> URL that the
+    /// terminal WebSocket proxy can resolve to a per-replica HMP v1 producer
+    /// socket without exposing the socket path to the browser.
     /// </summary>
-    public static bool TryGetTerminalSocketPath(this ResourceViewModel resource, [NotNullWhen(returnValue: true)] out string? socketPath)
+    public static bool TryGetTerminalReplicaInfo(this ResourceViewModel resource, out int replicaIndex, out int replicaCount)
     {
-        return resource.TryGetCustomDataString(KnownProperties.Terminal.SocketPath, out socketPath);
+        replicaIndex = 0;
+        replicaCount = 0;
+
+        if (!resource.TryGetCustomDataString(KnownProperties.Terminal.ReplicaIndex, out var indexString) ||
+            !int.TryParse(indexString, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex))
+        {
+            return false;
+        }
+
+        if (!resource.TryGetCustomDataString(KnownProperties.Terminal.ReplicaCount, out var countString) ||
+            !int.TryParse(countString, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaCount))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Tries to get the per-replica consumer UDS path stamped onto the snapshot
+    /// by the AppHost. Used by the dashboard's terminal WebSocket proxy to
+    /// connect a local HMP v1 client to the terminal host. Returns <c>false</c>
+    /// for resources that don't have a terminal or for snapshots from older
+    /// AppHost builds that don't stamp this property.
+    /// </summary>
+    public static bool TryGetTerminalConsumerUdsPath(this ResourceViewModel resource, [NotNullWhen(returnValue: true)] out string? consumerUdsPath)
+    {
+        return resource.TryGetCustomDataString(KnownProperties.Terminal.ConsumerUdsPath, out consumerUdsPath);
     }
 
     private static bool TryGetCustomDataString(this ResourceViewModel resource, string key, [NotNullWhen(returnValue: true)] out string? s)
