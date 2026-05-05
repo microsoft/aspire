@@ -10,6 +10,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,8 @@ internal sealed class AppHostLauncher(
     CliExecutionContext executionContext,
     IInteractionService interactionService,
     IAuxiliaryBackchannelMonitor backchannelMonitor,
+    ICliHostEnvironment hostEnvironment,
+    AspireCliTelemetry telemetry,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
@@ -84,17 +87,25 @@ internal sealed class AppHostLauncher(
         IEnumerable<string> additionalArgs,
         CancellationToken cancellationToken)
     {
-        // In JSON mode, avoid interactive prompts to keep stdout parseable.
-        var multipleAppHostBehavior = format == OutputFormat.Json
+        // In JSON mode or non-interactive mode, avoid interactive prompts.
+        var multipleAppHostBehavior = format == OutputFormat.Json || !hostEnvironment.SupportsInteractiveInput
             ? MultipleAppHostProjectsFoundBehavior.Throw
             : MultipleAppHostProjectsFoundBehavior.Prompt;
 
         // Failure mode 1: Project not found
-        var searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
-            passedAppHostProjectFile,
-            multipleAppHostBehavior,
-            createSettingsFile: false,
-            cancellationToken);
+        AppHostProjectSearchResult searchResult;
+        try
+        {
+            searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
+                passedAppHostProjectFile,
+                multipleAppHostBehavior,
+                createSettingsFile: false,
+                cancellationToken);
+        }
+        catch (ProjectLocatorException ex)
+        {
+            return BaseCommand.HandleProjectLocatorException(ex, interactionService, telemetry);
+        }
 
         var effectiveAppHostFile = searchResult.SelectedProjectFile;
 
@@ -117,8 +128,13 @@ internal sealed class AppHostLauncher(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName);
         var expectedHash = AppHostHelper.ExtractHashFromSocketPath(expectedSocketPrefix)!;
+        var legacyHash = AppHostHelper.ComputeLegacyHash(effectiveAppHostFile.FullName);
 
         logger.LogDebug("Waiting for socket with prefix: {SocketPrefix}, Hash: {Hash}", expectedSocketPrefix, expectedHash);
+        if (legacyHash is not null)
+        {
+            logger.LogDebug("Also searching for legacy hash: {LegacyHash}", legacyHash);
+        }
 
         // If --wait-for-debugger is active, show a message so the user knows the AppHost
         // is paused. In detached mode we don't have the AppHost PID (stdout is suppressed),
@@ -133,7 +149,7 @@ internal sealed class AppHostLauncher(
         // Start the child process and wait for the backchannel
         var launchResult = await interactionService.ShowStatusAsync(
             RunCommandStrings.StartingAppHostInBackground,
-            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, cancellationToken));
+            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, cancellationToken));
 
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
@@ -235,6 +251,7 @@ internal sealed class AppHostLauncher(
         string executablePath,
         List<string> childArgs,
         string expectedHash,
+        string? legacyHash,
         CancellationToken cancellationToken)
     {
         Process childProcess;
@@ -272,7 +289,8 @@ internal sealed class AppHostLauncher(
 
             await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
 
-            var connection = backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault();
+            var connection = backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault()
+                ?? (legacyHash is not null ? backchannelMonitor.GetConnectionsByHash(legacyHash).FirstOrDefault() : null);
             if (connection is not null)
             {
                 DashboardUrlsState? dashboardUrls = null;

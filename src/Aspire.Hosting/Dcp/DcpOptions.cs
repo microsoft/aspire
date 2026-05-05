@@ -118,12 +118,12 @@ internal class ValidateDcpOptions : IValidateOptions<DcpOptions>
     {
         var builder = new ValidateOptionsResultBuilder();
 
-        if (string.IsNullOrEmpty(options.CliPath))
+        if (string.IsNullOrWhiteSpace(options.CliPath))
         {
             builder.AddError("The path to the DCP executable used for Aspire orchestration is required.", "CliPath");
         }
 
-        if (string.IsNullOrEmpty(options.DashboardPath))
+        if (string.IsNullOrWhiteSpace(options.DashboardPath))
         {
             builder.AddError("The path to the Aspire Dashboard binaries is missing.", "DashboardPath");
         }
@@ -147,18 +147,12 @@ internal class ConfigureDefaultDcpOptions(
         var dcpPublisherConfiguration = configuration.GetSection(DcpPublisher);
         var assemblyMetadata = appOptions.Assembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
 
-        // Priority 1: Check configuration first (env vars are automatically bound via IConfiguration)
-        // BundleDiscovery env vars: ASPIRE_DCP_PATH, ASPIRE_DASHBOARD_PATH
+        // Priority 1: Check explicit DcpPublisher configuration first (env vars are automatically bound via IConfiguration)
+        // Priority 2: BundleDiscovery env vars: ASPIRE_DCP_PATH, ASPIRE_DASHBOARD_PATH
         var configDcpPath = configuration[BundleDiscovery.DcpPathEnvVar];
         var configDashboardPath = configuration[BundleDiscovery.DashboardPathEnvVar];
 
-        if (!string.IsNullOrEmpty(configDcpPath))
-        {
-            // Configuration/environment variable override - set DCP paths from bundle
-            options.CliPath = BundleDiscovery.GetDcpExecutablePath(configDcpPath);
-            options.ExtensionsPath = Path.Combine(configDcpPath, "ext");
-        }
-        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.CliPath)]))
+        if (!string.IsNullOrWhiteSpace(dcpPublisherConfiguration[nameof(options.CliPath)]))
         {
             // If an explicit path to DCP was provided from configuration
             options.CliPath = dcpPublisherConfiguration[nameof(options.CliPath)];
@@ -167,6 +161,12 @@ internal class ConfigureDefaultDcpOptions(
                 options.ExtensionsPath = Path.Combine(dcpDir, "ext");
             }
         }
+        else if (!string.IsNullOrWhiteSpace(configDcpPath))
+        {
+            // Configuration/environment variable override - set DCP paths from bundle
+            options.CliPath = BundleDiscovery.GetDcpExecutablePath(configDcpPath);
+            options.ExtensionsPath = Path.Combine(configDcpPath, "ext");
+        }
         else
         {
             // Resolve via assembly metadata attributes (NuGet packages)
@@ -174,15 +174,15 @@ internal class ConfigureDefaultDcpOptions(
             options.ExtensionsPath = GetMetadataValue(assemblyMetadata, DcpExtensionsPathMetadataKey);
         }
 
-        if (!string.IsNullOrEmpty(configDashboardPath))
-        {
-            // Configuration/environment variable override - set Dashboard path from bundle
-            options.DashboardPath = configDashboardPath;
-        }
-        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.DashboardPath)]))
+        if (!string.IsNullOrWhiteSpace(dcpPublisherConfiguration[nameof(options.DashboardPath)]))
         {
             // If an explicit path to Dashboard was provided from configuration
             options.DashboardPath = dcpPublisherConfiguration[nameof(options.DashboardPath)];
+        }
+        else if (!string.IsNullOrWhiteSpace(configDashboardPath))
+        {
+            // Configuration/environment variable override - set Dashboard path from bundle
+            options.DashboardPath = configDashboardPath;
         }
         else
         {

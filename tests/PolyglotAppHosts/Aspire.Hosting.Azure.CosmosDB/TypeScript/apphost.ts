@@ -14,17 +14,17 @@ const db = await cosmos.addCosmosDatabase("app-db", { databaseName: "appdb" });
 // 4) addContainer (single partition key path)
 await db.addContainer("orders", "/orderId", { containerName: "orders-container" });
 
-// 5) addContainerWithPartitionKeyPaths (IEnumerable<string> export)
-await db.addContainerWithPartitionKeyPaths("events", ["/tenantId", "/eventId"], {
+// 5) addContainer (IEnumerable<string> partition key paths)
+await db.addContainer("events", ["/tenantId", "/eventId"], {
     containerName: "events-container",
 });
 
 // 6) withAccessKeyAuthentication
 await cosmos.withAccessKeyAuthentication();
 
-// 7) withAccessKeyAuthenticationWithKeyVault
+// 7) withAccessKeyAuthentication(keyVault)
 const keyVault = await builder.addAzureKeyVault("kv");
-await cosmos.withAccessKeyAuthenticationWithKeyVault(keyVault);
+await cosmos.withAccessKeyAuthentication({ keyVaultBuilder: keyVault });
 
 // 8) runAsEmulator + emulator container configuration methods
 const cosmosEmulator = await builder.addAzureCosmosDB("cosmos-emulator");

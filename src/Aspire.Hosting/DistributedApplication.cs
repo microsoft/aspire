@@ -152,7 +152,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Creates a new distributed application builder")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
     public static IDistributedApplicationBuilder CreateBuilder(string[] args)
     {
         WaitForDebugger();
@@ -216,7 +216,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </summary>
     /// <param name="options">The <see cref="CreateBuilderOptions"/> to use for configuring the builder.</param>
     /// <returns>A new instance of the <see cref="IDistributedApplicationBuilder"/> interface.</returns>
-    [AspireExport("createBuilderWithOptions", Description = "Creates builder with options")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
     internal static IDistributedApplicationBuilder CreateBuilder(CreateBuilderOptions options)
     {
         WaitForDebugger();
@@ -244,6 +244,19 @@ public class DistributedApplication : IHost, IAsyncDisposable
         }
 
         return new DistributedApplicationBuilder(realOptions);
+    }
+
+    [AspireExport("createBuilder", Description = "Creates a new distributed application builder")]
+    internal static IDistributedApplicationBuilder CreateBuilderForPolyglot(
+        [AspireUnion(typeof(string[]), typeof(CreateBuilderOptions))] object? argsOrOptions = null)
+    {
+        return argsOrOptions switch
+        {
+            null => CreateBuilder(),
+            string[] args => CreateBuilder(args),
+            CreateBuilderOptions options => CreateBuilder(options),
+            _ => throw new ArgumentException("Options must be omitted, a string array, or a CreateBuilderOptions instance.", nameof(argsOrOptions))
+        };
     }
 
     private static void WaitForDebugger()

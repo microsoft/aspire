@@ -377,7 +377,7 @@ public static class OrleansServiceExtensions
     /// <param name="orleansService">The Orleans service, containing clustering, etc.</param>
     /// <returns>The resource builder.</returns>
     /// <exception cref="InvalidOperationException">Clustering has not been configured.</exception>
-    [AspireExport("withOrleansReference", Description = "Adds an Orleans silo reference to a resource")]
+    [AspireExport("withOrleansReference", MethodName = "withReference", Description = "Adds an Orleans silo reference to a resource")]
     public static IResourceBuilder<T> WithReference<T>(
         this IResourceBuilder<T> builder,
         OrleansService orleansService)

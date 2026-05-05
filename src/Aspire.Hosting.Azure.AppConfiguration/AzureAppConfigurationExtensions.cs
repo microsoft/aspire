@@ -208,7 +208,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="roles">The App Configuration roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureAppConfigurationRole"/> value.</exception>
-    [AspireExport("withAppConfigurationRoleAssignments", Description = "Assigns App Configuration roles to a resource")]
+    [AspireExport("withAppConfigurationRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns App Configuration roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureAppConfigurationResource> target,

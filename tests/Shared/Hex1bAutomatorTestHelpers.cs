@@ -413,10 +413,11 @@ internal static class Hex1bAutomatorTestHelpers
             .Find("What version would you like to install?");
         var waitingForLegacyVersionSelection = new CellPatternSearcher()
             .Find("based on NuGet.config");
-        var addCompleted = new CellPatternSearcher()
-            .Find("added to your AppHost project");
-        var addFailed = new CellPatternSearcher()
-            .Find("already exists in the project");
+
+        // We intentionally do NOT check for completion text like "was added successfully"
+        // because it persists on the terminal from prior aspire-add runs and would match
+        // stale output when multiple aspire-add commands run in sequence. Instead we rely
+        // on the shell success/error prompt which uses a unique counter value.
 
         await auto.WaitUntilAsync(s =>
             {
@@ -426,9 +427,7 @@ internal static class Hex1bAutomatorTestHelpers
                     return true;
                 }
 
-                return addCompleted.Search(s).Count > 0
-                    || addFailed.Search(s).Count > 0
-                    || successPrompt.Search(s).Count > 0
+                return successPrompt.Search(s).Count > 0
                     || errorPrompt.Search(s).Count > 0;
             },
             timeout: effectiveTimeout,
@@ -459,6 +458,7 @@ internal static class Hex1bAutomatorTestHelpers
             .Find("configure AI agent environments");
 
         var agentInitFound = false;
+        var errorPromptFound = false;
 
         // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
         await auto.WaitUntilAsync(s =>
@@ -471,8 +471,22 @@ internal static class Hex1bAutomatorTestHelpers
             var successSearcher = new CellPatternSearcher()
                 .FindPattern(counter.Value.ToString())
                 .RightText(" OK] $ ");
-            return successSearcher.Search(s).Count > 0;
-        }, timeout: effectiveTimeout, description: $"agent init prompt or success prompt [{counter.Value} OK] $");
+            if (successSearcher.Search(s).Count > 0)
+            {
+                return true;
+            }
+
+            var errorSearcher = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" ERR:");
+            errorPromptFound = errorSearcher.Search(s).Count > 0;
+            return errorPromptFound;
+        }, timeout: effectiveTimeout, description: $"agent init prompt, success prompt [{counter.Value} OK] $, or error prompt [{counter.Value} ERR:*] $");
+
+        if (errorPromptFound)
+        {
+            throw new InvalidOperationException($"Command failed with error prompt [{counter.Value} ERR:*] while waiting for the agent init prompt or success prompt.");
+        }
 
         if (!agentInitFound)
         {
@@ -482,17 +496,14 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        await auto.EnterAsync();
 
-        await auto.WaitUntilAsync(s =>
-        {
-            var successSearcher = new CellPatternSearcher()
-                .FindPattern(counter.Value.ToString())
-                .RightText(" OK] $ ");
-            return successSearcher.Search(s).Count > 0;
-        }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ after agent init");
+        // Do not send Enter after typing "n" — the Spectre Console [Y/n] confirmation
+        // prompt accepts a single character. Sending Enter risks a race: if aspire init
+        // exits after reading "n" but before the Enter is delivered, bash receives the
+        // Enter and executes a phantom blank command, advancing CMDCOUNT and desyncing
+        // the test counter from the shell counter.
 
-        counter.Increment();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
     }
 
     /// <summary>
@@ -525,7 +536,7 @@ internal static class Hex1bAutomatorTestHelpers
             case AspireTemplate.JsReact:
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React, C# AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "JS React template selected");
                 await auto.EnterAsync();
@@ -535,7 +546,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (Express/React)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (Express/React, TypeScript AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Express React template selected");
                 await auto.EnterAsync();
@@ -546,7 +557,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React, TypeScript AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Python React template selected");
                 await auto.EnterAsync();
@@ -569,20 +580,24 @@ internal static class Hex1bAutomatorTestHelpers
                 break;
 
             case AspireTemplate.TypeScriptEmptyAppHost:
-                await auto.TypeAsync("TypeScript");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (TypeScript AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "TypeScript Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("TypeScript");
                 await auto.EnterAsync();
                 break;
 
             case AspireTemplate.JavaEmptyAppHost:
-                await auto.TypeAsync("Empty (Java AppHost)");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (Java AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "Java Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("Java");
                 await auto.EnterAsync();
                 break;
 
@@ -620,10 +635,12 @@ internal static class Hex1bAutomatorTestHelpers
 
             if (!useRedisCache)
             {
-                await auto.DownAsync(); // Default is "Yes", navigate to "No"
+                await auto.TypeAsync("n");
             }
-
-            await auto.EnterAsync();
+            else
+            {
+                await auto.EnterAsync();
+            }
         }
 
         // Step 7: Test project prompt (only Starter)
@@ -656,32 +673,65 @@ internal static class Hex1bAutomatorTestHelpers
         var waitingForInitComplete = new CellPatternSearcher()
             .Find("Aspire initialization complete");
 
+        var waitingForAgentInitPrompt = new CellPatternSearcher()
+            .Find("configure AI agent environments");
+
         await auto.TypeAsync("aspire init --language csharp");
         await auto.EnterAsync();
 
-        // NuGet.config prompt may or may not appear depending on environment.
-        // Wait for either the NuGet.config prompt or the URLs prompt.
-        await auto.WaitUntilAsync(
-            s => waitingForNuGetConfigPrompt.Search(s).Count > 0
-                || waitingForUrlsPrompt.Search(s).Count > 0,
-            timeout: TimeSpan.FromMinutes(2),
-            description: "NuGet.config prompt or URLs prompt");
-        await auto.EnterAsync(); // Dismiss NuGet.config prompt if present
+        var handledNuGetConfigPrompt = false;
+        var handledUrlsPrompt = false;
 
-        // Wait for the URLs prompt (if NuGet.config appeared first) or init completion.
-        await auto.WaitUntilAsync(
-            s => waitingForUrlsPrompt.Search(s).Count > 0
-                || waitingForInitComplete.Search(s).Count > 0,
-            timeout: TimeSpan.FromMinutes(2),
-            description: "URLs prompt or init completion");
-        await auto.EnterAsync(); // Dismiss URLs prompt (accept default "No")
+        while (true)
+        {
+            var initState = "unknown";
+            await auto.WaitUntilAsync(s =>
+            {
+                if (!handledNuGetConfigPrompt && waitingForNuGetConfigPrompt.Search(s).Count > 0)
+                {
+                    initState = "nuget-config";
+                    return true;
+                }
 
-        await auto.WaitUntilAsync(
-            s => waitingForInitComplete.Search(s).Count > 0,
-            timeout: TimeSpan.FromMinutes(2),
-            description: "aspire initialization complete");
+                if (!handledUrlsPrompt && waitingForUrlsPrompt.Search(s).Count > 0)
+                {
+                    initState = "urls";
+                    return true;
+                }
 
-        await auto.DeclineAgentInitPromptAsync(counter);
+                if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                {
+                    initState = "agent-init";
+                    return true;
+                }
+
+                if (waitingForInitComplete.Search(s).Count > 0)
+                {
+                    initState = "init-complete";
+                    return true;
+                }
+
+                return false;
+            }, timeout: TimeSpan.FromMinutes(2), description: "NuGet.config prompt, URLs prompt, agent init prompt, or init completion");
+
+            if (initState is "nuget-config" or "urls")
+            {
+                if (initState == "nuget-config")
+                {
+                    handledNuGetConfigPrompt = true;
+                }
+                else
+                {
+                    handledUrlsPrompt = true;
+                }
+
+                await auto.EnterAsync();
+                continue;
+            }
+
+            await auto.DeclineAgentInitPromptAsync(counter);
+            return;
+        }
     }
 
     /// <summary>

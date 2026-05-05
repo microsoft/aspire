@@ -18,6 +18,8 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
+    internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
 
     /// <summary>
@@ -200,6 +202,14 @@ internal static class CliE2ETestHelpers
                     c.Volumes.Add($"{workspace.WorkspaceRoot.FullName}:/workspace/{workspace.WorkspaceRoot.Name}");
                 }
 
+                var cliVersionOutputDir = Environment.GetEnvironmentVariable(CliVersionOutputDirEnvironmentVariableName);
+                if (!string.IsNullOrEmpty(cliVersionOutputDir))
+                {
+                    Directory.CreateDirectory(cliVersionOutputDir);
+                    c.Volumes.Add($"{cliVersionOutputDir}:{ContainerCliVersionOutputDir}");
+                    c.Environment[CliVersionOutputDirEnvironmentVariableName] = ContainerCliVersionOutputDir;
+                }
+
                 if (additionalVolumes is not null)
                 {
                     foreach (var volume in additionalVolumes)
@@ -301,6 +311,7 @@ internal static class CliE2ETestHelpers
             startInfo.ArgumentList.Add("--quiet");
             startInfo.ArgumentList.Add("--build-arg");
             startInfo.ArgumentList.Add("SKIP_SOURCE_BUILD=true");
+            AddUbuntuAptMirrorBuildArg(startInfo);
             startInfo.ArgumentList.Add("-f");
             startInfo.ArgumentList.Add(dockerfilePath);
             startInfo.ArgumentList.Add("-t");
@@ -350,6 +361,7 @@ internal static class CliE2ETestHelpers
 
             startInfo.ArgumentList.Add("build");
             startInfo.ArgumentList.Add("--quiet");
+            AddUbuntuAptMirrorBuildArg(startInfo);
             startInfo.ArgumentList.Add("-f");
             startInfo.ArgumentList.Add(dockerfilePath);
             startInfo.ArgumentList.Add("-t");
@@ -434,6 +446,18 @@ internal static class CliE2ETestHelpers
     private static string GenerateDockerContainerName()
     {
         return $"hex1b-test-{Guid.NewGuid():N}".Substring(0, 32);
+    }
+
+    private static void AddUbuntuAptMirrorBuildArg(ProcessStartInfo startInfo)
+    {
+        var buildArgs = new Dictionary<string, string>();
+        CliInstallStrategy.ConfigureUbuntuAptMirrorBuildArg(buildArgs);
+
+        foreach (var (name, value) in buildArgs)
+        {
+            startInfo.ArgumentList.Add("--build-arg");
+            startInfo.ArgumentList.Add($"{name}={value}");
+        }
     }
 
     /// <summary>

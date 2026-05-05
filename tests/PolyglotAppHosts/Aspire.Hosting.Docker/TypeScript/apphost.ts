@@ -19,7 +19,7 @@ await compose.withProperties(async (environment) => {
     await environment.dashboardEnabled.set(true);
     const _dashboardEnabled: boolean = await environment.dashboardEnabled.get();
 
-    const _environmentName: string = await environment.name.get();
+    const _environmentName: string = await environment.name();
 });
 
 await compose.configureEnvFile(async (envVars) => {
@@ -46,25 +46,25 @@ await compose.configureDashboard(async (dashboard) => {
     await dashboard.withHostPort({ port: 18888 });
     await dashboard.withForwardedHeaders({ enabled: true });
 
-    const _dashboardName: string = await dashboard.name.get();
+    const _dashboardName: string = await dashboard.name();
 
-    const primaryEndpoint = await dashboard.primaryEndpoint.get();
-    const _primaryUrl: string = await primaryEndpoint.url.get();
-    const _primaryHost: string = await primaryEndpoint.host.get();
-    const _primaryPort: number = await primaryEndpoint.port.get();
+    const primaryEndpoint = await dashboard.primaryEndpoint();
+    const _primaryUrl: string = await primaryEndpoint.url();
+    const _primaryHost: string = await primaryEndpoint.host();
+    const _primaryPort: number = await primaryEndpoint.port();
 
-    const otlpGrpcEndpoint = await dashboard.otlpGrpcEndpoint.get();
-    const _otlpGrpcUrl: string = await otlpGrpcEndpoint.url.get();
-    const _otlpGrpcPort: number = await otlpGrpcEndpoint.port.get();
+    const otlpGrpcEndpoint = await dashboard.otlpGrpcEndpoint();
+    const _otlpGrpcUrl: string = await otlpGrpcEndpoint.url();
+    const _otlpGrpcPort: number = await otlpGrpcEndpoint.port();
 });
 
 await api.publishAsDockerComposeService(async (composeService, service) => {
     await service.containerName.set(await containerName.asEnvironmentPlaceholder(composeService));
     await service.restart.set("unless-stopped");
 
-    const _composeServiceName: string = await composeService.name.get();
-    const composeEnvironment = await composeService.parent.get();
-    const _composeEnvironmentName: string = await composeEnvironment.name.get();
+    const _composeServiceName: string = await composeService.name();
+    const composeEnvironment = await composeService.parent();
+    const _composeEnvironmentName: string = await composeEnvironment.name();
 
     const _serviceContainerName: string = await service.containerName.get();
     const _serviceRestart: string = await service.restart.get();
@@ -72,6 +72,6 @@ await api.publishAsDockerComposeService(async (composeService, service) => {
 
 const _resolvedDefaultNetworkName: string = await compose.defaultNetworkName.get();
 const _resolvedDashboardEnabled: boolean = await compose.dashboardEnabled.get();
-const _resolvedName: string = await compose.name.get();
+const _resolvedName: string = await compose.name();
 
 await builder.build().run();

@@ -41,16 +41,44 @@ export function findStatementStartLine(text: string, matchIndex: number, documen
     }
     let line = document.positionAt(start).line;
     const matchLine = document.positionAt(matchIndex).line;
-    // Skip lines that are only closing braces (with optional comment) or comments
+    // Skip lines that are only closing braces (with optional comment), comments,
+    // C# 12 file-scoped top-level directives (e.g. `#:sdk Aspire.AppHost.Sdk`),
+    // or blank lines.
     while (line < matchLine) {
         const lineText = document.lineAt(line).text.trimStart();
-        if (/^\}\s*(\/\/.*)?$/.test(lineText) || lineText.startsWith('//') || lineText.startsWith('/*') || lineText.startsWith('*')) {
+        if (lineText === ''
+            || /^\}\s*(\/\/.*)?$/.test(lineText)
+            || lineText.startsWith('//')
+            || lineText.startsWith('/*')
+            || lineText.startsWith('*')
+            || lineText.startsWith('#:')) {
             line++;
         } else {
             break;
         }
     }
     return line;
+}
+
+/**
+ * Find the first match of `regex` whose line is not a comment line (// or /* / *).
+ * Used to avoid matching builder-detection patterns inside header/block comments.
+ * The regex must be created with the global flag.
+ */
+export function findFirstMatchOutsideComments(text: string, regex: RegExp, document: vscode.TextDocument): RegExpExecArray | undefined {
+    if (!regex.global) {
+        throw new Error('findFirstMatchOutsideComments requires a global regex');
+    }
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+        const line = document.positionAt(match.index).line;
+        const lineText = document.lineAt(line).text.trimStart();
+        if (lineText.startsWith('//') || lineText.startsWith('/*') || lineText.startsWith('*')) {
+            continue;
+        }
+        return match;
+    }
+    return undefined;
 }
 
 /**

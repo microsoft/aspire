@@ -261,6 +261,9 @@ public static class HostedAgentResourceBuilderExtensions
                 project = builder.ApplicationBuilder.CreateResourceBuilder(projResource);
             }
         }
+
+        builder.WithComputeEnvironment(project);
+
         // Hosted Agent resource name
         var agentName = $"{resource.Name}-ha";
         if (builder.ApplicationBuilder.TryCreateResourceBuilder<AzureHostedAgentResource>(agentName, out var rb))
@@ -304,9 +307,12 @@ public static class HostedAgentResourceBuilderExtensions
             {
                 throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
             }
-
-            target = resource;
+            else
+            {
+                target = resource;
+            }
         }
+
         // Create a separate agent resource to host the deployment
         var agent = new AzureHostedAgentResource(agentName, target, configure);
 

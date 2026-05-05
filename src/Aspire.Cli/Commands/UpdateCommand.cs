@@ -104,18 +104,9 @@ internal sealed class UpdateCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    private static bool IsRunningAsDotNetTool()
+    private static string? GetDotNetToolUpdateCommand()
     {
-        // When running as a dotnet tool, the process path points to "dotnet" or "dotnet.exe"
-        // When running as a native binary, it points to "aspire" or "aspire.exe"
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return false;
-        }
-
-        var fileName = Path.GetFileNameWithoutExtension(processPath);
-        return string.Equals(fileName, "dotnet", StringComparison.OrdinalIgnoreCase);
+        return DotNetToolDetection.GetDotNetToolUpdateCommand();
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -126,10 +117,11 @@ internal sealed class UpdateCommand : BaseCommand
         if (isSelfUpdate)
         {
             // When running as a dotnet tool, print the update command instead of executing
-            if (IsRunningAsDotNetTool())
+            var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+            if (dotNetToolUpdateCommand is not null)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
+                InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
                 return 0;
             }
 
@@ -232,6 +224,14 @@ internal sealed class UpdateCommand : BaseCommand
 
                 if (shouldUpdateCli)
                 {
+                    var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+                    if (dotNetToolUpdateCommand is not null)
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+                        InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+                        return ExitCodeConstants.Success;
+                    }
+
                     // Use the same channel that was selected for the project update
                     return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
                 }
@@ -257,7 +257,7 @@ internal sealed class UpdateCommand : BaseCommand
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
                 // Only prompt for self-update if not running as dotnet tool and downloader is available
-                if (_cliDownloader is not null)
+                if (GetDotNetToolUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,

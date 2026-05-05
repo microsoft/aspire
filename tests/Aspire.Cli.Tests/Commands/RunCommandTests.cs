@@ -17,6 +17,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Shared.UserSecrets;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -52,6 +53,37 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("run");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenMultipleProjectFilesFound_NonInteractive_ReturnsFailedToFindProject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create two real apphost project files in the workspace
+        var appHost1Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
+        await File.WriteAllTextAsync(Path.Combine(appHost1Dir.FullName, "AppHost1.csproj"), "fake");
+
+        var appHost2Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost2");
+        await File.WriteAllTextAsync(Path.Combine(appHost2Dir.FullName, "AppHost2.csproj"), "fake");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            // Use the real ProjectLocator (default) so it discovers both apphosts
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
         Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
     }
 

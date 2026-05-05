@@ -28,7 +28,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         CommandSpec? execute = null,
         CommandSpec? watchExecute = null,
         CommandSpec? publishExecute = null,
-        CommandSpec? installDependencies = null)
+        CommandSpec? installDependencies = null,
+        CommandSpec[]? preExecute = null)
     {
         return new RuntimeSpec
         {
@@ -43,7 +44,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             },
             WatchExecute = watchExecute,
             PublishExecute = publishExecute,
-            InstallDependencies = installDependencies
+            InstallDependencies = installDependencies,
+            PreExecute = preExecute
         };
     }
 
@@ -112,6 +114,72 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsync_WatchModeWithWatchExecute_SkipsPreExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            watchExecute: new CommandSpec { Command = "watch-cmd", Args = ["--watch", "{appHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--noEmit"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: true, launcher, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("watch-cmd", call.Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_RunsPreExecuteBeforeExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--project", "{appHostDir}"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal(2, launcher.Calls.Count);
+        Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
+        Assert.Equal(["--project", directory.FullName], launcher.Calls[0].Args);
+        Assert.Equal("run-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenPreExecuteFails_DoesNotExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--noEmit"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        launcher.ExitCodes.Enqueue(2);
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal(2, exitCode);
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("typecheck-cmd", call.Command);
+    }
+
+    [Fact]
     public async Task RunAsync_WatchModeWithoutWatchSpec_FallsBackToExecute()
     {
         var spec = CreateTestSpec(execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] });
@@ -141,6 +209,28 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("publish-cmd", launcher.LastCommand);
         Assert.Contains(launcher.LastArgs, a => a.Contains("--output") && a.Contains("/out"));
+    }
+
+    [Fact]
+    public async Task PublishAsync_RunsPreExecuteBeforePublishExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            publishExecute: new CommandSpec { Command = "publish-cmd", Args = ["{appHostFile}", "{args}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--project", "{appHostDir}"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        await runtime.PublishAsync(appHostFile, directory, new Dictionary<string, string>(), ["--output", "/out"], launcher, CancellationToken.None);
+
+        Assert.Equal(2, launcher.Calls.Count);
+        Assert.Equal("typecheck-cmd", launcher.Calls[0].Command);
+        Assert.Equal("publish-cmd", launcher.Calls[1].Command);
     }
 
     [Fact]
@@ -527,6 +617,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 
     private sealed class RecordingLauncher : IGuestProcessLauncher
     {
+        public List<(string Command, string[] Args)> Calls { get; } = [];
+        public Queue<int> ExitCodes { get; } = [];
         public string LastCommand { get; private set; } = string.Empty;
         public string[] LastArgs { get; private set; } = [];
         public DirectoryInfo? LastWorkingDirectory { get; private set; }
@@ -539,11 +631,13 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             IDictionary<string, string> environmentVariables,
             CancellationToken cancellationToken)
         {
+            Calls.Add((command, args));
             LastCommand = command;
             LastArgs = args;
             LastWorkingDirectory = workingDirectory;
             LastEnvironmentVariables = new Dictionary<string, string>(environmentVariables);
-            return Task.FromResult<(int, OutputCollector?)>((0, new OutputCollector()));
+            var exitCode = ExitCodes.Count > 0 ? ExitCodes.Dequeue() : 0;
+            return Task.FromResult<(int, OutputCollector?)>((exitCode, new OutputCollector()));
         }
     }
 }

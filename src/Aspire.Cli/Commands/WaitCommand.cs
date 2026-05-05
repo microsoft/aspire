@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -47,13 +48,14 @@ internal sealed class WaitCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         ILogger<WaitCommand> logger,
         AspireCliTelemetry telemetry,
         TimeProvider? timeProvider = null)
         : base("wait", WaitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -96,8 +98,7 @@ internal sealed class WaitCommand : BaseCommand
 
         if (!result.Success)
         {
-            _interactionService.DisplayError(result.ErrorMessage);
-            return ExitCodeConstants.FailedToFindProject;
+            return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
         }
 
         var connection = result.Connection!;

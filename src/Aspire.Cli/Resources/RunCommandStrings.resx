@@ -124,7 +124,7 @@
     <value>Stop any running instance of the AppHost without prompting</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
   </data>
   <data name="DetachArgumentDescription" xml:space="preserve">
     <value>Run the AppHost in the background and exit after it starts</value>

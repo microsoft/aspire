@@ -721,7 +721,8 @@ Some ~~strikethrough~~ text with ```inline code block```.
         {
             Ansi = AnsiSupport.No,
             ColorSystem = ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(writer)
+            Out = new AnsiConsoleOutput(writer),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         });
 
         console.Profile.Width = int.MaxValue;
@@ -782,5 +783,36 @@ npm install[/]
 
 [italic grey]> That's all![/]".Replace("\r\n", "\n").Replace("\r", "\n");
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithParagraphBeforeTable_HasSingleBlankLineBetween()
+    {
+        var markdown = """
+            ## API
+
+            The API section configures authentication.
+            | Option | Description |
+            | ------ | ----------- |
+            | `AuthMode` | Can be set to `ApiKey` or `Unsecured`. |
+            """;
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        var expected = """
+            API
+
+            The API section configures authentication.
+
+            ┌──────────┬────────────────────────────────────┐
+            │ Option   │ Description                        │
+            ├──────────┼────────────────────────────────────┤
+            │ AuthMode │ Can be set to ApiKey or Unsecured. │
+            └──────────┴────────────────────────────────────┘
+
+
+            """;
+
+        Assert.Equal(expected, output, ignoreLineEndingDifferences: true);
     }
 }

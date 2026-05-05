@@ -4,7 +4,7 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;

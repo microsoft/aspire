@@ -87,8 +87,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
         var resource = new AzureAppServiceEnvironmentResource(name, static infra =>
         {
-            var prefix = infra.AspireResource.Name;
             var resource = (AzureAppServiceEnvironmentResource)infra.AspireResource;
+            var prefix = Infrastructure.NormalizeBicepIdentifier(resource.Name);
 
             // This tells azd to avoid creating infrastructure
             var userPrincipalId = new ProvisioningParameter(AzureBicepResource.KnownParameters.UserPrincipalId, typeof(string)) { Value = new BicepValue<string>(string.Empty) };
@@ -101,7 +101,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
             infra.Add(tags);
 
-            var identity = new UserAssignedIdentity(Infrastructure.NormalizeBicepIdentifier($"{prefix}-mi"))
+            var identity = new UserAssignedIdentity($"{prefix}_mi")
             {
                 Tags = tags
             };
@@ -133,7 +133,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
             pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, identity.Id, pullRa.RoleDefinitionId);
             infra.Add(pullRa);
 
-            var plan = new AppServicePlan(Infrastructure.NormalizeBicepIdentifier($"{prefix}-asplan"))
+            var plan = new AppServicePlan($"{prefix}_asplan")
             {
                 Sku = new AppServiceSkuDescription
                 {
@@ -191,7 +191,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
                 infra.Add(new ProvisioningOutput("AZURE_APP_SERVICE_DASHBOARD_URI", typeof(string))
                 {
-                    Value = BicepFunction.Interpolate($"https://{AzureAppServiceEnvironmentUtility.GetDashboardHostName(prefix)}.azurewebsites.net")
+                    Value = BicepFunction.Interpolate($"https://{AzureAppServiceEnvironmentUtility.GetDashboardHostName(resource.Name)}.azurewebsites.net")
                 });
             }
 
@@ -206,7 +206,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                 else
                 {
                     // Create Log Analytics workspace
-                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace(prefix + "_law")
+                    var logAnalyticsWorkspace = new OperationalInsightsWorkspace($"{prefix}_law")
                     {
                         Sku = new OperationalInsightsWorkspaceSku()
                         {
@@ -217,7 +217,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
                     infra.Add(logAnalyticsWorkspace);
 
                     // Create Application Insights resource linked to the Log Analytics workspace
-                    applicationInsights = new ApplicationInsightsComponent(prefix + "_ai")
+                    applicationInsights = new ApplicationInsightsComponent($"{prefix}_ai")
                     {
                         ApplicationType = ApplicationInsightsApplicationType.Web,
                         Kind = "web",
@@ -306,12 +306,31 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// </summary>
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Enables Azure Application Insights for the Azure App Service environment")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
         builder.Resource.EnableApplicationInsights = true;
         return builder;
+    }
+
+    [AspireExport("withAzureApplicationInsights", Description = "Enables Azure Application Insights for the Azure App Service environment")]
+    internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsightsForPolyglot(
+        this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>), typeof(IResourceBuilder<AzureApplicationInsightsResource>))] object? applicationInsights = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return applicationInsights switch
+        {
+            null => builder.WithAzureApplicationInsights(),
+            string applicationInsightsLocation => builder.WithAzureApplicationInsights(applicationInsightsLocation),
+            IResourceBuilder<ParameterResource> applicationInsightsLocationParameter => builder.WithAzureApplicationInsights(applicationInsightsLocationParameter),
+            IResourceBuilder<AzureApplicationInsightsResource> applicationInsightsBuilder => builder.WithAzureApplicationInsights(applicationInsightsBuilder),
+            _ => throw new ArgumentException(
+                "Application Insights must be omitted, a location string, a location parameter, or an Application Insights resource builder.",
+                nameof(applicationInsights))
+        };
     }
 
     /// <summary>
@@ -320,7 +339,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="applicationInsightsLocation">The location for Application Insights.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withAzureApplicationInsightsLocation", Description = "Enables Azure Application Insights for the Azure App Service environment with a specific location")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, string applicationInsightsLocation)
     {
         builder.WithAzureApplicationInsights();
@@ -334,7 +353,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="applicationInsightsLocation">The location parameter for Application Insights.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withAzureApplicationInsightsLocationParameter", Description = "Enables Azure Application Insights for the Azure App Service environment using a location parameter")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<ParameterResource> applicationInsightsLocation)
     {
         builder.WithAzureApplicationInsights();
@@ -348,7 +367,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource builder to configure.</param>
     /// <param name="applicationInsightsBuilder">The Application Insights resource builder.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withAzureApplicationInsightsResource", Description = "Enables Azure Application Insights for the Azure App Service environment using an existing Application Insights resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<AzureApplicationInsightsResource> applicationInsightsBuilder)
     {
         builder.WithAzureApplicationInsights();
@@ -362,7 +381,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="deploymentSlot">The deployment slot parameter for all App Services in the App Service Environment.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport("withDeploymentSlotParameter", Description = "Configures the deployment slot for all Azure App Services in the environment using a parameter")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, IResourceBuilder<ParameterResource> deploymentSlot)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -372,13 +391,29 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
+    [AspireExport("withDeploymentSlot", Description = "Configures the deployment slot for all Azure App Services in the environment")]
+    internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlotForPolyglot(
+        this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object deploymentSlot)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(deploymentSlot);
+
+        return deploymentSlot switch
+        {
+            string deploymentSlotName => builder.WithDeploymentSlot(deploymentSlotName),
+            IResourceBuilder<ParameterResource> deploymentSlotParameter => builder.WithDeploymentSlot(deploymentSlotParameter),
+            _ => throw new ArgumentException("Deployment slot must be a string or a parameter resource builder.", nameof(deploymentSlot))
+        };
+    }
+
     /// <summary>
     /// Configures the slot to which the Azure App Services should be deployed.
     /// </summary>
     /// <param name="builder">The AzureAppServiceEnvironmentResource to configure.</param>
     /// <param name="deploymentSlot">The deployment slot for all App Services in the App Service Environment.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Configures the deployment slot for all Azure App Services in the environment")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlot(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, string deploymentSlot)
     {
         ArgumentNullException.ThrowIfNull(builder);

@@ -50,7 +50,7 @@ public class AzureContainerAppEnvironmentResource :
                 Name = $"prepare-azure-container-apps-{name}",
                 Description = $"Prepares Azure Container Apps deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 
@@ -175,6 +175,7 @@ public class AzureContainerAppEnvironmentResource :
             DefaultContainerRegistry is not null)
         {
             appModel.Resources.Remove(DefaultContainerRegistry);
+            DefaultContainerRegistry = null;
         }
 
         var logger = services.GetRequiredService<ILogger<AzureContainerAppEnvironmentResource>>();

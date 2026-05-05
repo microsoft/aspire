@@ -260,6 +260,20 @@ extends:
                   # validation (Homebrew cask audit, WinGet manifest) against published URLs.
                   targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download Native CLI Tool Packages
+                inputs:
+                  itemPattern: |
+                    **/Aspire.Cli*.nupkg
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)'
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
+                    -DownloadRoot "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)" `
+                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                displayName: 🟣Stage Native CLI Tool Packages
+
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
                 inputs:

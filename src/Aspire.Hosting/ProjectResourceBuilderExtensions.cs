@@ -97,12 +97,8 @@ public static class ProjectResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <para>
-    /// This overload is also exported to polyglot app hosts as <c>addProjectWithoutLaunchProfile</c> for the common case
-    /// where no launch profile is needed.
-    /// </para>
     /// </remarks>
-    [AspireExport("addProjectWithoutLaunchProfile", Description = "Adds a .NET project resource without a launch profile")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -110,6 +106,26 @@ public static class ProjectResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(projectPath);
 
         return builder.AddProject(name, projectPath, _ => { });
+    }
+
+    [AspireExport("addProject", Description = "Adds a .NET project resource")]
+    internal static IResourceBuilder<ProjectResource> AddProjectForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        string projectPath,
+        [AspireUnion(typeof(string), typeof(ProjectResourceOptions))] object? launchProfileOrOptions = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(projectPath);
+
+        return launchProfileOrOptions switch
+        {
+            null => builder.AddProject(name, projectPath),
+            string launchProfileName => builder.AddProject(name, projectPath, launchProfileName),
+            ProjectResourceOptions options => builder.AddProject(name, projectPath, configure => ApplyProjectResourceOptions(configure, options)),
+            _ => throw new ArgumentException("Launch profile must be a string or ProjectResourceOptions.", nameof(launchProfileOrOptions))
+        };
     }
 
     /// <summary>
@@ -190,7 +206,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a .NET project resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, string? launchProfileName)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -285,7 +301,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addProjectWithOptions", Description = "Adds a project resource with configuration options", RunSyncOnBackgroundThread = true)]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -331,7 +347,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Adds a C# application resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -339,6 +355,19 @@ public static class ProjectResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(path);
 
         return builder.AddCSharpApp(name, path, _ => { });
+    }
+
+    [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("addCSharpApp", Description = "Adds a C# application resource")]
+    internal static IResourceBuilder<CSharpAppResource> AddCSharpAppForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        string path,
+        ProjectResourceOptions? options = null)
+    {
+        return options is null
+            ? builder.AddCSharpApp(name, path, _ => { })
+            : builder.AddCSharpApp(name, path, configure => ApplyProjectResourceOptions(configure, options));
     }
 
     /// <summary>
@@ -367,7 +396,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addCSharpAppWithOptions", Description = "Adds a C# application resource with configuration options", RunSyncOnBackgroundThread = true)]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -416,6 +445,16 @@ public static class ProjectResourceBuilderExtensions
         });
 
         return resource;
+    }
+
+    private static void ApplyProjectResourceOptions(ProjectResourceOptions target, ProjectResourceOptions source)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(source);
+
+        target.LaunchProfileName = source.LaunchProfileName;
+        target.ExcludeLaunchProfile = source.ExcludeLaunchProfile;
+        target.ExcludeKestrelEndpoints = source.ExcludeKestrelEndpoints;
     }
 
     private static IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)

@@ -265,7 +265,7 @@ public static class AzureContainerRegistryExtensions
     /// <param name="roles">The Azure Container Registry roles to assign to the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureContainerRegistryRole"/> value.</exception>
-    [AspireExport("withContainerRegistryRoleAssignments", Description = "Assigns Azure Container Registry roles to a resource.")]
+    [AspireExport("withContainerRegistryRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Azure Container Registry roles to a resource.")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureContainerRegistryResource> target,

@@ -161,6 +161,8 @@
   "command.codeLensResourceAction": "Aspire resource action",
   "command.codeLensRevealResource": "Reveal resource in Aspire panel",
   "command.codeLensViewLogs": "View Aspire resource logs",
+  "command.codeLensOpenDashboard": "Open Aspire Dashboard",
+  "command.codeLensViewAppHostLogs": "View Aspire AppHost logs",
   "command.expandAll": "Expand all resources",
   "walkthrough.getStarted.title": "Get started with Aspire",
   "walkthrough.getStarted.description": "Learn how to create, run, and monitor distributed applications with Aspire.",

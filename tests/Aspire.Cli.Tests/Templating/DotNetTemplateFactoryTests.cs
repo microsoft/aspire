@@ -355,19 +355,16 @@ public class DotNetTemplateFactoryTests
         var configurationService = new FakeConfigurationService();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService, prompter, hostEnvironment);
 
         return new DotNetTemplateFactory(
             interactionService,
             runner,
             certificateService,
-            packagingService,
-            prompter,
             prompter,
             executionContext,
             sdkInstaller,
             features,
-            configurationService,
             telemetry,
             hostEnvironment,
             templateNuGetConfigService);
@@ -447,7 +444,7 @@ public class DotNetTemplateFactoryTests
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
         public void DisplayPlainText(string text) { }
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
-        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) { }
+        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null) { }
         public void DisplayMarkupLine(string markup) { }
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
         public void DisplayEmptyLine() { }

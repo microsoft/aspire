@@ -173,7 +173,7 @@ public class ExtensionGuestLauncherTests
         public void DisplayEmptyLine() => throw new NotImplementedException();
         public void DisplayPlainText(string text) => throw new NotImplementedException();
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
-        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
+        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null) => throw new NotImplementedException();
         public void DisplayMarkupLine(string markup) => throw new NotImplementedException();
         public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) => throw new NotImplementedException();
         public void DisplayRenderable(Spectre.Console.Rendering.IRenderable renderable) => throw new NotImplementedException();

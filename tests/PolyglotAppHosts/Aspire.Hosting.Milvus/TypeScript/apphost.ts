@@ -67,12 +67,12 @@ await api.withReference(db);
 await api.withReference(milvus);
 
 // ---- Property access on MilvusServerResource ----
-const _endpoint = await milvus.primaryEndpoint.get();
-const _host = await milvus.host.get();
-const _port = await milvus.port.get();
-const _token = await milvus.token.get();
-const _uri = await milvus.uriExpression.get();
+const _endpoint = await milvus.primaryEndpoint();
+const _host = await milvus.host();
+const _port = await milvus.port();
+const _token = await milvus.token();
+const _uri = await milvus.uriExpression();
 
-const _cstr = await milvus.connectionStringExpression.get();
+const _cstr = await milvus.connectionStringExpression();
 const _databases = milvus.databases;
 await builder.build().run();

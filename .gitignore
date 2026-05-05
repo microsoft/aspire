@@ -177,6 +177,10 @@ playground/**/publish/
 playground/**/dist/
 tests/PolyglotAppHosts/**/TypeScript/dist/
 
+# Go AppHost
+tests/PolyglotAppHosts/**/Go/apphost
+tests/PolyglotAppHosts/**/Go/apphost.exe
+
 # Verify
 *.received.*
 

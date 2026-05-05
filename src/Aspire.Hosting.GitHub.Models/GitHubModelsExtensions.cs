@@ -185,7 +185,7 @@ public static class GitHubModelsExtensions
     /// the model is not working as expected. Furthermore, the health check will run a single time per application instance.
     /// </para>
     /// </remarks>
-    [AspireExport("enableHealthCheck", Description = "Adds a health check for the GitHub Model resource.")]
+    [AspireExport("enableHealthCheck", MethodName = "withHealthCheck", Description = "Adds a health check for the GitHub Model resource.")]
     public static IResourceBuilder<GitHubModelResource> WithHealthCheck(this IResourceBuilder<GitHubModelResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

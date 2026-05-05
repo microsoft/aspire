@@ -94,7 +94,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The URL of the endpoint.</returns>
-    [AspireExport("getValueAsync", Description = "Gets the URL of the endpoint asynchronously")]
+    [AspireExport(Description = "Gets the URL of the endpoint asynchronously")]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => Property(EndpointProperty.Url).GetValueAsync(cancellationToken);
 
     /// <summary>
@@ -114,7 +114,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     public NetworkIdentifier? ContextNetworkID => _contextNetworkID;
 
     /// <summary>
-    /// Gets the specified property expression of the endpoint. Defaults to the URL if no property is specified.
+    /// Gets the specified property expression of the endpoint.
     /// </summary>
     internal string GetExpression(EndpointProperty property = EndpointProperty.Url)
     {
@@ -134,11 +134,11 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     }
 
     /// <summary>
-    /// Gets the specified property expression of the endpoint. Defaults to the URL if no property is specified.
+    /// Gets the specified property expression of the endpoint.
     /// </summary>
     /// <param name="property">The <see cref="EndpointProperty"/> enum value to use in the reference.</param>
     /// <returns>An <see cref="EndpointReferenceExpression"/> representing the specified <see cref="EndpointProperty"/>.</returns>
-    [AspireExportIgnore]
+    [AspireExport(Description = "Gets the specified property expression of the endpoint")]
     public EndpointReferenceExpression Property(EndpointProperty property)
     {
         return new(this, property);

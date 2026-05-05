@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
@@ -55,6 +57,23 @@ public class AtsTypeScriptCodeGeneratorTests
 
         await Verify(files["transport.ts"], extension: "ts")
             .UseFileName("transport");
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("export namespace TestConfigs", aspireTs);
+        Assert.Contains("export const Default", aspireTs);
+        Assert.Contains("export namespace Profiles", aspireTs);
+        Assert.Contains("export const Development", aspireTs);
     }
 
     [Fact]
@@ -380,16 +399,17 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Scanner_HostingAssembly_WithBrowserLogsCapability()
+    public void Scanner_BrowsersAssembly_WithBrowserLogsCapability()
     {
-        var capabilities = ScanCapabilitiesFromHostingAssembly();
+        var capabilities = ScanCapabilitiesFromBrowsersAssembly();
 
-        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting/withBrowserLogs");
+        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting.Browsers/withBrowserLogs");
         Assert.NotNull(withBrowserLogs);
         Assert.Equal("withBrowserLogs", withBrowserLogs.MethodName);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", withBrowserLogs.TargetTypeId);
         Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "browser" && p.Type?.TypeId == "string" && p.IsOptional);
         Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "profile" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "userDataMode" && p.IsOptional);
         Assert.True(withBrowserLogs.ReturnsBuilder);
     }
 
@@ -863,18 +883,6 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void TwoPassScanning_GeneratesDeprecatedJSDocForObsoleteExports()
-    {
-        var atsContext = CreateContextFromBothAssemblies();
-
-        var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
-
-        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead.", aspireTs);
-        Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
-    }
-
-    [Fact]
     public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
     {
         var atsContext = CreateContextFromBothAssemblies();
@@ -918,6 +926,13 @@ public class AtsTypeScriptCodeGeneratorTests
     {
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+        return result.Capabilities;
+    }
+
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromBrowsersAssembly()
+    {
+        var browsersAssembly = typeof(global::Aspire.Hosting.BrowserLogsBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(browsersAssembly);
         return result.Capabilities;
     }
 
@@ -1104,7 +1119,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var capabilities = ScanCapabilitiesFromHostingAssembly();
 
         var getValueAsync = capabilities.FirstOrDefault(c =>
-            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValue" &&
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValueAsync" &&
             c.TargetTypeId == AtsConstants.ReferenceExpressionTypeId);
 
         Assert.NotNull(getValueAsync);
@@ -1373,33 +1388,32 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Generate_ListProperty_GeneratesAspireListGetter()
+    public void Generate_ListProperty_GeneratesGetterOnlyMethods()
     {
         // Verify that List properties on [AspireExport(ExposeProperties = true)] types
-        // generate AspireList getters (same pattern as Dictionary properties with AspireDict)
+        // generate zero-argument methods (same pattern as Dictionary properties with AspireDict)
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];
 
         // TestCollectionContext has both Items (List) and Metadata (Dictionary)
-        // Both should use the same getter pattern with lazy initialization
+        // Both should use the same getter-only method pattern with lazy initialization.
 
-        // Check for AspireList getter pattern
+        // Check for AspireList getter-only method pattern.
         Assert.Contains("private _items?: AspireList<string>;", code);
-        Assert.Contains("get items(): AspireList<string>", code);
+        Assert.Contains("async items(): Promise<AspireList<string>>", code);
         Assert.Contains("this._items = new AspireList<string>(", code);
 
-        // Check for AspireDict getter pattern (existing behavior)
+        // Check for AspireDict getter-only method pattern.
         Assert.Contains("private _metadata?: AspireDict<string, string>;", code);
-        Assert.Contains("get metadata(): AspireDict<string, string>", code);
+        Assert.Contains("async metadata(): Promise<AspireDict<string, string>>", code);
         Assert.Contains("this._metadata = new AspireDict<string, string>(", code);
     }
 
     [Fact]
-    public void Generate_ListProperty_DoesNotUseAsyncGetterPattern()
+    public void Generate_ListProperty_DoesNotUsePropertyObjectPattern()
     {
-        // Verify that List properties do NOT use the old async getter pattern
-        // (args = { get: async () => ... }) but instead use proper TypeScript getters
+        // Verify that getter-only List properties do not use the old property object pattern.
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];
@@ -1407,6 +1421,31 @@ public class AtsTypeScriptCodeGeneratorTests
         // Should NOT contain the old pattern for items
         Assert.DoesNotContain("items = {", code);
         Assert.DoesNotContain("items = {\n        get: async", code);
+    }
+
+    [Fact]
+    public void Generate_OptionalOptionsProperty_UsesDistinctOptionsBagParameter()
+    {
+        var code = GenerateTwoPassCode();
+
+        Assert.DoesNotContain("= options?.options;", code);
+        Assert.Contains("addProject(name: string, projectPath: string, options?: AddProjectOptions)", code);
+        Assert.Contains("let launchProfileOrOptions = options?.launchProfileOrOptions;", code);
+    }
+
+    [Fact]
+    public void Generate_MutableCollectionProperties_UsePropertyAccessors()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var code = files["aspire.ts"];
+
+        Assert.Contains("readonly tags: AspireList<string>;", code);
+        Assert.Contains("get tags(): AspireList<string> {", code);
+        Assert.Contains("readonly counts: AspireDict<string, number>;", code);
+        Assert.Contains("get counts(): AspireDict<string, number> {", code);
+        Assert.DoesNotContain("async tags(): Promise<AspireList<string>>", code);
+        Assert.DoesNotContain("async counts(): Promise<AspireDict<string, number>>", code);
     }
 
     [Fact]

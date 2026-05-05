@@ -51,7 +51,7 @@ public class AzureAppServiceEnvironmentResource :
                 Name = $"prepare-azure-app-service-{name}",
                 Description = $"Prepares Azure App Service deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 
@@ -181,6 +181,7 @@ public class AzureAppServiceEnvironmentResource :
             DefaultContainerRegistry is not null)
         {
             appModel.Resources.Remove(DefaultContainerRegistry);
+            DefaultContainerRegistry = null;
         }
 
         var logger = services.GetRequiredService<ILogger<AzureAppServiceEnvironmentResource>>();

@@ -48,7 +48,7 @@
         <note>{0} is a number, {1} is the log file path</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file to add the integration to</source>
+        <source>The Aspire AppHost project file, or a directory to search, to add the integration to</source>
         <target state="needs-review-translation">Cesta k souboru projektu, do které se má integrace přidat</target>
         <note />
       </trans-unit>

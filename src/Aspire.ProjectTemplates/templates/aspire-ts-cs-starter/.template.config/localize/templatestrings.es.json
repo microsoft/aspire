@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Aplicación starter de Starter (ASP.NET Core/React)",
+  "name": "Aplicación starter de Starter (ASP.NET Core/React, C# AppHost)",
   "description": "Plantilla de proyecto para crear una aplicación Desi con un front-end de React y un servicio back-end de API mínimo de C#, con almacenamiento en caché de Redis opcional.",
   "symbols/Framework/description": "Marco de destino del proyecto.",
   "symbols/Framework/choices/net8.0/description": "NET8.0 de destino",

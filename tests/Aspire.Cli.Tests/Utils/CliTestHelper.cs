@@ -114,6 +114,7 @@ internal static class CliTestHelper
         services.AddTransient(options.DotNetCliExecutionFactoryFactory);
         services.AddTransient(options.DotNetCliRunnerFactory);
         services.AddTransient(options.NuGetPackageCacheFactory);
+        services.AddSingleton<TemplateNuGetConfigService>();
         services.AddSingleton(options.TemplateProviderFactory);
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
@@ -139,7 +140,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.NpmProvenanceCheckerFactory);
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();
-        services.AddSingleton<IScaffoldingService, ScaffoldingService>();
+        services.AddSingleton(options.ScaffoldingServiceFactory);
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         services.AddSingleton(options.AppHostServerSessionFactory);
         services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
@@ -149,6 +150,7 @@ internal static class CliTestHelper
         // This ensures backward compatibility: no layout found = use legacy SDK mode
         services.AddSingleton(options.LayoutDiscoveryFactory);
         services.AddTransient<LayoutProcessRunner>();
+        services.AddSingleton(options.BundlePayloadProviderFactory);
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
 
@@ -438,6 +440,15 @@ internal sealed class CliServiceCollectionTestOptions
         return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment);
     };
 
+    public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    {
+        var appHostServerProjectFactory = serviceProvider.GetRequiredService<IAppHostServerProjectFactory>();
+        var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
+        var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
+        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger);
+    };
+
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         return new TestProcessExecutionFactory();
@@ -516,8 +527,8 @@ internal sealed class CliServiceCollectionTestOptions
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var scaffoldingService = serviceProvider.GetRequiredService<IScaffoldingService>();
         var cliTemplateLogger = serviceProvider.GetRequiredService<ILogger<CliTemplateFactory>>();
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService);
-        var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, packagingService, prompter, templateVersionPrompter, executionContext, sdkInstaller, features, configurationService, telemetry, hostEnvironment, templateNuGetConfigService);
+        var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
+        var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService);
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
         var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);
@@ -583,6 +594,9 @@ internal sealed class CliServiceCollectionTestOptions
     // Bundle service - returns no-op implementation by default (no embedded bundle)
     public Func<IServiceProvider, IBundleService> BundleServiceFactory { get; set; } = _ => new NullBundleService();
 
+    // Bundle payload provider - returns no-payload provider by default
+    public Func<IServiceProvider, IBundlePayloadProvider> BundlePayloadProviderFactory { get; set; } = _ => new NullBundlePayloadProvider();
+
     public Func<IServiceProvider, IMcpTransportFactory> McpServerTransportFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var loggerFactory = serviceProvider.GetService<ILoggerFactory>();
@@ -643,6 +657,16 @@ internal sealed class NullBundleService : IBundleService
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<Layout.LayoutConfiguration?>(null);
+}
+
+/// <summary>
+/// A no-op payload provider that reports no payload available.
+/// </summary>
+internal sealed class NullBundlePayloadProvider : IBundlePayloadProvider
+{
+    public bool HasPayload => false;
+
+    public Stream? OpenPayload() => null;
 }
 
 /// <summary>

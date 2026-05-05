@@ -115,7 +115,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         _languageOption = new Option<string?>("--language")
         {
-            Description = NewCommandStrings.LanguageOptionDescription
+            Description = NewCommandStrings.LanguageOptionDescription,
+            Recursive = true
         };
         Options.Add(_languageOption);
 
@@ -152,6 +153,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             KnownLanguageId.CSharp => KnownLanguageId.CSharpDisplayName,
             KnownLanguageId.TypeScript => "TypeScript (Node.js)",
             KnownLanguageId.Python => KnownLanguageId.PythonDisplayName,
+            KnownLanguageId.Go => KnownLanguageId.GoDisplayName,
+            KnownLanguageId.Java => KnownLanguageId.JavaDisplayName,
+            KnownLanguageId.Rust => KnownLanguageId.RustDisplayName,
             _ => languageId
         };
     }
@@ -169,6 +173,10 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             choices,
             choice => choice.DisplayName.EscapeMarkup(),
             cancellationToken: cancellationToken);
+
+        // The prompt is cleared after selection.
+        // Write out the selected language again for context before proceeding.
+        InteractionService.DisplayPlainText($"Which language would you like to use? {selected.DisplayName}");
 
         return selected.LanguageId;
     }
@@ -197,18 +205,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 return (false, null);
             }
 
-            await _configurationService.SetConfigurationAsync("language", normalizedExplicitLanguageId, isGlobal: false, cancellationToken);
             return (true, normalizedExplicitLanguageId);
-        }
-
-        var configuredLanguageId = await _configurationService.GetConfigurationAsync("language", cancellationToken);
-        if (!string.IsNullOrWhiteSpace(configuredLanguageId))
-        {
-            var normalizedConfiguredLanguageId = NormalizeLanguageId(configuredLanguageId);
-            if (template.SelectableAppHostLanguages.Any(l => l.Equals(normalizedConfiguredLanguageId, StringComparison.OrdinalIgnoreCase)))
-            {
-                return (true, normalizedConfiguredLanguageId);
-            }
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -217,24 +214,23 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         }
 
         var selectedLanguageId = await PromptForAppHostLanguageAsync(template.SelectableAppHostLanguages, cancellationToken);
-        await _configurationService.SetConfigurationAsync("language", selectedLanguageId, isGlobal: false, cancellationToken);
         return (true, selectedLanguageId);
     }
 
-    private ITemplate[] GetTemplatesForPrompt(ITemplate[] availableTemplates, ParseResult parseResult)
+    private ITemplate[] GetTemplatesForTemplateArgument(ITemplate[] availableTemplates, ParseResult parseResult)
     {
         var explicitLanguageId = ParseExplicitLanguageId(parseResult);
-        var templatesForPrompt = availableTemplates.ToList();
+        var templates = availableTemplates.ToList();
 
         if (!string.IsNullOrWhiteSpace(explicitLanguageId))
         {
-            templatesForPrompt = templatesForPrompt
+            templates = templates
                 .Where(t => t.SupportsLanguage(explicitLanguageId))
                 .ToList();
         }
 
         // Sort templates alphabetically by description, keeping empty templates at the end
-        templatesForPrompt.Sort((a, b) =>
+        templates.Sort((a, b) =>
         {
             var aIsEmpty = a.IsEmpty;
             var bIsEmpty = b.IsEmpty;
@@ -247,7 +243,14 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return string.Compare(a.Description, b.Description, StringComparison.OrdinalIgnoreCase);
         });
 
-        return templatesForPrompt.ToArray();
+        return templates.ToArray();
+    }
+
+    private ITemplate[] GetTemplatesForPrompt(ITemplate[] availableTemplates, ParseResult parseResult)
+    {
+        return GetTemplatesForTemplateArgument(availableTemplates, parseResult)
+            .Where(static t => t.ShowInPrompt)
+            .ToArray();
     }
 
     private async Task<ITemplate?> GetProjectTemplateAsync(ITemplate[] availableTemplates, ParseResult parseResult, CancellationToken cancellationToken)
@@ -267,8 +270,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return null;
         }
 
-        var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
-        if (templatesForPrompt.Length == 0)
+        var templatesForTemplateArgument = GetTemplatesForTemplateArgument(availableTemplates, parseResult);
+        if (templatesForTemplateArgument.Length == 0)
         {
             InteractionService.DisplayError("No templates are available for the current environment.");
             return null;
@@ -277,9 +280,16 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
             InteractionService.DisplayError(NewCommandStrings.NonInteractiveTemplateRequired);
-            var templateNames = string.Join(", ", templatesForPrompt.Select(t => t.Name));
+            var templateNames = string.Join(", ", templatesForTemplateArgument.Select(t => t.Name));
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, templateNames));
             throw new NonInteractiveException("template");
+        }
+
+        var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
+        if (templatesForPrompt.Length == 0)
+        {
+            InteractionService.DisplayError("No templates are available for the current environment.");
+            return null;
         }
 
         var result = await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken);
@@ -415,14 +425,14 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
-        var exitCode = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
             extensionInteractionService.OpenEditor(templateResult.OutputPath);
         }
 
-        return exitCode;
+        return agentInitResult.ExitCode;
     }
 
     private static bool ShouldResolveCliTemplateVersion(ITemplate template)

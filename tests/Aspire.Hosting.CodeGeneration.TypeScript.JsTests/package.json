@@ -12,5 +12,8 @@
     "typescript": "^5.8.2",
     "vitest": "^3.2.1",
     "vscode-jsonrpc": "^8.2.0"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
   }
 }

@@ -24,6 +24,8 @@ namespace Aspire.Hosting.Pipelines;
 [DebuggerDisplay("{ToString(),nq}")]
 internal sealed class DistributedApplicationPipeline : IDistributedApplicationPipeline
 {
+    internal const string ValidateBuildOnlyContainerReferencesStepName = "validate-build-only-container-references";
+
     private readonly List<PipelineStep> _steps = [];
     private readonly List<Func<PipelineConfigurationContext, Task>> _configurationCallbacks = [];
 
@@ -310,6 +312,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Action = _ => Task.CompletedTask,
         });
 
+        _steps.Add(new PipelineStep
+        {
+            Name = ValidateBuildOnlyContainerReferencesStepName,
+            Description = "Validates that build-only containers are consumed by another resource before publish or deploy.",
+            Action = static context =>
+            {
+                ValidateBuildOnlyContainerReferences(context.Model);
+                return Task.CompletedTask;
+            },
+            RequiredBySteps = [WellKnownPipelineSteps.PublishPrereq, WellKnownPipelineSteps.DeployPrereq],
+        });
+
         // Add diagnostic step for dependency graph analysis
         _steps.Add(new PipelineStep
         {
@@ -334,6 +348,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Action = _ => Task.CompletedTask
         });
 
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.ValidateComputeEnvironments,
+            Description = "Validates compute resource bindings before startup.",
+            Action = static context =>
+            {
+                ValidateComputeEnvironmentBindings(context.Model);
+                return Task.CompletedTask;
+            },
+            RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+        });
+
         // Add a "destroy" aggregation step for teardown operations
         _steps.Add(new PipelineStep
         {
@@ -354,6 +380,78 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Description = "Prerequisite step that runs before any destroy operations.",
             Action = _ => Task.CompletedTask,
         });
+    }
+
+    private static void ValidateComputeEnvironmentBindings(DistributedApplicationModel model)
+    {
+        // With multiple compute environments there is no unambiguous default. Surface a clear
+        // error for any compute resource that hasn't been explicitly bound, rather than letting
+        // the environments' steps silently skip it (which would result in the resource
+        // never being deployed).
+
+        var computeEnvironments = model.Resources.OfType<IComputeEnvironmentResource>().ToList();
+        if (computeEnvironments.Count <= 1)
+        {
+            return;
+        }
+
+        var unboundResources = model.Resources
+            .OfType<IComputeResource>()
+            .Where(resource => resource.GetComputeEnvironment() is null)
+            .ToList();
+
+        if (unboundResources.Count == 0)
+        {
+            return;
+        }
+
+        var resourceNames = string.Join("', '", unboundResources.Select(resource => resource.Name));
+        var environmentNames = string.Join("', '", computeEnvironments.Select(environment => environment.Name));
+        throw new InvalidOperationException(
+            $"Compute resource(s) '{resourceNames}' are not assigned to a compute environment, but the model contains multiple compute environments ('{environmentNames}'). " +
+            $"Specify which environment each resource should target by calling 'WithComputeEnvironment' on the resource builder.");
+    }
+
+    private static void ValidateBuildOnlyContainerReferences(DistributedApplicationModel model)
+    {
+        var buildOnlyContainers = model.GetBuildResources()
+            .Where(resource => resource.IsBuildOnlyContainer() && !resource.IsExcludedFromPublish())
+            .ToList();
+
+        if (buildOnlyContainers.Count == 0)
+        {
+            return;
+        }
+
+        var consumedBuildOnlyContainerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var resource in model.Resources)
+        {
+            if (resource.IsExcludedFromPublish())
+            {
+                continue;
+            }
+
+            foreach (var annotation in resource.Annotations.OfType<ContainerFilesDestinationAnnotation>())
+            {
+                if (!string.Equals(resource.Name, annotation.Source.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    consumedBuildOnlyContainerNames.Add(annotation.Source.Name);
+                }
+            }
+        }
+
+        var unconsumedBuildOnlyContainers = buildOnlyContainers
+            .Where(resource => !consumedBuildOnlyContainerNames.Contains(resource.Name))
+            .ToList();
+
+        if (unconsumedBuildOnlyContainers.Count > 0)
+        {
+            var resourceNames = string.Join("', '", unconsumedBuildOnlyContainers.Select(resource => resource.Name));
+            throw new DistributedApplicationException(
+                $"Build-only container resource(s) '{resourceNames}' are not consumed by another resource and won't participate in publish or deploy. " +
+                $"Reference them from another resource, for example using 'PublishWithContainerFiles' or 'PublishWithStaticFiles', or suppress this validation for the app by calling 'builder.Pipeline.DisableBuildOnlyContainerValidation()'.");
+        }
     }
 
     public bool HasSteps => _steps.Count > 0;
@@ -739,6 +837,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             var configContext = new PipelineConfigurationContext
             {
+                Logger = pipelineContext.Logger,
                 Services = pipelineContext.Services,
                 Steps = allSteps.AsReadOnly(),
                 Model = pipelineContext.Model

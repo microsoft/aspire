@@ -48,6 +48,18 @@ internal sealed class SkillDefinition
         isDefault: false,
         applicableLanguages: [KnownLanguageId.CSharp]);
 
+    /// <summary>
+    /// One-time skill for completing Aspire initialization.
+    /// Installed by <c>aspire init</c> to scan the repo, wire up the AppHost, and configure dependencies.
+    /// </summary>
+    public static readonly SkillDefinition Aspireify = new(
+        CommonAgentApplicators.AspireifySkillName,
+        AgentCommandStrings.SkillDescription_Aspireify,
+        skillContent: null,
+        embeddedResourceRoot: CommonAgentApplicators.AspireifySkillResourceRoot,
+        installExcludedRelativePaths: [],
+        isDefault: true);
+
     private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {
         Name = name;
@@ -152,7 +164,7 @@ internal sealed class SkillDefinition
     /// <summary>
     /// Gets all available skill definitions.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, PlaywrightCli, DotnetInspect];
+    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, Aspireify, PlaywrightCli, DotnetInspect];
 
     /// <inheritdoc />
     public override string ToString() => Name;

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AppHostResourceParser, ParsedResource, registerParser } from './AppHostResourceParser';
-import { findStatementStartLine } from './parserUtils';
+import { findStatementStartLine, findFirstMatchOutsideComments } from './parserUtils';
 
 /**
  * JavaScript / TypeScript AppHost resource parser.
@@ -49,6 +49,15 @@ class JsTsAppHostParser implements AppHostResourceParser {
         }
 
         return results;
+    }
+
+    findBuilderStatementLine(document: vscode.TextDocument): number | undefined {
+        const text = document.getText();
+        const match = findFirstMatchOutsideComments(text, /\bcreateBuilder\s*\(/g, document);
+        if (!match) {
+            return undefined;
+        }
+        return findStatementStartLine(text, match.index, document);
     }
 
 }

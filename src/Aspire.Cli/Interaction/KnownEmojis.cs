@@ -48,6 +48,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji PageFacingUp = new("page_facing_up", "white");
     public static readonly KnownEmoji Rocket = new("rocket", "darkorange");
     public static readonly KnownEmoji RunningShoe = new("running_shoe", "green");
+    public static readonly KnownEmoji Dizzy = new("dizzy");
     public static readonly KnownEmoji StopSign = new("stop_sign", "red");
     public static readonly KnownEmoji UpButton = new("up_button", "blue");
     public static readonly KnownEmoji Warning = new("warning", "yellow");

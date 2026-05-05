@@ -47,13 +47,10 @@ internal class NuGetConfigPrompter
 
         if (!hasConfigInTargetDir)
         {
-            var choice = await _interactionService.PromptForSelectionAsync(
+            var shouldCreate = await _interactionService.PromptConfirmAsync(
                 TemplatingStrings.CreateNugetConfigConfirmation,
-                [TemplatingStrings.Yes, TemplatingStrings.No],
-                c => c,
-                binding: PromptBinding.CreateDefault<string?>(TemplatingStrings.Yes),
+                binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
-            var shouldCreate = string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput);
 
             if (shouldCreate)
             {
@@ -63,13 +60,10 @@ internal class NuGetConfigPrompter
         }
         else if (hasMissingSources)
         {
-            var updateChoice = await _interactionService.PromptForSelectionAsync(
+            var shouldUpdate = await _interactionService.PromptConfirmAsync(
                 TemplatingStrings.UpdateNuGetConfigConfirmation,
-                [TemplatingStrings.Yes, TemplatingStrings.No],
-                c => c,
-                binding: PromptBinding.CreateDefault<string?>(TemplatingStrings.Yes),
+                binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
-            var shouldUpdate = string.Equals(updateChoice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput);
 
             if (shouldUpdate)
             {

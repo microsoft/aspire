@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -48,12 +49,13 @@ internal sealed class McpCallCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
         ILogger<McpCallCommand> logger)
         : base("call", McpCommandStrings.CallCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_toolArgument);
@@ -77,8 +79,7 @@ internal sealed class McpCallCommand : BaseCommand
 
         if (!result.Success)
         {
-            _interactionService.DisplayError(result.ErrorMessage);
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToDotnetRunAppHost);
         }
 
         var connection = result.Connection!;

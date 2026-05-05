@@ -102,6 +102,11 @@
         <target state="translated">Nessun elemento disponibile per la selezione: {0}</target>
         <note>{0} is the original selection prompt text.</note>
       </trans-unit>
+      <trans-unit id="NoSupportedAppHostsFound">
+        <source>No supported app hosts were found.</source>
+        <target state="new">No supported app hosts were found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NonInteractiveAvailableValues">
         <source>Available values: {0}</source>
         <target state="new">Available values: {0}</target>
@@ -145,6 +150,16 @@
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
         <source>The project argument was not specified and no AppHost project files were detected.</source>
         <target state="needs-review-translation">L'argomento del progetto non è stato specificato e non sono stati rilevati file del progetto host dell'app.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
+        <source>The --apphost option specified a directory that contains multiple AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that contains multiple AppHost project files.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsNoAppHosts">
+        <source>The --apphost option specified a directory that does not contain any AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that does not contain any AppHost project files.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">

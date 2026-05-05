@@ -10,8 +10,9 @@ import { dcpServerNotInitialized } from '../loc/strings';
  * Return `true` to suppress VS Code's automatic child session restart.
  */
 export type AppHostRestartHandler = (debugSessionId: string) => boolean;
+export type AppHostOutputHandler = (output: string, category: 'stdout' | 'stderr') => void;
 
-export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler): vscode.Disposable {
+export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler): vscode.Disposable {
     return vscode.debug.registerDebugAdapterTrackerFactory(debugAdapter, {
         createDebugAdapterTracker(session: vscode.DebugSession) {
                 return {
@@ -43,7 +44,12 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                             }
 
                             const { category, output } = message.body;
-                            if (category === 'stdout' || category === 'stderr') {
+                            if (typeof output === 'string' && category !== 'telemetry') {
+                                if (session.configuration.isApphost) {
+                                    onAppHostOutput?.(output, category === 'stderr' ? 'stderr' : 'stdout');
+                                    return;
+                                }
+
                                 const notification: ServiceLogsNotification = {
                                     notification_type: 'serviceLogs',
                                     session_id: session.configuration.runId,

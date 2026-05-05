@@ -48,8 +48,8 @@ public class Aspire {
             }
         }
         Map<String, Object> args = new HashMap<>();
-        args.put("options", resolvedOptions);
-        return (IDistributedApplicationBuilder) client.invokeCapability("Aspire.Hosting/createBuilderWithOptions", args);
+        args.put("argsOrOptions", resolvedOptions);
+        return (IDistributedApplicationBuilder) client.invokeCapability("Aspire.Hosting/createBuilder", args);
     }
 }
 
@@ -995,6 +995,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", (h, c) -> new TestResourceContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource", (h, c) -> new TestDatabaseResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", (h, c) -> new IResource(h, c));
@@ -1005,6 +1006,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment", (h, c) -> new IResourceWithEnvironment(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,string>", (h, c) -> new AspireDict(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,number>", (h, c) -> new AspireDict(h, c));
     }
 
     static void ensureRegistered() {
@@ -1597,6 +1599,32 @@ public class TestConfigDto {
     }
 }
 
+// ===== TestConfigs.java =====
+// TestConfigs.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+public final class TestConfigs {
+    private TestConfigs() { }
+
+    public static final TestConfigDto Default = new TestConfigDto() {{ setName("default"); setPort(6379); setEnabled(true); setOptionalField("cache"); }};
+
+    public static final class Profiles {
+        private Profiles() { }
+
+        public static final TestConfigDto Development = new TestConfigDto() {{ setName("development"); setPort(5001); setEnabled(false); setOptionalField(null); }};
+
+    }
+
+    public static final TestConfigDto Secure = new TestConfigDto() {{ setName("secure"); setPort(6380); setEnabled(true); setOptionalField(null); }};
+
+    public static final String UnicodeGreeting = "你好こんにちは";
+
+}
+
 // ===== TestDatabaseResource.java =====
 // TestDatabaseResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -2046,6 +2074,56 @@ public class TestEnvironmentContext extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
         return (TestEnvironmentContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority", reqArgs);
+    }
+
+}
+
+// ===== TestMutableCollectionContext.java =====
+// TestMutableCollectionContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext. */
+public class TestMutableCollectionContext extends HandleWrapperBase {
+    TestMutableCollectionContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Tags property */
+    private AspireList<String> tagsField;
+    public AspireList<String> tags() {
+        if (tagsField == null) {
+            tagsField = new AspireList<>(getHandle(), getClient(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags");
+        }
+        return tagsField;
+    }
+
+    /** Sets the Tags property */
+    public TestMutableCollectionContext setTags(AspireList<String> value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (TestMutableCollectionContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs);
+    }
+
+    /** Gets the Counts property */
+    private AspireDict<String, Double> countsField;
+    public AspireDict<String, Double> counts() {
+        if (countsField == null) {
+            countsField = new AspireDict<>(getHandle(), getClient(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts");
+        }
+        return countsField;
+    }
+
+    /** Sets the Counts property */
+    public TestMutableCollectionContext setCounts(AspireDict<String, Double> value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (TestMutableCollectionContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs);
     }
 
 }
@@ -3219,9 +3297,11 @@ public final class WithOptionalStringOptions {
 .modules/TestCallbackContext.java
 .modules/TestCollectionContext.java
 .modules/TestConfigDto.java
+.modules/TestConfigs.java
 .modules/TestDatabaseResource.java
 .modules/TestDeeplyNestedDto.java
 .modules/TestEnvironmentContext.java
+.modules/TestMutableCollectionContext.java
 .modules/TestNestedDto.java
 .modules/TestPersistenceMode.java
 .modules/TestRedisResource.java

@@ -41,6 +41,12 @@ checkout:
       owner: "microsoft"
       repositories: ["aspire.dev"]
     current: true
+    # Fetch release/* refs in addition to the default branch so Step 3 can
+    # detect whether the resolved release branch (for example, release/13.3)
+    # exists on microsoft/aspire.dev. With the default shallow checkout, only
+    # the default branch ref is available locally, which causes the
+    # "release branch exists" check to always fall back to main.
+    fetch: ["release/*"]
   - repository: microsoft/aspire.dev
     path: _repos/aspire.dev
     github-app:

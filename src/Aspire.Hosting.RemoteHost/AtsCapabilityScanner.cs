@@ -4,6 +4,10 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Xml.Linq;
 using Aspire.TypeSystem;
 
@@ -32,6 +36,9 @@ public static class AtsCapabilityScanner
         /// <summary>Enum types found in capability signatures, serialized as strings.</summary>
         public List<AtsEnumTypeInfo> EnumTypes { get; init; } = [];
 
+        /// <summary>Immutable values exported into guest SDKs.</summary>
+        public List<AtsExportedValueInfo> ExportedValues { get; init; } = [];
+
         /// <summary>Diagnostics (warnings/errors) generated during scanning.</summary>
         public List<AtsDiagnostic> Diagnostics { get; init; } = [];
 
@@ -58,6 +65,7 @@ public static class AtsCapabilityScanner
                 HandleTypes = HandleTypes,
                 DtoTypes = DtoTypes,
                 EnumTypes = EnumTypes,
+                ExportedValues = ExportedValues,
                 Diagnostics = Diagnostics
             };
 
@@ -124,6 +132,7 @@ public static class AtsCapabilityScanner
         var allTypeInfos = new List<AtsTypeInfo>();
         var allDtoTypes = new List<AtsDtoTypeInfo>();
         var allEnumTypes = new List<AtsEnumTypeInfo>();
+        var allExportedValues = new List<AtsExportedValueInfo>();
         var allDiagnostics = new List<AtsDiagnostic>();
         var allMethods = new Dictionary<string, MethodInfo>();
         var allProperties = new Dictionary<string, PropertyInfo>();
@@ -182,6 +191,8 @@ public static class AtsCapabilityScanner
                 }
             }
 
+            allExportedValues.AddRange(result.ExportedValues);
+
             // Merge runtime registries (methods and properties)
             foreach (var (id, method) in result.Methods)
             {
@@ -195,6 +206,8 @@ public static class AtsCapabilityScanner
             // Merge diagnostics
             allDiagnostics.AddRange(result.Diagnostics);
         }
+
+        allExportedValues = DeduplicateExportedValues(allExportedValues, allDiagnostics);
 
         // Pass 2: Build universe of valid types and resolve Unknown types
         // Valid types are ALL types with [AspireExport] - the ExposeProperties/ExposeMethods
@@ -217,6 +230,7 @@ public static class AtsCapabilityScanner
             HandleTypes = allTypeInfos,
             DtoTypes = allDtoTypes,
             EnumTypes = allEnumTypes,
+            ExportedValues = allExportedValues,
             Diagnostics = allDiagnostics,
             Methods = allMethods,
             Properties = allProperties
@@ -248,7 +262,19 @@ public static class AtsCapabilityScanner
         // Filter method name collisions (overloaded methods) after expansion
         FilterMethodNameCollisions(result.Capabilities, result.Diagnostics);
 
-        return result;
+        var exportedValues = DeduplicateExportedValues(result.ExportedValues, result.Diagnostics);
+
+        return new ScanResult
+        {
+            Capabilities = result.Capabilities,
+            HandleTypes = result.HandleTypes,
+            DtoTypes = result.DtoTypes,
+            EnumTypes = result.EnumTypes,
+            ExportedValues = exportedValues,
+            Diagnostics = result.Diagnostics,
+            Methods = result.Methods,
+            Properties = result.Properties
+        };
     }
 
     /// <summary>
@@ -263,6 +289,7 @@ public static class AtsCapabilityScanner
         var capabilities = new List<AtsCapabilityInfo>();
         var typeInfos = new List<AtsTypeInfo>();
         var dtoTypes = new List<AtsDtoTypeInfo>();
+        var exportedValues = new List<AtsExportedValueInfo>();
         var diagnostics = new List<AtsDiagnostic>();
 
         // Runtime registries for CapabilityDispatcher
@@ -331,6 +358,8 @@ public static class AtsCapabilityScanner
                     dtoTypes.Add(dtoInfo);
                 }
             }
+
+            ScanStaticExportedValues(type, assemblyExportedTypeCache, exportedValues, diagnostics);
 
             // Check for [AspireExport(AtsTypeId = "...")] on types
             var typeExportAttr = GetAspireExportAttribute(type);
@@ -471,6 +500,7 @@ public static class AtsCapabilityScanner
             HandleTypes = typeInfos,
             DtoTypes = dtoTypes,
             EnumTypes = enumTypes,
+            ExportedValues = exportedValues,
             Diagnostics = diagnostics,
             Methods = methods,
             Properties = properties
@@ -859,33 +889,13 @@ public static class AtsCapabilityScanner
             return;
         }
 
-        // Collect all MethodName values that have collisions and their colliding CapabilityIds.
-        var collidingMethodNames = new Dictionary<string, List<string>>();
-
-        foreach (var g in collisionGroups)
-        {
-            var methodName = g.Key.MethodName;
-            var capIds = g.Select(x => x.Capability.CapabilityId).Distinct().ToList();
-
-            if (!collidingMethodNames.TryGetValue(methodName, out var existingIds))
-            {
-                existingIds = [];
-                collidingMethodNames[methodName] = existingIds;
-            }
-
-            foreach (var id in capIds)
-            {
-                if (!existingIds.Contains(id))
-                {
-                    existingIds.Add(id);
-                }
-            }
-        }
-
         var capabilitiesToRemove = new HashSet<string>();
 
-        foreach (var (methodName, capIds) in collidingMethodNames)
+        foreach (var collisionGroup in collisionGroups)
         {
+            var methodName = collisionGroup.Key.MethodName;
+            var targetTypeId = collisionGroup.Key.Target;
+            var capIds = collisionGroup.Select(x => x.Capability.CapabilityId).Distinct().ToList();
             capIds.Sort(StringComparer.Ordinal);
 
             var conflictingIdsStr = string.Join(", ", capIds);
@@ -896,7 +906,7 @@ public static class AtsCapabilityScanner
                 capabilitiesToRemove.Add(capIds[i]);
 
                 diagnostics.Add(AtsDiagnostic.Warning(
-                    $"Method '{methodName}' has collisions ({conflictingIdsStr}). '{capIds[i]}' was removed. Use [AspireExport(MethodName = \"uniqueName\")] to set an explicit name.",
+                    $"Method '{methodName}' on target '{targetTypeId}' has collisions ({conflictingIdsStr}). '{capIds[i]}' was removed. Use [AspireExport(MethodName = \"uniqueName\")] to set an explicit name.",
                     capIds[i]));
             }
         }
@@ -965,6 +975,11 @@ public static class AtsCapabilityScanner
 
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
+            if (HasExportIgnoreAttribute(prop))
+            {
+                continue;
+            }
+
             // Only include public readable properties (DTOs are public API)
             if (!prop.CanRead)
             {
@@ -996,6 +1011,341 @@ public static class AtsCapabilityScanner
             Description = typeDescription,
             Properties = properties
         };
+    }
+
+    private static void ScanStaticExportedValues(
+        Type type,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        List<AtsExportedValueInfo> exportedValues,
+        List<AtsDiagnostic> diagnostics)
+    {
+        var xmlDoc = LoadXmlDocumentation(type.Assembly);
+
+        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+        {
+            var valueAttr = AttributeDataReader.GetAspireValueData(field);
+            if (valueAttr is null)
+            {
+                continue;
+            }
+
+            if (!field.IsPublic)
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on non-public field '{field.Name}'. Exported values must be public.",
+                    $"{type.FullName}.{field.Name}"));
+                continue;
+            }
+
+            TryCreateExportedValue(
+                valueAttr,
+                type,
+                memberName: field.Name,
+                memberType: field.FieldType,
+                getValue: () => field.GetValue(null),
+                docMemberName: $"F:{type.FullName}.{field.Name}",
+                assemblyExportedTypeCache,
+                xmlDoc,
+                exportedValues,
+                diagnostics);
+        }
+
+        foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+        {
+            var valueAttr = AttributeDataReader.GetAspireValueData(property);
+            if (valueAttr is null)
+            {
+                continue;
+            }
+
+            if (property.GetMethod is not { IsStatic: true, IsPublic: true })
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on property '{property.Name}'. Exported value properties must have a public static getter.",
+                    $"{type.FullName}.{property.Name}"));
+                continue;
+            }
+
+            if (property.GetIndexParameters().Length != 0)
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on indexed property '{property.Name}'. Indexed properties are not supported.",
+                    $"{type.FullName}.{property.Name}"));
+                continue;
+            }
+
+            TryCreateExportedValue(
+                valueAttr,
+                type,
+                memberName: property.Name,
+                memberType: property.PropertyType,
+                getValue: () => property.GetValue(null),
+                docMemberName: $"P:{type.FullName}.{property.Name}",
+                assemblyExportedTypeCache,
+                xmlDoc,
+                exportedValues,
+                diagnostics);
+        }
+    }
+
+    private static void TryCreateExportedValue(
+        AspireValueData valueAttr,
+        Type declaringType,
+        string memberName,
+        Type memberType,
+        Func<object?> getValue,
+        string docMemberName,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        XDocument? xmlDoc,
+        List<AtsExportedValueInfo> exportedValues,
+        List<AtsDiagnostic> diagnostics)
+    {
+        try
+        {
+            var typeRef = CreateTypeRef(memberType, enumCollector: null, assemblyExportedTypeCache);
+            if (!IsSupportedExportedValueType(typeRef, assemblyExportedTypeCache))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}'. Exported values must serialize to copied shapes. Mutable lists, mutable dictionaries, handles, and DTOs containing them are not supported.",
+                    $"{declaringType.FullName}.{memberName}"));
+                return;
+            }
+
+            var pathSegments = BuildExportedValuePath(declaringType, valueAttr, memberName);
+            if (!IsValidExportedValuePath(pathSegments, out var invalidSegment))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}'. Exported value path segment '{invalidSegment}' is not a valid guest SDK identifier.",
+                    $"{declaringType.FullName}.{memberName}"));
+                return;
+            }
+
+            exportedValues.Add(new AtsExportedValueInfo
+            {
+                OwningAssemblyName = declaringType.Assembly.GetName().Name ?? declaringType.Assembly.FullName ?? string.Empty,
+                PathSegments = pathSegments,
+                Type = typeRef!,
+                Value = SerializeExportedValue(getValue(), memberType),
+                Description = GetXmlDocSummary(xmlDoc, docMemberName)
+            });
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            diagnostics.Add(AtsDiagnostic.Warning(
+                $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}': {ex.Message}",
+                $"{declaringType.FullName}.{memberName}"));
+        }
+    }
+
+    private static bool IsSupportedExportedValueType(
+        AtsTypeRef? typeRef,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        HashSet<string>? visitedDtoTypeIds = null)
+    {
+        if (typeRef is null)
+        {
+            return false;
+        }
+
+        visitedDtoTypeIds ??= new HashSet<string>(StringComparer.Ordinal);
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => typeRef.TypeId != AtsConstants.CancellationToken && typeRef.TypeId != AtsConstants.Void,
+            AtsTypeCategory.Enum => true,
+            AtsTypeCategory.Dto => IsSupportedExportedDtoType(typeRef, assemblyExportedTypeCache, visitedDtoTypeIds),
+            AtsTypeCategory.Array => IsSupportedExportedValueType(typeRef.ElementType, assemblyExportedTypeCache, visitedDtoTypeIds),
+            AtsTypeCategory.Dict => typeRef.IsReadOnly
+                && IsSupportedExportedValueType(typeRef.KeyType, assemblyExportedTypeCache, visitedDtoTypeIds)
+                && IsSupportedExportedValueType(typeRef.ValueType, assemblyExportedTypeCache, visitedDtoTypeIds),
+            AtsTypeCategory.Union => typeRef.UnionTypes is not null
+                && typeRef.UnionTypes.All(type => IsSupportedExportedValueType(type, assemblyExportedTypeCache, visitedDtoTypeIds)),
+            _ => false
+        };
+    }
+
+    private static bool IsSupportedExportedDtoType(
+        AtsTypeRef typeRef,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        HashSet<string> visitedDtoTypeIds)
+    {
+        if (typeRef.ClrType is null)
+        {
+            return false;
+        }
+
+        if (!visitedDtoTypeIds.Add(typeRef.TypeId))
+        {
+            return true;
+        }
+
+        try
+        {
+            foreach (var property in typeRef.ClrType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (HasExportIgnoreAttribute(property))
+                {
+                    continue;
+                }
+
+                if (!property.CanRead || property.GetIndexParameters().Length != 0)
+                {
+                    continue;
+                }
+
+                var propertyTypeRef = CreateTypeRef(property.PropertyType, enumCollector: null, assemblyExportedTypeCache);
+                if (!IsSupportedExportedValueType(propertyTypeRef, assemblyExportedTypeCache, visitedDtoTypeIds))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            _ = visitedDtoTypeIds.Remove(typeRef.TypeId);
+        }
+    }
+
+    private static JsonNode? SerializeExportedValue(object? value, Type memberType)
+    {
+        return JsonSerializer.SerializeToNode(value, memberType, s_exportedValueSerializerOptions);
+    }
+
+    private static IReadOnlyList<string> BuildExportedValuePath(Type declaringType, AspireValueData valueAttr, string memberName)
+    {
+        var pathSegments = new List<string> { valueAttr.CatalogName };
+        var nestedSegments = new Stack<string>();
+
+        for (var current = declaringType; current.DeclaringType is not null; current = current.DeclaringType)
+        {
+            nestedSegments.Push(current.Name);
+        }
+
+        while (nestedSegments.Count > 0)
+        {
+            pathSegments.Add(nestedSegments.Pop());
+        }
+
+        pathSegments.Add(valueAttr.Name ?? memberName);
+        return pathSegments;
+    }
+
+    private static bool IsValidExportedValuePath(IReadOnlyList<string> pathSegments, [System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? invalidSegment)
+    {
+        foreach (var pathSegment in pathSegments)
+        {
+            if (!IsValidExportedValuePathSegment(pathSegment))
+            {
+                invalidSegment = pathSegment;
+                return false;
+            }
+        }
+
+        invalidSegment = null;
+        return true;
+    }
+
+    private static bool IsValidExportedValuePathSegment(string pathSegment)
+    {
+        if (string.IsNullOrWhiteSpace(pathSegment) || !(IsAsciiLetter(pathSegment[0]) || pathSegment[0] == '_'))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < pathSegment.Length; i++)
+        {
+            if (!(IsAsciiLetter(pathSegment[i]) || char.IsAsciiDigit(pathSegment[i]) || pathSegment[i] == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiLetter(char value)
+    {
+        return value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
+    }
+
+    private static List<AtsExportedValueInfo> DeduplicateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        List<AtsDiagnostic> diagnostics)
+    {
+        if (exportedValues.Count <= 1)
+        {
+            return [.. exportedValues];
+        }
+
+        var seenPaths = new HashSet<string>(StringComparer.Ordinal);
+        var uniqueValues = new List<AtsExportedValueInfo>(exportedValues.Count);
+
+        foreach (var exportedValue in exportedValues)
+        {
+            var path = string.Join(".", exportedValue.PathSegments);
+            if (!seenPaths.Add(path))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Duplicate exported value path '{path}'. [AspireValue] exports must use unique catalog paths; later entries are ignored.",
+                    path));
+                continue;
+            }
+
+            if (TryFindConflictingExportedValuePath(exportedValue.PathSegments, uniqueValues, out var conflictingPath))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Conflicting exported value path '{path}'. Exported value paths cannot be both a leaf value and a parent path. Existing path '{conflictingPath}' is kept and later entries are ignored.",
+                    path));
+                continue;
+            }
+
+            uniqueValues.Add(exportedValue);
+        }
+
+        return uniqueValues;
+    }
+
+    private static bool TryFindConflictingExportedValuePath(
+        IReadOnlyList<string> candidatePathSegments,
+        IReadOnlyList<AtsExportedValueInfo> existingValues,
+        out string? conflictingPath)
+    {
+        foreach (var existingValue in existingValues)
+        {
+            if (PathsConflict(candidatePathSegments, existingValue.PathSegments))
+            {
+                conflictingPath = string.Join(".", existingValue.PathSegments);
+                return true;
+            }
+        }
+
+        conflictingPath = null;
+        return false;
+    }
+
+    private static bool PathsConflict(IReadOnlyList<string> leftPathSegments, IReadOnlyList<string> rightPathSegments)
+    {
+        return IsPrefixPath(leftPathSegments, rightPathSegments) || IsPrefixPath(rightPathSegments, leftPathSegments);
+    }
+
+    private static bool IsPrefixPath(IReadOnlyList<string> prefixPathSegments, IReadOnlyList<string> fullPathSegments)
+    {
+        if (prefixPathSegments.Count >= fullPathSegments.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < prefixPathSegments.Count; i++)
+        {
+            if (!string.Equals(prefixPathSegments[i], fullPathSegments[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -1148,21 +1498,24 @@ public static class AtsCapabilityScanner
 
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
+                var methodNameOverride = memberExportAttr?.MethodName;
+                var propertyDescription = memberExportAttr?.Description ?? $"Gets the {property.Name} property";
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
                 if (property.CanRead)
                 {
                     var camelCaseName = ToCamelCase(property.Name);
-                    var getMethodName = customMethodName ?? $"{typeName}.{camelCaseName}";
+                    var getterMethodName = methodNameOverride ?? camelCaseName;
+                    var getMethodName = customMethodName ?? $"{typeName}.{getterMethodName}";
                     var getCapabilityId = $"{package}/{getMethodName}";
 
                     capabilities.Add(new AtsCapabilityInfo
                     {
                         CapabilityId = getCapabilityId,
-                        MethodName = camelCaseName,
+                        MethodName = getterMethodName,
                         OwningTypeName = typeName,
-                        Description = $"Gets the {property.Name} property",
+                        Description = propertyDescription,
                         Parameters = [
                            new AtsParameterInfo
                             {
@@ -1192,7 +1545,10 @@ public static class AtsCapabilityScanner
                 // Naming: {TypeName}.set{PropertyName} (keep "set" prefix, PascalCase property name)
                 if (property.CanWrite)
                 {
-                    var setMethodName = $"set{property.Name}";
+                    var setterMethodNameSuffix = methodNameOverride is { Length: > 0 }
+                        ? char.ToUpperInvariant(methodNameOverride[0]) + methodNameOverride[1..]
+                        : property.Name;
+                    var setMethodName = $"set{setterMethodNameSuffix}";
                     var setCapabilityId = $"{package}/{typeName}.{setMethodName}";
 
                     capabilities.Add(new AtsCapabilityInfo
@@ -1291,6 +1647,7 @@ public static class AtsCapabilityScanner
             {
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
+                var methodNameOverride = memberExportAttr?.MethodName;
 
                 // Generate method capability
                 // If explicit [AspireExport("id")] with custom Id, use that directly (like static exports)
@@ -1367,7 +1724,7 @@ public static class AtsCapabilityScanner
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
                 // Get simple method name (without type prefix)
-                var simpleMethodName = customMethodName ?? ToCamelCase(method.Name);
+                var simpleMethodName = methodNameOverride ?? customMethodName ?? ToCamelCase(method.Name);
 
                 capabilities.Add(new AtsCapabilityInfo
                 {
@@ -2722,6 +3079,32 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static readonly ConcurrentDictionary<string, XDocument?> s_xmlDocCache = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<Type, byte> s_assemblyExportedTypeCache = new();
+    private static readonly JsonSerializerOptions s_exportedValueSerializerOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver
+        {
+            Modifiers =
+            {
+                typeInfo =>
+                {
+                    if (typeInfo.Kind != JsonTypeInfoKind.Object)
+                    {
+                        return;
+                    }
+
+                    for (var i = typeInfo.Properties.Count - 1; i >= 0; i--)
+                    {
+                        if (typeInfo.Properties[i].AttributeProvider is PropertyInfo propertyInfo &&
+                            HasExportIgnoreAttribute(propertyInfo))
+                        {
+                            typeInfo.Properties.RemoveAt(i);
+                        }
+                    }
+                }
+            }
+        }
+    };
 
     private static AssemblyExportedTypeCache CreateAssemblyExportedTypeCache(IEnumerable<Assembly> assemblies)
     {

@@ -434,6 +434,7 @@ internal static partial class VmSizeClassGenerator
                 sb.AppendLine("        /// <summary>");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"        /// {EscapeXml(description)}");
                 sb.AppendLine("        /// </summary>");
+                sb.AppendLine("        [AspireValue(\"AksNodeVmSizes\")]");
                 sb.AppendLine(CultureInfo.InvariantCulture, $"        public const string {fieldName} = \"{size.Name}\";");
             }
 

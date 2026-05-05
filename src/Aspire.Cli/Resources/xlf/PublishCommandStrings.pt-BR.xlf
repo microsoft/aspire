@@ -38,7 +38,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file</source>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">O caminho para o arquivo de projeto do Aspire AppHost.</target>
         <note />
       </trans-unit>

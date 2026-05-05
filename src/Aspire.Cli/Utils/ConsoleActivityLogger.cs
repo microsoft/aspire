@@ -189,9 +189,9 @@ internal sealed class ConsoleActivityLogger
         WriteCompletion(taskKey, FailureSymbol, message, ActivityState.Failure, seconds);
     }
 
-    public void Info(string taskKey, string message)
+    public void Info(string taskKey, string message, bool dim = false)
     {
-        WriteLine(taskKey, InfoSymbol, message, ActivityState.Info);
+        WriteLine(taskKey, InfoSymbol, message, ActivityState.Info, dim);
     }
 
     public void Continuation(string message)
@@ -668,7 +668,7 @@ internal sealed class ConsoleActivityLogger
         WriteLine(taskKey, symbol, text, state);
     }
 
-    private void WriteLine(string taskKey, string symbol, string message, ActivityState state)
+    private void WriteLine(string taskKey, string symbol, string message, ActivityState state, bool dim = false)
     {
         lock (_lock)
         {
@@ -681,9 +681,17 @@ internal sealed class ConsoleActivityLogger
             {
                 // Format: dim timestamp, colored step tag, symbol, message with Spectre markup
                 var highlightedLine = HighlightMessage(line);
+
+                // Apply dim formatting per-line so that [dim]...[/] tags don't span across
+                // split lines or conflict with Spectre markup already present in the message.
+                if (dim && _enableColor)
+                {
+                    highlightedLine = $"[dim]{highlightedLine}[/]";
+                }
+
                 var markup = new StringBuilder();
                 markup.Append("[dim]").Append(time).Append("[/] ");
-                markup.Append('[').Append(stepColor).Append(']').Append('(').Append(displayKey).Append(')').Append("[/] ");
+                markup.Append('[').Append(stepColor).Append(']').Append('(').Append(displayKey).Append(")[/] ");
                 if (_enableColor)
                 {
                     if (state == ActivityState.Failure)
@@ -705,7 +713,16 @@ internal sealed class ConsoleActivityLogger
                 {
                     markup.Append(symbol).Append(' ').Append(highlightedLine);
                 }
-                _console.MarkupLine(markup.ToString());
+                var markupString = markup.ToString();
+                try
+                {
+                    _console.MarkupLine(markupString);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Spectre markup rendering failed for line: \"{markupString}\". Original message: \"{line}\"", ex);
+                }
             }
         }
     }

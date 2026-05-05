@@ -11,7 +11,7 @@ with create_builder() as builder:
     env = builder.add_azure_app_service_environment("resource")
     website = builder.add_container("resource", "image")
     builder.add_executable("resource", "echo", ".", [])
-    builder.add_project("resource", ".", "default")
+    builder.add_project("resource", ".", launch_profile_name="default")
     _environment_name = env.get_resource_name()
     _website_name = website.get_resource_name()
     builder.run()

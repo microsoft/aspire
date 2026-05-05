@@ -157,7 +157,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
         // Check if CLI is in a bundle layout
         // First, check if components are siblings of the CLI (flat layout):
-        //   {layout}/aspire + {layout}/managed/ + {layout}/dcp/
+        //   {layout}/aspire + {layout}/bundle/ -> {layout}/versions/{id}/
         var layout = TryInferLayout(cliDir);
         if (layout is not null)
         {
@@ -165,7 +165,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         }
 
         // Next, check the parent directory (bin/ layout where CLI is in a subdirectory):
-        //   {layout}/bin/aspire + {layout}/managed/ + {layout}/dcp/
+        //   {layout}/bin/aspire + {layout}/bundle/ -> {layout}/versions/{id}/
         var parentDir = Path.GetDirectoryName(cliDir);
         if (!string.IsNullOrEmpty(parentDir))
         {
@@ -182,11 +182,40 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
     private LayoutConfiguration? TryInferLayout(string layoutPath)
     {
-        // Check for essential directories
+        // New layout: a single bundle/ link whose target contains managed/ and dcp/.
+        var bundlePath = Path.Combine(layoutPath, BundleDiscovery.BundleDirectoryName);
+        var bundleManagedPath = Path.Combine(bundlePath, BundleDiscovery.ManagedDirectoryName);
+        var bundleDcpPath = Path.Combine(bundlePath, BundleDiscovery.DcpDirectoryName);
+        var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
+
+        _logger.LogDebug("TryInferLayout: Checking layout at {Path}", layoutPath);
+        _logger.LogDebug("  {Dir}/{Managed}/: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, Directory.Exists(bundleManagedPath) ? "exists" : "MISSING");
+        _logger.LogDebug("  {Dir}/{Dcp}/: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName, Directory.Exists(bundleDcpPath) ? "exists" : "MISSING");
+
+        if (Directory.Exists(bundleManagedPath) && Directory.Exists(bundleDcpPath))
+        {
+            var bundleManagedExe = Path.Combine(bundleManagedPath, managedExeName);
+            _logger.LogDebug("  {Dir}/{Managed}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, managedExeName, File.Exists(bundleManagedExe) ? "exists" : "MISSING");
+
+            if (File.Exists(bundleManagedExe))
+            {
+                _logger.LogDebug("TryInferLayout: New bundle/ layout is valid");
+                return new LayoutConfiguration
+                {
+                    LayoutPath = layoutPath,
+                    Components = new LayoutComponents
+                    {
+                        Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
+                        Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
+                    }
+                };
+            }
+        }
+
+        // Legacy layout: top-level managed/ and dcp/ directories (or reparse points).
         var managedPath = Path.Combine(layoutPath, BundleDiscovery.ManagedDirectoryName);
         var dcpPath = Path.Combine(layoutPath, BundleDiscovery.DcpDirectoryName);
 
-        _logger.LogDebug("TryInferLayout: Checking layout at {Path}", layoutPath);
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.ManagedDirectoryName, Directory.Exists(managedPath) ? "exists" : "MISSING");
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.DcpDirectoryName, Directory.Exists(dcpPath) ? "exists" : "MISSING");
 
@@ -197,7 +226,6 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         }
 
         // Check for aspire-managed executable
-        var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
         var managedExePath = Path.Combine(managedPath, managedExeName);
         _logger.LogDebug("  managed/{ManagedExe}: {Exists}", managedExeName, File.Exists(managedExePath) ? "exists" : "MISSING");
 
@@ -207,7 +235,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             return null;
         }
 
-        _logger.LogDebug("TryInferLayout: Layout is valid");
+        _logger.LogDebug("TryInferLayout: Legacy layout is valid");
 
         // Infer a basic layout configuration
         return new LayoutConfiguration

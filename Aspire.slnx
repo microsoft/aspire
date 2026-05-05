@@ -50,6 +50,7 @@
     <Project Path="src/Aspire.Hosting.Analyzers/Aspire.Hosting.Analyzers.csproj" />
     <Project Path="src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" />
     <Project Path="src/Aspire.Hosting.AppHost/Aspire.Hosting.AppHost.csproj" />
+    <Project Path="src/Aspire.Hosting.Browsers/Aspire.Hosting.Browsers.csproj" />
     <Project Path="src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj" />
     <Project Path="src/Aspire.Hosting.Docker/Aspire.Hosting.Docker.csproj" />
     <Project Path="src/Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.csproj" />
@@ -230,9 +231,10 @@
   <Folder Name="/playground/FoundryAgentEnterprise/">
     <Project Path="playground/FoundryAgentEnterprise/FoundryAgentEnterprise.AppHost/FoundryAgentEnterprise.AppHost.csproj" />
   </Folder>
-  <Folder Name="/playground/FoundryHostedAgents/">
-    <Project Path="playground/FoundryHostedAgents/DotNetHostedAgent/DotNetHostedAgent.csproj" />
-    <Project Path="playground/FoundryHostedAgents/FoundryHostedAgents.AppHost/FoundryHostedAgents.AppHost.csproj" />
+  <Folder Name="/playground/FoundryAgents/">
+    <Project Path="playground/FoundryAgents/DotNetHostedAgent/DotNetHostedAgent.csproj" />
+    <Project Path="playground/FoundryAgents/FoundryAgents.AppHost/FoundryAgents.AppHost.csproj" />
+    <Project Path="playground/FoundryAgents/PromptAgentChat/PromptAgentChat.csproj" />
   </Folder>
   <Folder Name="/playground/GitHubModelsEndToEnd/">
     <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.AppHost/GitHubModelsEndToEnd.AppHost.csproj" />
@@ -476,6 +478,7 @@
     <Project Path="tests/Aspire.Hosting.Azure.Kusto.Tests/Aspire.Hosting.Azure.Kusto.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Kubernetes.Tests/Aspire.Hosting.Azure.Kubernetes.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Tests/Aspire.Hosting.Azure.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Browsers.Tests/Aspire.Hosting.Browsers.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Containers.Tests/Aspire.Hosting.Containers.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.DevTunnels.Tests/Aspire.Hosting.DevTunnels.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.DotnetTool.Tests/Aspire.Hosting.DotnetTool.Tests.csproj" />

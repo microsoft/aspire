@@ -1,6 +1,6 @@
 {
   "author": "Microsoft",
-  "name": "Aplicativo Inicial Aspire (ASP.NET Core/React)",
+  "name": "Aplicativo Inicial Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Um modelo de projeto para criar um aplicativo Aspire com front-end React e serviço de back-end C# com API Mínima, com cache Redis opcional.",
   "symbols/Framework/description": "A estrutura de destino para o projeto.",
   "symbols/Framework/choices/net8.0/description": "Destino net8.0",

@@ -2,10 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.DotNet.RemoteExecutor;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -243,6 +247,74 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
         }, AppContext.BaseDirectory, options: s_remoteInvokeOptions);
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
+
+    [Fact]
+    public void FormatJson_IncludesExportedValues()
+    {
+        var capabilities = CreateCapabilitiesInfo();
+
+        var json = InvokeFormatter("FormatJson", capabilities);
+        using var document = JsonDocument.Parse(json);
+
+        var exportedValues = document.RootElement.GetProperty("ExportedValues");
+        Assert.Single(exportedValues.EnumerateArray());
+        var exportedValue = exportedValues[0];
+        Assert.Equal("TestCatalog", exportedValue.GetProperty("PathSegments")[0].GetString());
+        Assert.Equal("Default", exportedValue.GetProperty("PathSegments")[1].GetString());
+        Assert.Equal("你好", exportedValue.GetProperty("Value").GetString());
+    }
+
+    [Fact]
+    public void FormatCi_IncludesExportedValues()
+    {
+        var capabilities = CreateCapabilitiesInfo();
+
+        var output = InvokeFormatter("FormatCi", capabilities);
+
+        Assert.Contains("# Exported Values", output);
+        Assert.Contains("TestCatalog.Default: test/string = \"你好\"", output);
+    }
+
+    [Fact]
+    public void FormatPretty_IncludesExportedValues()
+    {
+        var capabilities = CreateCapabilitiesInfo();
+
+        var output = InvokeFormatter("FormatPretty", capabilities);
+
+        Assert.Contains("Exported Values (copied into guest SDKs)", output);
+        Assert.Contains("TestCatalog.Default: string", output);
+        Assert.Contains("\"你好\"", output);
+    }
+
+    private static string InvokeFormatter(string methodName, CapabilitiesInfo capabilities)
+    {
+        var method = typeof(SdkDumpCommand).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        return Assert.IsType<string>(method.Invoke(null, [capabilities]));
+    }
+
+    private static CapabilitiesInfo CreateCapabilitiesInfo()
+    {
+        return new CapabilitiesInfo
+        {
+            ExportedValues =
+            [
+                new ExportedValueInfo
+                {
+                    PathSegments = ["TestCatalog", "Default"],
+                    Type = new TypeRefInfo
+                    {
+                        TypeId = "test/string",
+                        Category = "Primitive"
+                    },
+                    Value = JsonValue.Create("你好"),
+                    Description = "Greeting"
+                }
+            ]
+        };
     }
 
     private static string? TryFindRepoRoot(string startPath)

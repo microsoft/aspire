@@ -21,6 +21,16 @@ internal static class CommonAgentApplicators
     internal const string AspireSkillResourceRoot = "skills.aspire";
 
     /// <summary>
+    /// The name of the Aspireify skill.
+    /// </summary>
+    internal const string AspireifySkillName = "aspireify";
+
+    /// <summary>
+    /// The embedded resource root for the Aspireify skill.
+    /// </summary>
+    internal const string AspireifySkillResourceRoot = "skills.aspireify";
+
+    /// <summary>
     /// The name of the dotnet-inspect skill.
     /// </summary>
     internal const string DotnetInspectSkillName = "dotnet-inspect";

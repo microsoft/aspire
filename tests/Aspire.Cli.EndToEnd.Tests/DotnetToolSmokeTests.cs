@@ -16,9 +16,9 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// <para>
 /// The strategy is resolved from (in priority order):
 /// <list type="number">
-///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — install from local nupkg directory</item>
-///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed (optionally with <c>ASPIRE_E2E_VERSION</c>)</item>
+///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> — install from local nupkg directory</item>
 ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
+///   <item>Published NuGet feed when <c>ASPIRE_E2E_VERSION</c> or <c>ASPIRE_E2E_QUALITY</c> is set</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -26,13 +26,9 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
 {
     [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task DotnetToolInstall_CreateAndRunAspireStarterProject()
+    public async Task CreateAndRunAspireStarterProject()
     {
         var strategy = GetDotnetToolStrategy();
-
-        Assert.True(strategy is not null,
-            "DotnetToolSmokeTests requires one of: ASPIRE_E2E_DOTNET_TOOL_SOURCE + ASPIRE_E2E_VERSION, " +
-            "ASPIRE_E2E_DOTNET_TOOL=true, or BUILT_NUGETS_PATH containing Aspire.Cli nupkg.");
 
         output.WriteLine($"DotnetTool strategy resolved: {strategy}");
 
@@ -64,6 +60,12 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync(".dotnet/tools/aspire", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
+        // Verify self-update uses the dotnet tool update path for dotnet tool installs.
+        await auto.TypeAsync("aspire update --self");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("dotnet tool update -g Aspire.Cli", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptAsync(counter);
+
         // Verify the installed version matches expectations
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
@@ -93,7 +95,8 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
                     "This indicates multiple apphosts were incorrectly detected.");
             }
 
-            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+            // Dotnet tool smoke tests can run against older published packages that used different AppHost casing.
+            return s.GetScreenText().Contains("Press CTRL+C to stop the AppHost and exit.", StringComparison.OrdinalIgnoreCase);
         }, timeout: TimeSpan.FromMinutes(2), description: "Press CTRL+C message (aspire run started)");
 
         // Stop the running apphost with Ctrl+C
@@ -111,14 +114,12 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
     /// Explicitly constructs a DotnetTool strategy from env vars, bypassing <see cref="CliInstallStrategy.Detect"/>.
     /// Checks (in order):
     /// <list type="number">
-    ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — explicit local nupkg directory</item>
-    ///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed</item>
+    ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> — explicit local nupkg directory</item>
     ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
+    ///   <item>Published NuGet feed when <c>ASPIRE_E2E_VERSION</c> or <c>ASPIRE_E2E_QUALITY</c> is set</item>
     /// </list>
-    /// Returns <see langword="null"/> when none of the above are configured — callers should fail with
-    /// a clear message indicating the workflow is misconfigured.
     /// </summary>
-    private static CliInstallStrategy? GetDotnetToolStrategy()
+    internal static CliInstallStrategy GetDotnetToolStrategy()
     {
         // 1. Explicit local nupkg source (user-provided)
         var source = Environment.GetEnvironmentVariable("ASPIRE_E2E_DOTNET_TOOL_SOURCE");
@@ -127,69 +128,38 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
         {
             var version = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
 
-            if (string.IsNullOrEmpty(version))
-            {
-                throw new InvalidOperationException(
-                    "ASPIRE_E2E_DOTNET_TOOL_SOURCE requires ASPIRE_E2E_VERSION to specify which version to install.");
-            }
-
-            return CliInstallStrategy.FromDotnetToolLocalSource(source, version);
+            return string.IsNullOrEmpty(version)
+                ? CliInstallStrategy.FromDotnetToolLocalSource(source)
+                : CliInstallStrategy.FromDotnetToolLocalSource(source, version);
         }
 
-        // 2. Published NuGet feed
-        var dotnetTool = Environment.GetEnvironmentVariable("ASPIRE_E2E_DOTNET_TOOL");
-
-        if (string.Equals(dotnetTool, "true", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(dotnetTool, "1", StringComparison.OrdinalIgnoreCase))
-        {
-            var version = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
-            return CliInstallStrategy.FromDotnetTool(version);
-        }
-
-        // 3. Auto-discover from CI-built nupkgs (BUILT_NUGETS_PATH contains the tool nupkg
+        // 2. Auto-discover from CI-built nupkgs (BUILT_NUGETS_PATH contains the tool nupkg
         //    directly since the dotnet tool is built as part of the normal package build)
         var builtNugetsPath = Environment.GetEnvironmentVariable("BUILT_NUGETS_PATH");
 
         if (!string.IsNullOrEmpty(builtNugetsPath) && Directory.Exists(builtNugetsPath))
         {
-            var nupkgs = Directory.GetFiles(builtNugetsPath, "Aspire.Cli.*.nupkg")
-                .Where(f => !f.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase)
-                         && !f.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-
-            if (nupkgs.Length == 1)
-            {
-                var version = ExtractVersionFromNupkgFilename(nupkgs[0]);
-                return CliInstallStrategy.FromDotnetToolLocalSource(builtNugetsPath, version);
-            }
-
-            if (nupkgs.Length > 1)
-            {
-                throw new InvalidOperationException(
-                    $"Found multiple Aspire.Cli nupkgs in '{builtNugetsPath}': {string.Join(", ", nupkgs.Select(Path.GetFileName))}. Expected exactly one.");
-            }
+            return CliInstallStrategy.FromDotnetToolLocalSource(builtNugetsPath);
         }
 
-        return null;
-    }
-
-    /// <summary>
-    /// Extracts the NuGet package version from a filename like <c>Aspire.Cli.10.0.0-dev.26223.1.nupkg</c>.
-    /// </summary>
-    private static string ExtractVersionFromNupkgFilename(string nupkgPath)
-    {
-        const string prefix = "Aspire.Cli.";
-        const string suffix = ".nupkg";
-
-        var filename = Path.GetFileName(nupkgPath);
-
-        if (filename.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
-            filename.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        // 3. Published NuGet feed. Require an explicit selector so local dotnet test runs
+        //    don't silently install the latest package from the public feed.
+        var requestedVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
+        if (string.IsNullOrWhiteSpace(requestedVersion))
         {
-            return filename[prefix.Length..^suffix.Length];
+            requestedVersion = null;
         }
 
-        throw new InvalidOperationException(
-            $"Cannot extract version from nupkg filename: {filename}. Expected format: Aspire.Cli.{{version}}.nupkg");
+        var quality = CliInstallStrategy.GetQualityFromEnvironment();
+        if (requestedVersion is null && quality is null)
+        {
+            throw new InvalidOperationException(
+                "Dotnet tool smoke tests require ASPIRE_E2E_QUALITY to select a daily published feed, " +
+                "ASPIRE_E2E_VERSION to install a specific published version, " +
+                "ASPIRE_E2E_DOTNET_TOOL_SOURCE to install from a local feed, " +
+                "or BUILT_NUGETS_PATH containing exactly one Aspire.Cli pointer nupkg.");
+        }
+
+        return CliInstallStrategy.FromPublishedDotnetToolFeed(requestedVersion, quality);
     }
 }

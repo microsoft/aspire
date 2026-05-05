@@ -12,7 +12,7 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 ## Use this skill for
 
 - Starting, restarting, and stopping AppHosts with `aspire start` and `aspire stop`
-- Initializing Aspire in an existing app with `aspire init`
+- Initializing Aspire in an existing app with `aspire init` (drops skeleton files; use the `aspireify` skill to complete wiring)
 - Inspecting resources, logs, traces, and docs
 - Adding integrations with `aspire add`
 - Recovering missing TypeScript AppHost support files with `aspire restore`
@@ -33,7 +33,7 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 1. Confirm that the workspace is an Aspire app and identify the AppHost.
 2. Start the app with `aspire start`. Use `--isolated` in git worktrees or whenever shared local state would be risky.
 3. Use `aspire wait <resource>` before interacting with a resource that needs to be healthy.
-4. Inspect state with `aspire describe`, then use `aspire otel logs`, `aspire logs`, `aspire otel traces`, and `aspire export` before making code changes.
+4. Inspect state with `aspire describe`, then use `aspire otel logs`, `aspire logs`, `aspire otel traces`, and `aspire export` before making code changes. Display returned data using the formatting rules in [references/monitoring.md](references/monitoring.md).
 5. Before adding an integration, introducing a custom dashboard/resource command, or using an unfamiliar AppHost API, use `aspire docs search <topic>` and `aspire docs get <slug>` for workflow guidance, then use `aspire docs api search <query> --language csharp|typescript` and `aspire docs api get <id>` when you need the API reference entry itself.
 6. Re-run `aspire start` after AppHost changes. In git worktrees, re-run `aspire start --isolated` instead of switching to `aspire run`.
 

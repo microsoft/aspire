@@ -42,6 +42,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsV2 { get; }
 
     /// <summary>
+    /// Gets AppHost information using the v2 API.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost information response.</returns>
+    Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

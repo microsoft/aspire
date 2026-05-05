@@ -3,12 +3,14 @@
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO.Pipelines;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
@@ -165,6 +167,7 @@ public class DcpExecutorTests
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
         Assert.Equal(expectedAnnotations, argAnnotations.Select(a => a.Argument));
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
     }
 
     [Theory]
@@ -201,6 +204,94 @@ public class DcpExecutorTests
 
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
         Assert.Equal(toolArgs, argAnnotations.Select(a => a.Argument));
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
+    }
+
+    [Fact]
+    public async Task CreateExecutable_ProjectArgsResolvedInSnapshot_UsesEffectiveArgsFromCreatorIndexes()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var project = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080);
+        var endpoint = project.GetEndpoint("http");
+
+        project.WithArgs("--port")
+            .WithArgs(c => c.Args.Add(endpoint.Property(EndpointProperty.Port)));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        Assert.Equal(2, argAnnotations.Count);
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
+
+        var effectiveArgs = exe.Spec.Args!.ToList();
+        var portArgument = Assert.Single(argAnnotations, a => a.Argument != "--port");
+        effectiveArgs[Assert.IsType<int>(portArgument.EffectiveArgumentIndex)] = "52731";
+        exe.Status = new ExecutableStatus
+        {
+            EffectiveArgs = effectiveArgs
+        };
+
+        var snapshot = CreateSnapshotBuilder(distributedAppModel).ToSnapshot(exe, CreatePreviousSnapshot());
+
+        Assert.Equal(["--port", "52731"], GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Resource.AppArgs).ToArray());
+        Assert.Equal(effectiveArgs, GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Executable.Args).ToArray());
+    }
+
+    [Fact]
+    public async Task CreateContainer_ArgsResolvedInSnapshot_UsesEffectiveArgsFromCreatorIndexes()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("aContainer", "image")
+            .WithArgs(c =>
+            {
+                c.Args.Add("--port");
+                c.Args.Add(executable.GetEndpoint("http").Property(EndpointProperty.Port));
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        Assert.True(container.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        Assert.Equal(2, argAnnotations.Count);
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, container.Spec.Args);
+
+        var effectiveArgs = container.Spec.Args!.ToList();
+        var portArgument = Assert.Single(argAnnotations, a => a.Argument != "--port");
+        effectiveArgs[Assert.IsType<int>(portArgument.EffectiveArgumentIndex)] = "5678";
+        container.Status = new ContainerStatus
+        {
+            EffectiveArgs = effectiveArgs
+        };
+
+        var snapshot = CreateSnapshotBuilder(distributedAppModel).ToSnapshot(container, CreatePreviousSnapshot());
+
+        Assert.Equal(["--port", "5678"], GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Resource.AppArgs).ToArray());
+        Assert.Equal(effectiveArgs, GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Container.Args).ToArray());
     }
 
     [Fact]
@@ -244,6 +335,7 @@ public class DcpExecutorTests
         Assert.Single(exe1.Spec.Args!, a => a == "--test");
         Assert.True(exe1.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations1));
         Assert.Single(argAnnotations1, a => a.Argument == "--test");
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations1, exe1.Spec.Args);
 
         var reference = appExecutor.GetResource(exe1.Metadata.Name);
 
@@ -262,6 +354,7 @@ public class DcpExecutorTests
         Assert.Single(exe2.Spec.Args!, a => a == "--test");
         Assert.True(exe2.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations2));
         Assert.Single(argAnnotations2, a => a.Argument == "--test");
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations2, exe2.Spec.Args);
     }
 
     [Fact]
@@ -2747,6 +2840,79 @@ public class DcpExecutorTests
         }
     }
 
+    [Fact]
+    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("aContainer", "image")
+            .WithEnvironment("URL", new HostUrl("https://localhost:17092/path"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+
+        var dcpContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        Assert.NotNull(dcpContainer.Spec.Env);
+        var url = Assert.Single(dcpContainer.Spec.Env, e => e.Name == "URL").Value;
+        Assert.Equal("https://host.docker.internal:17092/path", url);
+
+        Assert.DoesNotContain(kubernetesService.CreatedResources.OfType<Service>(),
+            s => s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+    }
+
+    [Fact]
+    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("aContainer", "image")
+            .WithEnvironment("URL", new HostUrl("https://localhost:5678/path"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var failedResources = new ConcurrentBag<string>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Add(context.Resource.Name);
+            return Task.CompletedTask;
+        });
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, events: events);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.DoesNotContain("aContainer", failedResources);
+
+        var dcpContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        var tunnelService = Assert.Single(kubernetesService.CreatedResources.OfType<Service>(),
+            s => s.AppModelResourceName == executable.Resource.Name
+                && s.EndpointName == "http"
+                && s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+
+        Assert.NotNull(dcpContainer.Spec.Env);
+        var url = Assert.Single(dcpContainer.Spec.Env, e => e.Name == "URL").Value;
+        Assert.Equal($"https://{KnownHostNames.DefaultContainerTunnelHostName}:{tunnelService.AllocatedPort}/path", url);
+    }
+
     // Verifies that environment value callbacks are invoked only once per container startup.
     [Fact]
     public async Task EnvironmentCallbacksInvokedOnceOnContainer()
@@ -2853,6 +3019,10 @@ public class DcpExecutorTests
         await appExecutor.RunApplicationAsync();
 
         Assert.Equal(1, callCount);
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        Assert.True(container.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, container.Spec.Args);
     }
 
     // Ensures that command-line argument callbacks are invoked after the OnResourceStarting event is raised for the resource,
@@ -3254,6 +3424,7 @@ public class DcpExecutorTests
             {
                 ServiceProvider = new TestServiceProvider(configuration)
                     .AddService<IDeveloperCertificateService>(developerCertificateService)
+                    .AddService(distributedAppModel)
                     .AddService(Options.Create(dcpOptions))
                     .AddService(resourceLoggerService)
             });
@@ -3319,6 +3490,46 @@ public class DcpExecutorTests
             .AddTimeout(TimeSpan.FromMilliseconds(timeoutMilliseconds))
             .Build();
         return retry.Execute(check);
+    }
+
+    private static void AssertEffectiveArgumentIndexesMatchSpecArgs(IReadOnlyList<AppLaunchArgumentAnnotation> argAnnotations, IReadOnlyList<string>? specArgs)
+    {
+        foreach (var annotation in argAnnotations)
+        {
+            if (annotation.EffectiveArgumentIndex is not int index)
+            {
+                continue;
+            }
+
+            Assert.NotNull(specArgs);
+            Assert.InRange(index, 0, specArgs.Count - 1);
+            Assert.Equal(annotation.Argument, specArgs[index]);
+        }
+    }
+
+    private static Aspire.Hosting.Dcp.ResourceSnapshotBuilder CreateSnapshotBuilder(DistributedApplicationModel model)
+    {
+        return new(new DcpResourceState(model.Resources.ToDictionary(r => r.Name), []));
+    }
+
+    private static CustomResourceSnapshot CreatePreviousSnapshot()
+    {
+        return new()
+        {
+            ResourceType = "resource",
+            Properties = []
+        };
+    }
+
+    private static ResourcePropertySnapshot GetProperty(CustomResourceSnapshot snapshot, string name)
+    {
+        return Assert.Single(snapshot.Properties, p => p.Name == name);
+    }
+
+    private static IEnumerable<T> GetEnumerablePropertyValue<T>(CustomResourceSnapshot snapshot, string name)
+    {
+        var property = GetProperty(snapshot, name);
+        return Assert.IsAssignableFrom<IEnumerable<T>>(property.Value);
     }
 
     private sealed class TestExecutableResource(string directory) : ExecutableResource("TestExecutable", "test", directory);

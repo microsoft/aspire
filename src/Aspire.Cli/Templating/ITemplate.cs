@@ -26,6 +26,11 @@ internal interface ITemplate
     bool IsEmpty { get; }
 
     /// <summary>
+    /// Gets a value indicating whether this template should be shown in the interactive template picker.
+    /// </summary>
+    bool ShowInPrompt { get; }
+
+    /// <summary>
     /// Gets the runtime model used to execute this template.
     /// </summary>
     TemplateRuntime Runtime { get; }

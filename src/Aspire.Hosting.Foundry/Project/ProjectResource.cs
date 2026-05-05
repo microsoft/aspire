@@ -43,6 +43,27 @@ public class AzureCognitiveServicesProjectResource :
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
 
+            var removeDefaultContainerRegistryStep = new PipelineStep
+            {
+                Name = $"prepare-foundry-project-{name}",
+                Description = $"Prepares Microsoft Foundry project {name} for deployment.",
+                Action = context =>
+                {
+                    if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
+                        DefaultContainerRegistry is not null)
+                    {
+                        context.Model.Resources.Remove(DefaultContainerRegistry);
+                        DefaultContainerRegistry = null;
+                    }
+
+                    return Task.CompletedTask;
+                },
+                Resource = this,
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+            steps.Add(removeDefaultContainerRegistryStep);
+
             var computeUrls = new PipelineStep
             {
                 Name = $"compute-endpoints-{name}",
@@ -147,7 +168,7 @@ public class AzureCognitiveServicesProjectResource :
             {
                 throw new InvalidOperationException(
                     $"The container registry configured for the Azure Cognitive Services project '{Name}' is not an Azure Container Registry. " +
-                    $"Only Azure Container Registry resources are supported. Use '.WithContainerRegistry()' to configure an Azure Container Registry.");
+                    $"Only Azure Container Registry resources are supported. Use '.WithAzureContainerRegistry()' to configure an Azure Container Registry.");
             }
 
             return azureRegistry;
@@ -198,11 +219,13 @@ public class AzureCognitiveServicesProjectResource :
     /// <summary>
     /// This is the encoding that the Microsoft Foundry web portal uses in their URLs, for some reason
     /// </summary>
+    // Foundry portal URLs use big-endian (RFC 4122) GUID encoding, not .NET's mixed-endian ToByteArray().
     internal static string EncodeSubscriptionId(string subscriptionId)
     {
         var guid = Guid.Parse(subscriptionId);
-        var encoded = Base64Url.EncodeToString(guid.ToByteArray());
-        return encoded.TrimEnd('=');
+        // Convert hex pairs from the canonical GUID string to bytes (preserves display order)
+        var bytes = Convert.FromHexString(guid.ToString("N"));
+        return Base64Url.EncodeToString(bytes).TrimEnd('=');
     }
 
     /// <summary>

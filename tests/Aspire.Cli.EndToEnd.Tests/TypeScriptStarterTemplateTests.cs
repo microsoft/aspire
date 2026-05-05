@@ -38,6 +38,7 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 
         // Step 1.5: Verify starter creation also restored the generated TypeScript SDK.
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "TsStarterApp");
+        GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");
         var modulesDir = Path.Combine(projectRoot, ".modules");
 
         if (!Directory.Exists(modulesDir))
@@ -55,6 +56,8 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         await auto.TypeAsync("cd TsStarterApp");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);

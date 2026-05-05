@@ -355,7 +355,7 @@ public static class JavaScriptHostingExtensions
     /// To add an API reverse-proxy, use the overload that accepts an <c>apiPath</c> and <c>apiTarget</c>.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -390,7 +390,7 @@ public static class JavaScriptHostingExtensions
     /// work correctly across all deployment targets (Docker Compose, Azure App Service, etc.).
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -410,6 +410,7 @@ public static class JavaScriptHostingExtensions
     /// in a single options object rather than positional args.
     /// </summary>
 #pragma warning disable ASPIREEXPORT009 // Polyglot entry point — collision is intentional
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("publishAsStaticWebsite", Description = "Publishes the JavaScript application as a standalone static website using YARP.")]
     internal static IResourceBuilder<TResource> PublishAsStaticWebsitePolyglot<TResource>(
 #pragma warning restore ASPIREEXPORT009
@@ -430,6 +431,7 @@ public static class JavaScriptHostingExtensions
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
 
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<TResource> PublishAsStaticWebsiteCore<TResource>(
         IResourceBuilder<TResource> builder,
         string? apiPath,
@@ -542,6 +544,7 @@ public static class JavaScriptHostingExtensions
     /// the built output directory is copied into the runtime container, not the full application source.
     /// </para>
     /// </remarks>
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Publishes the JavaScript application as a standalone Node.js server that runs a built artifact directly.")]
     public static IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
         where TResource : JavaScriptAppResource
@@ -605,6 +608,7 @@ public static class JavaScriptHostingExtensions
     /// use <see cref="PublishAsNodeServer{TResource}"/> instead for a smaller runtime image.
     /// </para>
     /// </remarks>
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Publishes the JavaScript application as a Node.js server that uses a package manager script at runtime.")]
     public static IResourceBuilder<TResource> PublishAsNpmScript<TResource>(this IResourceBuilder<TResource> builder, string startScriptName = "start", string? runScriptArguments = null)
         where TResource : JavaScriptAppResource
@@ -1084,6 +1088,7 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Adds a Next.js application resource")]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
@@ -1170,6 +1175,7 @@ public static class JavaScriptHostingExtensions
     /// to suppress those checks when the configuration is set dynamically or via an external
     /// mechanism that cannot be detected by static file inspection.
     /// </remarks>
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Disables deploy-time build validation checks for the Next.js application.")]
     public static IResourceBuilder<NextJsAppResource> DisableBuildValidation(this IResourceBuilder<NextJsAppResource> builder)
     {

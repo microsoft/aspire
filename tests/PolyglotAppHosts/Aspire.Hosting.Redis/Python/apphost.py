@@ -8,8 +8,8 @@ with create_builder() as builder:
     # addRedis — full overload with port and password parameter
     password = builder.add_parameter("parameter")
     cache = builder.add_redis("resource")
-    # addRedisWithPort — overload with explicit port
-    cache2 = builder.add_redis_with_port("resource")
+    # addRedis — overload with explicit port
+    cache2 = builder.add_redis("resource", 6380)
     # withDataVolume + withPersistence — fluent chaining on RedisResource
     cache.with_data_volume()
     cache.with_persistence()

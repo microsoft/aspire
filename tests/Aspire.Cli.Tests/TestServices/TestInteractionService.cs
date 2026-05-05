@@ -23,6 +23,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
+    public string? LastVersionUpdateCommand { get; private set; }
 
     /// <summary>
     /// Callback for capturing selection prompts in tests. Uses non-generic IEnumerable and object
@@ -41,6 +42,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
     public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
+    public List<string> DisplayedPlainText { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
 
     // Response queue setup methods
@@ -234,6 +236,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayPlainText(string text)
     {
+        DisplayedPlainText.Add(text);
     }
 
     public Action<string>? DisplayRawTextCallback { get; set; }
@@ -243,7 +246,7 @@ internal sealed class TestInteractionService : IInteractionService
         DisplayRawTextCallback?.Invoke(text);
     }
 
-    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null)
     {
     }
 
@@ -259,6 +262,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null)
     {
+        LastVersionUpdateCommand = updateCommand;
         DisplayVersionUpdateNotificationCallback?.Invoke(newerVersion);
     }
 

@@ -15,13 +15,16 @@ internal class CallbackTemplate(
     string? languageId = null,
     Func<string, bool>? supportsLanguageCallback = null,
     IReadOnlyList<string>? selectableAppHostLanguages = null,
-    bool isEmpty = false) : ITemplate
+    bool isEmpty = false,
+    bool showInPrompt = true) : ITemplate
 {
     public string Name => name;
 
     public string Description => description;
 
     public bool IsEmpty => isEmpty;
+
+    public bool ShowInPrompt => showInPrompt;
 
     public TemplateRuntime Runtime => runtime;
 

@@ -710,7 +710,7 @@ public static class AzureStorageExtensions
     /// <param name="roles">The storage roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureStorageRole"/> value.</exception>
-    [AspireExport("withStorageRoleAssignments", Description = "Assigns Azure Storage roles to a resource")]
+    [AspireExport("withStorageRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Azure Storage roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureStorageResource> target,

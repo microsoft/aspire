@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { getParserForDocument } from './parsers/AppHostResourceParser';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
 import {
@@ -26,6 +27,8 @@ import {
     codeLensStart,
     codeLensViewLogs,
     codeLensCommand,
+    codeLensOpenDashboard,
+    codeLensViewAppHostLogs,
 } from '../loc/strings';
 
 export class AspireCodeLensProvider implements vscode.CodeLensProvider {
@@ -34,7 +37,10 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
     private _disposables: vscode.Disposable[] = [];
 
-    constructor(private readonly _treeProvider: AspireAppHostTreeProvider) {
+    constructor(
+        private readonly _treeProvider: AspireAppHostTreeProvider,
+        private readonly _dataRepository: AppHostDataRepository,
+    ) {
         // Re-compute lenses whenever the polling data changes
         this._disposables.push(
             _treeProvider.onDidChangeTreeData(() => this._onDidChangeCodeLenses.fire())
@@ -52,9 +58,6 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         }
 
         const resources = parser.parseResources(document);
-        if (resources.length === 0) {
-            return [];
-        }
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
@@ -64,9 +67,26 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         const lenses: vscode.CodeLens[] = [];
 
+        // Builder-statement lenses (Open Dashboard + View Logs) appear only when this
+        // document maps to a concretely-running AppHost — independent of whether any
+        // Add* resource calls were found in the file.
+        this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath, workspaceResources);
+
+        if (resources.length === 0) {
+            return lenses;
+        }
+
         for (const resource of resources) {
-            // Use statementStartLine to position the CodeLens at the top of a multi-line chain
-            const lensLine = resource.statementStartLine ?? resource.range.start.line;
+            // For pipeline steps the whole statement maps to a single Add*(...) call, so
+            // anchoring at the top of the chain reads naturally. For resources, however,
+            // a single fluent chain can declare several (e.g.
+            // `builder.AddPostgres("pg").AddDatabase("db")`) and collapsing them all to
+            // the chain's start line would stack two state/action lenses on the same
+            // line — the user can't tell which "Stopped" / which "Stop" belongs to which
+            // resource. Anchor each resource lens at its own call line instead.
+            const lensLine = resource.kind === 'pipelineStep'
+                ? (resource.statementStartLine ?? resource.range.start.line)
+                : resource.range.start.line;
             const lineRange = new vscode.Range(lensLine, 0, lensLine, 0);
 
             if (resource.kind === 'pipelineStep') {
@@ -96,6 +116,81 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             tooltip: codeLensDebugPipelineStep,
             arguments: [stepName],
         }));
+    }
+
+    private _addBuilderStatementLenses(
+        lenses: vscode.CodeLens[],
+        document: vscode.TextDocument,
+        parser: { findBuilderStatementLine?(document: vscode.TextDocument): number | undefined },
+        workspaceAppHostPath: string,
+        workspaceResources: readonly ResourceJson[],
+    ): void {
+        const builderLine = parser.findBuilderStatementLine?.(document);
+        if (builderLine === undefined) {
+            return;
+        }
+
+        // Only emit the lens when the document maps to a concretely-running AppHost.
+        // This prevents stale lenses on AppHost files whose host is not currently running,
+        // and avoids dispatching commands with a `.cs` source path the CLI cannot resolve.
+        const appHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath, workspaceResources);
+        if (appHostPath === undefined) {
+            return;
+        }
+
+        const range = new vscode.Range(builderLine, 0, builderLine, 0);
+
+        lenses.push(new vscode.CodeLens(range, {
+            title: codeLensOpenDashboard,
+            command: 'aspire-vscode.codeLensOpenDashboard',
+            tooltip: codeLensOpenDashboard,
+            arguments: [appHostPath],
+        }));
+
+        lenses.push(new vscode.CodeLens(range, {
+            title: codeLensViewAppHostLogs,
+            command: 'aspire-vscode.codeLensViewAppHostLogs',
+            tooltip: codeLensViewAppHostLogs,
+            arguments: [appHostPath],
+        }));
+    }
+
+    /**
+     * Resolves the running-AppHost path that the given document represents, or
+     * `undefined` when the document cannot be tied to a running host.
+     *
+     * Resolution order:
+     *  1. Exact path or same-directory match against {@link AppHostDataRepository.appHosts}
+     *     (covers global mode and any workspace AppHosts that surface there).
+     *  2. The repository's `workspaceAppHostPath` when workspace describe data is live
+     *     and the document lives in the same directory as that AppHost.
+     *
+     * The document path itself is intentionally not used as a fallback — for C#
+     * AppHosts the CLI requires a `.csproj`, not a `.cs` file.
+     */
+    private _resolveAppHostPathForDocument(
+        document: vscode.TextDocument,
+        workspaceAppHostPath: string,
+        workspaceResources: readonly ResourceJson[],
+    ): string | undefined {
+        const docPath = document.uri.fsPath;
+        const docDir = path.dirname(docPath);
+        const match = this._dataRepository.appHosts.find(host => {
+            const hostPath = host.appHostPath;
+            if (!hostPath) {
+                return false;
+            }
+            return hostPath === docPath || path.dirname(hostPath) === docDir;
+        });
+        if (match) {
+            return match.appHostPath;
+        }
+        if (workspaceAppHostPath && workspaceResources.length > 0) {
+            if (workspaceAppHostPath === docPath || path.dirname(workspaceAppHostPath) === docDir) {
+                return workspaceAppHostPath;
+            }
+        }
+        return undefined;
     }
 
     private _addStateLenses(

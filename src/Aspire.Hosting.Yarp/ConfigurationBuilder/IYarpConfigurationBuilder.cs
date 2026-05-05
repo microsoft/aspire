@@ -175,7 +175,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="endpoint">The target endpoint for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExport("addCatchAllRouteFromEndpoint", Description = "Adds a YARP catch-all route for an endpoint reference.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, EndpointReference endpoint)
     {
         return builder.AddRoute(CatchAllPath, endpoint);
@@ -187,7 +187,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="resource">The target resource for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExport("addCatchAllRouteFromResource", Description = "Adds a YARP catch-all route for a resource that supports service discovery.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, IResourceBuilder<IResourceWithServiceDiscovery> resource)
     {
         return builder.AddRoute(CatchAllPath, resource);
@@ -200,7 +200,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="endpoint">The target endpoint for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExport("addRouteFromEndpoint", Description = "Adds a YARP route for an endpoint reference.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, EndpointReference endpoint)
     {
         var cluster = builder.AddCluster(endpoint);
@@ -214,7 +214,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="resource">The target endpoint for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExport("addRouteFromResource", Description = "Adds a YARP route for a resource that supports service discovery.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, IResourceBuilder<IResourceWithServiceDiscovery> resource)
     {
         var cluster = builder.AddCluster(resource);
@@ -228,7 +228,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="externalService">The target external service for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExport("addRouteFromExternalService", Description = "Adds a YARP route for an external service resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, IResourceBuilder<ExternalServiceResource> externalService)
     {
         var cluster = builder.AddCluster(externalService);
@@ -252,26 +252,12 @@ public static class YarpConfigurationBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a route for an existing cluster.
-    /// </summary>
-    /// <param name="builder">The builder instance.</param>
-    /// <param name="path">The path to match for this route.</param>
-    /// <param name="cluster">The target cluster for this route.</param>
-    /// <returns>The created route.</returns>
-    [Obsolete("Use addRoute(path, target) instead.")]
-    [AspireExport("IYarpConfigurationBuilder.addRoute", MethodName = "addRouteCluster", Description = "Obsolete compatibility shim for the previous cluster-only addRoute export. Use addRoute(path, target) instead.")]
-    internal static YarpRoute AddRouteCluster(this IYarpConfigurationBuilder builder, string path, YarpCluster cluster)
-    {
-        return builder.AddRoute(path, cluster);
-    }
-
-    /// <summary>
     /// Add a new catch all route to YARP that will target the cluster in parameter.
     /// </summary>
     /// <param name="builder">The builder instance.</param>
     /// <param name="externalService">The target external service for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExport("addCatchAllRouteFromExternalService", Description = "Adds a YARP catch-all route for an external service resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, IResourceBuilder<ExternalServiceResource> externalService)
     {
         return builder.AddRoute(CatchAllPath, externalService);

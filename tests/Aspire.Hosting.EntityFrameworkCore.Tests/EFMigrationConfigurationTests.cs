@@ -126,7 +126,7 @@ public class EFMigrationConfigurationTests
             .PublishAsMigrationBundle();
 
         // The context type name should be preserved through chaining
-        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.ContextTypeName);
+        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
     [Fact]
@@ -199,15 +199,27 @@ public class EFMigrationConfigurationTests
     }
 
     [Fact]
-    public void PublishAsMigrationScriptSetsIdempotentProperty()
+    public void PublishAsMigrationScriptDefaultsIdempotentToTrue()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddProject<Projects.ServiceA>("myproject");
         var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
-            .PublishAsMigrationScript(idempotent: true);
+            .PublishAsMigrationScript();
 
         Assert.True(migrations.Resource.PublishAsMigrationScript);
         Assert.True(migrations.Resource.ScriptIdempotent);
+    }
+
+    [Fact]
+    public void PublishAsMigrationScriptCanOptOutOfIdempotentDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .PublishAsMigrationScript(idempotent: false);
+
+        Assert.True(migrations.Resource.PublishAsMigrationScript);
+        Assert.False(migrations.Resource.ScriptIdempotent);
     }
 
     [Fact]

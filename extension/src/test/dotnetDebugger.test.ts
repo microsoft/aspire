@@ -51,6 +51,82 @@ suite('Dotnet Debugger Extension Tests', () => {
         const fakeDotNetService = new TestDotNetService(outputPath, rejectBuild, hasDevKit);
         return { dotNetService: fakeDotNetService, extension: createProjectDebuggerExtension(() => fakeDotNetService), doesFileExistStub: sinon.stub(io, 'doesFileExist').resolves(doesOutputFileExist) };
     }
+
+    test('failed AppHost start writes error to debug console', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.ts'
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub()
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const outputEvents: any[] = [];
+        const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
+        const startError = new Error('AppHost build failed');
+
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').rejects(startError);
+        const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+
+        await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
+
+        assert.ok(showErrorMessageStub.calledWith(startError.message));
+        assert.ok(startError.stack);
+        assert.ok(outputEvents.some(message =>
+            message.type === 'event'
+            && message.event === 'output'
+            && message.body.category === 'stderr'
+            && message.body.output.includes(startError.stack)));
+
+        outputSubscription.dispose();
+    });
+
+    test('failed AppHost start does not duplicate already streamed build output', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.ts'
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub()
+        } as unknown as vscode.DebugSession;
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, {} as any, {} as any, () => { });
+        const outputEvents: any[] = [];
+        const outputSubscription = aspireDebugSession.onDidSendMessage(message => outputEvents.push(message));
+        const startError = new Error('Build FAILED.');
+        (startError as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten = true;
+
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').rejects(startError);
+        const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+
+        await aspireDebugSession.startAppHost('/workspace/apphost.ts', ['node', 'apphost.ts'], [], true, { forceBuild: false });
+
+        assert.ok(showErrorMessageStub.calledWith(startError.message));
+        assert.strictEqual(outputEvents.some(message =>
+            message.type === 'event'
+            && message.event === 'output'
+            && message.body.output.includes(startError.message)), false);
+
+        outputSubscription.dispose();
+    });
+
     test('project is built when C# dev kit is installed and executable not found', async () => {
         const outputPath = 'C:\\temp\\bin\\Debug\\net7.0\\TestProject.dll';
         const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);

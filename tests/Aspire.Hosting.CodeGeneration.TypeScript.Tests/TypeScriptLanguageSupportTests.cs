@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Shared;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
@@ -38,9 +39,12 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
-        Assert.False(scripts.ContainsKey("start"));
-        Assert.False(scripts.ContainsKey("build"));
-        Assert.False(scripts.ContainsKey("dev"));
+        Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint", scripts["predev"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:start", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
+        Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
         Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
@@ -53,6 +57,7 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.DoesNotContain("\\u003E", files["package.json"]);
 
         Assert.Contains("eslint.config.mjs", files.Keys);
+        Assert.Contains("project: './tsconfig.apphost.json'", files["eslint.config.mjs"]);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
         Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
@@ -187,15 +192,63 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal(existingTsConfig, File.ReadAllText(existingTsConfigPath));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(16626)]
+    [InlineData(55571)]
+    public void Scaffold_GeneratesProfilePortsOutsideWindowsEphemeralRange(int? portSeed)
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "PortsApp",
+            PortSeed = portSeed
+        });
+
+        var appHostRunJson = ParseJson(files["apphost.run.json"]);
+        var httpsProfile = appHostRunJson["profiles"]!["https"]!.AsObject();
+        var applicationUrls = httpsProfile["applicationUrl"]!.GetValue<string>().Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var environmentVariables = httpsProfile["environmentVariables"]!.AsObject();
+
+        Assert.Equal(2, applicationUrls.Length);
+
+        var httpsPort = GetPort(applicationUrls.Single(url => url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)));
+        var httpPort = GetPort(applicationUrls.Single(url => url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)));
+        var otlpHttpsPort = GetPort(environmentVariables["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        var resourceServiceHttpsPort = GetPort(environmentVariables["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+
+        AssertPortInRange(httpPort, AppHostProfilePortGenerator.DashboardHttpPortMin, AppHostProfilePortGenerator.DashboardHttpPortMaxExclusive);
+        AssertPortInRange(httpsPort, AppHostProfilePortGenerator.DashboardHttpsPortMin, AppHostProfilePortGenerator.DashboardHttpsPortMaxExclusive);
+        AssertPortInRange(otlpHttpsPort, AppHostProfilePortGenerator.OtlpHttpsPortMin, AppHostProfilePortGenerator.OtlpHttpsPortMaxExclusive);
+        AssertPortInRange(resourceServiceHttpsPort, AppHostProfilePortGenerator.ResourceServiceHttpsPortMin, AppHostProfilePortGenerator.ResourceServiceHttpsPortMaxExclusive);
+    }
+
     [Fact]
     public void GetRuntimeSpec_UsesAppHostSpecificTsConfig()
     {
         var runtimeSpec = _languageSupport.GetRuntimeSpec();
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
 
+        Assert.Equal("npx", preExecute.Command);
+        Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, preExecute.Args);
         Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
-        Assert.Contains("npx --no-install tsx --tsconfig tsconfig.apphost.json {appHostFile}", watchExecute.Args);
+        Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
     }
 
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
+
+    private static int GetPort(string url) => new Uri(url).Port;
+
+    private const int WindowsEphemeralPortMin = 49152;
+
+    private static void AssertPortInRange(int port, int minInclusive, int maxExclusive)
+    {
+        Assert.InRange(port, minInclusive, maxExclusive - 1);
+        Assert.True(port < WindowsEphemeralPortMin, $"Expected port {port} to be below the Windows ephemeral range.");
+    }
 }

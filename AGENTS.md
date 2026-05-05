@@ -95,6 +95,7 @@ When reviewing pull requests:
 - **Skip Native Build**: Add `/p:SkipNativeBuild=true` to avoid slow native AOT compilation (~1-2 minutes saved)
 - **Clean Build**: `./build.sh --rebuild`
 - **Package Generation**: `./build.sh --pack` to create NuGet packages
+- If you need to disable the terminal logger for `dotnet`/build-related commands, prefer setting `MSBUILDTERMINALLOGGER=false` instead of passing `-tl:false`; avoid `-tl:false` on commands that may invoke tests because it can be forwarded to the test host and fail under Microsoft.Testing.Platform native runner mode
 
 #### Build Troubleshooting
 - If temporarily introducing warnings during refactoring, add `/p:TreatWarningsAsErrors=false` to prevent build failure
@@ -406,6 +407,7 @@ The following specialized skills are available in `.github/skills/`:
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
+- **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
 - **startup-perf**: Measures Aspire application startup performance using dotnet-trace and the TraceAnalyzer tool
 - **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
 

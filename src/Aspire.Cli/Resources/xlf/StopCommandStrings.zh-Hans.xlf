@@ -33,7 +33,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file</source>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Aspire AppHost 项目文件的路径。</target>
         <note />
       </trans-unit>

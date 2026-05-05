@@ -222,57 +222,14 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("Azure__SubscriptionId", output);
         Assert.Contains("Target Azure subscription", output);
 
-        var headingIndex = FindLogIndex(outputWriter.Logs, "Docs Smoke Test");
-        var listIndex = FindLogIndex(outputWriter.Logs, "1. First item");
-        var codeIndex = FindLogIndex(outputWriter.Logs, "aspire docs get docs-smoke-test");
-        var tableIndex = FindLogIndex(outputWriter.Logs, "Azure:SubscriptionId");
+        var headingPos = output.IndexOf("Docs Smoke Test", StringComparison.Ordinal);
+        var listPos = output.IndexOf("1. First item", StringComparison.Ordinal);
+        var codePos = output.IndexOf("aspire docs get docs-smoke-test", StringComparison.Ordinal);
+        var tablePos = output.IndexOf("Azure:SubscriptionId", StringComparison.Ordinal);
 
-        Assert.True(headingIndex < listIndex);
-        Assert.True(listIndex < codeIndex);
-        Assert.True(codeIndex < tableIndex);
-    }
-
-    [Fact]
-    public void WrapMarkdownForConsole_PreservesMarkdownStructure()
-    {
-        var markdown = """
-            # Certificate configuration
-
-            > Learn how to configure HTTPS endpoints with the [Aspire CLI](https://aspire.dev/get-started/install-cli/) and `aspire run`.
-
-            ### Using the Aspire CLI (recommended)
-
-            * First item with [a link](https://example.com/docs)
-            * Second item
-
-            ```bash
-            aspire docs get certificate-configuration
-            ```
-            """;
-
-        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 60);
-
-        Assert.Contains("# Certificate configuration", wrapped);
-        Assert.Contains("\n\n### Using the Aspire CLI (recommended)\n\n", wrapped);
-        Assert.Contains("[Aspire CLI](https://aspire.dev/get-started/install-cli/)", wrapped);
-        Assert.Contains("`aspire run`", wrapped);
-        Assert.Contains("```bash\naspire docs get certificate-configuration\n```", wrapped.Replace("\r\n", "\n"));
-    }
-
-    [Fact]
-    public void WrapMarkdownForConsole_DoesNotWrapTableRows()
-    {
-        var markdown = """
-            | Setting | Environment variable | Purpose |
-            | ---------------------- | ----------------------- | ---------------------------------------------- |
-            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
-            """;
-
-        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 40);
-
-        Assert.Contains("| Setting | Environment variable | Purpose |", wrapped);
-        Assert.Contains("| ---------------------- | ----------------------- | ---------------------------------------------- |", wrapped);
-        Assert.Contains("| `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |", wrapped);
+        Assert.True(headingPos < listPos);
+        Assert.True(listPos < codePos);
+        Assert.True(codePos < tablePos);
     }
 
     [Fact]
@@ -290,23 +247,6 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.NotEqual(0, exitCode);
-    }
-
-    private static int FindLogIndex(IReadOnlyList<string> logs, string text)
-    {
-        var index = -1;
-
-        for (var i = 0; i < logs.Count; i++)
-        {
-            if (logs[i].Contains(text, StringComparison.Ordinal))
-            {
-                index = i;
-                break;
-            }
-        }
-
-        Assert.True(index >= 0, $"Could not find '{text}' in output.");
-        return index;
     }
 }
 
