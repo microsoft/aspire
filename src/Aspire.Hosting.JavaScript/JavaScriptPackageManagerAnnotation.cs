@@ -56,11 +56,11 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     /// <remarks>
     /// Examples:
     /// <list type="bullet">
-    ///   <item><description>pnpm: <c>pnpm --filter &lt;name&gt; run &lt;script&gt; [args]</c> (or <c>--filter &lt;name&gt;...</c> with workspace deps)</description></item>
+    ///   <item><description>pnpm: <c>pnpm --filter &lt;name&gt;... run &lt;script&gt; [args]</c> (topological — builds the package and its workspace dependencies)</description></item>
     ///   <item><description>yarn: <c>yarn workspace &lt;name&gt; run &lt;script&gt; [args]</c></description></item>
     ///   <item><description>npm: <c>npm run &lt;script&gt; --workspace=&lt;name&gt; [-- args]</c></description></item>
     ///   <item><description>bun: <c>bun --filter &lt;name&gt; run &lt;script&gt; [args]</c></description></item>
     /// </list>
     /// </remarks>
-    internal Func<string, string, IReadOnlyList<string>, bool, IReadOnlyList<string>>? WorkspaceCommandFactory { get; init; }
+    internal Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>>? WorkspaceCommandFactory { get; init; }
 }

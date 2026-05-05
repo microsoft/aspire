@@ -21,17 +21,4 @@ public sealed class JavaScriptBuildScriptAnnotation(string scriptName, string[]?
     /// Gets the command-line arguments supplied to the build script.
     /// </summary>
     public string[] Args { get; } = args ?? [];
-
-    /// <summary>
-    /// Gets a value indicating whether the build script should also be executed
-    /// for the target package's workspace dependencies (in topological order).
-    /// </summary>
-    /// <remarks>
-    /// When the resource is configured with <see cref="JavaScriptWorkspaceExtensions.WithWorkspaceRoot{T}"/>
-    /// and the workspace's package manager supports topological filtering (for example pnpm), enabling this
-    /// causes the generated Dockerfile to invoke the build script across the target package and every
-    /// workspace package it depends on. This is required when consumed workspace packages produce build
-    /// outputs (for example a TypeScript library compiled to <c>dist/</c>) that the target needs at runtime.
-    /// </remarks>
-    public bool IncludeWorkspaceDependencies { get; init; }
 }
