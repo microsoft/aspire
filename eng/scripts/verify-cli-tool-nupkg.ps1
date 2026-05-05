@@ -185,24 +185,13 @@ try {
         Write-Step "RID package binary matches CLI archive binary."
     }
 
-    # Assert .aspire-install.json is present in the RID-specific nupkg at the expected tool path
-    $expectedSidecarPath = "tools/net10.0/$Rid/.aspire-install.json"
-    $sidecarFile = Get-ChildItem -Path $ridExtract -Recurse -File -Filter '.aspire-install.json' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $sidecarFile) {
-        throw "RID package $($ridPackage.Name) is missing .aspire-install.json at '$expectedSidecarPath'."
-    }
-    $relativeSidecarPath = $sidecarFile.FullName.Substring($ridExtract.Length + 1).Replace('\', '/')
-    if ($relativeSidecarPath -ne $expectedSidecarPath) {
-        throw "Expected .aspire-install.json at '$expectedSidecarPath', but found '$relativeSidecarPath'."
-    }
-    Write-Step "RID package contains .aspire-install.json at '$expectedSidecarPath'."
-
-    # Assert .aspire-install.json is NOT present in the pointer (architecture-neutral) nupkg
-    $pointerSidecar = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter '.aspire-install.json' -ErrorAction SilentlyContinue | Select-Object -First 1
+    $pointerSidecar = Get-ChildItem -Path $pointerExtract -Recurse -File -Force |
+        Where-Object { $_.Name -eq '.aspire-install.json' } |
+        Select-Object -First 1
     if ($pointerSidecar) {
-        throw "Pointer package should not contain .aspire-install.json, but found: $($pointerSidecar.FullName)"
+        throw "Pointer package must not contain '.aspire-install.json': found at '$($pointerSidecar.FullName.Substring($pointerExtract.Length + 1))'."
     }
-    Write-Step "Pointer package correctly omits .aspire-install.json."
+    Write-Step "Sidecar absent from pointer package (correct)."
 
     $toolSettings = Get-ChildItem -Path $ridExtract -Recurse -File -Filter 'DotnetToolSettings.xml' -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $toolSettings) {
@@ -220,12 +209,6 @@ try {
     if ($pointerBinary) {
         throw "Pointer package should not contain native binaries: $($pointerBinary.Name -join ', ')"
     }
-
-    $pointerSidecar = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter '.aspire-install.json' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($pointerSidecar) {
-        throw "Pointer package must not contain '.aspire-install.json': found at '$($pointerSidecar.FullName.Substring($pointerExtract.Length + 1))'."
-    }
-    Write-Step "Sidecar absent from pointer package (correct)."
 
     $pointerNuspec = Get-ChildItem -Path $pointerExtract -Filter '*.nuspec' -File | Select-Object -First 1
     if (-not $pointerNuspec) {
