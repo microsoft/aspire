@@ -192,6 +192,8 @@ public class CliInstallStrategyTests
         using var environment = new EnvironmentVariableScope(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
         var options = new DockerContainerOptions();
 
@@ -208,6 +210,10 @@ public class CliInstallStrategyTests
         using var environment = new EnvironmentVariableScope(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, null),
             (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
         var strategy = CliInstallStrategy.LatestGa();
         var options = new DockerContainerOptions();
@@ -225,6 +231,8 @@ public class CliInstallStrategyTests
         using var environment = new EnvironmentVariableScope(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
         var strategy = CliInstallStrategy.LatestGa();
         var options = new DockerContainerOptions();
@@ -235,6 +243,85 @@ public class CliInstallStrategyTests
         Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
         Assert.Equal("true", options.BuildArgs["SKIP_SOURCE_BUILD"]);
         Assert.Equal("http://azure.archive.ubuntu.com/ubuntu/", options.BuildArgs[CliInstallStrategy.UbuntuAptMirrorBuildArgName]);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_UsesPolyglotImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, "aspire-cli-e2e-polyglot:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+
+        Assert.Equal("aspire-cli-e2e-polyglot:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresPolyglotImageWhenConfigured()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot));
+
+        Assert.Contains(CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_UsesPolyglotJavaImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-java:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotJava);
+
+        Assert.Equal("aspire-cli-e2e-polyglot-java:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresPolyglotJavaImageWhenConfigured()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotJava));
+
+        Assert.Contains(CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_IgnoresPolyglotJavaImageForPolyglotVariant()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-java:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
     }
 
     [Fact]

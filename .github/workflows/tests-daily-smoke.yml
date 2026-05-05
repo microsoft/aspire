@@ -29,6 +29,8 @@ jobs:
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
+    with:
+      includePolyglotImages: false
 
   smoke-test:
     name: CLI Smoke Test (${{ inputs.quality || 'dev' }})

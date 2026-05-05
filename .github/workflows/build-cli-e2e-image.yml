@@ -1,21 +1,33 @@
-# Builds the default .NET CLI E2E image used by DockerfileVariant.DotNet.
-# Polyglot and Podman variants use separate Dockerfiles with variant-specific
-# base image behavior and are intentionally left on their existing per-job paths.
+# Builds CLI E2E images shared across split test jobs.
+# Podman uses a separate privileged runtime path and is intentionally left on its
+# existing per-job Dockerfile path.
 name: Build CLI E2E Docker Image
 
 on:
   workflow_call:
+    inputs:
+      includePolyglotImages:
+        required: false
+        type: boolean
+        default: true
 
 env:
   CLI_E2E_DOTNET_IMAGE_ARTIFACT: cli-e2e-dotnet-image
   CLI_E2E_DOTNET_IMAGE_TAG: aspire-cli-e2e-dotnet:prebuilt
   CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE: cli-e2e-dotnet
+  CLI_E2E_POLYGLOT_IMAGE_ARTIFACT: cli-e2e-polyglot-image
+  CLI_E2E_POLYGLOT_IMAGE_TAG: aspire-cli-e2e-polyglot:prebuilt
+  CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT: cli-e2e-polyglot-java-image
+  CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG: aspire-cli-e2e-polyglot-java:prebuilt
+  CLI_E2E_POLYGLOT_BASE_IMAGE_TAG: aspire-e2e-polyglot-base:latest
+  CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-base
+  CLI_E2E_INCLUDE_POLYGLOT_IMAGES: ${{ inputs.includePolyglotImages }}
 
 jobs:
   build:
     name: Build CLI E2E Docker image
     runs-on: ${{ github.repository_owner == 'microsoft' && '8-core-ubuntu-latest' || 'ubuntu-latest' }}
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -33,37 +45,98 @@ jobs:
           docker buildx inspect --bootstrap
 
           build_image() {
-            local mirror="$1"
+            local display_name="$1"
+            local dockerfile="$2"
+            local tag="$3"
+            local cache_scope="$4"
+            local mirror="$5"
             local -a build_args=(--build-arg SKIP_SOURCE_BUILD=true)
 
             if [[ -n "$mirror" ]]; then
-              echo "Building with Ubuntu apt mirror: $mirror"
+              echo "Building $display_name with Ubuntu apt mirror: $mirror"
               build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
             else
-              echo "Building with the default Ubuntu apt sources"
+              echo "Building $display_name with the default Ubuntu apt sources"
             fi
 
             docker buildx build \
               --load \
-              --cache-from "type=gha,scope=$CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE" \
-              --cache-to "type=gha,scope=$CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE,mode=max,ignore-error=true" \
+              --cache-from "type=gha,scope=$cache_scope" \
+              --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
               "${build_args[@]}" \
-              -f tests/Shared/Docker/Dockerfile.e2e \
-              -t "$CLI_E2E_DOTNET_IMAGE_TAG" \
+              -f "$dockerfile" \
+              -t "$tag" \
               .
           }
 
-          if ! build_image "http://azure.archive.ubuntu.com/ubuntu/"; then
-            echo "Build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
-            build_image ""
+          build_java_image() {
+            local mirror="$1"
+            local -a build_args=()
+
+            if [[ -n "$mirror" ]]; then
+              echo "Building Java polyglot image with Ubuntu apt mirror: $mirror"
+              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
+            else
+              echo "Building Java polyglot image with the default Ubuntu apt sources"
+            fi
+
+            DOCKER_BUILDKIT=1 docker build \
+              "${build_args[@]}" \
+              -f tests/Shared/Docker/Dockerfile.e2e-polyglot-java \
+              -t "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" \
+              .
+          }
+
+          build_with_mirror_retry() {
+            local display_name="$1"
+            local dockerfile="$2"
+            local tag="$3"
+            local cache_scope="$4"
+
+            if ! build_image "$display_name" "$dockerfile" "$tag" "$cache_scope" "http://azure.archive.ubuntu.com/ubuntu/"; then
+              echo "$display_name build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
+              build_image "$display_name" "$dockerfile" "$tag" "$cache_scope" ""
+            fi
+          }
+
+          build_with_mirror_retry ".NET image" "tests/Shared/Docker/Dockerfile.e2e" "$CLI_E2E_DOTNET_IMAGE_TAG" "$CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE"
+
+          if [[ "$CLI_E2E_INCLUDE_POLYGLOT_IMAGES" == "true" ]]; then
+            build_with_mirror_retry "polyglot base image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-base" "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE"
+            docker tag "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_IMAGE_TAG"
+
+            if ! build_java_image "http://azure.archive.ubuntu.com/ubuntu/"; then
+              echo "Java polyglot image build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
+              build_java_image ""
+            fi
           fi
 
           mkdir -p artifacts/cli-e2e-image
           docker save "$CLI_E2E_DOTNET_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
+          if [[ "$CLI_E2E_INCLUDE_POLYGLOT_IMAGES" == "true" ]]; then
+            docker save "$CLI_E2E_POLYGLOT_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
+            docker save "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
+          fi
 
-      - name: Upload CLI E2E Docker image
+      - name: Upload CLI E2E .NET Docker image
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ env.CLI_E2E_DOTNET_IMAGE_ARTIFACT }}
           path: artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
+          retention-days: 1
+
+      - name: Upload CLI E2E polyglot Docker image
+        if: ${{ inputs.includePolyglotImages }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.CLI_E2E_POLYGLOT_IMAGE_ARTIFACT }}
+          path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
+          retention-days: 1
+
+      - name: Upload CLI E2E Java Docker image
+        if: ${{ inputs.includePolyglotImages }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT }}
+          path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
           retention-days: 1
