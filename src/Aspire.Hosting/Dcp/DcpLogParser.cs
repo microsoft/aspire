@@ -55,7 +55,7 @@ internal static class DcpLogParser
                 return false;
             }
 
-            var timestampSpan = line[..tab];
+            var timestampBytes = line[..tab];
             line = line[(tab + 1)..];
 
             tab = line.IndexOf((byte)'\t');
@@ -84,7 +84,7 @@ internal static class DcpLogParser
 
             var messageSpan = line;
 
-            var timestampText = Encoding.UTF8.GetString(timestampSpan);
+            var timestampText = Encoding.UTF8.GetString(timestampBytes);
             if (TimestampParser.TryParseConsoleTimestamp(timestampText, out var timestampParseResult))
             {
                 timestamp = timestampParseResult.Value.Timestamp;

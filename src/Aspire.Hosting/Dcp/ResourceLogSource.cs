@@ -180,13 +180,13 @@ internal sealed class ResourceLogSource<TResource>(
         {
             var prefixLength = line.Length - timestampParseResult.Value.ModifiedText.Length;
             var prefix = line[..prefixLength];
-            return prefix + GetFinalCarriageReturnSegment(timestampParseResult.Value.ModifiedText);
+            return prefix + GetTextAfterLastCarriageReturn(timestampParseResult.Value.ModifiedText);
         }
 
-        return GetFinalCarriageReturnSegment(line);
+        return GetTextAfterLastCarriageReturn(line);
     }
 
-    private static string GetFinalCarriageReturnSegment(string text)
+    private static string GetTextAfterLastCarriageReturn(string text)
     {
         var carriageReturnIndex = text.LastIndexOf('\r');
         return carriageReturnIndex >= 0 ? text[(carriageReturnIndex + 1)..] : text;
