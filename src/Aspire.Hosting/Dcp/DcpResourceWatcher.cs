@@ -363,7 +363,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         {
             var timestamp = entry.Timestamp;
             var resolvedContent = entry.Content;
-            var rawContent = entry.RawContent ?? entry.Content;
 
             if (timestamp is null && TimestampParser.TryParseConsoleTimestamp(resolvedContent, out var result))
             {
@@ -371,7 +370,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 timestamp = result.Value.Timestamp.UtcDateTime;
             }
 
-            yield return LogEntry.Create(timestamp, resolvedContent, rawContent, entry.IsErrorMessage, resourcePrefix: null);
+            yield return LogEntry.Create(timestamp, resolvedContent, entry.Content, entry.IsErrorMessage, resourcePrefix: null);
         }
     }
 

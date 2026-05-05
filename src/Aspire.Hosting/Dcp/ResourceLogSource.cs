@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
-internal readonly record struct ResourceLogEntry(string Content, bool IsErrorMessage, DateTime? Timestamp = null, string? RawContent = null);
+internal readonly record struct ResourceLogEntry(string Content, bool IsErrorMessage, DateTime? Timestamp = null);
 
 internal sealed class ResourceLogSource<TResource>(
     ILogger logger,
@@ -52,7 +52,6 @@ internal sealed class ResourceLogSource<TResource>(
                 {
                     var line = NormalizeCarriageReturns(rawLine);
                     DateTime? timestamp = null;
-                    var rawContent = rawLine;
 
                     // Parse DCP logs if requested
                     if (parseDcpLogs && DcpLogParser.TryParseDcpLog(line, out var parsedMessage, out _, out var isErrorLevel, out var dcpTimestamp))
@@ -62,7 +61,7 @@ internal sealed class ResourceLogSource<TResource>(
                         isError = isErrorLevel;
                         timestamp = dcpTimestamp?.UtcDateTime;
                     }
-                    var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, isError, timestamp, rawContent));
+                    var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, isError, timestamp));
                     if (!succeeded)
                     {
                         logger.LogWarning("Failed to write log entry to channel. Logs for {Kind} {Name} may be incomplete", resource.Kind, resource.Metadata.Name);
