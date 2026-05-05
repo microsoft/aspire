@@ -1084,7 +1084,6 @@ install_from_local_dir() {
         else
             cli_path="$cli_install_dir/aspire"
         fi
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 
@@ -1125,7 +1124,12 @@ download_and_install_from_pr() {
     say_info "Using workflow run https://github.com/${REPO}/actions/runs/$workflow_run_id"
 
     # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
+    local cli_install_dir
+    if [[ -n "$PR_NUMBER" ]]; then
+        cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+    else
+        cli_install_dir="$INSTALL_PREFIX/bin"
+    fi
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
@@ -1199,18 +1203,16 @@ download_and_install_from_pr() {
         fi
     fi
 
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if [[ "$HIVE_ONLY" != true ]]; then
-        # Determine CLI path
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
+    # Write install-route sidecar so Aspire CLI can identify this as a PR-route install
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
+        local sidecar_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
+        local sidecar_content='{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r '"$PR_NUMBER"'" }'
+        if [[ "$DRY_RUN" == true ]]; then
+            say_info "[DRY RUN] Would write $sidecar_dir/.aspire-install.json"
         else
-            cli_path="$cli_install_dir/aspire"
+            mkdir -p "$sidecar_dir"
+            printf '%s\n' "$sidecar_content" > "$sidecar_dir/.aspire-install.json"
         fi
-        # Non-fatal: channel can be set manually if this fails
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 
@@ -1255,8 +1257,13 @@ main() {
     fi
 
     # Set paths based on install prefix
-    cli_install_dir="$INSTALL_PREFIX/bin"
-    INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    if [[ -n "$PR_NUMBER" ]]; then
+        cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/dogfood/pr-$PR_NUMBER/bin"
+    else
+        cli_install_dir="$INSTALL_PREFIX/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    fi
 
     # Create a temporary directory for downloads
     if [[ "$DRY_RUN" == true ]]; then
@@ -1297,6 +1304,12 @@ main() {
                 else
                     export PATH="$cli_install_dir:$PATH"
                 fi
+            fi
+
+            # Print a reminder for PR installs in case the profile change hasn't taken effect
+            if [[ -n "$PR_NUMBER" ]]; then
+                say_info "If 'aspire' is not found, add the following to your shell profile:"
+                say_info "  export PATH=\"$INSTALL_PATH_UNEXPANDED:\$PATH\""
             fi
         fi
     fi

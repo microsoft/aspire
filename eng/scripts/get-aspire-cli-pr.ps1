@@ -1298,13 +1298,6 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
-    # Save the global channel setting
-    if (-not $HiveOnly) {
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
-    }
-
     # Update PATH environment variables
     if (-not $HiveOnly) {
         if ($SkipPath) {
@@ -1346,7 +1339,11 @@ function Start-DownloadAndInstall {
     Write-Message "Using workflow run https://github.com/$Script:Repository/actions/runs/$runId" -Level Info
 
     # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber" "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } elseif ($PRNumber -gt 0) {
@@ -1399,13 +1396,15 @@ function Start-DownloadAndInstall {
         }
     }
 
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if (-not $HiveOnly) {
-        # Determine CLI path
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
+    # Write install-route sidecar so Aspire CLI can identify this as a PR-route install
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        $sidecarDir = Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber"
+        $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+        $sidecarContent = "{ `"route`": `"pr`", `"updateCommand`": `"get-aspire-cli-pr.ps1 -r $PRNumber`" }"
+        if ($PSCmdlet.ShouldProcess($sidecarPath, "Write install route sidecar")) {
+            New-Item -ItemType Directory -Path $sidecarDir -Force | Out-Null
+            $sidecarContent | Set-Content -Path $sidecarPath -Encoding UTF8
+        }
     }
 
     # Update PATH environment variables
@@ -1414,6 +1413,12 @@ function Start-DownloadAndInstall {
             Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
         } else {
             Update-PathEnvironment -CliBinDir $cliBinDir
+
+            # Print a reminder for PR installs in case the profile change hasn't taken effect
+            if ($PRNumber -gt 0) {
+                Write-Message "If 'aspire' is not found, add the following to your profile:" -Level Info
+                Write-Message "  `$env:PATH = `"$cliBinDir;`$env:PATH`"" -Level Info
+            }
         }
     }
 }
