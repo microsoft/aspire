@@ -33,19 +33,35 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// <summary>
     /// Gets or sets the name of the Helm chart to be generated.
     /// </summary>
-    public string HelmChartName { get; set; } = "aspire";
+    /// <remarks>
+    /// Defaults to the application name. Use
+    /// <see cref="HelmChartOptions.WithChartName(string)"/> via
+    /// <see cref="KubernetesEnvironmentExtensions.WithHelm(IResourceBuilder{KubernetesEnvironmentResource}, Action{HelmChartOptions})"/>
+    /// to customize the chart name.
+    /// </remarks>
+    internal string HelmChartName { get; set; } = "aspire";
 
     /// <summary>
     /// Gets or sets the version of the Helm chart to be generated.
     /// This property specifies the version number that will be assigned to the Helm chart,
     /// typically following semantic versioning conventions.
     /// </summary>
-    public string HelmChartVersion { get; set; } = "0.1.0";
+    /// <remarks>
+    /// Use <see cref="HelmChartOptions.WithChartVersion(string)"/> via
+    /// <see cref="KubernetesEnvironmentExtensions.WithHelm(IResourceBuilder{KubernetesEnvironmentResource}, Action{HelmChartOptions})"/>
+    /// to customize the chart version.
+    /// </remarks>
+    internal string HelmChartVersion { get; set; } = "0.1.0";
 
     /// <summary>
     /// Gets or sets the description of the Helm chart being generated.
     /// </summary>
-    public string HelmChartDescription { get; set; } = "Aspire Helm Chart";
+    /// <remarks>
+    /// Use <see cref="HelmChartOptions.WithChartDescription(string)"/> via
+    /// <see cref="KubernetesEnvironmentExtensions.WithHelm(IResourceBuilder{KubernetesEnvironmentResource}, Action{HelmChartOptions})"/>
+    /// to customize the chart description.
+    /// </remarks>
+    internal string HelmChartDescription { get; set; } = "Aspire Helm Chart";
 
     /// <summary>
     /// Determines whether to include an Aspire dashboard for telemetry visualization in this environment.
@@ -215,6 +231,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 Description = $"Publishes the Kubernetes environment configuration for {Name}.",
                 Action = ctx => PublishAsync(ctx)
             };
+            // Depend on publish-prereq so that process-parameters has run before we
+            // resolve Helm chart annotations (chart name/version/description) that may
+            // be backed by ParameterResource values.
+            publishStep.DependsOn(WellKnownPipelineSteps.PublishPrereq);
             publishStep.RequiredBy(WellKnownPipelineSteps.Publish);
             steps.Add(publishStep);
 

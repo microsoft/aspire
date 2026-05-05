@@ -1,17 +1,17 @@
-﻿---
+---
 apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
   name: "special-app-deployment"
   labels:
-    app.kubernetes.io/name: "my-chart"
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
     app.kubernetes.io/component: "SpeciaL-ApP"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: "my-chart"
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
         app.kubernetes.io/component: "SpeciaL-ApP"
         app.kubernetes.io/instance: "{{ .Release.Name }}"
     spec:
@@ -26,7 +26,7 @@ spec:
           imagePullPolicy: "IfNotPresent"
   selector:
     matchLabels:
-      app.kubernetes.io/name: "my-chart"
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
       app.kubernetes.io/component: "SpeciaL-ApP"
       app.kubernetes.io/instance: "{{ .Release.Name }}"
   replicas: 1

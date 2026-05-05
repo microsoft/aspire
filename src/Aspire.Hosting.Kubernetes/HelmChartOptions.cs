@@ -20,6 +20,8 @@ public sealed partial class HelmChartOptions
 {
     private const int KubernetesNamespaceMaxLength = 63;
     private const int HelmReleaseNameMaxLength = 53;
+    private const int HelmChartNameMaxLength = 250;
+    private const int HelmChartDescriptionMaxLength = 1024;
 
     internal IResourceBuilder<KubernetesEnvironmentResource> EnvironmentBuilder { get; }
 
@@ -160,6 +162,94 @@ public sealed partial class HelmChartOptions
         };
     }
 
+    /// <summary>
+    /// Sets the Helm chart name written to the generated <c>Chart.yaml</c>.
+    /// </summary>
+    /// <param name="name">The chart name. Must match Helm's chart-name format (alphanumeric, <c>-</c>, <c>_</c>, or <c>.</c>).</param>
+    /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+    public HelmChartOptions WithChartName(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateChartName(name, nameof(name));
+
+        var expression = ReferenceExpression.Create($"{name}");
+        EnvironmentBuilder.WithAnnotation(new HelmChartNameAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Helm chart name written to the generated <c>Chart.yaml</c> using a parameter that will be prompted at deploy time.
+    /// </summary>
+    /// <param name="name">A parameter resource builder for the chart name value.</param>
+    /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+    public HelmChartOptions WithChartName(IResourceBuilder<ParameterResource> name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        var expression = ReferenceExpression.Create($"{name.Resource}");
+        EnvironmentBuilder.WithAnnotation(new HelmChartNameAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
+        return this;
+    }
+
+    [AspireExport(MethodName = "withChartName", Description = "Sets the Helm chart name written to the generated Chart.yaml.")]
+    internal HelmChartOptions WithChartName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        return name switch
+        {
+            string nameValue => WithChartName(nameValue),
+            IResourceBuilder<ParameterResource> nameParameter => WithChartName(nameParameter),
+            _ => throw new ArgumentException("Chart name must be a string or a parameter resource builder.", nameof(name))
+        };
+    }
+
+    /// <summary>
+    /// Sets the Helm chart description written to the generated <c>Chart.yaml</c>.
+    /// </summary>
+    /// <param name="description">The chart description.</param>
+    /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+    public HelmChartOptions WithChartDescription(string description)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        ValidateChartDescription(description, nameof(description));
+
+        var expression = ReferenceExpression.Create($"{description}");
+        EnvironmentBuilder.WithAnnotation(new HelmChartDescriptionAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Helm chart description written to the generated <c>Chart.yaml</c> using a parameter that will be prompted at deploy time.
+    /// </summary>
+    /// <param name="description">A parameter resource builder for the chart description value.</param>
+    /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+    public HelmChartOptions WithChartDescription(IResourceBuilder<ParameterResource> description)
+    {
+        ArgumentNullException.ThrowIfNull(description);
+
+        var expression = ReferenceExpression.Create($"{description.Resource}");
+        EnvironmentBuilder.WithAnnotation(new HelmChartDescriptionAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
+        return this;
+    }
+
+    [AspireExport(MethodName = "withChartDescription", Description = "Sets the Helm chart description written to the generated Chart.yaml.")]
+    internal HelmChartOptions WithChartDescription([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object description)
+    {
+        ArgumentNullException.ThrowIfNull(description);
+
+        return description switch
+        {
+            string descriptionValue => WithChartDescription(descriptionValue),
+            IResourceBuilder<ParameterResource> descriptionParameter => WithChartDescription(descriptionParameter),
+            _ => throw new ArgumentException("Chart description must be a string or a parameter resource builder.", nameof(description))
+        };
+    }
+
     private static void ValidateDnsLabel(string value, string target, int maxLength, string paramName)
     {
         if (value.Length > maxLength)
@@ -181,6 +271,30 @@ public sealed partial class HelmChartOptions
         }
     }
 
+    internal static void ValidateChartName(string name, string paramName)
+    {
+        if (name.Length > HelmChartNameMaxLength)
+        {
+            throw new ArgumentException($"Helm chart name '{name}' is invalid. It must be {HelmChartNameMaxLength} characters or fewer.", paramName);
+        }
+
+        if (!HelmChartNamePattern().IsMatch(name))
+        {
+            throw new ArgumentException($"Helm chart name '{name}' is invalid. Use alphanumeric characters, '-', '_', or '.'.", paramName);
+        }
+    }
+
+    internal static void ValidateChartDescription(string description, string paramName)
+    {
+        if (description.Length > HelmChartDescriptionMaxLength)
+        {
+            throw new ArgumentException($"Helm chart description is invalid. It must be {HelmChartDescriptionMaxLength} characters or fewer.", paramName);
+        }
+    }
+
     [GeneratedRegex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")]
     private static partial Regex DnsLabelPattern();
+
+    [GeneratedRegex("^[a-zA-Z0-9._-]+$")]
+    private static partial Regex HelmChartNamePattern();
 }
