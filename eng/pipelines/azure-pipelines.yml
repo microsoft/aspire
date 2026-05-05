@@ -292,17 +292,42 @@ extends:
                   workingFile: $(Build.SourcesDirectory)\.npmrc
 
               - task: PowerShell@2
-                displayName: 🟣Set .npmrc environment
+                displayName: 🟣Set npm/yarn auth environment
                 inputs:
                   targetType: 'inline'
-                  script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
+                  script: |
+                    $ErrorActionPreference = 'Stop'
+                    $npmrcPath = "$(Build.SourcesDirectory)\.npmrc"
+                    Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$npmrcPath"
+
+                    $npmrc = Get-Content $npmrcPath
+                    $tokenLine = $npmrc | Where-Object { $_ -match ':_authToken=' } | Select-Object -First 1
+                    if ($tokenLine) {
+                      $token = ($tokenLine -split '=', 2)[1]
+                      Write-Host "##vso[task.setvariable variable=YARN_NPM_AUTH_TOKEN;issecret=true]$token"
+                      exit 0
+                    }
+
+                    $usernameLine = $npmrc | Where-Object { $_ -match ':username=' } | Select-Object -First 1
+                    $passwordLine = $npmrc | Where-Object { $_ -match ':_password=' } | Select-Object -First 1
+                    if ($usernameLine -and $passwordLine) {
+                      $username = ($usernameLine -split '=', 2)[1]
+                      $encodedPassword = ($passwordLine -split '=', 2)[1]
+                      $password = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encodedPassword))
+                      Write-Host "##vso[task.setvariable variable=YARN_NPM_AUTH_IDENT;issecret=true]$username`:$password"
+                      exit 0
+                    }
+
+                    Write-Error "Could not find npm auth credentials in $npmrcPath."
 
               - task: PowerShell@2
                 displayName: 🟣Install yarn
                 inputs:
                   targetType: 'inline'
                   script: |
-                    npm install -g yarn@1.22.22
+                    npm install -g corepack@latest
+                    corepack enable yarn
+                    corepack prepare yarn@4.14.1 --activate
                     yarn --version
                   workingDirectory: '$(Build.SourcesDirectory)'
 

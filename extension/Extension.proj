@@ -68,12 +68,14 @@
   </Target>
 
   <Target Name="CheckYarnInstalled">
+    <Exec Command="corepack enable yarn" ContinueOnError="true" IgnoreStandardErrorWarningFormat="true" />
+
     <Exec Command="yarn --version" ContinueOnError="true" ConsoleToMSBuild="true" IgnoreStandardErrorWarningFormat="true">
       <Output TaskParameter="ExitCode" PropertyName="YarnExitCode" />
       <Output TaskParameter="ConsoleOutput" PropertyName="YarnVersion" />
     </Exec>
 
-    <Error Condition="'$(YarnExitCode)' != '0'" Text="yarn is not installed or not available in PATH. To build the extension, install yarn: https://yarnpkg.com/getting-started/install" />
+    <Error Condition="'$(YarnExitCode)' != '0'" Text="yarn is not installed or not available in PATH. To build the extension, install Corepack and enable yarn: https://yarnpkg.com/getting-started/install" />
 
     <Message Importance="high" Text="yarn version: $(YarnVersion)" />
   </Target>

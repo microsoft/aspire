@@ -17,9 +17,14 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 }
 
 # Check for yarn
+if (-not (Get-Command yarn -ErrorAction SilentlyContinue) -and (Get-Command corepack -ErrorAction SilentlyContinue)) {
+    Write-Host "Enabling yarn with corepack..."
+    corepack enable yarn
+}
+
 if (-not (Get-Command yarn -ErrorAction SilentlyContinue)) {
     Write-Error "Error: yarn is not installed. Please install yarn first."
-    Write-Host "You can install yarn by running: npm install -g yarn"
+    Write-Host "You can install yarn by running: npm install -g corepack@latest; corepack enable yarn"
     exit 1
 }
 

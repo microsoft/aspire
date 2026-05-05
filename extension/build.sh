@@ -16,9 +16,14 @@ if ! command -v npm &> /dev/null; then
 fi
 
 # Check for yarn
+if ! command -v yarn &> /dev/null && command -v corepack &> /dev/null; then
+    echo "Enabling yarn with corepack..."
+    corepack enable yarn
+fi
+
 if ! command -v yarn &> /dev/null; then
     echo "Error: yarn is not installed. Please install yarn first."
-    echo "You can install yarn by running: npm install -g yarn"
+    echo "You can install yarn by running: npm install -g corepack@latest && corepack enable yarn"
     exit 1
 fi
 
