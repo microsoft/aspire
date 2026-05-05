@@ -124,7 +124,7 @@ internal sealed class AppHostLauncher(
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
         var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
         // Only create cross-process startup correlation when the profiling harness opted in.
-        var startupTelemetryContext = profilingTelemetry.CreateContextFromCurrentActivity();
+        var profilingTelemetryContext = profilingTelemetry.CreateContextFromCurrentActivity();
 
         // Compute the expected socket prefix for backchannel detection
         var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
@@ -152,7 +152,7 @@ internal sealed class AppHostLauncher(
         // Start the child process and wait for the backchannel
         var launchResult = await interactionService.ShowStatusAsync(
             RunCommandStrings.StartingAppHostInBackground,
-            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, startupTelemetryContext, cancellationToken));
+            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, profilingTelemetryContext, cancellationToken));
 
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
@@ -248,10 +248,10 @@ internal sealed class AppHostLauncher(
     internal static bool IsExtensionEnvironmentVariable(string name) =>
         name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
 
-    internal static Dictionary<string, string> CreateDetachedChildEnvironment(StartupTelemetryContext? startupTelemetryContext)
+    internal static Dictionary<string, string> CreateDetachedChildEnvironment(ProfilingTelemetryContext? profilingTelemetryContext)
     {
         var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
-        startupTelemetryContext?.AddToEnvironment(environment);
+        profilingTelemetryContext?.AddToEnvironment(environment);
         return environment;
     }
 
@@ -262,12 +262,12 @@ internal sealed class AppHostLauncher(
         List<string> childArgs,
         string expectedHash,
         string? legacyHash,
-        StartupTelemetryContext? startupTelemetryContext,
+        ProfilingTelemetryContext? profilingTelemetryContext,
         CancellationToken cancellationToken)
     {
         Process childProcess;
 
-        using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs.Count, "run", startupTelemetryContext))
+        using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs.Count, "run", profilingTelemetryContext))
         {
             try
             {
@@ -276,7 +276,7 @@ internal sealed class AppHostLauncher(
                     childArgs,
                     executionContext.WorkingDirectory.FullName,
                     IsExtensionEnvironmentVariable,
-                    CreateDetachedChildEnvironment(startupTelemetryContext));
+                    CreateDetachedChildEnvironment(profilingTelemetryContext));
                 spawnActivity.SetProcessId(childProcess.Id);
             }
             catch (Exception ex)
@@ -291,7 +291,7 @@ internal sealed class AppHostLauncher(
 
         var startTime = timeProvider.GetUtcNow();
         var timeout = TimeSpan.FromSeconds(120);
-        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHash is not null, startupTelemetryContext);
+        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHash is not null, profilingTelemetryContext);
         var scanCount = 0;
 
         while (timeProvider.GetUtcNow() - startTime < timeout)
@@ -317,7 +317,7 @@ internal sealed class AppHostLauncher(
                 waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
                 waitForBackchannelActivity.AddStartAppHostBackchannelConnectedEvent();
                 DashboardUrlsState? dashboardUrls = null;
-                using (var getDashboardUrlsActivity = profilingTelemetry.StartDetachedGetDashboardUrls(startupTelemetryContext))
+                using (var getDashboardUrlsActivity = profilingTelemetry.StartDetachedGetDashboardUrls(profilingTelemetryContext))
                 {
                     try
                     {

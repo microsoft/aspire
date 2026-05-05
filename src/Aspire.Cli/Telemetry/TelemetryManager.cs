@@ -49,7 +49,9 @@ internal sealed class TelemetryManager : IDisposable
 #if DEBUG
         var useOtlpExporter = !string.IsNullOrEmpty(configuration[AspireCliTelemetry.OtlpExporterEndpointConfigKey]);
         var consoleExporterLevel = configuration.GetEnum<ConsoleExporterLevel>(AspireCliTelemetry.ConsoleExporterLevelConfigKey, defaultValue: null);
-        var startupProfilingEnabled = configuration.GetBool(KnownConfigNames.StartupProfilingEnabled, defaultValue: false);
+        var profilingEnabled =
+            configuration.GetBool(KnownConfigNames.ProfilingEnabled) ??
+            configuration.GetBool(KnownConfigNames.Legacy.StartupProfilingEnabled, defaultValue: false);
 #else
         var useOtlpExporter = false;
         ConsoleExporterLevel? consoleExporterLevel = null;
@@ -99,7 +101,7 @@ internal sealed class TelemetryManager : IDisposable
                 .AddSource(AspireCliTelemetry.ReportedActivitySourceName)
                 .SetResourceBuilder(resource);
 
-            if (startupProfilingEnabled)
+            if (profilingEnabled)
             {
                 diagnosticBuilder.AddSource(ProfilingTelemetry.ActivitySourceName);
             }

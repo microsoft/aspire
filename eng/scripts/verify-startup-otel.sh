@@ -604,6 +604,7 @@ write_step "Configuring CLI diagnostic OTLP export to $otlp_grpc_url"
 startup_env=(
     "${dashboard_env[@]}"
     "ASPIRE_CLI_TELEMETRY_OPTOUT=true"
+    "ASPIRE_PROFILING_ENABLED=true"
     "ASPIRE_STARTUP_PROFILING_ENABLED=true"
     "OTEL_EXPORTER_OTLP_ENDPOINT=$otlp_grpc_url"
     "OTEL_EXPORTER_OTLP_PROTOCOL=grpc"
@@ -641,6 +642,7 @@ cat >"$properties_dir/launchSettings.json" <<EOF
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
         "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:$apphost_otlp_grpc_port",
         "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:$apphost_resource_service_port",
+        "ASPIRE_PROFILING_ENABLED": "true",
         "ASPIRE_STARTUP_PROFILING_ENABLED": "true",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "$otlp_grpc_url",
         "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
@@ -731,7 +733,7 @@ else
 fi
 
 if (( post_start_delay_seconds > 0 )); then
-    write_step "Waiting ${post_start_delay_seconds}s for startup telemetry to flush"
+    write_step "Waiting ${post_start_delay_seconds}s for profiling telemetry to flush"
     sleep "$post_start_delay_seconds"
 fi
 

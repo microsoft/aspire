@@ -13,6 +13,7 @@ using Aspire.Hosting.Dcp.Model;
 using Aspire.Shared.ConsoleLogs;
 using k8s;
 using k8s.Autorest;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 
@@ -28,6 +29,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly ResourceLoggerService _loggerService;
     private readonly DcpExecutorEvents _executorEvents;
     private readonly ILogger _logger;
+    private readonly IConfiguration _configuration;
     private readonly CancellationToken _shutdownToken;
 
     private readonly DcpResourceState _resourceState;
@@ -52,12 +54,14 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         DcpExecutorEvents executorEvents,
         DistributedApplicationModel model,
         DcpAppResourceStore appResources,
+        IConfiguration configuration,
         CancellationToken shutdownToken)
     {
         _kubernetesService = kubernetesService;
         _loggerService = loggerService;
         _executorEvents = executorEvents;
         _logger = logger;
+        _configuration = configuration;
         _shutdownToken = shutdownToken;
 
         _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources.Get());
@@ -328,9 +332,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         return new(null, null, null);
     }
 
-    private static void AddDcpResourceObservedEvent(CustomResource resource, IResource appModelResource, string resourceKind, ResourceStatus status)
+    private void AddDcpResourceObservedEvent(CustomResource resource, IResource appModelResource, string resourceKind, ResourceStatus status)
     {
         using var activity = ProfilingTelemetry.StartDcpResourceObserved(
+            _configuration,
             appModelResource,
             resourceKind,
             resource.Metadata.Name,

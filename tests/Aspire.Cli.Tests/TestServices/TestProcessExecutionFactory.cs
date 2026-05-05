@@ -168,13 +168,14 @@ internal static class DotNetCliRunnerTestHelper
             AssertionCallback = assertionCallback,
             DefaultExitCode = exitCode
         };
+        var resolvedConfiguration = configuration ?? serviceProvider.GetRequiredService<IConfiguration>();
 
         return new DotNetCliRunner(
             logger ?? serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
             serviceProvider,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
-            new ProfilingTelemetry(executionContext),
-            configuration ?? serviceProvider.GetRequiredService<IConfiguration>(),
+            new ProfilingTelemetry(resolvedConfiguration),
+            resolvedConfiguration,
             diskCache ?? new NullDiskCache(),
             serviceProvider.GetRequiredService<IFeatures>(),
             serviceProvider.GetRequiredService<IInteractionService>(),
@@ -199,13 +200,14 @@ internal static class DotNetCliRunnerTestHelper
         {
             AttemptCallback = attemptCallback
         };
+        var resolvedConfiguration = configuration ?? serviceProvider.GetRequiredService<IConfiguration>();
 
         var runner = new DotNetCliRunner(
             logger ?? serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
             serviceProvider,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
-            new ProfilingTelemetry(executionContext),
-            configuration ?? serviceProvider.GetRequiredService<IConfiguration>(),
+            new ProfilingTelemetry(resolvedConfiguration),
+            resolvedConfiguration,
             diskCache ?? new NullDiskCache(),
             serviceProvider.GetRequiredService<IFeatures>(),
             serviceProvider.GetRequiredService<IInteractionService>(),

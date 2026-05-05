@@ -3,19 +3,20 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
 public class ProfilingTelemetryTests
 {
     [Fact]
-    public void StartRunCommand_ReturnsInactiveScopeWhenStartupProfilingIsDisabled()
+    public void StartRunCommand_ReturnsInactiveScopeWhenProfilingIsDisabled()
     {
         Activity? startedActivity = null;
         using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
-        using var profilingTelemetry = new ProfilingTelemetry(CreateExecutionContext(new Dictionary<string, string?>()));
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration());
 
-        using var activity = profilingTelemetry.StartRunCommand(startupTelemetryContext: null);
+        using var activity = profilingTelemetry.StartRunCommand(profilingTelemetryContext: null);
 
         Assert.False(activity.IsRunning);
         Assert.Null(startedActivity);
@@ -26,18 +27,17 @@ public class ProfilingTelemetryTests
     {
         Activity? startedActivity = null;
         using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
-        using var profilingTelemetry = new ProfilingTelemetry(CreateExecutionContext(new Dictionary<string, string?>
-        {
-            [StartupTelemetryContext.EnabledEnvironmentVariable] = "true",
-            [StartupTelemetryContext.OperationIdEnvironmentVariable] = "operation-1"
-        }));
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetryContext.EnabledEnvironmentVariable, "true"),
+            (ProfilingTelemetryContext.SessionIdEnvironmentVariable, "session-1")));
 
-        using var activity = profilingTelemetry.StartRunCommand(startupTelemetryContext: null);
+        using var activity = profilingTelemetry.StartRunCommand(profilingTelemetryContext: null);
 
         Assert.True(activity.IsRunning);
         Assert.NotNull(startedActivity);
         Assert.Equal(ProfilingTelemetry.ActivitySourceName, startedActivity.Source.Name);
-        Assert.Equal("operation-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.StartupOperationId));
+        Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+        Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.LegacyStartupOperationId));
     }
 
     private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
@@ -52,17 +52,10 @@ public class ProfilingTelemetryTests
         return listener;
     }
 
-    private static CliExecutionContext CreateExecutionContext(IReadOnlyDictionary<string, string?> environmentVariables)
+    private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        return new CliExecutionContext(
-            directory,
-            directory,
-            directory,
-            directory,
-            directory,
-            "test.log",
-            environmentVariables: environmentVariables,
-            homeDirectory: directory);
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
+            .Build();
     }
 }

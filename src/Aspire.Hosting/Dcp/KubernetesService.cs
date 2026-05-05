@@ -11,6 +11,7 @@ using k8s;
 using k8s.Autorest;
 using k8s.Exceptions;
 using k8s.Models;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
@@ -77,7 +78,7 @@ internal interface IKubernetesService
     Task CleanupResourcesAsync(CancellationToken cancellationToken = default);
 }
 
-internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOptions<DcpOptions> dcpOptions, Locations locations) : IKubernetesService, IDisposable
+internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOptions<DcpOptions> dcpOptions, Locations locations, IConfiguration configuration) : IKubernetesService, IDisposable
 {
     // A pseudo-resource type used for log operations on the DCP execution document.
     private const string DcpExecutionResourceType = "DcpExecution";
@@ -474,7 +475,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         var delay = s_initialRetryDelay;
         AspireEventSource.Instance.DcpApiCallStart(operationType, resourceType);
 
-        using var activity = ProfilingTelemetry.StartDcpKubernetesApi(operationType, resourceType);
+        using var activity = ProfilingTelemetry.StartDcpKubernetesApi(configuration, operationType, resourceType);
         var retryCount = 0;
 
         var resiliencePipeline = CreateKubernetesCallResiliencePipeline(operationType, resourceType, isRetryable, activity, () => retryCount++);
@@ -576,7 +577,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             return;
         }
 
-        using var activity = ProfilingTelemetry.StartDcpEnsureKubernetesClient(File.Exists(locations.DcpKubeconfigPath));
+        using var activity = ProfilingTelemetry.StartDcpEnsureKubernetesClient(configuration, File.Exists(locations.DcpKubeconfigPath));
 
         var lockWaitStopwatch = Stopwatch.StartNew();
         await _kubeconfigReadSemaphore.WaitAsync(-1, cancellationToken).ConfigureAwait(false);

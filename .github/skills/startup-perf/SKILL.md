@@ -1,6 +1,6 @@
 ---
 name: startup-perf
-description: Measures Aspire startup profiling with the OTEL startup harness, dashboard export, optional dotnet-trace traces, and optional MSBuild binlogs.
+description: Measures Aspire profiling with the OTEL startup harness, dashboard export, optional dotnet-trace traces, and optional MSBuild binlogs.
 ---
 
 # Aspire Startup Profiling with OTEL
@@ -11,15 +11,15 @@ The primary workflow is the PowerShell-free `eng/scripts/verify-startup-otel.sh`
 
 ## Current Profiling Model
 
-Startup profiling is opt-in and separate from reported telemetry:
+Profiling is opt-in and separate from reported telemetry:
 
-- Enable profiling with `ASPIRE_STARTUP_PROFILING_ENABLED=true` or `1`.
+- Enable profiling with `ASPIRE_PROFILING_ENABLED=true` or `1`.
 - CLI profiling spans use the `Aspire.Cli.Profiling` ActivitySource.
 - Hosting profiling spans use the `Aspire.Hosting.Profiling` ActivitySource.
 - DCP startup spans use the `dcp.startup` instrumentation scope.
-- Reported telemetry must not carry startup operation IDs, high-cardinality profiling tags, or profiling spans.
+- Reported telemetry must not carry profiling session IDs, high-cardinality profiling tags, or profiling spans.
 
-The older EventSource/dotnet-trace startup measurement scripts still exist, but they are a legacy fallback for explicit EventSource timing requests. Prefer the OTEL harness for current startup profiling work.
+The older EventSource/dotnet-trace startup measurement scripts still exist, but they are a legacy fallback for explicit EventSource timing requests. Prefer the OTEL harness for current profiling work.
 
 ## Prerequisites
 
@@ -125,7 +125,7 @@ Important files:
 
 | Path | Description |
 | --- | --- |
-| `summary.json` | Run summary with `StartupOperationId`, `TraceId`, `CorrelatedSpanCount`, paths, and optional trace/binlog file lists. |
+| `summary.json` | Run summary with `ProfilingSessionId`, `TraceId`, `CorrelatedSpanCount`, paths, and optional trace/binlog file lists. |
 | `span-summary.json` | Flattened exported span summary for quick inspection. |
 | `startup-otel-export.zip` | Dashboard export containing trace JSON. |
 | `logs/` | stdout/stderr for harness commands and child processes. |
@@ -135,7 +135,7 @@ Important files:
 
 ## What the Harness Validates
 
-The shared C# file-based validator (`tools/StartupOtelValidator/ValidateStartupOtelExport.cs`) reads the dashboard export and requires a startup operation with correlated spans from:
+The shared C# file-based validator (`tools/StartupOtelValidator/ValidateStartupOtelExport.cs`) reads the dashboard export and requires a profiling session with correlated spans from:
 
 - CLI startup/launch spans, including `aspire/cli/start_apphost.spawn_child`.
 - Child CLI spans such as `aspire/cli/run`, dotnet build/run spans, backchannel connect spans, and dashboard URL retrieval.
@@ -184,8 +184,8 @@ Keep profiling APIs coarse-grained and profiling-specific:
 | --- | --- | --- |
 | `Required command 'dotnet-trace' was not found` | `--collect-dotnet-traces` was used without the global tool. | Run `dotnet tool install -g dotnet-trace`. |
 | `Target Aspire CLI not found` | CLI was not built or `--target-aspire-path` is wrong. | Omit `--skip-build` or pass the correct CLI path. |
-| `No exported spans contained aspire.startup.operation_id` | Profiling was not enabled or telemetry was not exported. | Confirm `ASPIRE_STARTUP_PROFILING_ENABLED=true` and inspect `logs/`. |
-| `No startup operation contained correlated... spans` | CLI/Hosting/DCP spans did not land in one correlated trace. | Inspect `span-summary.json` for missing scopes or broken parent/trace IDs. |
+| `No exported spans contained aspire.profiling.session_id` | Profiling was not enabled or telemetry was not exported. | Confirm `ASPIRE_PROFILING_ENABLED=true` and inspect `logs/`. |
+| `No profiling session contained correlated... spans` | CLI/Hosting/DCP spans did not land in one correlated trace. | Inspect `span-summary.json` for missing scopes or broken parent/trace IDs. |
 | `No dotnet-trace files were collected` | Trace collection was requested but no traceable child process was found or attach failed. | Inspect `logs/dotnet-trace-*.stderr.txt`; rerun with a longer `--post-start-delay`. |
 | `No dotnet MSBuild binlogs were collected` | Binlog collection was requested but no MSBuild-backed dotnet command ran. | Inspect `logs/start.*`; rerun without `--skip-build` if necessary. |
 

@@ -106,7 +106,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="socketPath">The path to the Unix domain socket.</param>
     /// <param name="logger">Optional logger for diagnostic messages.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <param name="profilingTelemetry">Optional startup profiling service.</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     public static Task<AppHostAuxiliaryBackchannel> ConnectAsync(
         string socketPath,
@@ -129,7 +129,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="socket">Optional already-connected socket. If null, a new connection will be established.</param>
     /// <param name="logger">Optional logger.</param>
     /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
-    /// <param name="profilingTelemetry">Optional startup profiling service.</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
         string hash,
@@ -246,7 +246,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger?.LogDebug("Requesting Dashboard URLs");
         // This method runs inside whichever activity is current, so avoid adding
-        // profiling-only events to reported telemetry unless startup profiling is on.
+        // profiling-only events to reported telemetry unless profiling is on.
         var activity = _profilingTelemetry?.StartAuxiliaryBackchannelGetDashboardUrls() ?? default;
 
         try

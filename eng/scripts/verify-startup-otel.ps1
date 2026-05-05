@@ -252,6 +252,7 @@ try {
     # Keep both forms: OTEL_* configures CLI/OpenTelemetry exporters, while ASPIRE_OTEL_* is
     # projected into AppHost IConfiguration as OTEL_* by DistributedApplicationBuilder.
     $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_CLI_TELEMETRY_OPTOUT" -Value "true"
+    $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_PROFILING_ENABLED" -Value "true"
     $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "ASPIRE_STARTUP_PROFILING_ENABLED" -Value "true"
     $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "OTEL_EXPORTER_OTLP_ENDPOINT" -Value $otlpGrpcUrl
     $environmentSnapshot += Set-ProcessEnvironmentVariable -Name "OTEL_EXPORTER_OTLP_PROTOCOL" -Value "grpc"
@@ -282,6 +283,7 @@ try {
           "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true",
           "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:$appHostOtlpGrpcPort",
           "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:$appHostResourceServicePort",
+          "ASPIRE_PROFILING_ENABLED": "true",
           "ASPIRE_STARTUP_PROFILING_ENABLED": "true",
           "OTEL_EXPORTER_OTLP_ENDPOINT": "$otlpGrpcUrl",
           "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
@@ -369,7 +371,7 @@ await builder.build().run();
     $startResult = Invoke-LoggedCommand -FilePath $TargetAspirePath -Arguments @("start", "--isolated", "--format", "Json", "--apphost", $appHostPath) -WorkingDirectory $projectDir -Name "start"
 
     if ($PostStartDelaySeconds -gt 0) {
-        Write-Step "Waiting ${PostStartDelaySeconds}s for startup telemetry to flush"
+        Write-Step "Waiting ${PostStartDelaySeconds}s for profiling telemetry to flush"
         Start-Sleep -Seconds $PostStartDelaySeconds
     }
 

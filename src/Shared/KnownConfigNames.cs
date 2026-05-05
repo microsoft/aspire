@@ -43,10 +43,10 @@ internal static class KnownConfigNames
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
     public const string MsBuildTerminalLogger = "MSBUILDTERMINALLOGGER";
-    public const string StartupProfilingEnabled = "ASPIRE_STARTUP_PROFILING_ENABLED";
-    public const string StartupOperationId = "ASPIRE_STARTUP_OPERATION_ID";
-    public const string StartupTraceParent = "ASPIRE_STARTUP_TRACEPARENT";
-    public const string StartupTraceState = "ASPIRE_STARTUP_TRACESTATE";
+    public const string ProfilingEnabled = "ASPIRE_PROFILING_ENABLED";
+    public const string ProfilingSessionId = "ASPIRE_PROFILING_SESSION_ID";
+    public const string ProfilingTraceParent = "ASPIRE_PROFILING_TRACEPARENT";
+    public const string ProfilingTraceState = "ASPIRE_PROFILING_TRACESTATE";
     public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
 
     public const string ExtensionEndpoint = "ASPIRE_EXTENSION_ENDPOINT";
@@ -85,5 +85,10 @@ internal static class KnownConfigNames
         public const string ContainerRuntime = "DOTNET_ASPIRE_CONTAINER_RUNTIME";
         public const string DependencyCheckTimeout = "DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
         public const string ServiceStartupWatchTimeout = "DOTNET_ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
+
+        public const string StartupProfilingEnabled = "ASPIRE_STARTUP_PROFILING_ENABLED";
+        public const string StartupOperationId = "ASPIRE_STARTUP_OPERATION_ID";
+        public const string StartupTraceParent = "ASPIRE_STARTUP_TRACEPARENT";
+        public const string StartupTraceState = "ASPIRE_STARTUP_TRACESTATE";
     }
 }

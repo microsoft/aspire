@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -30,6 +31,7 @@ public class ResourceNotificationService : IDisposable
     private readonly ResourceLoggerService _resourceLoggerService;
 
     private Action<ResourceEvent>? OnResourceUpdated { get; set; }
+    private IConfiguration? Configuration => _serviceProvider.GetService<IConfiguration>();
 
     // This is for testing
     internal WaitBehavior DefaultWaitBehavior { get; set; }
@@ -139,7 +141,7 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilHealthyAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(resource, dependency, WaitType.WaitUntilHealthy, waitBehavior);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitUntilHealthy, waitBehavior);
 
         try
         {
@@ -279,7 +281,7 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilCompletionAsync(IResource resource, IResource dependency, int exitCode, CancellationToken cancellationToken)
     {
-        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(resource, dependency, WaitType.WaitForCompletion, waitBehavior: null);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitForCompletion, waitBehavior: null);
         activity.SetResourceWaitExpectedExitCode(exitCode);
 
         var names = dependency.GetResolvedResourceNames();
@@ -441,7 +443,7 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilStartedAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(resource, dependency, WaitType.WaitUntilStarted, waitBehavior);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitUntilStarted, waitBehavior);
 
         try
         {
@@ -480,7 +482,7 @@ public class ResourceNotificationService : IDisposable
             return;
         }
 
-        using var activity = ProfilingTelemetry.StartResourceWaitForDependencies(resource, waitAnnotationList.Length);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependencies(Configuration, resource, waitAnnotationList.Length);
 
         try
         {
@@ -542,8 +544,8 @@ public class ResourceNotificationService : IDisposable
     private async Task<ResourceEvent> WaitForResourceCoreAsync(string resourceName, Func<ResourceEvent, bool> predicate, string cancellationMessage, CancellationToken cancellationToken = default, string waitCondition = "predicate")
     {
         // Waits can run under non-profiling activities; don't attach high-cardinality
-        // resource wait tags/events unless startup profiling was explicitly enabled.
-        var activity = ProfilingTelemetry.CurrentActivity;
+        // resource wait tags/events unless profiling was explicitly enabled.
+        var activity = ProfilingTelemetry.CurrentActivity(Configuration);
         activity.SetResourceWaitTarget(resourceName, waitCondition);
 
         try

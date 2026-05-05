@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
+using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Diagnostics;
 
@@ -35,7 +36,8 @@ internal static class ProfilingTelemetry
 
     internal static class Tags
     {
-        public const string OperationId = "aspire.startup.operation_id";
+        public const string ProfilingSessionId = "aspire.profiling.session_id";
+        public const string LegacyStartupOperationId = "aspire.startup.operation_id";
         public const string AppHostName = "aspire.apphost.name";
         public const string AppHostOperation = "aspire.apphost.operation";
         public const string ResourceName = "aspire.resource.name";
@@ -102,14 +104,18 @@ internal static class ProfilingTelemetry
 
     internal static class Annotations
     {
-        public const string OperationId = "aspire-startup-operation-id";
-        public const string TraceParent = "aspire-startup-traceparent";
-        public const string TraceState = "aspire-startup-tracestate";
+        public const string ProfilingSessionId = "aspire-profiling-session-id";
+        public const string TraceParent = "aspire-profiling-traceparent";
+        public const string TraceState = "aspire-profiling-tracestate";
+        public const string LegacyStartupOperationId = "aspire-startup-operation-id";
+        public const string LegacyStartupTraceParent = "aspire-startup-traceparent";
+        public const string LegacyStartupTraceState = "aspire-startup-tracestate";
     }
 
     private static readonly ActivitySource s_activitySource = new(ActivitySourceName);
 
-    public static ActivityScope CurrentActivity => IsEnabled() ? new(Activity.Current, ownsActivity: false) : default;
+    public static ActivityScope CurrentActivity(IConfiguration? configuration) =>
+        IsEnabled(configuration) ? new(Activity.Current, configuration, ownsActivity: false) : default;
 
     public static IEnumerable<KeyValuePair<string, object>> CreateAppHostResourceAttributes(string appHostPath, string operation)
     {
@@ -120,75 +126,76 @@ internal static class ProfilingTelemetry
         ];
     }
 
-    public static ActivityScope StartDcpRunApplication(int resourceCount)
+    public static ActivityScope StartDcpRunApplication(IConfiguration? configuration, int resourceCount)
     {
-        var activity = StartActivity(Activities.DcpRunApplication);
+        var activity = StartActivity(configuration, Activities.DcpRunApplication);
         activity.SetResourceCount(resourceCount);
         return activity;
     }
 
-    public static ActivityScope StartDcpPrepareServices()
+    public static ActivityScope StartDcpPrepareServices(IConfiguration? configuration)
     {
-        return StartActivity(Activities.DcpPrepareServices);
+        return StartActivity(configuration, Activities.DcpPrepareServices);
     }
 
-    public static ActivityScope StartDcpPrepareResources()
+    public static ActivityScope StartDcpPrepareResources(IConfiguration? configuration)
     {
-        return StartActivity(Activities.DcpPrepareResources);
+        return StartActivity(configuration, Activities.DcpPrepareResources);
     }
 
-    public static ActivityScope StartDcpAllocateServiceAddresses(int serviceCount)
+    public static ActivityScope StartDcpAllocateServiceAddresses(IConfiguration? configuration, int serviceCount)
     {
-        var activity = StartActivity(Activities.DcpAllocateServiceAddresses);
+        var activity = StartActivity(configuration, Activities.DcpAllocateServiceAddresses);
         activity.SetDcpServiceCount(serviceCount);
         return activity;
     }
 
-    public static ActivityScope StartDcpCreateObjects(string resourceKind, int resourceCount)
+    public static ActivityScope StartDcpCreateObjects(IConfiguration? configuration, string resourceKind, int resourceCount)
     {
-        var activity = StartActivity(Activities.DcpCreateObjects);
+        var activity = StartActivity(configuration, Activities.DcpCreateObjects);
         activity.SetDcpResourceSet(resourceKind, resourceCount);
         return activity;
     }
 
-    public static ActivityScope StartDcpCreateObject(string resourceKind, string resourceName)
+    public static ActivityScope StartDcpCreateObject(IConfiguration? configuration, string resourceKind, string resourceName)
     {
-        var activity = StartActivity(Activities.DcpCreateObject);
+        var activity = StartActivity(configuration, Activities.DcpCreateObject);
         activity.SetDcpResource(resourceKind, resourceName);
         activity.SetDcpCreateObject(resourceKind, resourceName);
         return activity;
     }
 
-    public static ActivityScope StartDcpCreateRenderedResources(string resourceKind, int resourceCount)
+    public static ActivityScope StartDcpCreateRenderedResources(IConfiguration? configuration, string resourceKind, int resourceCount)
     {
-        var activity = StartActivity(Activities.DcpCreateRenderedResources);
+        var activity = StartActivity(configuration, Activities.DcpCreateRenderedResources);
         activity.SetDcpResourceSet(resourceKind, resourceCount);
         return activity;
     }
 
-    public static ActivityScope StartDcpCreateResourceReplica(IResource resource, string resourceKind, string resourceName)
+    public static ActivityScope StartDcpCreateResourceReplica(IConfiguration? configuration, IResource resource, string resourceKind, string resourceName)
     {
-        var activity = StartActivity(Activities.DcpCreateResourceReplica);
+        var activity = StartActivity(configuration, Activities.DcpCreateResourceReplica);
         activity.SetResource(resource);
         activity.SetDcpResource(resourceKind, resourceName);
         return activity;
     }
 
-    public static ActivityScope StartDcpEnsureKubernetesClient(bool kubeconfigExists)
+    public static ActivityScope StartDcpEnsureKubernetesClient(IConfiguration? configuration, bool kubeconfigExists)
     {
-        var activity = StartActivity(Activities.DcpEnsureKubernetesClient);
+        var activity = StartActivity(configuration, Activities.DcpEnsureKubernetesClient);
         activity.SetDcpKubeconfigExists(kubeconfigExists);
         return activity;
     }
 
-    public static ActivityScope StartDcpKubernetesApi(DcpApiOperationType operationType, string resourceType)
+    public static ActivityScope StartDcpKubernetesApi(IConfiguration? configuration, DcpApiOperationType operationType, string resourceType)
     {
-        var activity = StartActivity(Activities.DcpKubernetesApi);
+        var activity = StartActivity(configuration, Activities.DcpKubernetesApi);
         activity.SetDcpKubernetesApi(operationType, resourceType);
         return activity;
     }
 
     public static ActivityScope StartDcpResourceObserved(
+        IConfiguration? configuration,
         IResource appModelResource,
         string resourceKind,
         string resourceName,
@@ -197,7 +204,7 @@ internal static class ProfilingTelemetry
         DateTime? finishedTimestamp,
         IDictionary<string, string>? annotations)
     {
-        var activity = StartActivityFromTraceAnnotations(Activities.DcpResourceObserved, annotations);
+        var activity = StartActivityFromTraceAnnotations(configuration, Activities.DcpResourceObserved, annotations);
         activity.SetResource(appModelResource);
         activity.SetDcpResource(resourceKind, resourceName);
         activity.SetDcpCreateObjectFromTraceAnnotations(resourceKind, resourceName, annotations);
@@ -205,82 +212,81 @@ internal static class ProfilingTelemetry
         return activity;
     }
 
-    public static ActivityScope StartResourceBeforeStartWait(IResource resource)
+    public static ActivityScope StartResourceBeforeStartWait(IConfiguration? configuration, IResource resource)
     {
-        var activity = StartActivity(Activities.ResourceBeforeStartWait);
+        var activity = StartActivity(configuration, Activities.ResourceBeforeStartWait);
         activity.SetResource(resource);
         return activity;
     }
 
-    public static ActivityScope StartResourceCreate(IResource resource, string resourceKind, int replicaCount)
+    public static ActivityScope StartResourceCreate(IConfiguration? configuration, IResource resource, string resourceKind, int replicaCount)
     {
-        var activity = StartActivity(Activities.ResourceCreate);
+        var activity = StartActivity(configuration, Activities.ResourceCreate);
         activity.SetResource(resource);
         activity.SetResourceCreate(resourceKind, replicaCount);
         return activity;
     }
 
-    public static ActivityScope StartResourceStart(IResource resource, string resourceKind, string resourceName, string resourceType)
+    public static ActivityScope StartResourceStart(IConfiguration? configuration, IResource resource, string resourceKind, string resourceName, string resourceType)
     {
-        var activity = StartActivity(Activities.ResourceStart);
+        var activity = StartActivity(configuration, Activities.ResourceStart);
         activity.SetResource(resource);
         activity.SetDcpResource(resourceKind, resourceName);
         activity.SetResourceKind(resourceType);
         return activity;
     }
 
-    public static ActivityScope StartResourceStop(IResource resource, string resourceKind, string resourceName)
+    public static ActivityScope StartResourceStop(IConfiguration? configuration, IResource resource, string resourceKind, string resourceName)
     {
-        var activity = StartActivity(Activities.ResourceStop);
+        var activity = StartActivity(configuration, Activities.ResourceStop);
         activity.SetResource(resource);
         activity.SetDcpResource(resourceKind, resourceName);
         return activity;
     }
 
-    public static ActivityScope StartResourceWaitForDependencies(IResource resource, int dependencyCount)
+    public static ActivityScope StartResourceWaitForDependencies(IConfiguration? configuration, IResource resource, int dependencyCount)
     {
-        var activity = StartActivity(Activities.ResourceWaitForDependencies);
+        var activity = StartActivity(configuration, Activities.ResourceWaitForDependencies);
         activity.SetResource(resource);
         activity.SetResourceWaitDependencyCount(dependencyCount);
         return activity;
     }
 
-    public static ActivityScope StartResourceWaitForDependency(IResource resource, IResource dependency, WaitType waitType, WaitBehavior? waitBehavior)
+    public static ActivityScope StartResourceWaitForDependency(IConfiguration? configuration, IResource resource, IResource dependency, WaitType waitType, WaitBehavior? waitBehavior)
     {
-        var activity = StartActivity(Activities.ResourceWaitForDependency);
+        var activity = StartActivity(configuration, Activities.ResourceWaitForDependency);
         activity.SetDependencyWait(resource, dependency, waitType, waitBehavior);
         return activity;
     }
 
-    private static ActivityScope StartActivity(string name)
+    private static ActivityScope StartActivity(IConfiguration? configuration, string name)
     {
-        if (!IsEnabled())
+        if (!IsEnabled(configuration))
         {
             return default;
         }
 
-        var activity = Activity.Current is null && TryGetStartupParentContext(out var parentContext)
+        var activity = Activity.Current is null && TryGetProfilingParentContext(configuration, out var parentContext)
             ? s_activitySource.StartActivity(name, ActivityKind.Internal, parentContext)
             : s_activitySource.StartActivity(name, ActivityKind.Internal);
 
-        AddStartupOperationId(activity);
-        return new ActivityScope(activity);
+        AddProfilingSessionId(activity, configuration);
+        return new ActivityScope(activity, configuration);
     }
 
-    private static ActivityScope StartActivityFromTraceAnnotations(string name, IDictionary<string, string>? annotations)
+    private static ActivityScope StartActivityFromTraceAnnotations(IConfiguration? configuration, string name, IDictionary<string, string>? annotations)
     {
-        if (!IsEnabled())
+        if (!IsEnabled(configuration))
         {
             return default;
         }
 
         Activity? activity = null;
         if (annotations is not null &&
-            annotations.TryGetValue(Annotations.TraceParent, out var traceParent) &&
-            !string.IsNullOrEmpty(traceParent))
+            TryGetAnnotation(annotations, Annotations.TraceParent, Annotations.LegacyStartupTraceParent, out var traceParent))
         {
             // DCP annotations carry the create_object trace context to later watch/reconcile spans.
-            annotations.TryGetValue(Annotations.TraceState, out var traceState);
+            TryGetAnnotation(annotations, Annotations.TraceState, Annotations.LegacyStartupTraceState, out var traceState);
             if (ActivityContext.TryParse(traceParent, traceState, out var parentContext))
             {
                 activity = s_activitySource.StartActivity(name, ActivityKind.Internal, parentContext);
@@ -289,12 +295,12 @@ internal static class ProfilingTelemetry
 
         if (activity is null)
         {
-            return StartActivity(name);
+            return StartActivity(configuration, name);
         }
 
-        AddStartupOperationId(activity, annotations);
+        AddProfilingSessionId(activity, configuration, annotations);
 
-        return new ActivityScope(activity);
+        return new ActivityScope(activity, configuration);
     }
 
     private static void SetDcpCreateObjectTags(Activity activity, string resourceKind, string resourceName, string traceId, string spanId)
@@ -306,26 +312,27 @@ internal static class ProfilingTelemetry
         activity.SetTag(Tags.DcpCreateObjectSpanId, spanId);
     }
 
-    private static void AddStartupOperationId(Activity? activity, IDictionary<string, string>? annotations = null)
+    private static void AddProfilingSessionId(Activity? activity, IConfiguration? configuration, IDictionary<string, string>? annotations = null)
     {
         if (activity is null)
         {
             return;
         }
 
-        var operationId = annotations is not null && annotations.TryGetValue(Annotations.OperationId, out var annotationOperationId)
-            ? annotationOperationId
-            : Environment.GetEnvironmentVariable(KnownConfigNames.StartupOperationId);
-        if (!string.IsNullOrEmpty(operationId))
+        var sessionId = annotations is not null && TryGetAnnotation(annotations, Annotations.ProfilingSessionId, Annotations.LegacyStartupOperationId, out var annotationSessionId)
+            ? annotationSessionId
+            : GetConfigurationValue(configuration, KnownConfigNames.ProfilingSessionId, KnownConfigNames.Legacy.StartupOperationId);
+        if (!string.IsNullOrEmpty(sessionId))
         {
-            activity.SetTag(Tags.OperationId, operationId);
+            activity.SetTag(Tags.ProfilingSessionId, sessionId);
+            activity.SetTag(Tags.LegacyStartupOperationId, sessionId);
         }
     }
 
-    private static bool TryGetStartupParentContext(out ActivityContext parentContext)
+    private static bool TryGetProfilingParentContext(IConfiguration? configuration, out ActivityContext parentContext)
     {
-        var traceParent = Environment.GetEnvironmentVariable(KnownConfigNames.StartupTraceParent);
-        var traceState = Environment.GetEnvironmentVariable(KnownConfigNames.StartupTraceState);
+        var traceParent = GetConfigurationValue(configuration, KnownConfigNames.ProfilingTraceParent, KnownConfigNames.Legacy.StartupTraceParent);
+        var traceState = GetConfigurationValue(configuration, KnownConfigNames.ProfilingTraceState, KnownConfigNames.Legacy.StartupTraceState);
         if (string.IsNullOrEmpty(traceParent))
         {
             parentContext = default;
@@ -335,13 +342,35 @@ internal static class ProfilingTelemetry
         return ActivityContext.TryParse(traceParent, traceState, out parentContext);
     }
 
-    internal static bool IsEnabled()
+    internal static bool IsEnabled(IConfiguration? configuration)
     {
-        var value = Environment.GetEnvironmentVariable(KnownConfigNames.StartupProfilingEnabled);
+        return IsTruthy(configuration?[KnownConfigNames.ProfilingEnabled]) ||
+            IsTruthy(configuration?[KnownConfigNames.Legacy.StartupProfilingEnabled]);
+    }
+
+    private static bool TryGetAnnotation(IDictionary<string, string> annotations, string name, string legacyName, out string? value)
+    {
+        if (annotations.TryGetValue(name, out value) && !string.IsNullOrEmpty(value))
+        {
+            return true;
+        }
+
+        return annotations.TryGetValue(legacyName, out value) && !string.IsNullOrEmpty(value);
+    }
+
+    private static string? GetConfigurationValue(IConfiguration? configuration, string name, string legacyName)
+    {
+        return configuration?[name] is { Length: > 0 } value
+            ? value
+            : configuration?[legacyName];
+    }
+
+    private static bool IsTruthy(string? value)
+    {
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
     }
 
-    internal readonly struct ActivityScope(Activity? activity, bool ownsActivity = true) : IDisposable
+    internal readonly struct ActivityScope(Activity? activity, IConfiguration? configuration = null, bool ownsActivity = true) : IDisposable
     {
         public void AddDcpServiceAddressAllocated(string serviceName)
         {
@@ -395,27 +424,30 @@ internal static class ProfilingTelemetry
 
         public void AnnotateTraceContext(Action<string, string> annotate)
         {
-            if (!IsEnabled())
+            if (!IsEnabled(configuration))
             {
                 return;
             }
 
-            var operationId = Environment.GetEnvironmentVariable(KnownConfigNames.StartupOperationId);
-            if (!string.IsNullOrEmpty(operationId))
+            var sessionId = GetConfigurationValue(configuration, KnownConfigNames.ProfilingSessionId, KnownConfigNames.Legacy.StartupOperationId);
+            if (!string.IsNullOrEmpty(sessionId))
             {
-                annotate(Annotations.OperationId, operationId);
+                annotate(Annotations.ProfilingSessionId, sessionId);
+                annotate(Annotations.LegacyStartupOperationId, sessionId);
             }
 
-            var traceParent = activity?.Id ?? Environment.GetEnvironmentVariable(KnownConfigNames.StartupTraceParent);
+            var traceParent = activity?.Id ?? GetConfigurationValue(configuration, KnownConfigNames.ProfilingTraceParent, KnownConfigNames.Legacy.StartupTraceParent);
             if (!string.IsNullOrEmpty(traceParent))
             {
                 annotate(Annotations.TraceParent, traceParent);
+                annotate(Annotations.LegacyStartupTraceParent, traceParent);
             }
 
-            var traceState = activity?.TraceStateString ?? Environment.GetEnvironmentVariable(KnownConfigNames.StartupTraceState);
+            var traceState = activity?.TraceStateString ?? GetConfigurationValue(configuration, KnownConfigNames.ProfilingTraceState, KnownConfigNames.Legacy.StartupTraceState);
             if (!string.IsNullOrEmpty(traceState))
             {
                 annotate(Annotations.TraceState, traceState);
+                annotate(Annotations.LegacyStartupTraceState, traceState);
             }
         }
 
@@ -437,8 +469,11 @@ internal static class ProfilingTelemetry
             }
 
             if (annotations is not null &&
-                annotations.TryGetValue(Annotations.TraceParent, out var traceParent) &&
-                ActivityContext.TryParse(traceParent, annotations.TryGetValue(Annotations.TraceState, out var traceState) ? traceState : null, out var createObjectContext))
+                TryGetAnnotation(annotations, Annotations.TraceParent, Annotations.LegacyStartupTraceParent, out var traceParent) &&
+                ActivityContext.TryParse(
+                    traceParent,
+                    TryGetAnnotation(annotations, Annotations.TraceState, Annotations.LegacyStartupTraceState, out var traceState) ? traceState : null,
+                    out var createObjectContext))
             {
                 SetDcpCreateObjectTags(activity, resourceKind, resourceName, createObjectContext.TraceId.ToString(), createObjectContext.SpanId.ToString());
             }

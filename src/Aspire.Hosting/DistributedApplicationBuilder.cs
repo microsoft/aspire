@@ -683,9 +683,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return false;
         }
 
-        // Dashboard OTLP is normally configured for app telemetry. Startup profiling
+        // Dashboard OTLP is normally configured for app telemetry. Profiling
         // spans are high-cardinality diagnostics, so only export them when requested.
-        if (_innerBuilder.Configuration.GetBool(KnownConfigNames.StartupProfilingEnabled) is not true)
+        var profilingEnabled =
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.ProfilingEnabled) ??
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.Legacy.StartupProfilingEnabled);
+        if (profilingEnabled is not true)
         {
             return false;
         }

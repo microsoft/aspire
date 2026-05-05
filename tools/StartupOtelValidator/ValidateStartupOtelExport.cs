@@ -4,6 +4,9 @@
 using System.Text;
 using System.Text.Json;
 
+const string ProfilingSessionIdAttribute = "aspire.profiling.session_id";
+const string LegacyStartupOperationIdAttribute = "aspire.startup.operation_id";
+
 var exportDirectory = GetRequiredEnvironmentVariable("EXPORT_DIR");
 var spanSummaryPath = GetRequiredEnvironmentVariable("SPAN_SUMMARY_PATH");
 var runRoot = GetRequiredEnvironmentVariable("RUN_ROOT");
@@ -12,22 +15,22 @@ var requireDcpSpans = string.Equals(Environment.GetEnvironmentVariable("REQUIRE_
 var spans = ReadExportedSpans(exportDirectory);
 WriteSpanSummary(spanSummaryPath, spans);
 
-var startupGroups = spans
-    .Where(span => !string.IsNullOrEmpty(span.StartupOperationId))
-    .GroupBy(span => span.StartupOperationId!);
+var profilingGroups = spans
+    .Where(span => !string.IsNullOrEmpty(span.ProfilingSessionId))
+    .GroupBy(span => span.ProfilingSessionId!);
 
-if (!startupGroups.Any())
+if (!profilingGroups.Any())
 {
-    Fail($"No exported spans contained aspire.startup.operation_id. See {spanSummaryPath}");
+    Fail($"No exported spans contained {ProfilingSessionIdAttribute} or legacy {LegacyStartupOperationIdAttribute}. See {spanSummaryPath}");
 }
 
-string? validStartupOperationId = null;
+string? validProfilingSessionId = null;
 string? validTraceId = null;
 List<ExportedSpan>? validTraceSpans = null;
 
-foreach (var startupGroup in startupGroups)
+foreach (var profilingGroup in profilingGroups)
 {
-    var traceGroups = startupGroup
+    var traceGroups = profilingGroup
         .Where(span => !string.IsNullOrEmpty(span.TraceId))
         .GroupBy(span => span.TraceId!);
 
@@ -102,23 +105,23 @@ foreach (var startupGroup in startupGroups)
             hasResourceWaitEvents &&
             hasRequiredDcpSpans)
         {
-            validStartupOperationId = startupGroup.Key;
+            validProfilingSessionId = profilingGroup.Key;
             validTraceId = traceGroup.Key;
             validTraceSpans = traceSpans;
             break;
         }
     }
 
-    if (validStartupOperationId is not null)
+    if (validProfilingSessionId is not null)
     {
         break;
     }
 }
 
-if (validStartupOperationId is null || validTraceId is null || validTraceSpans is null)
+if (validProfilingSessionId is null || validTraceId is null || validTraceSpans is null)
 {
     var dcpRequirement = requireDcpSpans ? ", DCP process, and DCP resource/controller" : string.Empty;
-    Fail($"No startup operation contained correlated CLI, Hosting DCP resource creation, DCP resource observation, resource wait events, Hosting-to-DCP links{dcpRequirement} spans in one trace. See {spanSummaryPath}");
+    Fail($"No profiling session contained correlated CLI, Hosting DCP resource creation, DCP resource observation, resource wait events, Hosting-to-DCP links{dcpRequirement} spans in one trace. See {spanSummaryPath}");
 }
 
 var startJsonPath = GetRequiredEnvironmentVariable("START_JSON_PATH");
@@ -142,7 +145,7 @@ var summary = new ValidationSummary(
     DotnetBinlogDirectory: GetOptionalEnvironmentVariable("DOTNET_BINLOG_DIR"),
     DotnetBinlogFiles: GetOptionalPathList(Environment.GetEnvironmentVariable("DOTNET_BINLOG_DIR"), ".binlog"),
     SpanSummary: spanSummaryPath,
-    StartupOperationId: validStartupOperationId!,
+    ProfilingSessionId: validProfilingSessionId!,
     CorrelatedSpanCount: validTraceSpans!.Count,
     TraceId: validTraceId!);
 
@@ -183,7 +186,7 @@ static List<ExportedSpan> ReadExportedSpans(string exportDirectory)
                         TraceId: GetStringProperty(span, "traceId"),
                         SpanId: GetStringProperty(span, "spanId"),
                         ParentSpanId: GetStringProperty(span, "parentSpanId"),
-                        StartupOperationId: GetSpanAttributeValue(span, "aspire.startup.operation_id"),
+                        ProfilingSessionId: GetSpanAttributeValue(span, ProfilingSessionIdAttribute) ?? GetSpanAttributeValue(span, LegacyStartupOperationIdAttribute),
                         CommandName: GetSpanAttributeValue(span, "aspire.cli.command.name"),
                         ProcessId: GetSpanAttributeValue(span, "process.pid"),
                         DcpCreateObjectId: GetSpanAttributeValue(span, "aspire.hosting.dcp.create_object.id"),
@@ -355,7 +358,7 @@ static void WriteExportedSpan(Utf8JsonWriter writer, ExportedSpan span)
     WriteString(writer, nameof(ExportedSpan.TraceId), span.TraceId);
     WriteString(writer, nameof(ExportedSpan.SpanId), span.SpanId);
     WriteString(writer, nameof(ExportedSpan.ParentSpanId), span.ParentSpanId);
-    WriteString(writer, nameof(ExportedSpan.StartupOperationId), span.StartupOperationId);
+    WriteString(writer, nameof(ExportedSpan.ProfilingSessionId), span.ProfilingSessionId);
     WriteString(writer, nameof(ExportedSpan.CommandName), span.CommandName);
     WriteString(writer, nameof(ExportedSpan.ProcessId), span.ProcessId);
     WriteString(writer, nameof(ExportedSpan.DcpCreateObjectId), span.DcpCreateObjectId);
@@ -388,7 +391,7 @@ static void WriteValidationSummary(Utf8JsonWriter writer, ValidationSummary summ
     WriteString(writer, nameof(ValidationSummary.DotnetBinlogDirectory), summary.DotnetBinlogDirectory);
     WriteStringArray(writer, nameof(ValidationSummary.DotnetBinlogFiles), summary.DotnetBinlogFiles);
     writer.WriteString(nameof(ValidationSummary.SpanSummary), summary.SpanSummary);
-    writer.WriteString(nameof(ValidationSummary.StartupOperationId), summary.StartupOperationId);
+    writer.WriteString(nameof(ValidationSummary.ProfilingSessionId), summary.ProfilingSessionId);
     writer.WriteNumber(nameof(ValidationSummary.CorrelatedSpanCount), summary.CorrelatedSpanCount);
     writer.WriteString(nameof(ValidationSummary.TraceId), summary.TraceId);
     writer.WriteEndObject();
@@ -423,7 +426,7 @@ internal sealed record ExportedSpan(
     string? TraceId,
     string? SpanId,
     string? ParentSpanId,
-    string? StartupOperationId,
+    string? ProfilingSessionId,
     string? CommandName,
     string? ProcessId,
     string? DcpCreateObjectId,
@@ -452,6 +455,6 @@ internal sealed record ValidationSummary(
     string? DotnetBinlogDirectory,
     List<string> DotnetBinlogFiles,
     string SpanSummary,
-    string StartupOperationId,
+    string ProfilingSessionId,
     int CorrelatedSpanCount,
     string TraceId);
