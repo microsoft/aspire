@@ -388,6 +388,29 @@ public class JavaScriptWorkspaceTests
         Assert.Contains("RUN pnpm --filter @example/api... run build", dockerfile);
     }
 
+    [Fact]
+    public async Task PublishAsNpmScript_PnpmWorkspace_Throws()
+    {
+        using var tempDir = new TestTempDirectory();
+        WritePnpmWorkspace(tempDir.Path, ["packages/api"]);
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"start":"node dist/index.js"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var app = builder.AddJavaScriptApp("api", appDir, runScriptName: "start")
+            .WithWorkspaceRoot(tempDir.Path)
+            .WithPnpm()
+            .PublishAsNpmScript("start");
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("PublishAsNpmScript is not supported with pnpm in workspace mode", ex.Message);
+    }
+
     private static void WriteNpmWorkspace(string rootPath, string[] patterns)
     {
         Directory.CreateDirectory(rootPath);
