@@ -167,6 +167,11 @@
         <target state="translated">提示“{0}”需要输入，但未提供。</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageDoesNotExposeGuestAppHostApis">
+        <source>The package '{0}' does not expose any APIs for {1} AppHosts. Aspire can still run your app, but this package did not add anything to the generated SDK.</source>
+        <target state="new">The package '{0}' does not expose any APIs for {1} AppHosts. Aspire can still run your app, but this package did not add anything to the generated SDK.</target>
+        <note>{0} is the package ID, {1} is the guest AppHost language display name. Do not translate 'AppHost' or 'SDK'.</note>
+      </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
         <source>The project could not be analyzed due to a build error. See logs at {0}</source>
         <target state="translated">由于生成错误，无法分析项目。请参阅 {0} 处的日志</target>

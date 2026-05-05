@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -530,6 +532,67 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
+    [Fact]
+    public async Task WarnAboutPackagesWithoutGeneratedSdkAsync_DisplaysWarningForEmptyPackageCapabilities()
+    {
+        var interactionService = new TestInteractionService();
+        var rpcClient = new TestAppHostRpcClient(new Dictionary<string, CapabilitiesInfo>
+        {
+            ["CommunityToolkit.Aspire.Hosting.Ollama"] = new()
+        });
+
+        await GuestAppHostProject.WarnAboutPackagesWithoutGeneratedSdkAsync(
+            languageDisplayName: "TypeScript (Node.js)",
+            codeGenerationPackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
+            interactionService: interactionService,
+            rpcClient: rpcClient,
+            integrations:
+            [
+                IntegrationReference.FromPackage("Aspire.Hosting", "13.3.0"),
+                IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Ollama", "13.2.1-beta.528"),
+                IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.3.0")
+            ],
+            cancellationToken: default);
+
+        var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal("warning", displayedMessage.Emoji.Name);
+        Assert.Equal(typeof(string[]), rpcClient.LastAssemblyNamesRuntimeType);
+        Assert.Equal(
+            "The package 'CommunityToolkit.Aspire.Hosting.Ollama' does not expose any APIs for TypeScript (Node.js) AppHosts. Aspire can still run your app, but this package did not add anything to the generated SDK.",
+            displayedMessage.Message);
+    }
+
+    [Fact]
+    public async Task WarnAboutPackagesWithoutGeneratedSdkAsync_SkipsPackagesThatExposeGeneratedSdkSurface()
+    {
+        var interactionService = new TestInteractionService();
+        var rpcClient = new TestAppHostRpcClient(new Dictionary<string, CapabilitiesInfo>
+        {
+            ["Aspire.Hosting.Redis"] = new()
+            {
+                Capabilities =
+                [
+                    new CapabilityInfo
+                    {
+                        CapabilityId = "capability-id",
+                        MethodName = "AddRedis",
+                        QualifiedMethodName = "Aspire.Hosting.Redis.RedisBuilderExtensions.AddRedis"
+                    }
+                ]
+            }
+        });
+
+        await GuestAppHostProject.WarnAboutPackagesWithoutGeneratedSdkAsync(
+            languageDisplayName: "TypeScript (Node.js)",
+            codeGenerationPackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
+            interactionService: interactionService,
+            rpcClient: rpcClient,
+            integrations: [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.3.0")],
+            cancellationToken: default);
+
+        Assert.Empty(interactionService.DisplayedMessages);
+    }
+
     private static GuestAppHostProject CreateGuestAppHostProject()
     {
         var language = new LanguageInfo(
@@ -556,5 +619,40 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             languageDiscovery: new TestLanguageDiscovery(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
+    }
+
+    private sealed class TestAppHostRpcClient(Dictionary<string, CapabilitiesInfo> capabilitiesByAssembly) : IAppHostRpcClient
+    {
+        public Type? LastAssemblyNamesRuntimeType { get; private set; }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<Dictionary<string, string>> ScaffoldAppHostAsync(string languageId, string targetPath, string? projectName, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<Dictionary<string, string>> GenerateCodeForAssemblyAsync(string languageId, string assemblyName, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<CapabilitiesInfo> GetCapabilitiesAsync(CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task<CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken)
+        {
+            LastAssemblyNamesRuntimeType = assemblyNames.GetType();
+            var assemblyName = Assert.Single(assemblyNames);
+            return Task.FromResult(capabilitiesByAssembly.GetValueOrDefault(assemblyName) ?? new CapabilitiesInfo());
+        }
+
+        public Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
+
+        public Task InvokeAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
+            => throw new NotSupportedException();
     }
 }

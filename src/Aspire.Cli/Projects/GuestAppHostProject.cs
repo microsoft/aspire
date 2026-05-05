@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Text.Json;
+using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
@@ -1302,11 +1304,62 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             await File.WriteAllTextAsync(filePath, content, cancellationToken);
         }
 
+        await WarnAboutPackagesWithoutGeneratedSdkAsync(
+            languageDisplayName: DisplayName,
+            codeGenerationPackageName: _resolvedLanguage.PackageName,
+            interactionService: _interactionService,
+            rpcClient: rpcClient,
+            integrations: integrationsList,
+            cancellationToken: cancellationToken);
+
         // Write generation hash for caching
         SaveGenerationHash(outputPath, integrationsList);
 
         _logger.LogInformation("Generated {Count} {CodeGenerator} files in {Path}",
             files.Count, codeGenerator, outputPath);
+    }
+
+    internal static async Task WarnAboutPackagesWithoutGeneratedSdkAsync(
+        string languageDisplayName,
+        string codeGenerationPackageName,
+        IInteractionService interactionService,
+        IAppHostRpcClient rpcClient,
+        IEnumerable<IntegrationReference> integrations,
+        CancellationToken cancellationToken)
+    {
+        foreach (var integration in integrations
+            .Where(integration => ShouldCheckForGeneratedSdkWarning(integration, codeGenerationPackageName))
+            .OrderBy(integration => integration.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var capabilities = await rpcClient.GetCapabilitiesForAssembliesAsync(new[] { integration.Name }, cancellationToken);
+            if (HasGeneratedSdkSurface(capabilities))
+            {
+                continue;
+            }
+
+            interactionService.DisplayMessage(
+                KnownEmojis.Warning,
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    ErrorStrings.PackageDoesNotExposeGuestAppHostApis,
+                    integration.Name,
+                    languageDisplayName));
+        }
+    }
+
+    internal static bool HasGeneratedSdkSurface(CapabilitiesInfo capabilities)
+    {
+        return capabilities.Capabilities.Count > 0
+            || capabilities.HandleTypes.Count > 0
+            || capabilities.DtoTypes.Count > 0
+            || capabilities.EnumTypes.Count > 0;
+    }
+
+    private static bool ShouldCheckForGeneratedSdkWarning(IntegrationReference integration, string codeGenerationPackageName)
+    {
+        return integration.IsPackageReference
+            && !string.Equals(integration.Name, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(integration.Name, codeGenerationPackageName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
