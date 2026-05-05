@@ -141,7 +141,7 @@ jobs:
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-milestone-prs.json"
 
@@ -163,12 +163,29 @@ jobs:
           echo "Already processed: $PROCESSED_COUNT"
           echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
 
+          # 2a. Enrich batch PRs with author_association (not available via gh pr list)
+          if [ "$BATCH_COUNT" -gt 0 ]; then
+            echo "Enriching batch PRs with author_association..."
+            # Build a JSON lookup object {"number": "association", ...} in one pass
+            ASSOC_JSON="{}"
+            for NUM in $(jq -r '.[].number' "$DATA_DIR/batch-prs.json"); do
+              ASSOC=$(gh api "repos/$REPO/pulls/$NUM" --jq '.author_association' 2>/dev/null || echo "UNKNOWN")
+              ASSOC_JSON=$(echo "$ASSOC_JSON" | jq --arg n "$NUM" --arg a "$ASSOC" '. + {($n): $a}')
+            done
+            # Merge all associations into batch-prs.json in a single rewrite
+            echo "$ASSOC_JSON" | jq --slurpfile prs "$DATA_DIR/batch-prs.json" \
+              '. as $lookup | $prs[0] | map(. + {authorAssociation: ($lookup[(.number | tostring)] // "UNKNOWN")})' \
+              > "$DATA_DIR/batch-prs-tmp.json" \
+              && mv "$DATA_DIR/batch-prs-tmp.json" "$DATA_DIR/batch-prs.json"
+            echo "Enriched $BATCH_COUNT batch PRs with author_association"
+          fi
+
           # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date
           DOCS_REPO="${{ env.DOCS_REPO }}"
           MILESTONE_START="${{ env.MILESTONE_START }}"
           gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
             --search "merged:>=${MILESTONE_START}" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-docs-prs.json"
 
@@ -497,8 +514,10 @@ The pre-computation step (in the frontmatter) has already:
 - Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
 
 Each entry in `batch-prs.json` contains: `number`, `title`, `body`, `author` (object
-with `login` and `is_bot`), `mergedAt`, `labels` (array of objects with `name`),
-`additions`, `deletions`, `changedFiles`.
+with `login` and `is_bot`), `authorAssociation` (string, e.g. `"MEMBER"`, `"OWNER"`,
+`"CONTRIBUTOR"`, `"NONE"`), `mergedAt`, `labels` (array of objects with `name`),
+`additions`, `deletions`, `changedFiles`, and `files` (array of objects with
+`path`, `additions`, `deletions`, `changeType`) listing the changed file paths.
 
 The pre-computation step has also fetched merged PRs from `${DOCS_REPO}` that
 were merged on or after `${MILESTONE_START}`:
@@ -512,7 +531,10 @@ Each entry in `batch-docs-prs.json` has the same schema as `batch-prs.json`.
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
 unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
 `number`, `title`, `body`, `author` (object with `login` and `is_bot`), `mergedAt`,
-`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`.
+`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`,
+and `files` (array of objects with `path`, `additions`, `deletions`, `changeType`).
+The batch is also enriched with `authorAssociation` (fetched via REST API in the
+pre-computation step).
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
@@ -527,10 +549,10 @@ unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry conta
 2. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
    processing it, the backlog will be fully caught up.
 
-For each remaining (non-bot) PR, use the `pull_request_read` tool to fetch its
-full body/description and changed file paths. Collect: number, title, author,
-`author_association`, body/description, labels, the list of changed files, and the
-total number of changed lines (additions + deletions).
+For each remaining (non-bot) PR, collect all data from the batch: number, title,
+author, `authorAssociation`, body, labels, changed file paths (`files` array), and
+total changed lines (additions + deletions). No additional API calls are needed —
+the batch data contains everything required.
 
 ### 3a. Processing backport PRs
 
@@ -664,20 +686,19 @@ Then determine whether either of these optional flags applies:
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
 | **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
-| **Community contribution** | 🌍 | PR author's `author_association` is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `author_association` and ignore the backport bot's `is_bot` flag. |
+| **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
-> **Important — verifying `author_association`:** The `pull_request_read` MCP tool
-> may omit the `author_association` field from its response. If the field is missing
-> or you cannot confirm its value from the tool response, you **must** fetch it
-> explicitly using the `bash` tool:
->
-> ```bash
-> gh api "repos/${REPO}/pulls/<NUMBER>" --jq '.author_association'
-> ```
->
+The `authorAssociation` field is pre-populated in the batch data by the fetch-data
+job. Use it directly — no additional API calls are needed. For **backport PRs**,
+the original PR's `author_association` is not in the batch; fetch it via:
+```bash
+gh api "repos/${REPO}/pulls/<ORIGINAL_NUMBER>" --jq '.author_association'
+```
+
 > **Never infer community-contributor status from fork origin, username, or any
-> other heuristic.** Only the `author_association` field from the GitHub API is
-> authoritative. Team members frequently submit PRs from personal forks.
+> other heuristic.** Only the `author_association` / `authorAssociation` field
+> from the GitHub API is authoritative. Team members frequently submit PRs from
+> personal forks.
 
 A change can have zero or more flags. When present, show each flag on its own
 indented line below the Changes line:
@@ -757,9 +778,9 @@ filter but documents an unrelated product or version), record it as
 `"excluded"` in the docs PR tracker (Step 6d) with a comment explaining why.
 
 For each remaining docs PR, determine whether it documents a changelog entry
-that has `docsRequired: true`. Use the `pull_request_read` tool (specifying the
-`${DOCS_REPO}` repository) to fetch the full body, changed file paths, and
-any cross-references. Match by:
+that has `docsRequired: true`. The batch data already contains each docs PR's
+`title`, `body`, and `files` (changed file paths) — no additional API calls
+are needed. Match by:
 
 1. **Explicit product PR reference** — the docs PR body or title mentions a
    product PR number (e.g., "Documents #1234", links to
@@ -910,8 +931,7 @@ To build/update:
 2. For each PR in the current batch, create or update its tracker file: set
    `status` to `"included"` or `"excluded"`, set `comment` to a brief
    explanation, and set `runDate` to the current ISO 8601 UTC timestamp.
-   For bot-excluded PRs (which skip the `pull_request_read` call in Step 3),
-   populate `author` from `author.login` and `title` from the batch data
+   Populate `author` from `author.login` and `title` from the batch data
    (`batch-prs.json`).
 
 Do **not** create tracker files for unprocessed PRs. PRs without a tracker file
@@ -967,7 +987,7 @@ Field definitions:
 - **mergedAt**: ISO 8601 UTC merge timestamp
 - **number**: Docs PR number (in `${DOCS_REPO}`)
 - **runDate**: ISO 8601 UTC timestamp of the workflow run that processed this docs PR
-- **status**: One of `"included"` (processed) or `"excluded"` (not relevant to the milestone)
+- **status**: One of `"included"` (matched to at least one changelog entry) or `"excluded"` (not relevant to the milestone)
 - **title**: Original docs PR title
 
 After writing each file, **normalize formatting** by running:
