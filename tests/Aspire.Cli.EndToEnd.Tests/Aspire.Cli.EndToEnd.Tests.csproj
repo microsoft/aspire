@@ -33,7 +33,6 @@
 
     <TestClassNamePrefixForCI>Aspire.Cli.EndToEnd.Tests</TestClassNamePrefixForCI>
 
-    <!-- These tests require built NuGet packages -->
     <TestUsingWorkloads>true</TestUsingWorkloads>
     <InstallWorkloadForTesting>true</InstallWorkloadForTesting>
     <IncludeTestPackages>false</IncludeTestPackages>

@@ -240,8 +240,8 @@ public static class TestDataBuilder
         [JsonPropertyName("uncollectedMtpBaseArgs")]
         public string? UncollectedMtpBaseArgs { get; set; }
 
-        [JsonPropertyName("properties")]
-        public Dictionary<string, bool> Properties { get; set; } = new();
+    [JsonPropertyName("properties")]
+    public Dictionary<string, bool> Properties { get; set; } = new();
 
         [JsonPropertyName("extraTestArgs")]
         public string? ExtraTestArgs { get; set; }
@@ -304,8 +304,8 @@ public class CanonicalMatrixEntry
     [JsonPropertyName("mtpBaseArgs")]
     public string MtpBaseArgs { get; set; } = "";
 
-    [JsonPropertyName("properties")]
-    public Dictionary<string, bool> Properties { get; set; } = new();
+        [JsonPropertyName("properties")]
+        public Dictionary<string, bool> Properties { get; set; } = new();
 
     [JsonPropertyName("splitTests")]
     public bool SplitTests { get; set; }

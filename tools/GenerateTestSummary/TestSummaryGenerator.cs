@@ -9,7 +9,7 @@ namespace Aspire.TestTools;
 
 sealed partial class TestSummaryGenerator
 {
-    public static string CreateCombinedTestSummaryReport(string basePath)
+    public static string CreateCombinedTestSummaryReport(string basePath, InfraTimingInfo? infraTiming = null)
     {
         var resolved = Path.GetFullPath(basePath);
         if (!Directory.Exists(resolved))
@@ -203,6 +203,13 @@ sealed partial class TestSummaryGenerator
         overallTableBuilder.Append(GenerateDurationStatistics(basePath));
         overallTableBuilder.AppendLine();
         overallTableBuilder.AppendLine("</details>");
+
+        // Add effective time analysis if infra timing data is available
+        if (infraTiming?.HasData == true)
+        {
+            overallTableBuilder.AppendLine();
+            overallTableBuilder.Append(GenerateEffectiveTimeTable(testRunData, infraTiming));
+        }
 
         return overallTableBuilder.ToString();
     }
@@ -541,6 +548,104 @@ sealed partial class TestSummaryGenerator
 
     [GeneratedRegex(@"(?<testName>.*)_(?<tfm>net\d+\.0)_.*")]
     private static partial Regex TestNameFromTrxFileNameRegex();
+
+    /// <summary>
+    /// Generates a "Top 20 Effective Times" table that adds infrastructure build overhead
+    /// to each test project's run time based on its dependency bucket.
+    /// </summary>
+    private static string GenerateEffectiveTimeTable(List<TestRunSummary> testRunData, InfraTimingInfo infraTiming)
+    {
+        if (infraTiming.TestDepMap is null || infraTiming.TestDepMap.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var effectiveEntries = new List<(string Title, string Os, double JobMinutes, string DepBucket, double InfraCost, double EffectiveMinutes)>();
+
+        foreach (var run in testRunData)
+        {
+            // The dep map keys are shortnames (e.g., "Hosting-1", "Cli.EndToEnd-SmokeTests").
+            // The Title from trx may be the shortname itself or "ProjectName (tfm)".
+            // Try matching the title directly first, then strip TFM suffix.
+            var lookupKey = run.Title;
+            var tfmMatch = TfmSuffixRegex().Match(lookupKey);
+            if (tfmMatch.Success)
+            {
+                lookupKey = tfmMatch.Groups["name"].Value;
+            }
+
+            if (!infraTiming.TestDepMap.TryGetValue(lookupKey, out var depBucket))
+            {
+                // Not in the dep map — treat as no dependencies
+                depBucket = "no_nugets";
+            }
+
+            var infraCost = infraTiming.GetInfraCostMinutes(depBucket);
+            var effectiveMinutes = run.DurationMinutes + infraCost;
+
+            effectiveEntries.Add((run.Title, run.Os, run.DurationMinutes, depBucket, infraCost, effectiveMinutes));
+        }
+
+        // Sort by effective time descending, take top 20
+        effectiveEntries.Sort((a, b) => b.EffectiveMinutes.CompareTo(a.EffectiveMinutes));
+        var top = effectiveEntries.Take(20).ToList();
+
+        if (top.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("## Top 20 Effective Times");
+        sb.AppendLine();
+        sb.AppendLine("Effective time = test job duration + infrastructure build overhead (NuGet packages, CLI native archives).");
+        sb.AppendLine();
+        sb.AppendLine("| Name | Dependency | Job Time | Infra Cost | Effective Time |");
+        sb.AppendLine("|------|------------|----------|------------|----------------|");
+
+        foreach (var entry in top)
+        {
+            var depLabel = entry.DepBucket switch
+            {
+                "requires_cli_archive" => "nugets+cli",
+                "requires_nugets" => "nugets",
+                _ => "none"
+            };
+
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"| [{entry.Os}] {entry.Title} | {depLabel} | {entry.JobMinutes:F1}m | {entry.InfraCost:F1}m | **{entry.EffectiveMinutes:F1}m** |");
+        }
+
+        sb.AppendLine();
+
+        // Summary by dependency type
+        var grouped = effectiveEntries.GroupBy(e => e.DepBucket)
+            .OrderByDescending(g => g.Average(e => e.EffectiveMinutes));
+
+        sb.AppendLine("### Effective Time by Dependency Type");
+        sb.AppendLine();
+        sb.AppendLine("| Dependency | Count | Avg Job | Avg Effective | Max Effective |");
+        sb.AppendLine("|------------|-------|---------|---------------|---------------|");
+
+        foreach (var g in grouped)
+        {
+            var depLabel = g.Key switch
+            {
+                "requires_cli_archive" => "nugets+cli",
+                "requires_nugets" => "nugets",
+                _ => "none"
+            };
+
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"| {depLabel} | {g.Count()} | {g.Average(e => e.JobMinutes):F1}m | {g.Average(e => e.EffectiveMinutes):F1}m | {g.Max(e => e.EffectiveMinutes):F1}m |");
+        }
+
+        sb.AppendLine();
+        return sb.ToString();
+    }
+
+    [GeneratedRegex(@"^(?<name>.+) \(net\d+\.\d+\)$")]
+    private static partial Regex TfmSuffixRegex();
 }
 
 internal sealed record TestRunSummary(string Icon, string Os, string Title, int Passed, int Failed, int Skipped, int Total, double DurationMinutes);

@@ -6,6 +6,7 @@ on:
       - main
       - 'release/**'
 
+
   push:
     branches:
       - main
@@ -45,7 +46,6 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         shell: pwsh
         env:
-          # Use the pull request head SHA instead of GITHUB_SHA (which can be a merge commit)
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.number }}
         run: |
@@ -82,17 +82,11 @@ jobs:
     steps:
       - name: Fail if any of the dependent jobs failed
         # Don't fail if the workflow is being skipped.
-        # Check skip_workflow on all declared dependencies. Workflows without
-        # skip_workflow outputs (e.g., tests, build_cli_archives) evaluate to
-        # empty string, so the check still works ('!= true' is true for empty).
-        #
-        # For others 'skipped' can be when a transitive dependency fails and the dependent job gets
-        # 'skipped'. For example, one of setup_* jobs failing and the Integration test jobs getting
-        # 'skipped'
+        # When Prepare for CI decides nothing relevant changed, the Tests job
+        # is intentionally skipped and should not cause a failure.
         if: >-
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
-              needs.tests.outputs.skip_workflow != 'true' &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                contains(needs.*.result, 'skipped')) }}

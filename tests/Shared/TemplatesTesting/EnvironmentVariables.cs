@@ -17,5 +17,7 @@ public static class EnvironmentVariables
     public static readonly string? TestScenario                    = Environment.GetEnvironmentVariable("TEST_SCENARIO");
     public static readonly string? DefaultTFMForTesting            = Environment.GetEnvironmentVariable("DEFAULT_TFM_FOR_TESTING");
     public static readonly string? TestRootPath                    = Environment.GetEnvironmentVariable("DEV_TEMP");
-    public static readonly bool    RunOnlyBasicBuildTemplatesTests = Environment.GetEnvironmentVariable("RunOnlyBasicBuildTemplateTests") is "true";
+    public static readonly bool    ConditionalSelectionRunOnlyBasicBuildTemplateScenarios = Environment.GetEnvironmentVariable("ConditionalSelectionRunOnlyBasicBuildTemplateScenarios") is "true";
+    public static readonly bool    RunOnlyBasicBuildTemplatesTests = Environment.GetEnvironmentVariable("RunOnlyBasicBuildTemplateTests") is "true"
+        || ConditionalSelectionRunOnlyBasicBuildTemplateScenarios;
 }

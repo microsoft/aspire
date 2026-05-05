@@ -220,6 +220,31 @@ public class ExpandTestMatrixGitHubTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task PreservesEnablePlaywrightInstall()
+    {
+        var entry = TestDataBuilder.CreateMatrixEntry(
+            name: "TemplateTests",
+            projectName: "Aspire.Templates.Tests",
+            testProjectPath: "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj",
+            enablePlaywrightInstall: true,
+            supportedOSes: ["linux"]);
+
+        var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
+        TestDataBuilder.CreateCanonicalMatrixJson(canonicalMatrix, tests: [entry]);
+
+        var outputFile = Path.Combine(_tempDir.Path, "expanded.json");
+
+        var result = await RunScript(canonicalMatrix, outputMatrixFile: outputFile);
+
+        result.EnsureSuccessful();
+
+        var expanded = ParseGitHubMatrix(outputFile);
+        Assert.Single(expanded.Include);
+        Assert.True(expanded.Include[0].Properties.GetValueOrDefault("enablePlaywrightInstall"));
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task PreservesAllEntryProperties()
     {
         var entry = TestDataBuilder.CreateMatrixEntry(
@@ -540,6 +565,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             shortName: "CliE2E",
             requiresNugets: true,
             requiresCliArchive: true,
+            enablePlaywrightInstall: true,
             supportedOSes: ["linux"]);
 
         // Run build-test-matrix.ps1
@@ -604,6 +630,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         Assert.Single(cliE2eEntries);
         Assert.Equal("ubuntu-latest", cliE2eEntries[0].RunsOn);
         Assert.True(cliE2eEntries[0].Properties.GetValueOrDefault("requiresCliArchive"));
+        Assert.True(cliE2eEntries[0].Properties.GetValueOrDefault("enablePlaywrightInstall"));
 
         // Total no-nugets: 3 + 6 = 9, Total nugets: 1 (linux only), Total cli-archive: 1
         Assert.Equal(9, allNoNugets.Length);

@@ -1,0 +1,42 @@
+{
+  "$schema": "./test-selection-rules.schema.json",
+
+  "ignorePaths": [
+    "**"
+  ],
+
+  "triggerAllPaths": [],
+
+  "testProjectPatterns": {
+    "include": ["tests/**/*.Tests.csproj"],
+    "exclude": ["tests/testproject/**", "tests/**/TestFixtures/**", "tests/TestingAppHost1/**"]
+  },
+
+  "sourceToTestMappings": [
+    {
+      "source": "src/Aspire.ProjectTemplates/**",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "tests/Aspire.Templates.Tests/**",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "tests/Shared/TemplatesTesting/**",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    }
+  ],
+
+  "packageOrArchiveProducingProjects": [],
+
+  "categories": {
+    "integrations": {
+      "description": "Template-focused integration test coverage",
+      "triggerPaths": [
+        "src/Aspire.ProjectTemplates/**",
+        "tests/Aspire.Templates.Tests/**",
+        "tests/Shared/TemplatesTesting/**"
+      ]
+    }
+  }
+}

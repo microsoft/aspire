@@ -177,6 +177,21 @@ public class SplitTestMatrixByDepsTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task FailsWithHelpfulErrorForInvalidIncludeType()
+    {
+        const string matrixJson = """
+            {"include":"oops"}
+            """;
+
+        var result = await RunScript(allTestsMatrix: matrixJson);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Matrix 'all_tests' has an invalid 'include' value of type", result.Output);
+        Assert.Contains("System.String", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task AllOutputKeysAlwaysPresent()
     {
         var matrixJson = BuildMatrixJson(

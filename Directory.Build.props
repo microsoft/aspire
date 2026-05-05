@@ -43,6 +43,21 @@
     <NoWarn>$(NoWarn);xUnit1051;NU1510;ASPIREATS001</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <ConditionalSelectionRunAll Condition="'$(ConditionalSelectionRunAll)' == ''">false</ConditionalSelectionRunAll>
+    <ConditionalSelectionIsActive Condition="'$(ConditionalSelectionIsActive)' == ''">false</ConditionalSelectionIsActive>
+    <ConditionalSelectionIsActive Condition="'$(ConditionalSelectionRunAll)' == 'true' or '$(DirectlyAffectedTestProjects)' != ''">true</ConditionalSelectionIsActive>
+
+    <_NormalizedCurrentProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(MSBuildThisFileDirectory)', '').Replace('\','/'))</_NormalizedCurrentProjectPath>
+    <_NormalizedCurrentProjectPath Condition="$(_NormalizedCurrentProjectPath.StartsWith('/')) or $(_NormalizedCurrentProjectPath.StartsWith('\\'))">$(_NormalizedCurrentProjectPath.Substring(1))</_NormalizedCurrentProjectPath>
+    <_NormalizedDirectlyAffectedTestProjects Condition="'$(DirectlyAffectedTestProjects)' != ''">$([System.String]::Copy('$(DirectlyAffectedTestProjects)').Replace('\','/'))</_NormalizedDirectlyAffectedTestProjects>
+    <_DelimitedDirectlyAffectedTestProjects Condition="'$(_NormalizedDirectlyAffectedTestProjects)' != ''">;$(_NormalizedDirectlyAffectedTestProjects);</_DelimitedDirectlyAffectedTestProjects>
+    <IsDirectlyAffectedProject>false</IsDirectlyAffectedProject>
+    <IsDirectlyAffectedProject Condition="'$(_DelimitedDirectlyAffectedTestProjects)' != '' and $(_DelimitedDirectlyAffectedTestProjects.Contains(';$(_NormalizedCurrentProjectPath);'))">true</IsDirectlyAffectedProject>
+    <ConditionalSelectionRunOnlyBasicBuildTemplateScenarios Condition="'$(ConditionalSelectionRunOnlyBasicBuildTemplateScenarios)' == ''">false</ConditionalSelectionRunOnlyBasicBuildTemplateScenarios>
+    <ConditionalSelectionRunOnlyBasicBuildTemplateScenarios Condition="'$(MSBuildProjectName)' == 'Aspire.Templates.Tests' and '$(ConditionalSelectionIsActive)' == 'true' and '$(ConditionalSelectionRunAll)' != 'true' and '$(IsDirectlyAffectedProject)' != 'true'">true</ConditionalSelectionRunOnlyBasicBuildTemplateScenarios>
+  </PropertyGroup>
+
   <!-- OS/Architecture properties for local development resources -->
   <PropertyGroup>
     <BuildOs Condition="$([MSBuild]::IsOsPlatform('Linux'))">linux</BuildOs>

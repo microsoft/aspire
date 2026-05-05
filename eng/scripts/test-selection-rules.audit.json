@@ -1,0 +1,134 @@
+{
+  "$schema": "./test-selection-rules.schema.json",
+
+  "ignorePaths": [
+    ".editorconfig",
+    ".gitignore",
+    "**/*.md",
+    "docs/**",
+    "eng/pipelines/**",
+    "eng/test-configuration.json",
+    "eng/testing/**",
+    ".github/workflows/**",
+    ".github/actions/**",
+    ".github/instructions/**",
+    ".github/skills/**",
+    "tests/agent-scenarios/**",
+    "eng/scripts/test-selection-rules.schema.json"
+  ],
+
+  "triggerAllPaths": [
+    "global.json",
+    "Directory.Build.props",
+    "Directory.Build.targets",
+    "Directory.Packages.props",
+    "NuGet.config",
+    "tests/Shared/**",
+    "*.sln",
+    "*.slnx",
+    "src/Aspire.Hosting/**"
+  ],
+
+  "testProjectPatterns": {
+    "include": ["tests/**/*.Tests.csproj"],
+    "exclude": ["tests/testproject/**", "tests/**/TestFixtures/**", "tests/TestingAppHost1/**"]
+  },
+
+  "sourceToTestMappings": [
+    {
+      "source": "playground/**",
+      "test": "tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj"
+    },
+    {
+      "source": "src/Aspire.ProjectTemplates/**",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "tests/Aspire.Templates.Tests/**",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "tests/Shared/**",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "tests/workloads.proj",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "tests/Directory.Build.props",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "tests/Directory.Build.targets",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "Directory.Build.props",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "Directory.Build.targets",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "eng/Versions.props",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    },
+    {
+      "source": "global.json",
+      "test": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+    }
+  ],
+
+  "packageOrArchiveProducingProjects": [
+    "eng/clipack/**"
+  ],
+
+  "categories": {
+    "cli_e2e": {
+      "description": "CLI end-to-end tests",
+      "triggerPaths": [
+        "src/Aspire.Cli/**",
+        "eng/clipack/**",
+        "tests/Aspire.Cli.EndToEnd.Tests/**"
+      ]
+    },
+
+    "extension": {
+      "description": "VS Code extension tests",
+      "triggerPaths": [
+        "extension/**"
+      ]
+    },
+
+    "polyglot": {
+      "description": "Polyglot SDK validation tests",
+      "triggerPaths": [
+        ".github/workflows/polyglot-validation/**",
+        ".github/workflows/polyglot-validation.yml"
+      ]
+    },
+
+    "integrations": {
+      "description": "Integration tests for components, dashboard, and hosting extensions",
+      "triggerPaths": [
+        "src/Aspire.Dashboard/**",
+        "src/Aspire.Hosting.*/**",
+        "src/Aspire.*/**",
+        "src/Components/**",
+        "src/Shared/**",
+        "src/Vendoring/**",
+        "tests/Aspire.*.Tests/**"
+      ],
+      "excludePaths": [
+        "src/Aspire.ProjectTemplates/**",
+        "src/Aspire.Cli/**",
+        "src/Aspire.Hosting/**",
+        "tests/Aspire.Templates.Tests/**",
+        "tests/Aspire.Cli.EndToEnd.Tests/**",
+        "tests/Aspire.EndToEnd.Tests/**"
+      ]
+    }
+  }
+}

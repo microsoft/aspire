@@ -64,7 +64,7 @@
           WorkingDirectory="$(_TargetDir)"
           IgnoreExitCode="true"
           Timeout="$(_TestTimeout)"
-          EnvironmentVariables="DOTNET_ROOT=$(DotNetRoot);DOTNET_ROOT_X86=$(DotNetRoot)x86"
+          EnvironmentVariables="DOTNET_ROOT=$(DotNetRoot);DOTNET_ROOT_X86=$(DotNetRoot)x86;ConditionalSelectionRunOnlyBasicBuildTemplateScenarios=$(ConditionalSelectionRunOnlyBasicBuildTemplateScenarios)"
           ContinueOnError="WarnAndContinue">
       <Output TaskParameter="ExitCode" PropertyName="_TestErrorCode" />
     </Exec>

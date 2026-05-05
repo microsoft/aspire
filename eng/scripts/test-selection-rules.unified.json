@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "description": "Draft unified rules model for conditional test selection.",
+  "ignore": {
+    "globs": [
+      ".editorconfig",
+      ".gitignore",
+      "**/*.md",
+      "docs/**",
+      "eng/pipelines/**",
+      "eng/test-configuration.json",
+      "eng/testing/**",
+      "eng/scripts/test-selection-rules.json",
+      "eng/scripts/test-selection-rules.schema.json",
+      "eng/scripts/test-selection-rules.audit.json",
+      "eng/scripts/test-selection-rules.unified.json",
+      "eng/scripts/test-selection-rules.hybrid.json",
+      ".github/actions/**",
+      ".github/instructions/**",
+      ".github/skills/**",
+      "tests/agent-scenarios/**",
+      "tests/Aspire.Infrastructure.Tests/**",
+      "src/Grafana/**",
+      "src/Schema/**"
+    ],
+    "regexes": [
+      "^\\.github/workflows/(?!polyglot-validation(?:\\.yml|/)).*$"
+    ],
+    "tagsWhenIgnoredOnly": [
+      "ignored_only"
+    ]
+  },
+  "fallbacks": {
+    "triggerAll": {
+      "paths": [
+        "global.json",
+        "Directory.Build.props",
+        "Directory.Build.targets",
+        "Directory.Packages.props",
+        "NuGet.config",
+        "tests/Directory.Build.props",
+        "tests/Directory.Build.targets",
+        "*.sln",
+        "*.slnx",
+        "src/Aspire.Hosting/**"
+      ],
+      "tags": [
+        "run_all",
+        "critical_path"
+      ]
+    },
+    "unmatched": {
+      "mode": "run_all",
+      "tags": [
+        "run_all",
+        "unmatched_fallback"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "id": "template-explicit",
+      "description": "Template paths explicitly opt into Aspire.Templates.Tests.",
+      "include": [
+        "src/Aspire.ProjectTemplates/**",
+        "tests/Aspire.Templates.Tests/**",
+        "tests/Shared/TemplatesTesting/**",
+        "tests/workloads.proj"
+      ],
+      "tags": [
+        "templates"
+      ],
+      "projects": [
+        {
+          "path": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj",
+          "skipWhenRunAll": true
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "description": "CLI changes select CLI E2E coverage and emit the cli tag.",
+      "include": [
+        "src/Aspire.Cli/**",
+        "eng/clipack/**",
+        "tests/Aspire.Cli.EndToEnd.Tests/**"
+      ],
+      "tags": [
+        "cli"
+      ],
+      "projects": [
+        {
+          "path": "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj"
+        }
+      ]
+    },
+    {
+      "id": "extension",
+      "description": "Extension paths emit the extension tag for workflow consumers.",
+      "include": [
+        "extension/**"
+      ],
+      "tags": [
+        "extension"
+      ]
+    },
+    {
+      "id": "polyglot",
+      "description": "Polyglot workflow paths emit the polyglot tag.",
+      "include": [
+        ".github/workflows/polyglot-validation/**",
+        ".github/workflows/polyglot-validation.yml"
+      ],
+      "tags": [
+        "polyglot"
+      ]
+    },
+    {
+      "id": "aspire-named",
+      "description": "Simple named mapping for Aspire sources and matching test projects.",
+      "include": [
+        "src/Aspire.{name}/**",
+        "src/Components/Aspire.{name}/**",
+        "tests/Aspire.{name}.Tests/**"
+      ],
+      "exclude": [
+        "src/Aspire.ProjectTemplates/**",
+        "src/Aspire.Cli/**",
+        "src/Aspire.Hosting/**",
+        "tests/Aspire.Templates.Tests/**",
+        "tests/Aspire.Cli.EndToEnd.Tests/**",
+        "tests/Aspire.EndToEnd.Tests/**"
+      ],
+      "tags": [
+        "integrations"
+      ],
+      "projectTemplates": [
+        {
+          "path": "tests/Aspire.{name}.Tests/Aspire.{name}.Tests.csproj",
+          "ifExists": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "description": "Draft clean hybrid rules model for conditional test selection.",
+  "ignore": {
+    "globs": [
+      ".editorconfig",
+      ".gitignore",
+      "**/*.md",
+      "docs/**",
+      "eng/pipelines/**",
+      "eng/test-configuration.json",
+      "eng/testing/**",
+      ".github/actions/**",
+      ".github/instructions/**",
+      ".github/skills/**",
+      "tests/agent-scenarios/**"
+    ],
+    "regexes": [
+      "^\\.github/workflows/(?!polyglot-validation(?:\\.yml|/)).*$"
+    ],
+    "tagsWhenIgnoredOnly": [
+      "ignored_only"
+    ]
+  },
+  "affectedProjectDiscovery": {
+    "include": [
+      "tests/**/*.Tests.csproj"
+    ],
+    "exclude": [
+      "tests/testproject/**",
+      "tests/**/TestFixtures/**",
+      "tests/TestingAppHost1/**"
+    ]
+  },
+  "projectPolicies": {
+    "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj": {
+      "runAllBehavior": "explicit_only"
+    }
+  },
+  "fallbacks": {
+    "triggerAll": {
+      "globs": [
+        "global.json",
+        "Directory.Build.props",
+        "Directory.Build.targets",
+        "Directory.Packages.props",
+        "NuGet.config",
+        "*.sln",
+        "*.slnx",
+        "src/Aspire.Hosting/**"
+      ],
+      "regexes": [],
+      "tags": [
+        "run_all",
+        "critical_path"
+      ]
+    },
+    "unmatched": {
+      "mode": "run_all",
+      "tags": [
+        "run_all",
+        "unmatched_fallback"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "id": "templates-explicit",
+      "description": "Template sources and template test infrastructure opt into Aspire.Templates.Tests only when directly touched.",
+      "include": [
+        "src/Aspire.ProjectTemplates/**",
+        "tests/Aspire.Templates.Tests/**",
+        "tests/Shared/TemplatesTesting/**",
+        "tests/workloads.proj",
+        "tests/Directory.Build.props",
+        "tests/Directory.Build.targets",
+        "Directory.Build.props",
+        "Directory.Build.targets",
+        "eng/Versions.props",
+        "global.json"
+      ],
+      "includeRegexes": [],
+      "exclude": [],
+      "excludeRegexes": [],
+      "tags": [
+        "templates"
+      ],
+      "projects": [
+        {
+          "path": "tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"
+        }
+      ],
+      "projectTemplates": []
+    },
+    {
+      "id": "extension-job",
+      "description": "VS Code extension changes emit the extension tag for workflow-controlled jobs.",
+      "include": [
+        "extension/**"
+      ],
+      "includeRegexes": [],
+      "exclude": [],
+      "excludeRegexes": [],
+      "tags": [
+        "extension"
+      ],
+      "projects": [],
+      "projectTemplates": []
+    },
+    {
+      "id": "polyglot-job",
+      "description": "Polyglot workflow changes emit the polyglot tag for workflow-controlled jobs.",
+      "include": [
+        ".github/workflows/polyglot-validation/**",
+        ".github/workflows/polyglot-validation.yml"
+      ],
+      "includeRegexes": [],
+      "exclude": [],
+      "excludeRegexes": [],
+      "tags": [
+        "polyglot"
+      ],
+      "projects": [],
+      "projectTemplates": []
+    },
+    {
+      "id": "aspire-named-tests",
+      "description": "Simple Aspire.{name} and Components/Aspire.{name} mapping with direct test-project resolution.",
+      "include": [
+        "src/Aspire.{name}/**",
+        "src/Components/Aspire.{name}/**",
+        "tests/Aspire.{name}.Tests/**"
+      ],
+      "includeRegexes": [],
+      "exclude": [
+        "src/Aspire.ProjectTemplates/**",
+        "src/Aspire.Cli/**",
+        "src/Aspire.Hosting/**",
+        "tests/Aspire.Templates.Tests/**",
+        "tests/Aspire.Cli.EndToEnd.Tests/**",
+        "tests/Aspire.EndToEnd.Tests/**",
+        "tests/Aspire.Deployment.EndToEnd.Tests/**"
+      ],
+      "excludeRegexes": [],
+      "tags": [
+        "integrations"
+      ],
+      "projects": [],
+      "projectTemplates": [
+        {
+          "path": "tests/Aspire.{name}.Tests/Aspire.{name}.Tests.csproj",
+          "ifExists": true
+        }
+      ]
+    }
+  ]
+}

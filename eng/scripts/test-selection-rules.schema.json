@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/dotnet/aspire/eng/scripts/test-selection-rules.schema.json",
+  "title": "Test Selection Rules",
+  "description": "Configuration for test selection based on changed paths",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON schema reference"
+    },
+    "ignorePaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns for files that should be completely ignored (no test triggers, no fallback)"
+    },
+    "triggerAllPaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns for critical files - if any match, ALL tests run"
+    },
+    "testProjectPatterns": {
+      "$ref": "#/definitions/includeExcludePatterns",
+      "description": "Patterns to identify test projects from affected project paths"
+    },
+    "sourceToTestMappings": {
+      "type": "array",
+      "description": "Mappings from source file patterns to test project patterns",
+      "items": {
+        "$ref": "#/definitions/sourceToTestMapping"
+      }
+    },
+    "packageOrArchiveProducingProjects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Glob patterns for projects that produce NuGet packages or archives but may not have IsPackable=true in a csproj (e.g. eng/clipack/**)"
+    },
+    "categories": {
+      "type": "object",
+      "description": "Test categories with their trigger rules",
+      "additionalProperties": {
+        "$ref": "#/definitions/category"
+      }
+    }
+  },
+  "required": ["categories"],
+  "definitions": {
+    "includeExcludePatterns": {
+      "type": "object",
+      "description": "Include/exclude pattern configuration",
+      "properties": {
+        "include": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns to include"
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns to exclude from matches"
+        }
+      },
+      "required": ["include"]
+    },
+    "sourceToTestMapping": {
+      "type": "object",
+      "description": "Maps source paths to test projects using pattern substitution",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Glob pattern with {name} placeholder for source files"
+        },
+        "test": {
+          "type": "string",
+          "description": "Pattern with {name} placeholder for test project path"
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns for paths to exclude from this mapping"
+        }
+      },
+      "required": ["source", "test"]
+    },
+    "category": {
+      "type": "object",
+      "description": "A test category configuration",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the category"
+        },
+        "triggerPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Glob patterns - if any match, category is triggered"
+        },
+        "excludePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Glob patterns - matching files are excluded from triggering this category"
+        }
+      }
+    }
+  }
+}

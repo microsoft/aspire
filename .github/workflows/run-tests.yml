@@ -30,6 +30,14 @@ on:
         required: false
         type: string
         default: '{}'
+      conditionalSelectionRunAll:
+        required: false
+        type: string
+        default: 'false'
+      directlyAffectedTestProjects:
+        required: false
+        type: string
+        default: ''
       os:
         required: false
         type: string
@@ -48,6 +56,8 @@ jobs:
     name: ${{ inputs.testShortName }} (${{ inputs.os }})
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      ConditionalSelectionRunAll: ${{ inputs.conditionalSelectionRunAll }}
+      DirectlyAffectedTestProjects: ${{ inputs.directlyAffectedTestProjects }}
       # Disable MSBuild terminal logger via env var instead of -tl:false on the command line.
       # In MTP native runner mode, -tl:false is forwarded to the test host which doesn't recognize it.
       MSBUILDTERMINALLOGGER: "false"
@@ -260,6 +270,8 @@ jobs:
           -ci
           -build
           -projects ${{ env.TEST_PROJECT_PATH }}
+          /p:ConditionalSelectionRunAll=${{ inputs.conditionalSelectionRunAll }}
+          /p:DirectlyAffectedTestProjects="${{ inputs.directlyAffectedTestProjects }}"
           ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }}
           ${{ inputs.versionOverrideArg }}
 
@@ -269,6 +281,8 @@ jobs:
           ${{ env.BUILD_SCRIPT }} -restore -ci -build -projects ${{ env.TEST_PROJECT_PATH }}
           /p:PrepareForHelix=true
           /p:ArchiveTests=true
+          /p:ConditionalSelectionRunAll=${{ inputs.conditionalSelectionRunAll }}
+          /p:DirectlyAffectedTestProjects="${{ inputs.directlyAffectedTestProjects }}"
           /bl:${{ github.workspace }}/artifacts/log/Debug/BuildAndArchive.binlog
           ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }}
           ${{ inputs.versionOverrideArg }}
@@ -448,6 +462,8 @@ jobs:
           ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
             /p:ContinuousIntegrationBuild=true \
             /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
+            /p:ConditionalSelectionRunAll=${{ inputs.conditionalSelectionRunAll }} \
+            /p:DirectlyAffectedTestProjects="${{ inputs.directlyAffectedTestProjects }}" \
             -bl:${{ github.workspace }}/testresults/test.binlog \
             --no-launch-profile \
             --no-restore \
@@ -500,6 +516,8 @@ jobs:
             & ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} `
               /p:ContinuousIntegrationBuild=true `
               /p:TrxFileNamePrefix="${{ inputs.testShortName }}" `
+              /p:ConditionalSelectionRunAll=${{ inputs.conditionalSelectionRunAll }} `
+              /p:DirectlyAffectedTestProjects="${{ inputs.directlyAffectedTestProjects }}" `
               -bl:${{ github.workspace }}/testresults/test.binlog `
               --no-launch-profile `
               --no-restore `

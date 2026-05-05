@@ -1,0 +1,10 @@
+<Project>
+  <!-- Block inheritance from parent Directory.Build.targets and keep these fixture projects from building. -->
+  <Target Name="Build" />
+  <Target Name="Rebuild" />
+  <Target Name="Clean" />
+  <Target Name="Restore" />
+  <Target Name="Pack" />
+  <Target Name="Publish" />
+  <Target Name="Test" />
+</Project>

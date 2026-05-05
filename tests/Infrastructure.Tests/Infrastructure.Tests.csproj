@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsTestProject>true</IsTestProject>
@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+    <ProjectReference Include="..\..\tools\TestSelector\TestSelector.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="TestSelector\TestFixtures\**\*" CopyToOutputDirectory="PreserveNewest" TargetPath="TestFixtures\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\tools\GenerateCITimeline\GitHubApi.cs" Link="CITimeline\GitHubApi.cs" />
     <Compile Include="..\..\tools\GenerateCITimeline\TimelineRenderer.cs" Link="CITimeline\TimelineRenderer.cs" />
   </ItemGroup>

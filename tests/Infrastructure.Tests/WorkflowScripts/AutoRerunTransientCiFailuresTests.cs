@@ -793,6 +793,22 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     }
 
     [Fact]
+    public async Task TestsWorkflowStandaloneConditionalJobsUseCategoryGuards()
+    {
+        string workflowText = await ReadRepoFileAsync(".github/workflows/tests.yml");
+
+        string polyglotJob = GetWorkflowJobBlock(workflowText, "polyglot_validation");
+        Assert.Contains("needs.setup_for_tests.outputs.run_all == 'true' ||", polyglotJob);
+        Assert.Contains("needs.setup_for_tests.outputs.run_polyglot == 'true'", polyglotJob);
+        Assert.DoesNotContain("github.event_name == 'pull_request' ||", polyglotJob);
+
+        string extensionJob = GetWorkflowJobBlock(workflowText, "extension_tests_win");
+        Assert.Contains("needs.setup_for_tests.outputs.run_all == 'true' ||", extensionJob);
+        Assert.Contains("needs.setup_for_tests.outputs.run_extension == 'true'", extensionJob);
+        Assert.DoesNotContain("github.event_name == 'pull_request' ||", extensionJob);
+    }
+
+    [Fact]
     [RequiresTools(["node"])]
     public async Task WriteAnalysisSummaryUsesExplicitOutcomeHeadingAndClickableAnalyzedRunLink()
     {
@@ -2086,6 +2102,16 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    private static string GetWorkflowJobBlock(string workflowText, string jobName)
+    {
+        int start = workflowText.IndexOf($"\n  {jobName}:\n", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Could not find workflow job '{jobName}'.");
+
+        int nextJob = workflowText.IndexOf("\n\n  ", start + 1, StringComparison.Ordinal);
+
+        return nextJob >= 0 ? workflowText[start..nextJob] : workflowText[start..];
+    }
 
     private sealed class HarnessRequest
     {

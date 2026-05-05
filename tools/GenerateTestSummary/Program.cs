@@ -13,13 +13,19 @@ var dirPathOrTrxFilePathArgument = new Argument<string>("dirPathOrTrxFilePath");
 var outputOption = new Option<string>("--output", "-o") { Description = "Output file path" };
 var combinedSummaryOption = new Option<bool>("--combined", "-c") { Description = "Generate combined summary report" };
 var urlOption = new Option<string>("--url", "-u") { Description = "URL for test links" };
+var nugetBuildMinutesOption = new Option<double>("--nuget-build-minutes") { Description = "Wall-clock minutes for the NuGet package build step" };
+var cliBuildMinutesOption = new Option<double>("--cli-build-minutes") { Description = "Wall-clock minutes for the CLI native archive build step" };
+var testDepMapOption = new Option<string>("--test-dep-map") { Description = "Path to JSON file mapping test shortnames to dependency buckets" };
 
 var rootCommand = new RootCommand
 {
     dirPathOrTrxFilePathArgument,
     outputOption,
     combinedSummaryOption,
-    urlOption
+    urlOption,
+    nugetBuildMinutesOption,
+    cliBuildMinutesOption,
+    testDepMapOption
 };
 
 rootCommand.SetAction(result =>
@@ -33,6 +39,9 @@ rootCommand.SetAction(result =>
 
     var combinedSummary = result.GetValue<bool>(combinedSummaryOption);
     var url = result.GetValue<string>(urlOption);
+    var nugetBuildMinutes = result.GetValue<double>(nugetBuildMinutesOption);
+    var cliBuildMinutes = result.GetValue<double>(cliBuildMinutesOption);
+    var testDepMapPath = result.GetValue<string>(testDepMapOption);
 
     if (combinedSummary && !string.IsNullOrEmpty(url))
     {
@@ -40,10 +49,34 @@ rootCommand.SetAction(result =>
         return;
     }
 
+    // Load test dependency map if provided
+    Dictionary<string, string>? testDepMap = null;
+    if (!string.IsNullOrEmpty(testDepMapPath))
+    {
+        if (!File.Exists(testDepMapPath))
+        {
+            Console.WriteLine($"Error: Test dependency map file not found: {testDepMapPath}");
+            return;
+        }
+
+        try
+        {
+            testDepMap = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(
+                File.ReadAllText(testDepMapPath));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: Failed to parse test dependency map: {ex.Message}");
+            return;
+        }
+    }
+
+    var infraTiming = new InfraTimingInfo(nugetBuildMinutes, cliBuildMinutes, testDepMap);
+
     string report;
     if (combinedSummary)
     {
-        report = TestSummaryGenerator.CreateCombinedTestSummaryReport(dirPathOrTrxFilePath);
+        report = TestSummaryGenerator.CreateCombinedTestSummaryReport(dirPathOrTrxFilePath, infraTiming);
     }
     else
     {
@@ -110,3 +143,21 @@ rootCommand.SetAction(result =>
 });
 
 return rootCommand.Parse(args).Invoke();
+
+/// <summary>
+/// Holds infrastructure build timing and test dependency classification data.
+/// </summary>
+/// <param name="NugetBuildMinutes">Wall-clock minutes for the NuGet package build step.</param>
+/// <param name="CliBuildMinutes">Wall-clock minutes for the CLI native archive build step.</param>
+/// <param name="TestDepMap">Maps test shortnames to dependency buckets (no_nugets, requires_nugets, requires_cli_archive).</param>
+internal sealed record InfraTimingInfo(double NugetBuildMinutes, double CliBuildMinutes, Dictionary<string, string>? TestDepMap)
+{
+    public bool HasData => TestDepMap is not null && TestDepMap.Count > 0 && (NugetBuildMinutes > 0 || CliBuildMinutes > 0);
+
+    public double GetInfraCostMinutes(string depBucket) => depBucket switch
+    {
+        "requires_cli_archive" => NugetBuildMinutes + CliBuildMinutes,
+        "requires_nugets" => NugetBuildMinutes,
+        _ => 0
+    };
+}

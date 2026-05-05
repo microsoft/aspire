@@ -16,19 +16,326 @@ jobs:
     name: Setup for tests
     runs-on: ubuntu-latest
     outputs:
-      tests_matrix_no_nugets: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}
-      tests_matrix_no_nugets_overflow: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets_overflow }}
-      tests_matrix_requires_nugets_linux: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_linux }}
-      tests_matrix_requires_nugets_windows: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}
-      tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
-      tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
+      run_all: ${{ steps.detect.outputs.run_all }}
+      run_extension: ${{ steps.detect.outputs.run_extension }}
+      run_polyglot: ${{ steps.detect.outputs.run_polyglot }}
+      affected_test_projects: ${{ steps.detect.outputs.affected_test_projects }}
+      tests_matrix_no_nugets: ${{ steps.filter_matrix.outputs.tests_matrix_no_nugets }}
+      tests_matrix_no_nugets_overflow: ${{ steps.filter_matrix.outputs.tests_matrix_no_nugets_overflow }}
+      tests_matrix_requires_nugets_linux: ${{ steps.filter_matrix.outputs.tests_matrix_requires_nugets_linux }}
+      tests_matrix_requires_nugets_windows: ${{ steps.filter_matrix.outputs.tests_matrix_requires_nugets_windows }}
+      tests_matrix_requires_nugets_macos: ${{ steps.filter_matrix.outputs.tests_matrix_requires_nugets_macos }}
+      tests_matrix_requires_cli_archive: ${{ steps.filter_matrix.outputs.tests_matrix_requires_cli_archive }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Restore local SDK
+        if: ${{ github.event_name == 'pull_request' }}
+        run: ./restore.sh
+
+      - name: Install dotnet-affected
+        if: ${{ github.event_name == 'pull_request' }}
+        run: ./dotnet.sh tool install --global dotnet-affected --version 6.2.0-preview-1
+
+      - name: Evaluate changed paths (active selector)
+        id: detect_active_raw
+        continue-on-error: true
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            mkdir -p "${{ github.workspace }}/artifacts/test-selection"
+            echo "::group::Running active test selector"
+            ./dotnet.sh run --project tools/TestSelector/TestSelector.csproj -- \
+              --solution Aspire.slnx \
+              --config eng/scripts/test-selection-rules.json \
+              --from "${{ github.event.pull_request.base.sha }}" \
+              --to "${{ github.event.pull_request.head.sha }}" \
+              --output "${{ github.workspace }}/artifacts/test-selection/selector-active.json" \
+              --github-output \
+              --verbose
+            echo "::endgroup::"
+          else
+            echo "::notice::Non-PR event (${{ github.event_name }}) - running all tests"
+            echo "run_all=true" >> $GITHUB_OUTPUT
+            echo "run_cli_e2e=true" >> $GITHUB_OUTPUT
+            echo "run_integrations=true" >> $GITHUB_OUTPUT
+            echo "run_extension=true" >> $GITHUB_OUTPUT
+            echo "run_polyglot=true" >> $GITHUB_OUTPUT
+            echo "affected_test_projects=[]" >> $GITHUB_OUTPUT
+            echo "selection_reason=non_pr_event" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Evaluate changed paths (audit selector)
+        id: detect_audit_raw
+        continue-on-error: true
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            mkdir -p "${{ github.workspace }}/artifacts/test-selection"
+            echo "::group::Running audit test selector"
+            ./dotnet.sh run --project tools/TestSelector/TestSelector.csproj -- \
+              --solution Aspire.slnx \
+              --config eng/scripts/test-selection-rules.audit.json \
+              --non-applying-paths "eng/scripts/test-selection-rules.audit.json" \
+              --from "${{ github.event.pull_request.base.sha }}" \
+              --to "${{ github.event.pull_request.head.sha }}" \
+              --output "${{ github.workspace }}/artifacts/test-selection/selector-audit.json" \
+              --github-output \
+              --verbose
+            echo "::endgroup::"
+          else
+            echo "run_all=true" >> $GITHUB_OUTPUT
+            echo "run_cli_e2e=true" >> $GITHUB_OUTPUT
+            echo "run_integrations=true" >> $GITHUB_OUTPUT
+            echo "run_extension=true" >> $GITHUB_OUTPUT
+            echo "run_polyglot=true" >> $GITHUB_OUTPUT
+            echo "affected_test_projects=[]" >> $GITHUB_OUTPUT
+            echo "selection_reason=non_pr_event" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply conditional scope
+        id: detect
+        shell: bash
+        env:
+          ACTIVE_SELECTION_REASON: ${{ steps.detect_active_raw.outputs.selection_reason }}
+          AUDIT_SELECTION_REASON: ${{ steps.detect_audit_raw.outputs.selection_reason }}
+          ACTIVE_AFFECTED_TEST_PROJECTS_JSON: ${{ steps.detect_active_raw.outputs.affected_test_projects }}
+          AUDIT_AFFECTED_TEST_PROJECTS_JSON: ${{ steps.detect_audit_raw.outputs.affected_test_projects }}
+        run: |
+          normalize_bool() {
+            if [ "$1" = "true" ]; then
+              echo "true"
+            else
+              echo "false"
+            fi
+          }
+
+          normalize_json_array() {
+            if [ -n "$1" ]; then
+              echo "$1"
+            else
+              echo "[]"
+            fi
+          }
+
+          normalize_reason() {
+            if [ -z "$1" ]; then
+              echo "unknown"
+            else
+              printf '%s' "$1" | tr '\r\n' '  ' | sed 's/[[:space:]][[:space:]]*/ /g'
+            fi
+          }
+
+          emit_fallback_banner() {
+            local reason="$1"
+            echo "::error::Selective test scope failed or was bypassed: ${reason}"
+            echo "::warning::IGNORING selective scope and running all tests as a conservative fallback."
+          }
+
+          reason_is_selector_failure() {
+            case "$1" in
+              dotnet-affected\ failed:*)
+                return 0
+                ;;
+              Test\ selector\ failed:*)
+                return 0
+                ;;
+              error)
+                return 0
+                ;;
+              *)
+                return 1
+                ;;
+            esac
+          }
+
+          if [ "${{ steps.detect_active_raw.outcome }}" != "success" ]; then
+            ACTIVE_FAILURE_REASON="$(normalize_reason "$ACTIVE_SELECTION_REASON")"
+            emit_fallback_banner "$ACTIVE_FAILURE_REASON"
+            echo "run_all=true" >> $GITHUB_OUTPUT
+            echo "run_integrations=true" >> $GITHUB_OUTPUT
+            echo "run_cli_e2e=true" >> $GITHUB_OUTPUT
+            echo "run_extension=true" >> $GITHUB_OUTPUT
+            echo "run_polyglot=true" >> $GITHUB_OUTPUT
+            echo "affected_test_projects=[]" >> $GITHUB_OUTPUT
+            echo "default_coverage_projects=[]" >> $GITHUB_OUTPUT
+
+            echo "<details><summary>Test Scope Selection</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "## Test Scope - Fallback Mode" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🚨 Active test selector failed." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**IGNORING selective scope and running all tests.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Failure reason: \`$ACTIVE_FAILURE_REASON\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "## Audit Selector Observation" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              if [ "${{ steps.detect_audit_raw.outcome }}" = "success" ]; then
+                AUDIT_RUN_ALL="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_all }}")"
+                AUDIT_RUN_INTEGRATIONS="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_integrations }}")"
+                AUDIT_RUN_CLI_E2E="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_cli_e2e }}")"
+                AUDIT_RUN_EXTENSION="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_extension }}")"
+                AUDIT_RUN_POLYGLOT="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_polyglot }}")"
+                AUDIT_AFFECTED="$(normalize_json_array "$AUDIT_AFFECTED_TEST_PROJECTS_JSON")"
+                AUDIT_REASON="$(normalize_reason "$AUDIT_SELECTION_REASON")"
+
+                echo "Audit selector still completed and produced observational data." >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "- Reason: \`$AUDIT_REASON\`" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "| Category | Detected | Mode |" >> $GITHUB_STEP_SUMMARY
+                echo "|----------|----------|------|" >> $GITHUB_STEP_SUMMARY
+                echo "| run_all | ${AUDIT_RUN_ALL} | Audit |" >> $GITHUB_STEP_SUMMARY
+                echo "| integrations | ${AUDIT_RUN_INTEGRATIONS} | Audit |" >> $GITHUB_STEP_SUMMARY
+                echo "| cli_e2e | ${AUDIT_RUN_CLI_E2E} | Audit |" >> $GITHUB_STEP_SUMMARY
+                echo "| extension | ${AUDIT_RUN_EXTENSION} | Audit |" >> $GITHUB_STEP_SUMMARY
+                echo "| polyglot | ${AUDIT_RUN_POLYGLOT} | Audit |" >> $GITHUB_STEP_SUMMARY
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "**Audit selector affected test projects:** ${AUDIT_AFFECTED}" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "⚠️ Audit selector did not produce observational data." >> $GITHUB_STEP_SUMMARY
+              fi
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          ACTIVE_RUN_ALL="$(normalize_bool "${{ steps.detect_active_raw.outputs.run_all }}")"
+          ACTIVE_RUN_INTEGRATIONS="$(normalize_bool "${{ steps.detect_active_raw.outputs.run_integrations }}")"
+          ACTIVE_RUN_CLI_E2E="$(normalize_bool "${{ steps.detect_active_raw.outputs.run_cli_e2e }}")"
+          ACTIVE_RUN_EXTENSION="$(normalize_bool "${{ steps.detect_active_raw.outputs.run_extension }}")"
+          ACTIVE_RUN_POLYGLOT="$(normalize_bool "${{ steps.detect_active_raw.outputs.run_polyglot }}")"
+          ACTIVE_AFFECTED="$(normalize_json_array "$ACTIVE_AFFECTED_TEST_PROJECTS_JSON")"
+          ACTIVE_REASON="$(normalize_reason "$ACTIVE_SELECTION_REASON")"
+          DEFAULT_COVERAGE='[]'
+
+          if [ "${ACTIVE_RUN_ALL}" = "true" ] && reason_is_selector_failure "$ACTIVE_REASON"; then
+            emit_fallback_banner "$ACTIVE_REASON"
+          fi
+
+          if [ "${ACTIVE_RUN_ALL}" != "true" ] && [ "${ACTIVE_RUN_INTEGRATIONS}" == "true" ] && [ "${ACTIVE_AFFECTED}" == "[]" ]; then
+            DEFAULT_COVERAGE='["tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"]'
+          fi
+
+          echo "run_all=${ACTIVE_RUN_ALL}" >> $GITHUB_OUTPUT
+          echo "run_integrations=${ACTIVE_RUN_INTEGRATIONS}" >> $GITHUB_OUTPUT
+          echo "run_cli_e2e=${ACTIVE_RUN_CLI_E2E}" >> $GITHUB_OUTPUT
+          echo "run_extension=${ACTIVE_RUN_EXTENSION}" >> $GITHUB_OUTPUT
+          echo "run_polyglot=${ACTIVE_RUN_POLYGLOT}" >> $GITHUB_OUTPUT
+          echo "affected_test_projects=${ACTIVE_AFFECTED}" >> $GITHUB_OUTPUT
+          echo "default_coverage_projects=${DEFAULT_COVERAGE}" >> $GITHUB_OUTPUT
+
+          echo "<details><summary>Test Scope Selection</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Active Test Selection" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${ACTIVE_RUN_ALL}" = "true" ] && reason_is_selector_failure "$ACTIVE_REASON"; then
+            echo "🚨 Selective scope was **not applied** because selector evaluation failed." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**IGNORING selective scope and running all tests.**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Conditional scope is **applied** to category and matrix selection." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Reason: \`$ACTIVE_REASON\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Category | Detected | Applied | Mode |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|----------|---------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| run_all | ${ACTIVE_RUN_ALL} | ${ACTIVE_RUN_ALL} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| integrations | ${ACTIVE_RUN_INTEGRATIONS} | ${ACTIVE_RUN_INTEGRATIONS} | Applied |" >> $GITHUB_STEP_SUMMARY
+          echo "| cli_e2e | ${ACTIVE_RUN_CLI_E2E} | ${ACTIVE_RUN_CLI_E2E} | Applied |" >> $GITHUB_STEP_SUMMARY
+          echo "| extension | ${ACTIVE_RUN_EXTENSION} | ${ACTIVE_RUN_EXTENSION} | Applied |" >> $GITHUB_STEP_SUMMARY
+          echo "| polyglot | ${ACTIVE_RUN_POLYGLOT} | ${ACTIVE_RUN_POLYGLOT} | Applied |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Affected test projects:** ${ACTIVE_AFFECTED}" >> $GITHUB_STEP_SUMMARY
+          echo "**Default coverage test projects:** ${DEFAULT_COVERAGE}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "## Audit Selector Observation" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.detect_audit_raw.outcome }}" = "success" ]; then
+              AUDIT_RUN_ALL="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_all }}")"
+              AUDIT_RUN_INTEGRATIONS="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_integrations }}")"
+              AUDIT_RUN_CLI_E2E="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_cli_e2e }}")"
+              AUDIT_RUN_EXTENSION="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_extension }}")"
+              AUDIT_RUN_POLYGLOT="$(normalize_bool "${{ steps.detect_audit_raw.outputs.run_polyglot }}")"
+              AUDIT_AFFECTED="$(normalize_json_array "$AUDIT_AFFECTED_TEST_PROJECTS_JSON")"
+              AUDIT_REASON="$(normalize_reason "$AUDIT_SELECTION_REASON")"
+
+              echo "The audit selector is **observational only** and does not change execution." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "- Reason: \`$AUDIT_REASON\`" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "| Category | Detected | Mode |" >> $GITHUB_STEP_SUMMARY
+              echo "|----------|----------|------|" >> $GITHUB_STEP_SUMMARY
+              echo "| run_all | ${AUDIT_RUN_ALL} | Audit |" >> $GITHUB_STEP_SUMMARY
+              echo "| integrations | ${AUDIT_RUN_INTEGRATIONS} | Audit |" >> $GITHUB_STEP_SUMMARY
+              echo "| cli_e2e | ${AUDIT_RUN_CLI_E2E} | Audit |" >> $GITHUB_STEP_SUMMARY
+              echo "| extension | ${AUDIT_RUN_EXTENSION} | Audit |" >> $GITHUB_STEP_SUMMARY
+              echo "| polyglot | ${AUDIT_RUN_POLYGLOT} | Audit |" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Audit selector affected test projects:** ${AUDIT_AFFECTED}" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚠️ Audit selector failed and did not contribute observational data." >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+      - name: Show test selection results
+        shell: bash
+        env:
+          AUDIT_SELECTION_REASON: ${{ steps.detect_audit_raw.outputs.selection_reason }}
+          ACTIVE_AFFECTED_TEST_PROJECTS_JSON: ${{ steps.detect.outputs.affected_test_projects }}
+          ACTIVE_DEFAULT_COVERAGE_PROJECTS_JSON: ${{ steps.detect.outputs.default_coverage_projects }}
+          AUDIT_AFFECTED_TEST_PROJECTS_JSON: ${{ steps.detect_audit_raw.outputs.affected_test_projects }}
+        run: |
+          normalize_reason() {
+            if [ -z "$1" ]; then
+              echo "unknown"
+            else
+              printf '%s' "$1" | tr '\r\n' '  ' | sed 's/[[:space:]][[:space:]]*/ /g'
+            fi
+          }
+
+          echo "::group::Active test selection"
+          echo "run_all=${{ steps.detect.outputs.run_all }}"
+          echo "run_integrations=${{ steps.detect.outputs.run_integrations }}"
+          echo "run_cli_e2e=${{ steps.detect.outputs.run_cli_e2e }}"
+          echo "run_extension=${{ steps.detect.outputs.run_extension }}"
+          echo "run_polyglot=${{ steps.detect.outputs.run_polyglot }}"
+          echo "selection_reason=$(normalize_reason "$ACTIVE_SELECTION_REASON")"
+          echo "affected_test_projects=$(normalize_reason "$ACTIVE_AFFECTED_TEST_PROJECTS_JSON")"
+          echo "default_coverage_projects=$(normalize_reason "$ACTIVE_DEFAULT_COVERAGE_PROJECTS_JSON")"
+          echo "::endgroup::"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "::group::Audit test selection"
+            echo "run_all=${{ steps.detect_audit_raw.outputs.run_all }}"
+            echo "run_integrations=${{ steps.detect_audit_raw.outputs.run_integrations }}"
+            echo "run_cli_e2e=${{ steps.detect_audit_raw.outputs.run_cli_e2e }}"
+            echo "run_extension=${{ steps.detect_audit_raw.outputs.run_extension }}"
+            echo "run_polyglot=${{ steps.detect_audit_raw.outputs.run_polyglot }}"
+            echo "selection_reason=$(normalize_reason "$AUDIT_SELECTION_REASON")"
+            echo "affected_test_projects=$(normalize_reason "$AUDIT_AFFECTED_TEST_PROJECTS_JSON")"
+            echo "::endgroup::"
+          fi
 
       - uses: ./.github/actions/enumerate-tests
         id: generate_tests_matrix
         with:
-          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' }}'
+          prepareEnvironment: 'false'
+          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' || steps.detect.outputs.run_all == ''true'' || steps.detect.outputs.run_cli_e2e == ''true'' }}'
 
       - name: Split matrix by dependency type
         id: split_matrix
@@ -36,6 +343,270 @@ jobs:
         run: |
           $splitScript = "${{ github.workspace }}/eng/scripts/split-test-matrix-by-deps.ps1"
           & $splitScript -AllTestsMatrix '${{ steps.generate_tests_matrix.outputs.all_tests }}' -OutputToGitHubEnv
+
+      - name: Filter matrices by test scope
+        id: filter_matrix
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "${{ github.workspace }}/artifacts/test-selection" -Force | Out-Null
+          $filterScript = "${{ github.workspace }}/eng/scripts/filter-test-matrix-by-scope.ps1"
+          $matrices = @{
+            'tests_matrix_no_nugets' = '${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}'
+            'tests_matrix_no_nugets_overflow' = '${{ steps.split_matrix.outputs.tests_matrix_no_nugets_overflow }}'
+            'tests_matrix_requires_nugets_linux' = '${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_linux }}'
+            'tests_matrix_requires_nugets_windows' = '${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}'
+            'tests_matrix_requires_nugets_macos' = '${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}'
+            'tests_matrix_requires_cli_archive' = '${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}'
+          }
+          $runAll = ('${{ steps.detect.outputs.run_all }}' -eq 'true')
+          & $filterScript `
+            -Matrices $matrices `
+            -AffectedProjects '${{ steps.detect.outputs.affected_test_projects }}' `
+            -DefaultCoverageProjects '${{ steps.detect.outputs.default_coverage_projects }}' `
+            -RunAll:$runAll `
+            -AuditFilePath "${{ github.workspace }}/artifacts/test-selection/matrix-active.json" `
+            -OutputToGitHubEnv
+
+      - name: Filter matrices by audit test scope
+        if: ${{ github.event_name == 'pull_request' && steps.detect_audit_raw.outcome == 'success' }}
+        id: filter_matrix_audit
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "${{ github.workspace }}/artifacts/test-selection" -Force | Out-Null
+          $filterScript = "${{ github.workspace }}/eng/scripts/filter-test-matrix-by-scope.ps1"
+          $matrices = @{
+            'tests_matrix_no_nugets' = '${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}'
+            'tests_matrix_no_nugets_overflow' = '${{ steps.split_matrix.outputs.tests_matrix_no_nugets_overflow }}'
+            'tests_matrix_requires_nugets_linux' = '${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_linux }}'
+            'tests_matrix_requires_nugets_windows' = '${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}'
+            'tests_matrix_requires_nugets_macos' = '${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}'
+            'tests_matrix_requires_cli_archive' = '${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}'
+          }
+          $runAll = ('${{ steps.detect_audit_raw.outputs.run_all }}' -eq 'true')
+          $affectedProjects = '${{ steps.detect_audit_raw.outputs.affected_test_projects }}'
+          $defaultCoverageProjects = '[]'
+          if (-not $runAll -and '${{ steps.detect_audit_raw.outputs.run_integrations }}' -eq 'true' -and $affectedProjects -eq '[]') {
+            $defaultCoverageProjects = '["tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj"]'
+          }
+          & $filterScript `
+            -Matrices $matrices `
+            -AffectedProjects $affectedProjects `
+            -DefaultCoverageProjects $defaultCoverageProjects `
+            -RunAll:$runAll `
+            -AuditFilePath "${{ github.workspace }}/artifacts/test-selection/matrix-audit.json"
+
+      - name: Write selected project summary
+        shell: pwsh
+        run: |
+          $activeMatrixPath = "${{ github.workspace }}/artifacts/test-selection/matrix-active.json"
+          $auditMatrixPath = "${{ github.workspace }}/artifacts/test-selection/matrix-audit.json"
+          $selectorActivePath = "${{ github.workspace }}/artifacts/test-selection/selector-active.json"
+          $selectorAuditPath = "${{ github.workspace }}/artifacts/test-selection/selector-audit.json"
+          $activeRulesPath = "eng/scripts/test-selection-rules.json"
+          $auditRulesPath = "eng/scripts/test-selection-rules.audit.json"
+          $activeMatrix = if (Test-Path $activeMatrixPath) { Get-Content -Raw $activeMatrixPath | ConvertFrom-Json -Depth 10 } else { $null }
+          $auditMatrix = if (Test-Path $auditMatrixPath) { Get-Content -Raw $auditMatrixPath | ConvertFrom-Json -Depth 10 } else { $null }
+          $selectorActive = if (Test-Path $selectorActivePath) { Get-Content -Raw $selectorActivePath | ConvertFrom-Json -Depth 10 } else { $null }
+          $selectorAudit = if (Test-Path $selectorAuditPath) { Get-Content -Raw $selectorAuditPath | ConvertFrom-Json -Depth 10 } else { $null }
+
+          $selectionReason = if ($null -ne $selectorActive -and -not [string]::IsNullOrWhiteSpace($selectorActive.reason)) { [string]$selectorActive.reason } else { 'unknown' }
+          $activeChangedFiles = if ($null -ne $selectorActive) { @($selectorActive.changedFiles) } else { @() }
+          $activeIgnoredFiles = if ($null -ne $selectorActive) { @($selectorActive.ignoredFiles) } else { @() }
+          $activeTriggerFile = if ($null -ne $selectorActive -and -not [string]::IsNullOrWhiteSpace($selectorActive.triggerFile)) { [string]$selectorActive.triggerFile } else { '' }
+          $activeTriggerPattern = if ($null -ne $selectorActive -and -not [string]::IsNullOrWhiteSpace($selectorActive.triggerPattern)) { [string]$selectorActive.triggerPattern } else { '' }
+          $auditReason = if ($null -ne $selectorAudit -and -not [string]::IsNullOrWhiteSpace($selectorAudit.reason)) { [string]$selectorAudit.reason } else { 'unknown' }
+          $auditChangedFiles = if ($null -ne $selectorAudit) { @($selectorAudit.changedFiles) } else { @() }
+          $auditIgnoredFiles = if ($null -ne $selectorAudit) { @($selectorAudit.ignoredFiles) } else { @() }
+          $auditTriggerFile = if ($null -ne $selectorAudit -and -not [string]::IsNullOrWhiteSpace($selectorAudit.triggerFile)) { [string]$selectorAudit.triggerFile } else { '' }
+          $auditTriggerPattern = if ($null -ne $selectorAudit -and -not [string]::IsNullOrWhiteSpace($selectorAudit.triggerPattern)) { [string]$selectorAudit.triggerPattern } else { '' }
+
+          $selectedProjects = if ($null -ne $activeMatrix) { @($activeMatrix.wouldRunProjects) } else { @() }
+          $auditSelectedProjects = if ($null -ne $auditMatrix) { @($auditMatrix.wouldRunProjects) } else { @() }
+          $activeMatch = "Active selector reason: $selectionReason"
+          if (-not [string]::IsNullOrWhiteSpace($activeTriggerFile)) {
+            $activeMatch = "Active selector matched `"$activeTriggerFile`""
+            if (-not [string]::IsNullOrWhiteSpace($activeTriggerPattern)) {
+              $activeMatch += " via rule `"$activeTriggerPattern`""
+            }
+            $activeMatch += " ($selectionReason)"
+          }
+
+          $auditMatch = ""
+          if ($null -ne $selectorAudit) {
+            $auditMatch = "Audit selector reason: $auditReason"
+            if (-not [string]::IsNullOrWhiteSpace($auditTriggerFile)) {
+              $auditMatch = "Audit selector matched `"$auditTriggerFile`""
+              if (-not [string]::IsNullOrWhiteSpace($auditTriggerPattern)) {
+                $auditMatch += " via rule `"$auditTriggerPattern`""
+              }
+              $auditMatch += " ($auditReason)"
+            }
+          }
+          $auditContext = "This block shows the hypothetical final selection if selector rules from `"$auditRulesPath`" had been applied. It did not affect execution."
+
+          Write-Host "::group::Final applied test selection result"
+          Write-Host "Changed files considered by the active selector:"
+          if ($activeChangedFiles.Count -eq 0) {
+            Write-Host "  [CHANGED FILE] <none>"
+          }
+          foreach ($file in $activeChangedFiles) {
+            Write-Host "  [CHANGED FILE] $file"
+          }
+          if ($activeIgnoredFiles.Count -gt 0) {
+            Write-Host "Ignored by active selector: $($activeIgnoredFiles.Count) file(s)"
+            Write-Host "These files were ignored by selector rules from `"$activeRulesPath`":"
+            foreach ($file in $activeIgnoredFiles) {
+              Write-Host "  [IGNORED FILE] $file"
+            }
+          }
+          Write-Host $activeMatch
+          Write-Host "Final selected test project paths:"
+          if ($selectedProjects.Count -eq 0) {
+            Write-Host "  [RESULT] <none>"
+          } else {
+            foreach ($project in $selectedProjects) {
+              Write-Host "  [RESULT] $project"
+            }
+          }
+          Write-Host "::endgroup::"
+
+          if ($null -ne $selectorAudit -or $null -ne $auditMatrix) {
+            Write-Host "::group::Hypothetical audit test selection result"
+            Write-Host "Changed files considered by the audit selector:"
+            if ($auditChangedFiles.Count -eq 0) {
+              Write-Host "  [CHANGED FILE] <none>"
+            }
+            foreach ($file in $auditChangedFiles) {
+              Write-Host "  [CHANGED FILE] $file"
+            }
+            if ($auditIgnoredFiles.Count -gt 0) {
+              Write-Host "Ignored by audit selector: $($auditIgnoredFiles.Count) file(s)"
+              Write-Host "These files were ignored by selector rules from `"$auditRulesPath`":"
+              foreach ($file in $auditIgnoredFiles) {
+                Write-Host "  [IGNORED FILE] $file"
+              }
+            }
+            if (-not [string]::IsNullOrWhiteSpace($auditMatch)) {
+              Write-Host $auditMatch
+            }
+            Write-Host $auditContext
+            Write-Host "Final selected test project paths if audit rules were applied:"
+            if ($null -eq $auditMatrix) {
+              Write-Host "  [RESULT] <not produced>"
+            } elseif ($auditSelectedProjects.Count -eq 0) {
+              Write-Host "  [RESULT] <none>"
+            } else {
+              foreach ($project in $auditSelectedProjects) {
+                Write-Host "  [RESULT] $project"
+              }
+            }
+            Write-Host "::endgroup::"
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "<details><summary>Applied test selection result</summary>"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Final Applied Test Scope Result"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Changed files"
+          if ($activeChangedFiles.Count -eq 0) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "*None*"
+          } else {
+            foreach ($file in $activeChangedFiles) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}`' -f $file)
+            }
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+
+          if ($activeIgnoredFiles.Count -gt 0) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('### Ignored by active selector (`{0}` file(s))' -f $activeIgnoredFiles.Count)
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('These files were ignored by selector rules from `{0}`:' -f $activeRulesPath)
+            foreach ($file in $activeIgnoredFiles) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}`' -f $file)
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Matched rule"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- {0}' -f $activeMatch)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Final selected test projects"
+          if ($selectedProjects.Count -eq 0) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "*No test projects were selected after matrix filtering.*"
+          } else {
+            foreach ($project in $selectedProjects) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}`' -f $project)
+            }
+          }
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "</details>"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+
+          if ($null -ne $selectorAudit -or $null -ne $auditMatrix) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "<details><summary>Hypothetical audit test selection result</summary>"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Hypothetical Audit Test Selection Result"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('This block shows what the final test selection would have been if `{0}` had been applied. It did not affect execution.' -f $auditRulesPath)
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Changed files"
+            if ($auditChangedFiles.Count -eq 0) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "*None*"
+            } else {
+              foreach ($file in $auditChangedFiles) {
+                Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}`' -f $file)
+              }
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+
+            if ($auditIgnoredFiles.Count -gt 0) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('### Ignored by audit selector (`{0}` file(s))' -f $auditIgnoredFiles.Count)
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('These files were ignored by selector rules from `{0}`:' -f $auditRulesPath)
+              foreach ($file in $auditIgnoredFiles) {
+                Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}`' -f $file)
+              }
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            }
+
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Matched rule"
+            if (-not [string]::IsNullOrWhiteSpace($auditMatch)) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- {0}' -f $auditMatch)
+            } else {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Audit selector reason: `{0}`' -f $auditReason)
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Final selected test projects"
+            if ($null -eq $auditMatrix) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "*Audit final selection was not produced.*"
+            } elseif ($auditSelectedProjects.Count -eq 0) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "*No test projects would have been selected after matrix filtering.*"
+            } else {
+              foreach ($project in $auditSelectedProjects) {
+                Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}`' -f $project)
+              }
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Context"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- {0}' -f $auditContext)
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+
+            if ($null -eq $auditMatrix) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Audit matrix artifact expected at `{0}` was not produced.' -f $auditMatrixPath)
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "</details>"
+          }
+
+      - name: Upload test scope diagnostics artifact
+        if: ${{ github.event_name == 'pull_request' && always() }}
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: test-scope-diagnostics
+          path: ${{ github.workspace }}/artifacts/test-selection
+          if-no-files-found: warn
 
   build_packages:
     name: Build packages
@@ -98,6 +669,8 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
+      directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
   tests_no_nugets_overflow:
     name: ${{ matrix.shortname }}
@@ -115,6 +688,8 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
+      directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
   # Split requires-nugets tests by OS so each group depends only on
   # the CLI archive build for its platform, avoiding cross-OS blocking.
@@ -134,6 +709,8 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
+      directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
   tests_requires_nugets_windows:
     name: ${{ matrix.shortname }}
@@ -151,6 +728,8 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
+      directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
   tests_requires_nugets_macos:
     name: ${{ matrix.shortname }}
@@ -168,6 +747,8 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
+      directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
   tests_requires_cli_archive:
     name: ${{ matrix.shortname }}
@@ -185,11 +766,16 @@ jobs:
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
+      conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
+      directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
   polyglot_validation:
     name: Polyglot SDK Validation
     uses: ./.github/workflows/polyglot-validation.yml
-    needs: [build_packages, build_cli_archive_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
+    if: |
+      needs.setup_for_tests.outputs.run_all == 'true' ||
+      needs.setup_for_tests.outputs.run_polyglot == 'true'
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
@@ -276,6 +862,10 @@ jobs:
   extension_tests_win:
     name: Run VS Code extension tests (Windows)
     runs-on: windows-latest
+    needs: setup_for_tests
+    if: |
+      needs.setup_for_tests.outputs.run_all == 'true' ||
+      needs.setup_for_tests.outputs.run_extension == 'true'
     defaults:
       run:
         working-directory: ./extension
@@ -335,29 +925,41 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
         with:
           pattern: logs-*-ubuntu-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/ubuntu-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
         with:
           pattern: logs-*-windows-latest
           merge-multiple: true
           path: ${{ github.workspace }}/testresults/windows-latest
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
         with:
           pattern: logs-*-macos-latest
           merge-multiple: true
           path: testresults/macos-latest
 
+      - name: Download test scope diagnostics artifact
+        if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: test-scope-diagnostics
+          path: ${{ github.workspace }}/audit/test-selection
+
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx
+          if-no-files-found: ignore
 
       - name: Generate test results summary
         if: always()
@@ -369,6 +971,82 @@ jobs:
             -- \
             ${{ github.workspace }}/testresults \
             --combined
+
+      - name: Compare audit predictions to failures
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "${{ github.workspace }}/audit/results" -Force | Out-Null
+          $script = "${{ github.workspace }}/eng/scripts/find-test-scope-audit-misses.ps1"
+          & $script `
+            -SelectorActivePath "${{ github.workspace }}/audit/test-selection/selector-active.json" `
+            -SelectorAuditPath "${{ github.workspace }}/audit/test-selection/selector-audit.json" `
+            -MatrixAuditPath "${{ github.workspace }}/audit/test-selection/matrix-audit.json" `
+            -TestResultsRoot "${{ github.workspace }}/testresults" `
+            -OutputPath "${{ github.workspace }}/audit/results/audit-miss-report.json"
+
+      - name: Append audit miss summary
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        shell: pwsh
+        run: |
+          $reportPath = "${{ github.workspace }}/audit/results/audit-miss-report.json"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '<details><summary>Test Scope Audit</summary>'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Test Scope Audit'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+
+          if (-not (Test-Path $reportPath)) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '*Audit report was not produced.*'
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '</details>'
+            exit 0
+          }
+
+          $report = Get-Content -Path $reportPath -Raw | ConvertFrom-Json
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Status: `{0}`' -f $report.status)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Active selector run_all: `{0}`' -f $report.activeSelectorRunAll)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Active selector reason: `{0}`' -f $report.activeSelectorReason)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Audit selector run_all: `{0}`' -f $report.auditSelectorRunAll)
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Audit selector reason: `{0}`' -f $report.auditSelectorReason)
+
+          if ($null -ne $report.templateGate) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Template test project would run: `{0}`' -f $report.templateGate.wouldRun)
+          }
+
+          if (@($report.missingArtifacts).Count -gt 0) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- Missing audit artifacts: `{0}`' -f (@($report.missingArtifacts) -join ', '))
+          }
+
+          if (@($report.auditMisses).Count -eq 0) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No audit misses detected.'
+          } else {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '**Audit misses detected:**'
+            foreach ($miss in @($report.auditMisses)) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}` from `{1}`' -f $miss.testProjectPath, $miss.trxFile)
+            }
+          }
+
+          if (@($report.unmappedFailedResults).Count -gt 0) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '**Unmapped failed TRX files:**'
+            foreach ($entry in @($report.unmappedFailedResults)) {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ('- `{0}`' -f $entry.trxFile)
+            }
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '</details>'
+
+      - name: Upload audit miss report
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: test-scope-audit-report
+          path: ${{ github.workspace }}/audit/results/audit-miss-report.json
+          if-no-files-found: warn
 
       - name: Generate CI timeline
         if: always()
@@ -387,38 +1065,33 @@ jobs:
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
         # For example, one of setup_* jobs failing and the dependent test jobs getting 'skipped'.
         # Some jobs are optional and can have an empty matrix. In those cases we allow a 'skipped'
-        # result. Specifically:
-        # - tests_no_nugets_overflow: this overflow bucket is expected to be empty unless the
-        #   primary no-nugets matrix exceeds the overflow threshold.
-        # - tests_requires_nugets_macos: some runs intentionally produce no macOS requires-nugets
-        #   tests, so an empty matrix and 'skipped' result are expected.
-        # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
-        #   be skipped for other workflow events.
-        # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
+        # result instead of treating it as a failure.
+        # Jobs may also be legitimately skipped when their category is not needed.
         if: >-
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
-                contains(needs.*.result, 'cancelled') ||
+               contains(needs.*.result, 'cancelled') ||
+                ((fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null &&
+                  needs.tests_no_nugets.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets_overflow).include[0] != null &&
+                  needs.tests_no_nugets_overflow.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null &&
+                  needs.tests_requires_nugets_linux.result == 'skipped') ||
+                (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null &&
+                 needs.tests_requires_nugets_windows.result == 'skipped') ||
+                (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                 needs.tests_requires_nugets_macos.result == 'skipped') ||
+                (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
+                 needs.tests_requires_cli_archive.result == 'skipped') ||
+                ((needs.setup_for_tests.outputs.run_all == 'true' ||
+                  needs.setup_for_tests.outputs.run_extension == 'true') &&
+                 needs.extension_tests_win.result == 'skipped') ||
+                ((needs.setup_for_tests.outputs.run_all == 'true' ||
+                  needs.setup_for_tests.outputs.run_polyglot == 'true') &&
+                 needs.polyglot_validation.result == 'skipped') ||
                 (github.event_name == 'pull_request' &&
-                 (needs.extension_tests_win.result == 'skipped' ||
-                    needs.cli_starter_validation_windows.result == 'skipped' ||
-                    needs.typescript_sdk_tests.result == 'skipped' ||
-                    needs.tests_no_nugets.result == 'skipped' ||
-                    needs.tests_requires_nugets_linux.result == 'skipped' ||
-                   needs.tests_requires_nugets_windows.result == 'skipped' ||
-                   (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                    needs.tests_requires_nugets_macos.result == 'skipped') ||
-                   needs.tests_requires_cli_archive.result == 'skipped' ||
-                  needs.polyglot_validation.result == 'skipped')) ||
-                (github.event_name != 'pull_request' &&
-                 (needs.extension_tests_win.result == 'skipped' ||
-                    needs.typescript_sdk_tests.result == 'skipped' ||
-                    needs.tests_no_nugets.result == 'skipped' ||
-                   needs.tests_requires_nugets_linux.result == 'skipped' ||
-                   needs.tests_requires_nugets_windows.result == 'skipped' ||
-                   (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                    needs.tests_requires_nugets_macos.result == 'skipped') ||
-                  needs.polyglot_validation.result == 'skipped'))) }}
+                 needs.cli_starter_validation_windows.result == 'skipped') ||
+                needs.typescript_sdk_tests.result == 'skipped')) }}
         run: |
-          echo "One or more dependent jobs failed."
+          echo "One or more test jobs failed, were cancelled, or were unexpectedly skipped."
           exit 1

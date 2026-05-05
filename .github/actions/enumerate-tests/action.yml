@@ -6,6 +6,11 @@ inputs:
     type: string
     default: ''
     description: 'Additional MSBuild arguments passed to the test matrix generation step (e.g., /p:IncludeTemplateTests=true /p:OnlyDeploymentTests=true)'
+  prepareEnvironment:
+    required: false
+    type: string
+    default: 'true'
+    description: 'When true, performs checkout, setup-dotnet, and restore before enumerating tests. Set to false when the caller already prepared the job environment.'
 
 # Output format: JSON with structure {"include": [{...}, ...]}
 # Each entry contains:
@@ -31,20 +36,23 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: ${{ inputs.prepareEnvironment == 'true' }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up .NET Core
+      if: ${{ inputs.prepareEnvironment == 'true' }}
       uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
       with:
         global-json-file: ${{ github.workspace }}/global.json
 
     - name: Restore
+      if: ${{ inputs.prepareEnvironment == 'true' }}
       shell: bash
       run: ./restore.sh
 
     - name: Build ExtractTestPartitions tool
       shell: bash
-      run: dotnet build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
+      run: ./dotnet.sh build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
 
     - name: Generate canonical test matrix
       shell: bash
@@ -73,7 +81,7 @@ runs:
 
     - name: Upload logs
       if: always()
-      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
       with:
         name: logs-enumerate-tests-${{ runner.os }}
         path: |

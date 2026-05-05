@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <ExtensionSrcDir>$(MSBuildThisFileDirectory)</ExtensionSrcDir>
+    <x/>
   </PropertyGroup>
 
   <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="CheckYarnInstalled;CheckVsceInstalled">

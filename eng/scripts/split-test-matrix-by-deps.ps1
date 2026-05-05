@@ -52,6 +52,58 @@ Set-StrictMode -Version Latest
 
 $maxMatrixSize = 256
 
+function Get-FriendlyTypeName {
+  param(
+    [AllowNull()]
+    [object]$Value
+  )
+
+  if ($null -eq $Value) {
+    return 'null'
+  }
+
+  return $Value.GetType().FullName
+}
+
+function Get-MatrixEntries {
+  param(
+    [Parameter(Mandatory=$true)]
+    [object]$Matrix,
+
+    [Parameter(Mandatory=$true)]
+    [string]$MatrixName
+  )
+
+  if ($null -eq $Matrix) {
+    throw "Matrix '$MatrixName' could not be parsed from JSON."
+  }
+
+  if ($Matrix.PSObject.Properties.Name -notcontains 'include') {
+    throw "Matrix '$MatrixName' must contain an 'include' property."
+  }
+
+  if ($null -eq $Matrix.include) {
+    return @()
+  }
+
+  if ($Matrix.include -is [string] -or $Matrix.include -is [System.ValueType]) {
+    throw "Matrix '$MatrixName' has an invalid 'include' value of type $(Get-FriendlyTypeName $Matrix.include). Expected an object or array of matrix entries."
+  }
+
+  $entries = @($Matrix.include)
+  foreach ($entry in $entries) {
+    if ($null -eq $entry) {
+      throw "Matrix '$MatrixName' contains a null entry in 'include'."
+    }
+
+    if ($entry -is [string] -or $entry -is [System.ValueType]) {
+      throw "Matrix '$MatrixName' contains an invalid entry of type $(Get-FriendlyTypeName $entry). Expected each matrix entry to be an object."
+    }
+  }
+
+  return $entries
+}
+
 # Read input
 if ($AllTestsMatrixFile) {
   if (-not (Test-Path $AllTestsMatrixFile)) {
@@ -67,10 +119,7 @@ if (-not $AllTestsMatrix) {
 }
 
 $matrix = $AllTestsMatrix | ConvertFrom-Json
-$allEntries = @()
-if ($matrix.include -and $matrix.include.Count -gt 0) {
-  $allEntries = @($matrix.include)
-}
+$allEntries = @(Get-MatrixEntries -Matrix $matrix -MatrixName 'all_tests')
 
 Write-Host "Input matrix: $($allEntries.Count) total entries"
 
