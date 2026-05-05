@@ -32,6 +32,9 @@ public sealed class ListStepsTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
+        // INTENTIONAL TEST FAILURE: Validate that cast recording content appears in GitHub step summary
+        Assert.Fail("Intentional failure to test cast recording in step summary (DoListStepsShowsPipelineSteps)");
+
         // Create a new Aspire project
         await auto.AspireNewAsync("ListStepsApp", counter);
 
