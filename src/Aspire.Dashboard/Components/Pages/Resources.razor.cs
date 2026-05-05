@@ -187,7 +187,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task VisibleResourcesChangedAsync()
     {
         await UpdateResourceGraphResourcesAsync();
-        await ClearSelectedResourceAsync();
+
+        // Only clear the selected resource if it no longer passes the current filter.
+        // This preserves the selection when a filter is removed (result set expands) and
+        // the selected resource is still visible.
+        if (SelectedResource is null || !Filter(SelectedResource))
+        {
+            await ClearSelectedResourceAsync();
+        }
+
         await _dataGrid.SafeRefreshDataAsync();
     }
 
