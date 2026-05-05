@@ -1,0 +1,202 @@
+# Reusable workflow that runs test jobs split into 6 dependency-based buckets.
+#
+# Shared by tests.yml and specialized-test-runner.yml to avoid duplicating the
+# 6 test job definitions. The calling workflow is responsible for:
+#   1. Generating and splitting the test matrix into 6 bucket outputs
+#   2. Building NuGet packages and CLI archives as needed
+#   3. Ensuring all required artifacts are uploaded before calling this workflow
+#
+# The 6 buckets mirror the output of split-test-matrix-by-deps.ps1:
+#   - no_nugets / no_nugets_overflow: tests with no package dependencies
+#   - requires_nugets_{linux,windows,macos}: tests needing built NuGet packages
+#   - requires_cli_archive: tests needing CLI native archives
+#
+# NOTE: This workflow is at nesting level 3 (caller → this → run-tests.yml).
+# GitHub Actions allows max 4 levels. Do NOT add reusable workflow calls inside
+# run-tests.yml or this chain will break.
+name: Run Tests
+
+on:
+  workflow_call:
+    inputs:
+      tests_matrix_no_nugets:
+        required: true
+        type: string
+        description: 'JSON matrix for tests with no package dependencies'
+      tests_matrix_no_nugets_overflow:
+        required: true
+        type: string
+        description: 'JSON matrix for overflow no-nugets tests'
+      tests_matrix_requires_nugets_linux:
+        required: true
+        type: string
+        description: 'JSON matrix for Linux tests requiring NuGet packages'
+      tests_matrix_requires_nugets_windows:
+        required: true
+        type: string
+        description: 'JSON matrix for Windows tests requiring NuGet packages'
+      tests_matrix_requires_nugets_macos:
+        required: true
+        type: string
+        description: 'JSON matrix for macOS tests requiring NuGet packages'
+      tests_matrix_requires_cli_archive:
+        required: true
+        type: string
+        description: 'JSON matrix for tests requiring CLI native archives'
+      extraTestArgs:
+        required: false
+        type: string
+        default: ''
+        description: 'Additional test arguments passed to run-tests.yml'
+      ignoreTestFailures:
+        required: false
+        type: boolean
+        default: false
+        description: 'When true, ignores test failures and checks if .trx files have nonzero test count'
+      versionOverrideArg:
+        required: false
+        type: string
+        default: ''
+        description: 'Version override argument for build commands'
+
+jobs:
+
+  tests_no_nugets:
+    name: ${{ matrix.shortname }}
+    uses: ./.github/workflows/run-tests.yml
+    if: ${{ fromJson(inputs.tests_matrix_no_nugets).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.tests_matrix_no_nugets) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: ${{ matrix.runs-on }}
+      testProjectPath: ${{ matrix.testProjectPath }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
+      extraTestArgs: "${{ inputs.extraTestArgs }} ${{ matrix.extraTestArgs }}"
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      properties: ${{ toJson(matrix.properties) }}
+
+  tests_no_nugets_overflow:
+    name: ${{ matrix.shortname }}
+    uses: ./.github/workflows/run-tests.yml
+    if: ${{ fromJson(inputs.tests_matrix_no_nugets_overflow).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.tests_matrix_no_nugets_overflow) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: ${{ matrix.runs-on }}
+      testProjectPath: ${{ matrix.testProjectPath }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
+      extraTestArgs: "${{ inputs.extraTestArgs }} ${{ matrix.extraTestArgs }}"
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      properties: ${{ toJson(matrix.properties) }}
+
+  tests_requires_nugets_linux:
+    name: ${{ matrix.shortname }}
+    uses: ./.github/workflows/run-tests.yml
+    if: ${{ fromJson(inputs.tests_matrix_requires_nugets_linux).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.tests_matrix_requires_nugets_linux) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: ${{ matrix.runs-on }}
+      testProjectPath: ${{ matrix.testProjectPath }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
+      extraTestArgs: "${{ inputs.extraTestArgs }} ${{ matrix.extraTestArgs }}"
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      properties: ${{ toJson(matrix.properties) }}
+
+  tests_requires_nugets_windows:
+    name: ${{ matrix.shortname }}
+    uses: ./.github/workflows/run-tests.yml
+    if: ${{ fromJson(inputs.tests_matrix_requires_nugets_windows).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.tests_matrix_requires_nugets_windows) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: ${{ matrix.runs-on }}
+      testProjectPath: ${{ matrix.testProjectPath }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
+      extraTestArgs: "${{ inputs.extraTestArgs }} ${{ matrix.extraTestArgs }}"
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      properties: ${{ toJson(matrix.properties) }}
+
+  tests_requires_nugets_macos:
+    name: ${{ matrix.shortname }}
+    uses: ./.github/workflows/run-tests.yml
+    if: ${{ fromJson(inputs.tests_matrix_requires_nugets_macos).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.tests_matrix_requires_nugets_macos) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: ${{ matrix.runs-on }}
+      testProjectPath: ${{ matrix.testProjectPath }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
+      extraTestArgs: "${{ inputs.extraTestArgs }} ${{ matrix.extraTestArgs }}"
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      properties: ${{ toJson(matrix.properties) }}
+
+  tests_requires_cli_archive:
+    name: ${{ matrix.shortname }}
+    uses: ./.github/workflows/run-tests.yml
+    if: ${{ fromJson(inputs.tests_matrix_requires_cli_archive).include[0] != null }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.tests_matrix_requires_cli_archive) }}
+    with:
+      testShortName: ${{ matrix.shortname }}
+      os: ${{ matrix.runs-on }}
+      testProjectPath: ${{ matrix.testProjectPath }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
+      extraTestArgs: "${{ inputs.extraTestArgs }} ${{ matrix.extraTestArgs }}"
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      properties: ${{ toJson(matrix.properties) }}
+
+  # --- Results gate ---
+  # Determines the overall result of this reusable workflow.
+  # Empty buckets produce 'skipped' test jobs, which is expected and not a failure.
+  # Only fail when a non-empty bucket's test job was unexpectedly skipped.
+
+  results:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    name: Test Results
+    needs:
+      - tests_no_nugets
+      - tests_no_nugets_overflow
+      - tests_requires_nugets_linux
+      - tests_requires_nugets_windows
+      - tests_requires_nugets_macos
+      - tests_requires_cli_archive
+    steps:
+      - name: Fail if any test job failed or was unexpectedly skipped
+        if: >-
+          ${{ always() &&
+              (contains(needs.*.result, 'failure') ||
+               contains(needs.*.result, 'cancelled') ||
+               (fromJson(inputs.tests_matrix_no_nugets).include[0] != null &&
+                needs.tests_no_nugets.result == 'skipped') ||
+               (fromJson(inputs.tests_matrix_no_nugets_overflow).include[0] != null &&
+                needs.tests_no_nugets_overflow.result == 'skipped') ||
+               (fromJson(inputs.tests_matrix_requires_nugets_linux).include[0] != null &&
+                needs.tests_requires_nugets_linux.result == 'skipped') ||
+               (fromJson(inputs.tests_matrix_requires_nugets_windows).include[0] != null &&
+                needs.tests_requires_nugets_windows.result == 'skipped') ||
+               (fromJson(inputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                needs.tests_requires_nugets_macos.result == 'skipped') ||
+               (fromJson(inputs.tests_matrix_requires_cli_archive).include[0] != null &&
+                needs.tests_requires_cli_archive.result == 'skipped')) }}
+        run: |
+          echo "One or more test jobs failed or were unexpectedly skipped."
+          exit 1

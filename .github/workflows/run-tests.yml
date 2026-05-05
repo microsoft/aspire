@@ -420,6 +420,10 @@ jobs:
             exit $testExitCode
           }
 
+          # When ignoreTestFailures is true, exit 0 explicitly so GitHub Actions'
+          # pwsh wrapper doesn't leak the non-zero $LASTEXITCODE from dotnet test.
+          exit 0
+
       - name: Run tests (Linux/macOS)
         if: ${{ fromJson(inputs.properties).requiresNugets != true && runner.os != 'Windows' }}
         id: run-tests-unix
@@ -522,8 +526,12 @@ jobs:
             exit $testExitCode
           }
 
+          # When ignoreTestFailures is true, exit 0 explicitly so GitHub Actions'
+          # pwsh wrapper doesn't leak the non-zero $LASTEXITCODE from dotnet test.
+          exit 0
+
       - name: Verify test results exist
-        if: ${{ inputs.ignoreTestFailures }}
+        if: ${{ always() && inputs.ignoreTestFailures }}
         shell: pwsh
         run: |
           $trxFiles = Get-ChildItem -Path "${{ github.workspace }}/testresults" -Filter *.trx -Recurse -ErrorAction SilentlyContinue

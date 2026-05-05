@@ -1,152 +1,201 @@
-# Reusable workflow for running specialized test suites (quarantined and outerloop tests)
+# Reusable workflow for running specialized test suites (quarantined and outerloop tests).
+#
+# Uses the same metadata-driven pipeline as tests.yml:
+#   1. Grep for attribute markers → BeforeBuildProps.props (limits build scope)
+#   2. TestEnumerationRunsheetBuilder → .tests-metadata.json per project (deterministic)
+#   3. build-test-matrix.ps1 → canonical platform-agnostic matrix
+#   4. expand-test-matrix-github.ps1 → per-OS entries with runner mappings
+#   5. split-test-matrix-by-deps.ps1 → 6 dependency-based buckets
+#
+# Compared to tests.yml, this workflow:
+#   - Scopes the build to only projects containing the target attribute (grep-based)
+#   - Passes specialized MSBuild properties (RunQuarantinedTests/RunOuterloopTests)
+#   - Uses positive trait filtering for class-level test splitting (DiscoveryTraitFilter)
+#   - Overrides enablePlaywrightInstall on all test entries
+#   - On PRs, filters to a single project for fast sanity checks
 name: Specialized Test Runner
 
 on:
   workflow_call:
     inputs:
-      testRunnerName:
-        required: true
-        type: string
-        description: 'Arcade test runner name'
       attributeName:
         required: true
         type: string
-        description: 'Attribute name to filter tests by like QuarantinedTest or OuterloopTest'
-      extraRunSheetBuilderArgs:
-        required: false
-        type: string
+        description: 'Attribute name to filter tests by (e.g., QuarantinedTest or OuterloopTest)'
       extraTestArgs:
         required: false
         type: string
-      # Controls whether to install Playwright browsers during project build
+        description: 'Additional test arguments passed to run-tests.yml (e.g., --filter-trait quarantined=true)'
       enablePlaywrightInstall:
         required: true
         type: boolean
         default: false
-      # When true, ignores test failures and checks if .trx files have nonzero test count
+        description: 'Controls whether to install Playwright browsers during project build'
       ignoreTestFailures:
         required: false
         type: boolean
         default: false
+        description: 'When true, ignores test failures and checks if .trx files have nonzero test count'
 
 jobs:
 
   generate_tests_matrix:
-    name: Generate test runsheet
+    name: Generate test matrix
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'microsoft' }}
     outputs:
-      runsheet: ${{ steps.inject_properties.outputs.runsheet }}
-      requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
-      requiresCliArchive: ${{ steps.check_cli_archive.outputs.requiresCliArchive }}
-      requiresGitHubToken: ${{ steps.check_github_token.outputs.requiresGitHubToken }}
+      tests_matrix_no_nugets: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}
+      tests_matrix_no_nugets_overflow: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets_overflow }}
+      tests_matrix_requires_nugets_linux: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_linux }}
+      tests_matrix_requires_nugets_windows: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}
+      tests_matrix_requires_nugets_macos: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_macos }}
+      tests_matrix_requires_cli_archive: ${{ steps.split_matrix.outputs.tests_matrix_requires_cli_archive }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Derive MSBuild properties from attribute name
+        id: derive_props
+        shell: bash
+        run: |
+          ATTR="${{ inputs.attributeName }}"
+          case "$ATTR" in
+            QuarantinedTest)
+              echo "msbuild_prop=/p:RunQuarantinedTests=true" >> $GITHUB_OUTPUT
+              echo "discovery_filter=quarantined=true" >> $GITHUB_OUTPUT
+              ;;
+            OuterloopTest)
+              echo "msbuild_prop=/p:RunOuterloopTests=true" >> $GITHUB_OUTPUT
+              echo "discovery_filter=outerloop=true" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "::error::Unknown attributeName '$ATTR'. Expected QuarantinedTest or OuterloopTest."
+              exit 1
+              ;;
+          esac
 
       - name: Identify relevant test projects
         run: ./eng/scripts/generate-specialized-test-projects-list.sh ${{ inputs.attributeName }} ${{ github.workspace }}/artifacts/BeforeBuildProps.props
 
-      # We need to build test projects, so that we can interrogate each test project
-      # and find out whether it contains any tests of the specified type.
-      # We use BuildTestsOnly=true to reduce disk space usage by skipping src, playground, and pack projects.
-      - name: Build the solution
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Build ExtractTestPartitions tool
+        run: dotnet build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
+
+      # Generate the canonical test matrix using the new metadata-driven pipeline.
+      # - BeforeBuildPropsPath limits enumeration to projects containing the attribute
+      # - The specialized MSBuild prop (e.g., RunQuarantinedTests=true) ensures projects
+      #   gated on that prop are included (some csproj files set SkipTests unless the prop is set)
+      # - DiscoveryTraitFilter enables positive filtering for class-level test splitting
+      #   (e.g., only discovers classes that contain quarantined tests)
+      - name: Generate canonical test matrix
         run: >
-          ./build.sh
-          --restore
-          --build
-          -c Release
-          /p:GeneratePackageOnBuild=false
+          ./build.sh -test
+          /p:TestRunnerName=TestEnumerationRunsheetBuilder
+          /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json
+          /p:GenerateCIPartitions=true
           /p:InstallBrowsersForPlaywright=false
           /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
+          /p:IncludeTemplateTests=true
+          /p:IncludeCliE2ETests=true
+          ${{ steps.derive_props.outputs.msbuild_prop }}
+          /p:DiscoveryTraitFilter=${{ steps.derive_props.outputs.discovery_filter }}
+          /bl
 
-      - name: Generate test runsheet
-        id: generate_tests_matrix_raw
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-        run: >
-          ./build.sh
-          --test
-          /p:TestRunnerName=${{ inputs.testRunnerName }}
-          ${{ inputs.extraRunSheetBuilderArgs }}
-          -c Release
-          /p:Restore=false
-          /p:Build=false
-          /p:InstallBrowsersForPlaywright=false
-          /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
-          /bl:${{ github.workspace }}/artifacts/log/Release/runsheet.binlog
-
-      - name: Inject enablePlaywrightInstall into runsheet properties
-        id: inject_properties
+      - name: Expand matrix for GitHub Actions
+        id: expand_matrix
+        shell: pwsh
         run: |
-          RUNSHEET='${{ steps.generate_tests_matrix_raw.outputs.runsheet }}'
-          if [ "$RUNSHEET" = "[]" ] || [ -z "$RUNSHEET" ]; then
-            echo "runsheet=[]" >> $GITHUB_OUTPUT
-          else
-            UPDATED=$(echo "$RUNSHEET" | jq -c --argjson epw ${{ inputs.enablePlaywrightInstall }} '[.[] | .properties.enablePlaywrightInstall = $epw]')
-            echo "runsheet=$UPDATED" >> $GITHUB_OUTPUT
-          fi
+          $canonicalMatrixPath = "${{ github.workspace }}/artifacts/canonical-test-matrix.json"
+          $expandScript = "${{ github.workspace }}/eng/scripts/expand-test-matrix-github.ps1"
 
-      - name: Check if any test requires NuGets
-        id: check_nugets
+          if (Test-Path $canonicalMatrixPath) {
+            & $expandScript -CanonicalMatrixFile $canonicalMatrixPath -OutputToGitHubEnv
+          } else {
+            $emptyMatrix = '{"include":[]}'
+            "all_tests=$emptyMatrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Host "No canonical test matrix found, using empty matrix"
+          }
+
+      # Override enablePlaywrightInstall on all entries and apply PR filter.
+      # On PRs, keep only one project's entries for fast sanity checks.
+      - name: Inject properties and apply PR filter
+        id: inject_and_filter
+        shell: pwsh
         run: |
-          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresNugets == true)' > /dev/null 2>&1; then
-            echo "requiresNugets=true" >> $GITHUB_OUTPUT
-          else
-            echo "requiresNugets=false" >> $GITHUB_OUTPUT
-          fi
+          $matrixJson = '${{ steps.expand_matrix.outputs.all_tests }}'
+          $matrix = $matrixJson | ConvertFrom-Json
 
-      - name: Check if any test requires CLI archives
-        id: check_cli_archive
+          if ($matrix.include.Count -eq 0) {
+            "all_tests=$matrixJson" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Host "Empty matrix, nothing to filter"
+            return
+          }
+
+          # Override enablePlaywrightInstall on all entries
+          $enablePw = [bool]::Parse("${{ inputs.enablePlaywrightInstall }}")
+          foreach ($entry in $matrix.include) {
+            $entry.properties.enablePlaywrightInstall = $enablePw
+          }
+
+          # On PRs, filter to a single project for fast sanity checks
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            $firstProject = $matrix.include[0].projectName
+            $matrix.include = @($matrix.include | Where-Object { $_.projectName -eq $firstProject })
+            Write-Host "PR mode: filtered to project '$firstProject' ($($matrix.include.Count) entries)"
+          }
+
+          $result = $matrix | ConvertTo-Json -Depth 10 -Compress
+          "all_tests=$result" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Split matrix by dependency type
+        id: split_matrix
+        shell: pwsh
         run: |
-          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresCliArchive == true)' > /dev/null 2>&1; then
-            echo "requiresCliArchive=true" >> $GITHUB_OUTPUT
-          else
-            echo "requiresCliArchive=false" >> $GITHUB_OUTPUT
-          fi
+          $splitScript = "${{ github.workspace }}/eng/scripts/split-test-matrix-by-deps.ps1"
+          & $splitScript -AllTestsMatrix '${{ steps.inject_and_filter.outputs.all_tests }}' -OutputToGitHubEnv
 
-      - name: Check if any test requires GitHub token
-        id: check_github_token
-        run: |
-          RUNSHEET='${{ steps.generate_tests_matrix.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .requiresGitHubToken == true)' > /dev/null 2>&1; then
-            echo "requiresGitHubToken=true" >> $GITHUB_OUTPUT
-          else
-            echo "requiresGitHubToken=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Upload logs, and test results
+      - name: Upload logs
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: logs-runsheet
           path: |
             ${{ github.workspace }}/artifacts/BeforeBuildProps.props
-            ${{ github.workspace }}/artifacts/log/*/runsheet.binlog
-            ${{ github.workspace }}/artifacts/log/*/TestLogs/**
-            ${{ github.workspace }}/artifacts/tmp/*/combined_runsheet.json
+            ${{ github.workspace }}/artifacts/log/**/*.binlog
+            ${{ github.workspace }}/artifacts/**/*tests-partitions.json
+            ${{ github.workspace }}/artifacts/**/*tests-metadata.json
+            ${{ github.workspace }}/artifacts/canonical-test-matrix.json
           retention-days: 5
 
   build_packages:
     name: Build packages
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
+    if: >-
+      ${{ github.repository_owner == 'microsoft' && (
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_linux).include[0] != null ||
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_windows).include[0] != null ||
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_macos).include[0] != null ||
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_cli_archive).include[0] != null
+      ) }}
     uses: ./.github/workflows/build-packages.yml
 
   build_cli_archives:
     name: Build native CLI archives
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
+    if: >-
+      ${{ github.repository_owner == 'microsoft' && (
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_linux).include[0] != null ||
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_windows).include[0] != null ||
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_macos).include[0] != null ||
+        fromJson(needs.generate_tests_matrix.outputs.tests_matrix_requires_cli_archive).include[0] != null
+      ) }}
     uses: ./.github/workflows/build-cli-native-archives.yml
 
+  # --- Test execution via shared split-tests workflow ---
+
   run_tests:
-    name: ${{ matrix.tests.project }}
     needs: [generate_tests_matrix, build_packages, build_cli_archives]
-    strategy:
-      fail-fast: false
-      matrix:
-        tests: ${{ fromJson(needs.generate_tests_matrix.outputs.runsheet) }}
     # Allow tests to run even if build_cli_archives partially fails (e.g., one RID
     # like osx-arm64 has an infra issue but linux-x64 succeeded). Tests that need
     # a failed RID's archive will fail at the download step.
@@ -158,70 +207,55 @@ jobs:
         needs.generate_tests_matrix.result == 'success' &&
         (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped')
       }}
-    uses: ./.github/workflows/run-tests.yml
+    uses: ./.github/workflows/run-tests-core.yml
     with:
-      testShortName: ${{ matrix.tests.project }}
-      properties: ${{ toJson(matrix.tests.properties) }}
-      os: ${{ matrix.tests.os }}
-      mtpBaseArgs: ${{ matrix.tests.mtpBaseArgs }}
-      extraTestArgs: ${{ inputs.extraTestArgs }}
+      tests_matrix_no_nugets: ${{ needs.generate_tests_matrix.outputs.tests_matrix_no_nugets }}
+      tests_matrix_no_nugets_overflow: ${{ needs.generate_tests_matrix.outputs.tests_matrix_no_nugets_overflow }}
+      tests_matrix_requires_nugets_linux: ${{ needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_linux }}
+      tests_matrix_requires_nugets_windows: ${{ needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_windows }}
+      tests_matrix_requires_nugets_macos: ${{ needs.generate_tests_matrix.outputs.tests_matrix_requires_nugets_macos }}
+      tests_matrix_requires_cli_archive: ${{ needs.generate_tests_matrix.outputs.tests_matrix_requires_cli_archive }}
+      extraTestArgs: "${{ inputs.extraTestArgs }}"
       ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
 
+  # --- Results gate ---
 
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [generate_tests_matrix, build_packages, build_cli_archives, run_tests]
+    needs:
+      - generate_tests_matrix
+      - build_packages
+      - build_cli_archives
+      - run_tests
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # Check if there were no tests to run
-      - name: Check if tests were run
-        id: check_tests
-        run: |
-          if [ "${{ needs.generate_tests_matrix.outputs.runsheet }}" = "[]" ]; then
-            echo "No tests found for this test type"
-            echo "tests_run=false" >> $GITHUB_OUTPUT
-          else
-            echo "tests_run=true" >> $GITHUB_OUTPUT
-          fi
-
-      # get all the test logs artifacts into a single directory
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        if: steps.check_tests.outputs.tests_run == 'true'
+        continue-on-error: true
         with:
-          pattern: 'logs-*'
-          path: ${{ github.workspace }}/artifacts/all-logs
+          pattern: logs-*-ubuntu-latest
+          merge-multiple: true
+          path: ${{ github.workspace }}/testresults/ubuntu-latest
 
-      # Organize the .trx files by OS
-      - name: Organize test results by OS
-        if: steps.check_tests.outputs.tests_run == 'true'
-        shell: pwsh
-        run: |
-          $logDirectory = "${{ github.workspace }}/artifacts/all-logs"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          pattern: logs-*-windows-latest
+          merge-multiple: true
+          path: ${{ github.workspace }}/testresults/windows-latest
 
-          # Create OS-specific directories
-          New-Item -ItemType Directory -Path "${{ github.workspace }}/testresults/ubuntu-latest" -Force
-          New-Item -ItemType Directory -Path "${{ github.workspace }}/testresults/windows-latest" -Force
-          New-Item -ItemType Directory -Path "${{ github.workspace }}/testresults/macos-latest" -Force
-
-          # Find all .trx files
-          $trxFiles = Get-ChildItem -Path $logDirectory -Filter *.trx -Recurse
-
-          # Copy each .trx file to the appropriate OS folder
-          foreach ($trxFile in $trxFiles) {
-              if ($trxFile.FullName -match "ubuntu") {
-                  Copy-Item -Path $trxFile.FullName -Destination "${{ github.workspace }}/testresults/ubuntu-latest/" -Force
-              } elseif ($trxFile.FullName -match "windows") {
-                  Copy-Item -Path $trxFile.FullName -Destination "${{ github.workspace }}/testresults/windows-latest/" -Force
-              } elseif ($trxFile.FullName -match "macos") {
-                  Copy-Item -Path $trxFile.FullName -Destination "${{ github.workspace }}/testresults/macos-latest/" -Force
-              }
-          }
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          pattern: logs-*-macos-latest
+          merge-multiple: true
+          path: ${{ github.workspace }}/testresults/macos-latest
 
       - name: Generate test results summary
-        if: steps.check_tests.outputs.tests_run == 'true'
+        if: always()
+        continue-on-error: true
         run: >
           ${{ github.workspace }}/dotnet.sh
           run

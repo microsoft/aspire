@@ -159,6 +159,59 @@ public class SplitTestProjectsTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task IncludeTraitFilterGracefullySkipsWhenNoClassesFound()
+    {
+        // Arrange - assembly with no partition attributes → falls to class mode.
+        // "echo" as RunCommand produces output that won't match the class prefix,
+        // so zero classes are discovered. With IncludeTraitFilter set, the script
+        // should succeed gracefully instead of erroring.
+        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        MockAssemblyBuilder.CreateAssemblyWithNoAttributes(assemblyPath, "UnrelatedClass");
+
+        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+
+        // Act
+        var result = await RunScript(
+            assemblyPath,
+            runCommand: "echo",
+            testClassPrefix: "TestNamespace",
+            outputFile: outputFile,
+            includeTraitFilter: "quarantined=true");
+
+        // Assert - script succeeds and produces valid JSON with empty partitions
+        result.EnsureSuccessful("split-test-projects-for-ci.ps1 should succeed with IncludeTraitFilter when no classes match");
+        Assert.Contains("will be skipped", result.Output);
+
+        Assert.True(File.Exists(outputFile), "Output file should exist");
+        var partitions = ParsePartitionsJson(outputFile);
+        Assert.Empty(partitions.TestPartitions);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task WithoutIncludeTraitFilterFailsWhenNoClassesFound()
+    {
+        // Arrange - assembly with no partition attributes → falls to class mode.
+        // Without IncludeTraitFilter, zero discovered classes should be an error.
+        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        MockAssemblyBuilder.CreateAssemblyWithNoAttributes(assemblyPath, "UnrelatedClass");
+
+        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+
+        // Act
+        var result = await RunScript(
+            assemblyPath,
+            runCommand: "echo",
+            testClassPrefix: "TestNamespace",
+            outputFile: outputFile);
+
+        // Assert - script should fail without IncludeTraitFilter
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("No test classes discovered", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task FailsWhenAssemblyNotFound()
     {
         // Arrange
@@ -181,7 +234,8 @@ public class SplitTestProjectsTests : IDisposable
         string assemblyPath,
         string runCommand,
         string testClassPrefix,
-        string outputFile)
+        string outputFile,
+        string? includeTraitFilter = null)
     {
         using var cmd = new PowerShellCommand(_scriptPath, _output)
             .WithTimeout(TimeSpan.FromMinutes(3));
@@ -194,6 +248,12 @@ public class SplitTestProjectsTests : IDisposable
             "-TestPartitionsJsonFile", $"\"{outputFile}\"",
             "-RepoRoot", $"\"{_repoRoot}\""
         };
+
+        if (!string.IsNullOrEmpty(includeTraitFilter))
+        {
+            args.Add("-IncludeTraitFilter");
+            args.Add($"\"{includeTraitFilter}\"");
+        }
 
         return await cmd.ExecuteAsync(args.ToArray());
     }
