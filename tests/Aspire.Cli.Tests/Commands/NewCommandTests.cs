@@ -46,7 +46,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.FeatureFlagsFactory = _ =>
             {
                 var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotRust, true);
                 return features;
             };
 
@@ -55,9 +58,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<NewCommand>();
         Assert.NotEmpty(command.Subcommands);
-        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty AppHost");
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty AppHost (Choose language...)");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.TypeScriptEmptyAppHost && subcommand.Description == "Empty (TypeScript AppHost)");
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.PythonEmptyAppHost && subcommand.Description == "Empty (Python AppHost)");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.JavaEmptyAppHost && subcommand.Description == "Empty (Java AppHost)");
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.GoEmptyAppHost && subcommand.Description == "Empty (Go AppHost)");
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.RustEmptyAppHost && subcommand.Description == "Empty (Rust AppHost)");
     }
 
     [Fact]
@@ -761,9 +767,18 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                return features;
+            };
             options.InteractionServiceFactory = _ => new TestInteractionService
             {
-                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) => choices.Cast<object>().First()
+                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                    promptText == "Which language would you like to use?"
+                        ? choices.Cast<object>().Single(choice => choiceFormatter(choice).Contains("TypeScript", StringComparison.Ordinal))
+                        : choices.Cast<object>().First()
             };
             options.NewCommandPrompterFactory = (sp) =>
             {
@@ -772,7 +787,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 prompter.PromptForTemplateCallback = templates =>
                 {
                     promptedTemplates = templates.Select(t => (t.Name, t.Description)).ToArray();
-                    return templates.Single(t => t.Name.Equals(KnownTemplateId.TypeScriptEmptyAppHost, StringComparison.OrdinalIgnoreCase));
+                    return templates.Single(t => t.Name.Equals(KnownTemplateId.CSharpEmptyAppHost, StringComparison.OrdinalIgnoreCase));
                 };
 
                 return prompter;
@@ -797,10 +812,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(KnownLanguageId.TypeScript, scaffoldedLanguageId);
         Assert.NotNull(promptedTemplates);
-        Assert.Contains((KnownTemplateId.CSharpEmptyAppHost, "Empty AppHost"), promptedTemplates);
-        Assert.Contains((KnownTemplateId.TypeScriptEmptyAppHost, "Empty (TypeScript AppHost)"), promptedTemplates);
+        Assert.Contains((KnownTemplateId.CSharpEmptyAppHost, "Empty AppHost (Choose language...)"), promptedTemplates);
+        Assert.DoesNotContain((KnownTemplateId.TypeScriptEmptyAppHost, "Empty (TypeScript AppHost)"), promptedTemplates);
+        Assert.DoesNotContain((KnownTemplateId.JavaEmptyAppHost, "Empty (Java AppHost)"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React, TypeScript AppHost)"), promptedTemplates);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
     }
 
     [Fact]
@@ -817,12 +834,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == "aspire-test");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.DotNetEmptyAppHost && subcommand.Description == "Empty (C# AppHost, dotnet template)");
-        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty AppHost");
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty AppHost (Choose language...)");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.TypeScriptEmptyAppHost && subcommand.Description == "Empty (TypeScript AppHost)");
     }
 
     [Fact]
-    public async Task NewCommandWithoutTemplatePromptsWithDistinctLanguageSpecificEmptyDescriptions()
+    public async Task NewCommandWithoutTemplatePromptsWithSingleGenericEmptyTemplate()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         string[]? promptedTemplateDescriptions = null;
@@ -830,6 +847,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotRust, true);
+                return features;
+            };
             options.InteractionServiceFactory = _ => new TestInteractionService();
             options.NewCommandPrompterFactory = (sp) =>
             {
@@ -838,7 +864,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 prompter.PromptForTemplateCallback = templates =>
                 {
                     promptedTemplateDescriptions = templates
-                        .Where(t => t.Name is KnownTemplateId.CSharpEmptyAppHost or KnownTemplateId.TypeScriptEmptyAppHost)
+                        .Where(t => t.IsEmpty)
                         .Select(t => t.Description)
                         .ToArray();
                     return templates.Single(t => t.Name.Equals(KnownTemplateId.CSharpEmptyAppHost, StringComparison.OrdinalIgnoreCase));
@@ -855,8 +881,194 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.NotNull(promptedTemplateDescriptions);
-        Assert.Contains("Empty AppHost", promptedTemplateDescriptions);
-        Assert.Contains("Empty (TypeScript AppHost)", promptedTemplateDescriptions);
+        Assert.Equal(["Empty AppHost (Choose language...)"], promptedTemplateDescriptions);
+    }
+
+    [Fact]
+    public async Task NewCommandWithEmptyTemplateOmitsDisabledLanguagesFromLanguagePrompt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        string[]? promptedLanguages = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                {
+                    if (promptText == "Which language would you like to use?")
+                    {
+                        promptedLanguages = choices.Cast<object>()
+                            .Select(choice => choiceFormatter(choice))
+                            .ToArray();
+                    }
+
+                    return choices.Cast<object>().First();
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output .");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(promptedLanguages);
+        Assert.Contains(KnownLanguageId.CSharpDisplayName, promptedLanguages);
+        Assert.Contains("TypeScript (Node.js)", promptedLanguages);
+        Assert.DoesNotContain(KnownLanguageId.PythonDisplayName, promptedLanguages);
+        Assert.DoesNotContain(KnownLanguageId.JavaDisplayName, promptedLanguages);
+        Assert.DoesNotContain(KnownLanguageId.GoDisplayName, promptedLanguages);
+        Assert.DoesNotContain(KnownLanguageId.RustDisplayName, promptedLanguages);
+    }
+
+    [Fact]
+    public async Task NewCommandWithEmptyTemplatePromptsForEnabledLanguages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        string[]? promptedLanguages = null;
+        string? scaffoldedLanguageId = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
+                return features;
+            };
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                {
+                    var formattedChoices = choices.Cast<object>()
+                        .Select(choice => choiceFormatter(choice))
+                        .ToArray();
+
+                    if (promptText == "Which language would you like to use?")
+                    {
+                        promptedLanguages = formattedChoices;
+                        return choices.Cast<object>().Single(choice => string.Equals(choiceFormatter(choice), KnownLanguageId.JavaDisplayName, StringComparison.Ordinal));
+                    }
+
+                    return choices.Cast<object>().First();
+                }
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "AppHost.java"), "package aspire;");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output .");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Java, scaffoldedLanguageId);
+        Assert.NotNull(promptedLanguages);
+        Assert.Contains(KnownLanguageId.CSharpDisplayName, promptedLanguages);
+        Assert.Contains("TypeScript (Node.js)", promptedLanguages);
+        Assert.Contains(KnownLanguageId.PythonDisplayName, promptedLanguages);
+        Assert.Contains(KnownLanguageId.JavaDisplayName, promptedLanguages);
+        Assert.DoesNotContain(KnownLanguageId.GoDisplayName, promptedLanguages);
+        Assert.DoesNotContain(KnownLanguageId.RustDisplayName, promptedLanguages);
+    }
+
+    [Fact]
+    public async Task NewCommandWithEmptyTemplateIgnoresConfiguredLanguage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), """
+            {
+              "language": "typescript/nodejs"
+            }
+            """);
+
+        var languagePrompted = false;
+        string? scaffoldedLanguageId = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                return features;
+            };
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                {
+                    if (promptText == "Which language would you like to use?")
+                    {
+                        languagePrompted = true;
+                        return choices.Cast<object>().Single(choice => string.Equals(choiceFormatter(choice), KnownLanguageId.JavaDisplayName, StringComparison.Ordinal));
+                    }
+
+                    return choices.Cast<object>().First();
+                }
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "AppHost.java"), "package aspire;");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output .");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(languagePrompted);
+        Assert.Equal(KnownLanguageId.Java, scaffoldedLanguageId);
+    }
+
+    [Fact]
+    public async Task NewCommandWithExplicitLanguageAfterEmptyTemplateSubcommandCreatesTypeScriptAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        string? scaffoldedLanguageId = null;
+
+        var services = CreateServiceCollection(workspace);
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output . --language typescript --localhost-tld false --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(KnownLanguageId.TypeScript, scaffoldedLanguageId);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
     }
 
     [Fact]
@@ -894,6 +1106,42 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(KnownLanguageId.Java, scaffoldedLanguageId);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.java")));
+    }
+
+    [Fact]
+    public async Task NewCommandWithExplicitPythonEmptyTemplateCreatesPythonAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        string? scaffoldedLanguageId = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
+                return features;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.py"), "# test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-py-empty --name TestApp --output . --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Python, scaffoldedLanguageId);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.py")));
     }
 
     [Fact]
@@ -1283,6 +1531,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
         TestInteractionService? testInteractionService = null;
+        string? availableTemplatesMessage = null;
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -1295,8 +1544,18 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
             options.InteractionServiceFactory = (sp) =>
             {
-                testInteractionService = new TestInteractionService();
+                testInteractionService = new TestInteractionService
+                {
+                    DisplaySubtleMessageCallback = message => availableTemplatesMessage = message
+                };
                 return testInteractionService;
+            };
+
+            options.FeatureFlagsFactory = _ =>
+            {
+                var features = new TestFeatures();
+                features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+                return features;
             };
 
         });
@@ -1311,6 +1570,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(testInteractionService);
         Assert.Contains(testInteractionService.DisplayedErrors,
             e => string.Equals(e, NewCommandStrings.NonInteractiveTemplateRequired, StringComparison.Ordinal));
+        Assert.NotNull(availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.TypeScriptEmptyAppHost, availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.JavaEmptyAppHost, availableTemplatesMessage);
     }
 
     [Fact]
