@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Terminals.Repl\Terminals.Repl.csproj" IsAspireProjectResource="true" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
   </ItemGroup>
 

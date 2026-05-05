@@ -3,10 +3,29 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Phase 8 of the WithTerminal work will rewrite this playground to demonstrate
-// the new DCP-driven terminal flow against both an executable and a container.
-// For now this is a no-op placeholder so the playground keeps building during
-// Phase 1 (app-model refactor).
+// A multi-replica project that calls `WithTerminal()` so each replica gets its
+// own pseudo-terminal and the dashboard can attach to any of them via
+// `/api/terminal?resource=repl&replica=<i>`. The replica index is forwarded as
+// an environment variable so the REPL can stamp it on its banner.
+builder.AddProject<Projects.Terminals_Repl>("repl")
+    .WithReplicas(2)
+    .WithEnvironment("ASPIRE_RESOURCE_NAME", "repl")
+    .WithTerminal(options =>
+    {
+        options.Columns = 120;
+        options.Rows = 32;
+    });
+
+if (OperatingSystem.IsWindows())
+{
+    // Single-replica executable wrapping cmd.exe to demonstrate that
+    // WithTerminal() also works for arbitrary executables, not just projects.
+    // DCP's PTY allocator currently only supports Windows, so this branch is
+    // gated behind an OS check; future Phase 3 follow-ups will extend it to
+    // Linux and macOS.
+    builder.AddExecutable("shell", "cmd.exe", ".")
+        .WithTerminal();
+}
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
@@ -19,3 +38,4 @@ builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard
 #endif
 
 builder.Build().Run();
+

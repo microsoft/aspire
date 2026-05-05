@@ -3285,6 +3285,47 @@ public class DcpExecutorTests
         Assert.Null(exe.Spec.Terminal);
     }
 
+    [Fact]
+    public async Task PlainExecutable_WithTerminal_PopulatesTerminalSpecOnWindows()
+    {
+        // Regression test: plain executables added via AddExecutable() were missing
+        // the ResourceReplicaIndex/ResourceReplicaCount annotations, which caused
+        // BuildExecutableConfiguration to skip the spec.Terminal wire-up entirely
+        // (the per-replica producer UDS path lookup in TerminalHostLayout was guarded
+        // by a successful TryGetReplicaIndex).
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "DCP terminal support is currently Windows-only.");
+
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("shell", "cmd.exe", ".")
+            .WithTerminal(options =>
+            {
+                options.Columns = 100;
+                options.Rows = 30;
+            })
+            .Resource;
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "shell");
+        var layout = resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost.Layout;
+
+        Assert.NotNull(exe.Spec.Terminal);
+        Assert.True(exe.Spec.Terminal!.Enabled);
+        Assert.Equal(layout.ProducerUdsPaths[0], exe.Spec.Terminal.UdsPath);
+        Assert.Equal(100, exe.Spec.Terminal.Cols);
+        Assert.Equal(30, exe.Spec.Terminal.Rows);
+
+        // Plain executables are always single-replica today; both annotations must
+        // be present for the per-replica lookup to succeed.
+        Assert.Equal("1", exe.Metadata.Annotations?[CustomResource.ResourceReplicaCount]);
+        Assert.Equal("0", exe.Metadata.Annotations?[CustomResource.ResourceReplicaIndex]);
+    }
+
     private static DcpExecutor CreateAppExecutor(
         DistributedApplicationModel distributedAppModel,
         IHostEnvironment? hostEnvironment = null,
