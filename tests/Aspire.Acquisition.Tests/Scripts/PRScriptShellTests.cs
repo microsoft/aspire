@@ -481,7 +481,8 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
-        var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path");
+        // Do NOT pass --skip-path: the PATH hint is only printed when PATH configuration runs.
+        var result = await cmd.ExecuteAsync("12345", "--dry-run");
 
         result.EnsureSuccessful();
 
