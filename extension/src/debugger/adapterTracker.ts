@@ -10,7 +10,15 @@ import { dcpServerNotInitialized } from '../loc/strings';
  * Return `true` to suppress VS Code's automatic child session restart.
  */
 export type AppHostRestartHandler = (debugSessionId: string) => boolean;
-export type AppHostOutputHandler = (output: string, category: string) => void;
+
+/**
+ * DAP output event categories. Per the DAP spec the `category` field is optional;
+ * when missing, clients should treat it as `'console'`. This union keeps the known
+ * categories explicit while allowing adapter-specific values via the `(string & {})`
+ * trick, and includes `undefined` so callers can't accidentally rely on it being set.
+ */
+export type DapOutputCategory = 'console' | 'important' | 'stdout' | 'stderr' | 'debug' | 'telemetry' | (string & {}) | undefined;
+export type AppHostOutputHandler = (output: string, category: DapOutputCategory) => void;
 
 export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapter: string, onAppHostRestartRequested?: AppHostRestartHandler, onAppHostOutput?: AppHostOutputHandler): vscode.Disposable {
     return vscode.debug.registerDebugAdapterTrackerFactory(debugAdapter, {
@@ -46,7 +54,7 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                             const { category, output } = message.body;
                             if (typeof output === 'string' && category !== 'telemetry') {
                                 if (session.configuration.isApphost) {
-                                    onAppHostOutput?.(output, category as string);
+                                    onAppHostOutput?.(output, category);
                                     return;
                                 }
 

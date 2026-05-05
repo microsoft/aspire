@@ -234,6 +234,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
+  private static readonly _csharpAppHostExtensions = ['.cs', '.csproj'];
 
   private _appHostRestartRequested = false;
 
@@ -241,6 +242,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     try {
       const fileExtension = path.extname(projectFile).toLowerCase();
       const isNodeAppHost = AspireDebugSession._nodeAppHostExtensions.includes(fileExtension);
+      const isCSharpAppHost = AspireDebugSession._csharpAppHostExtensions.includes(fileExtension);
 
       const debuggerExtension = isNodeAppHost ? nodeDebuggerExtension : projectDebuggerExtension;
 
@@ -248,6 +250,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       // When the user clicks "restart" on the app host child session,
       // we suppress VS Code's automatic child restart and restart the
       // entire Aspire debug session instead.
+      //
+      // The output filter is intentionally a positive opt-in for C# AppHosts only.
+      // The .NET debugger (`coreclr`) emits a lot of `console`-category chatter
+      // (module loads, exception-thrown notifications, the debugger banner, etc.)
+      // into the parent debug console, and structured `Microsoft.Extensions.Logging`
+      // lines need trce/dbug-level filtering. Other languages (Node, and future
+      // additions like Python/Go) use different debug adapters that don't produce
+      // that noise, so we pass their output through unmodified until/unless they
+      // explicitly opt in to filtering.
       this.createDebugAdapterTrackerCore(
         debuggerExtension.debugAdapter,
         (debugSessionId) => {
@@ -257,7 +268,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           }
           return false;
         },
-        (output, category) => this.sendAppHostMessage(output, category)
+        isCSharpAppHost
+          ? (output, category) => this.sendAppHostMessage(output, category)
+          : (output, category) => this.sendMessage(output, false, category === 'stderr' ? 'stderr' : 'stdout')
       );
 
       let appHostArgs: string[];
@@ -557,15 +570,28 @@ export interface AppHostParentOutput {
 export class AppHostParentOutputFilter {
   private _continuingDroppedLog = false;
   private _continuingErrorBlock = false;
+  private _lastCategory: string | undefined;
 
   filter(output: string, category: string | undefined): AppHostParentOutput | undefined {
     if (category === 'debug') {
       this.resetState();
+      this._lastCategory = category;
       return undefined;
     }
 
+    // Continuation state (dropped log / error block) only makes sense within a single
+    // logical stream. When the DAP category changes (e.g. console -> stdout) we are
+    // looking at a different stream and previous indented-continuation context no
+    // longer applies.
+    if (category !== this._lastCategory) {
+      this.resetState();
+    }
+    this._lastCategory = category;
+
     const segments = output.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(segment => segment.length > 0) ?? [];
     let filteredOutput = '';
+    // If the DAP delivered this chunk on stderr, keep the whole emitted message on
+    // stderr — the channel itself is authoritative regardless of per-line classification.
     let hasErrorOutput = category === 'stderr';
 
     for (const segment of segments) {
@@ -645,7 +671,12 @@ function getConsoleLogSeverity(line: string): 'low' | 'normal' | 'severe' | unde
         : 'normal';
   }
 
-  const simpleConsoleLogLevel = /^[^:]+:\s*(Trace|Debug|Information|Warning|Error|Critical):\s/.exec(line)?.[1];
+  // Microsoft.Extensions.Logging "simple" console formatter emits lines shaped like
+  // `<CategoryTypeName>[<EventId>]?: <Level>: <message>`. Real category names are
+  // namespaced .NET type names containing at least one dot (e.g.
+  // `Aspire.Hosting.Health.ResourceHealthCheckService`). Requiring a dot avoids
+  // matching arbitrary user stdout like `"Status: Error: connection refused"`.
+  const simpleConsoleLogLevel = /^[A-Za-z_]\w*(?:\.\w+)+(?:\[[^\]]+\])?:\s*(Trace|Debug|Information|Warning|Error|Critical):\s/.exec(line)?.[1];
   if (simpleConsoleLogLevel) {
     return simpleConsoleLogLevel === 'Trace' || simpleConsoleLogLevel === 'Debug'
       ? 'low'
@@ -662,7 +693,12 @@ function isIndentedContinuation(line: string): boolean {
 }
 
 function isSevereRuntimeOutputLine(line: string): boolean {
+  // Typed exception — `Namespace.Type.NameException: message` (also matches plain `System.Exception:`).
   return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
+    // JavaScript / Node.js error shapes — `Uncaught TypeError: ...`, `Error [CODE]: ...`.
     || /(?:^|\s)(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
-    || /\b(?:fatal|fail(?:ed|ure)?|error|critical)\b/i.test(line);
+    // Anchored fatal-marker prefixes only — bare word matches like `\bfailed\b` produced
+    // false positives on user stdout (`"Failed payment retry queued"`, file paths
+    // containing "error", etc.).
+    || /^(?:fatal|critical|panic|aborted|segmentation\s+fault|unhandled\s+exception)\b/i.test(line);
 }

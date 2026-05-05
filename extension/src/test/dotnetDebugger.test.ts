@@ -168,6 +168,39 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.deepStrictEqual(filter.filter(normalOutput, 'stdout'), { output: normalOutput, category: 'stdout' });
     });
 
+    test('does not promote benign AppHost stdout containing words like fail/error to stderr', () => {
+        const filter = new AppHostParentOutputFilter();
+        const benignFailMention = 'Failed payment retry queued for processing\n';
+        const benignErrorMention = 'Loaded handler from /src/error_handler/main.cs\n';
+        const benignFailureMention = 'Build complete with no failures detected\n';
+
+        assert.deepStrictEqual(filter.filter(benignFailMention, 'stdout'), { output: benignFailMention, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(benignErrorMention, 'stdout'), { output: benignErrorMention, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(benignFailureMention, 'stdout'), { output: benignFailureMention, category: 'stdout' });
+    });
+
+    test('does not classify arbitrary user stdout shaped like prefix:Level: as a structured log', () => {
+        const filter = new AppHostParentOutputFilter();
+        const userPrint = 'Status: Error: connection refused\n';
+        const userDebugPrint = 'Note: Debug: caller line 42\n';
+
+        assert.deepStrictEqual(filter.filter(userPrint, 'stdout'), { output: userPrint, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(userDebugPrint, 'stdout'), { output: userDebugPrint, category: 'stdout' });
+    });
+
+    test('continuation state is reset when DAP category changes between events', () => {
+        const filter = new AppHostParentOutputFilter();
+        // First event: a dropped trace log on stdout. Continuation state would say "drop indented lines".
+        assert.strictEqual(filter.filter('trce: Some.Category[0]\n', 'stdout'), undefined);
+        // A subsequent event on a different category (console) that happens to start with
+        // an indented line must NOT be silently dropped as a continuation of the trace log.
+        const indentedConsoleLine = '    Loaded module foo\n';
+        assert.strictEqual(filter.filter(indentedConsoleLine, 'console'), undefined); // dropped because console+non-severe, not because of continuation state
+        // And an indented stdout line afterwards is emitted normally instead of being dropped.
+        const indentedStdoutLine = '    plain user output line\n';
+        assert.deepStrictEqual(filter.filter(indentedStdoutLine, 'stdout'), { output: indentedStdoutLine, category: 'stdout' });
+    });
+
     test('project is built when C# dev kit is installed and executable not found', async () => {
         const outputPath = 'C:\\temp\\bin\\Debug\\net7.0\\TestProject.dll';
         const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
