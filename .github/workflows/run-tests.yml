@@ -342,9 +342,9 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # CLI E2E Dockerfiles consume this as a build arg to avoid overloaded default Ubuntu package servers.
-          # azure.archive.ubuntu.com does not serve HTTPS; HTTP is intentional and matches the GitHub-hosted Ubuntu runner fallback mirror.
-          ASPIRE_E2E_UBUNTU_APT_MIRROR: ${{ runner.os == 'Linux' && (runner.arch == 'ARM64' && 'https://azure.ports.ubuntu.com/ubuntu-ports/' || 'http://azure.archive.ubuntu.com/ubuntu/') || '' }}
+          # CLI E2E Dockerfiles consume this as a build arg. ARM64 images need the Ubuntu ports archive;
+          # x64 images use their default Ubuntu sources to avoid pinning to a transiently unavailable mirror.
+          ASPIRE_E2E_UBUNTU_APT_MIRROR: ${{ runner.os == 'Linux' && runner.arch == 'ARM64' && 'https://azure.ports.ubuntu.com/ubuntu-ports/' || '' }}
           # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
@@ -431,9 +431,9 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # CLI E2E Dockerfiles consume this as a build arg to avoid overloaded default Ubuntu package servers.
-          # azure.archive.ubuntu.com does not serve HTTPS; HTTP is intentional and matches the GitHub-hosted Ubuntu runner fallback mirror.
-          ASPIRE_E2E_UBUNTU_APT_MIRROR: ${{ runner.os == 'Linux' && (runner.arch == 'ARM64' && 'https://azure.ports.ubuntu.com/ubuntu-ports/' || 'http://azure.archive.ubuntu.com/ubuntu/') || '' }}
+          # CLI E2E Dockerfiles consume this as a build arg. ARM64 images need the Ubuntu ports archive;
+          # x64 images use their default Ubuntu sources to avoid pinning to a transiently unavailable mirror.
+          ASPIRE_E2E_UBUNTU_APT_MIRROR: ${{ runner.os == 'Linux' && runner.arch == 'ARM64' && 'https://azure.ports.ubuntu.com/ubuntu-ports/' || '' }}
           # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
