@@ -138,8 +138,12 @@ jobs:
               $ErrorActionPreference = 'Stop'
               $reason = '$(Build.Reason)'
               $branch = '$(Build.SourceBranch)'
-              $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
-              $versionKind = $versionKind.Trim()
+              $versionsContent = Get-Content "$(Build.SourcesDirectory)/eng/Versions.props" -Raw
+              if ($versionsContent -match '<DotNetFinalVersionKind>([^<]*)</DotNetFinalVersionKind>') {
+                $versionKind = $matches[1].Trim()
+              } else {
+                $versionKind = ''
+              }
               Write-Host "Build.Reason: '$reason'  SourceBranch: '$branch'  DotNetFinalVersionKind: '$versionKind'"
 
               if ($reason -eq 'PullRequest') {
