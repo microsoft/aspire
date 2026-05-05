@@ -76,6 +76,18 @@ public class SidecarSourceFileTests
     }
 
     [Fact]
+    public void BrewCaskTemplate_WritesRouteSidecarInPostflight()
+    {
+        var templatePath = Path.Combine(RepoRoot, "eng", "homebrew", "aspire.rb.template");
+        Assert.True(File.Exists(templatePath), $"Brew cask template not found at: {templatePath}");
+
+        var content = File.ReadAllText(templatePath);
+        Assert.Contains("postflight do", content);
+        Assert.Contains(".aspire-install.json", content);
+        Assert.Contains("brew upgrade aspire", content);
+    }
+
+    [Fact]
     public void WingetInstallerTemplate_HasScopeUser()
     {
         var templatePath = Path.Combine(RepoRoot, "eng", "winget", "microsoft.aspire", "Aspire.installer.yaml.template");

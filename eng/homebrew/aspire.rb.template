@@ -16,4 +16,8 @@ cask "aspire" do
   end
 
   binary "aspire"
+
+  postflight do
+    File.write("#{staged_path}/.aspire-install.json", "{ \"route\": \"brew\", \"updateCommand\": \"brew upgrade aspire\" }\n")
+  end
 end

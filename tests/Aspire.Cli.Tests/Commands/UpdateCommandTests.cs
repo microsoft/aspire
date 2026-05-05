@@ -624,6 +624,43 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenInstallRouteSidecarHasUpdateCommand_DisplaysDelegatedUpdateCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var tempDirectory = new TestTempDirectory();
+        var processPath = Path.Combine(tempDirectory.Path, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        var sidecarPath = Path.Combine(tempDirectory.Path, ".aspire-install.json");
+        File.WriteAllText(processPath, string.Empty);
+        File.WriteAllText(sidecarPath, "{ \"route\": \"winget\", \"updateCommand\": \"winget upgrade Microsoft.Aspire\" }");
+        using var processPathScope = CliInstallRouteDetection.UseProcessPathForTesting(processPath);
+        var interactionService = new TestInteractionService();
+        var downloaderInvoked = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(downloaderInvoked, "Archive self-update should not be used when the install route delegates updates.");
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("winget upgrade Microsoft.Aspire", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task UpdateCommand_WhenNoProjectFoundAndRunningAsDotnetTool_DoesNotPromptForArchiveSelfUpdate()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

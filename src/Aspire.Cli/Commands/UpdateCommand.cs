@@ -109,6 +109,18 @@ internal sealed class UpdateCommand : BaseCommand
         return DotNetToolDetection.GetDotNetToolUpdateCommand();
     }
 
+    private string? GetDelegatedSelfUpdateCommand()
+    {
+        return GetDotNetToolUpdateCommand() ??
+            CliInstallRouteDetection.GetUpdateCommand(ex => _logger.LogDebug(ex, "Failed to cache CLI install route sidecar."));
+    }
+
+    private void DisplayDelegatedSelfUpdateCommand(string updateCommand)
+    {
+        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+        InteractionService.DisplayPlainText($"  {updateCommand}");
+    }
+
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
@@ -116,12 +128,10 @@ internal sealed class UpdateCommand : BaseCommand
         // If --self is specified, handle CLI self-update
         if (isSelfUpdate)
         {
-            // When running as a dotnet tool, print the update command instead of executing
-            var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
-            if (dotNetToolUpdateCommand is not null)
+            var delegatedSelfUpdateCommand = GetDelegatedSelfUpdateCommand();
+            if (delegatedSelfUpdateCommand is not null)
             {
-                InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+                DisplayDelegatedSelfUpdateCommand(delegatedSelfUpdateCommand);
                 return 0;
             }
 
@@ -224,11 +234,10 @@ internal sealed class UpdateCommand : BaseCommand
 
                 if (shouldUpdateCli)
                 {
-                    var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
-                    if (dotNetToolUpdateCommand is not null)
+                    var delegatedSelfUpdateCommand = GetDelegatedSelfUpdateCommand();
+                    if (delegatedSelfUpdateCommand is not null)
                     {
-                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                        InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+                        DisplayDelegatedSelfUpdateCommand(delegatedSelfUpdateCommand);
                         return ExitCodeConstants.Success;
                     }
 
@@ -256,8 +265,7 @@ internal sealed class UpdateCommand : BaseCommand
             // Check if this is a "no project found" error and prompt for self-update
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
-                // Only prompt for self-update if not running as dotnet tool and downloader is available
-                if (GetDotNetToolUpdateCommand() is null && _cliDownloader is not null)
+                if (_cliDownloader is not null && GetDotNetToolUpdateCommand() is null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,
@@ -266,6 +274,13 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
+                        var delegatedSelfUpdateCommand = GetDelegatedSelfUpdateCommand();
+                        if (delegatedSelfUpdateCommand is not null)
+                        {
+                            DisplayDelegatedSelfUpdateCommand(delegatedSelfUpdateCommand);
+                            return ExitCodeConstants.Success;
+                        }
+
                         return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
                     }
                 }

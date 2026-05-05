@@ -78,8 +78,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">
-        <source>To update the Aspire CLI when installed as a .NET tool, run:</source>
-        <target state="translated">Um die Aspire-CLI bei der Installation als .NET-Tool zu aktualisieren, führen Sie folgende Schritte aus:</target>
+        <source>To update the Aspire CLI for this installation, run:</source>
+        <target state="needs-review-translation">Um die Aspire-CLI bei der Installation als .NET-Tool zu aktualisieren, führen Sie folgende Schritte aus:</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
