@@ -222,7 +222,10 @@ internal static class ResourceExtensions
                     break;
 
                 case "pvc":
-                    _ = CreatePersistentVolume(context, volume);
+                    if (!ShouldDynamicallyProvision(context.TargetResource, context.Parent))
+                    {
+                        _ = CreatePersistentVolume(context, volume);                        
+                    }
                     var pvc = CreatePersistentVolumeClaim(context, volume);
                     podVolume.PersistentVolumeClaim = new()
                     {
@@ -238,6 +241,15 @@ internal static class ResourceExtensions
         }
 
         return podTemplateSpec;
+    }
+
+    private static bool ShouldDynamicallyProvision(IResource resource, KubernetesEnvironmentResource environment)
+    {
+        if (resource.TryGetLastAnnotation<KubernetesProvisioningPolicyAnnotation>(out var provisioningAnnotation))
+        {
+            return provisioningAnnotation.ShouldDynamicallyProvision;
+        }
+        return environment.DefaultShouldDynamicallyProvision;
     }
 
     private static ContainerV1 ToContainerV1(this IResource resource, KubernetesResource context)
