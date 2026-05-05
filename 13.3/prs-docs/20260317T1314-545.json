@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-03-17T13:14:04Z",
+  "number": 545,
+  "runDate": "2026-05-05T16:53:33Z",
+  "status": "excluded",
+  "title": "chore(deps): bump fast-xml-parser from 5.3.6 to 5.5.6 in /src/frontend"
+}

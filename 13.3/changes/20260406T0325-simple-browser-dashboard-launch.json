@@ -5,10 +5,15 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "The VS Code extension now defaults to opening the Aspire Dashboard in VS Code's built-in Simple Browser tab, keeping the developer in the IDE. The existing options (external browser, Chrome, Edge, Firefox debug) continue to work via the `aspire.dashboardBrowser` setting.",
+  "docsPrs": [
+    538
+  ],
   "docsRequired": true,
   "emoji": "🖥️",
   "firstMergedAt": "2026-04-06T03:25:02Z",
   "lastMergedAt": "2026-04-06T03:25:02Z",
   "name": "Dashboard opens in VS Code Simple Browser by default",
-  "prs": [15896]
+  "prs": [
+    15896
+  ]
 }

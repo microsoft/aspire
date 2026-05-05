@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Fixes existing docs inaccuracies, no matching 13.3 changelog entry",
+  "mergedAt": "2026-03-11T16:05:49Z",
+  "number": 531,
+  "runDate": "2026-05-05T16:53:33Z",
+  "status": "excluded",
+  "title": "Fix migrate-from-docker-compose docs: address all technical inaccuracies from dotnet/docs-aspire#5445"
+}

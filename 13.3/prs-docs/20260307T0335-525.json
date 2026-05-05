@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents ASPIREAZURE003 diagnostic introduced in Aspire 13.2, not a 13.3 changelog entry",
+  "mergedAt": "2026-03-07T03:35:21Z",
+  "number": 525,
+  "runDate": "2026-05-05T16:53:33Z",
+  "status": "excluded",
+  "title": "Add diagnostics doc for ASPIREAZURE003"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "New docs recipe, no matching 13.3 changelog entry with docsRequired",
+  "mergedAt": "2026-03-10T20:23:41Z",
+  "number": 500,
+  "runDate": "2026-05-05T16:53:33Z",
+  "status": "excluded",
+  "title": "Add recipe for passing Aspire parameters to SPA frontends"
+}

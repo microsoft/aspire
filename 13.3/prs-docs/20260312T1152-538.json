@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Matches changelog entry: Dashboard opens in VS Code Simple Browser by default (PR 15896)",
+  "mergedAt": "2026-03-12T11:52:23Z",
+  "number": 538,
+  "runDate": "2026-05-05T16:53:33Z",
+  "status": "included",
+  "title": "Revamp VS Code extension doc and add cross-references"
+}

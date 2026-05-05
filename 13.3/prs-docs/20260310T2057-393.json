@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Updates WithCustomInput example, no matching 13.3 changelog entry with docsRequired",
+  "mergedAt": "2026-03-10T20:57:42Z",
+  "number": 393,
+  "runDate": "2026-05-05T16:53:33Z",
+  "status": "excluded",
+  "title": "Add EnableDescriptionMarkdown to WithCustomInput example"
+}

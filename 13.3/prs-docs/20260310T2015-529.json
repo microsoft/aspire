@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Hides 13.2 feature docs from main branch, not a 13.3 changelog entry",
+  "mergedAt": "2026-03-10T20:15:32Z",
+  "number": 529,
+  "runDate": "2026-05-05T16:53:33Z",
+  "status": "excluded",
+  "title": "Hide aspire doctor docs from main (release/13.2 feature)"
+}
