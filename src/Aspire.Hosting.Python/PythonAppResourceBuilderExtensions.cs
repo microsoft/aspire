@@ -930,23 +930,31 @@ public static class PythonAppResourceBuilderExtensions
         var entrypointType = entrypointAnnotation.Type;
         var entrypoint = entrypointAnnotation.Entrypoint;
 
-        string programPath;
-        string module;
-
-        if (entrypointType == EntrypointType.Script)
-        {
-            programPath = Path.GetFullPath(entrypoint, builder.Resource.WorkingDirectory);
-            module = string.Empty;
-        }
-        else
-        {
-            programPath = builder.Resource.WorkingDirectory;
-            module = entrypoint;
-        }
-
         builder.WithDebugSupport(
             mode =>
             {
+                // Compute paths inside the lambda so a later WithWorkingDirectory(...) override is respected.
+                var workingDirectory = builder.Resource.WorkingDirectory;
+
+                string programPath;
+                string module;
+
+                if (entrypointType == EntrypointType.Script)
+                {
+                    programPath = Path.GetFullPath(entrypoint, workingDirectory);
+                    module = string.Empty;
+                }
+                else
+                {
+                    // For Module and Executable entrypoints the new `working_directory` field on the launch
+                    // configuration carries the cwd to the Python debugger. Older versions of the VS Code
+                    // extension only look at `program_path`/`project_path` to derive the cwd and don't
+                    // understand `working_directory`, so to preserve backward compatibility we still
+                    // populate `ProgramPath` with the working directory like the previous behavior.
+                    programPath = workingDirectory;
+                    module = entrypoint;
+                }
+
                 string interpreterPath;
                 if (!builder.Resource.TryGetLastAnnotation<PythonEnvironmentAnnotation>(out var annotation) || annotation.VirtualEnvironment is null)
                 {
@@ -956,7 +964,7 @@ public static class PythonAppResourceBuilderExtensions
                 {
                     var venvPath = Path.IsPathRooted(annotation.VirtualEnvironment.VirtualEnvironmentPath)
                         ? annotation.VirtualEnvironment.VirtualEnvironmentPath
-                        : Path.GetFullPath(annotation.VirtualEnvironment.VirtualEnvironmentPath, builder.Resource.WorkingDirectory);
+                        : Path.GetFullPath(annotation.VirtualEnvironment.VirtualEnvironmentPath, workingDirectory);
 
                     if (OperatingSystem.IsWindows())
                     {
@@ -973,7 +981,8 @@ public static class PythonAppResourceBuilderExtensions
                     ProgramPath = programPath,
                     Module = module,
                     Mode = mode,
-                    InterpreterPath = interpreterPath
+                    InterpreterPath = interpreterPath,
+                    WorkingDirectory = workingDirectory
                 };
             },
             "python",
