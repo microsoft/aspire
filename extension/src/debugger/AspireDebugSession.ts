@@ -173,26 +173,59 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       ? Object.entries(configuredEnv).map(([name, value]) => ({ name, value: String(value) }))
       : undefined;
 
+    // Per-stream line buffers. CLI stdio chunks aren't guaranteed to arrive aligned to line
+    // boundaries; without buffering, partial lines (and split-point ANSI sequences) would be
+    // emitted as their own debug-console events, producing broken output like a bare emoji on
+    // one line followed by the rest of the message on the next.
+    let stdoutBuffer = '';
+    let stderrBuffer = '';
+
+    const flushBuffer = (buffer: string, category: 'stdout' | 'stderr') => {
+      const remainder = buffer.replace(/\r$/, '');
+      if (remainder.length > 0 && !isProgressEscapeSequence(remainder)) {
+        // Spectre's stderr is intentionally bare for non-error notifications (e.g. the version
+        // update banner). The DAP `'stderr'` category alone causes the debug console to render
+        // these lines in red; we don't add an extra `❌` because legitimate CLI errors are
+        // already emoji-prefixed by Spectre at the source.
+        this.sendMessage(remainder, true, category);
+      }
+    };
+
+    const handleChunk = (chunk: string, currentBuffer: string, category: 'stdout' | 'stderr'): string => {
+      const combined = currentBuffer + chunk;
+      const lines = combined.split('\n');
+      const partial = lines.pop() ?? '';
+      for (const line of lines) {
+        flushBuffer(line, category);
+      }
+      return partial;
+    };
+
     spawnCliProcess(
       this._terminalProvider,
       await this._terminalProvider.getAspireCliExecutablePath(),
       args,
       {
         stdoutCallback: (data) => {
-          for (const line of trimMessage(data)) {
-            this.sendMessage(line);
-          }
+          stdoutBuffer = handleChunk(data, stdoutBuffer, 'stdout');
         },
         stderrCallback: (data) => {
-          for (const line of trimMessage(data)) {
-            this.sendMessageWithEmoji("❌", line, false, 'stderr');
-          }
+          stderrBuffer = handleChunk(data, stderrBuffer, 'stderr');
         },
         errorCallback: (error) => {
           extensionLogOutputChannel.error(`Error spawning aspire process: ${error}`);
           vscode.window.showErrorMessage(processExceptionOccurred(error.message, commandLabel));
         },
         exitCallback: (code) => {
+          // Flush any partial line left in either buffer so trailing output isn't lost.
+          if (stdoutBuffer.length > 0) {
+            flushBuffer(stdoutBuffer, 'stdout');
+            stdoutBuffer = '';
+          }
+          if (stderrBuffer.length > 0) {
+            flushBuffer(stderrBuffer, 'stderr');
+            stderrBuffer = '';
+          }
           this.sendMessageWithEmoji("🔚", processExitedWithCode(code ?? '?'));
           // if the process failed, we want to stop the debug session
           this.dispose();
@@ -213,13 +246,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       }
     });
 
-    function trimMessage(message: string): string[] {
-      return message
-        .replace('\r\n', '\n')
-        .split('\n')
-        .map(line => line.trim())
-        // Filter empty lines and terminal progress bar escape sequences
-        .filter(line => line.length > 0 && !line.match(/^\u001b\]9;4;\d+\u001b\\$/));
+    function isProgressEscapeSequence(line: string): boolean {
+      // ConEmu/iTerm2 progress-reporting OSC sequence (`OSC 9;4;<state>;<value> ST`).
+      return /^\u001b\]9;4;\d+\u001b\\$/.test(line.trim());
     }
   }
 
