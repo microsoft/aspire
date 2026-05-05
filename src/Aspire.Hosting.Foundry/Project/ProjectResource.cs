@@ -6,10 +6,9 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
+using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -69,19 +68,30 @@ public class AzureCognitiveServicesProjectResource :
                 Name = $"compute-endpoints-{name}",
                 Action = async (context) =>
                 {
-                    var configuration = context.Services.GetRequiredService<IConfiguration>();
-                    var subscriptionId = configuration["Azure:SubscriptionId"];
-                    var resourceGroupName = configuration["Azure:ResourceGroup"];
+                    var parentId = await Parent.Id.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(parentId))
+                    {
+                        return;
+                    }
+
+                    var resourceId = new ResourceIdentifier(parentId);
+                    var subscriptionId = resourceId.SubscriptionId;
+                    var resourceGroupName = resourceId.ResourceGroupName;
                     if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroupName))
                     {
                         return;
                     }
+
                     var encodedSubscriptionId = EncodeSubscriptionId(subscriptionId);
-                    // Print dashboard URL
-                    await context.ReportingStep.CompleteAsync(
-                        $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId},{resourceGroupName},,{Parent.Name},{Name}/home").ConfigureAwait(false);
+                    // Commas are percent-encoded so terminal link detection doesn't truncate the URL.
+                    var portalUrl = $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId}%2C{Uri.EscapeDataString(resourceGroupName)}%2C%2C{Uri.EscapeDataString(Parent.Name)}%2C{Uri.EscapeDataString(Name)}/home";
+
+                    await context.ReportingStep.CompleteAsync(portalUrl).ConfigureAwait(false);
+
+                    context.Summary.Add(Name, new MarkdownString($"[{portalUrl}]({portalUrl})"));
                 },
                 Resource = this,
+                Tags = ["print-summary"],
                 DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy]
             };
