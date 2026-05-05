@@ -569,20 +569,24 @@ internal static class Hex1bAutomatorTestHelpers
                 break;
 
             case AspireTemplate.TypeScriptEmptyAppHost:
-                await auto.TypeAsync("Empty (TypeScript");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (TypeScript AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "TypeScript Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("TypeScript");
                 await auto.EnterAsync();
                 break;
 
             case AspireTemplate.JavaEmptyAppHost:
-                await auto.TypeAsync("Empty (Java AppHost)");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (Java AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "Java Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("Java");
                 await auto.EnterAsync();
                 break;
 
