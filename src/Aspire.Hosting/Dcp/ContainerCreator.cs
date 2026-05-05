@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -296,7 +297,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var dcpContainer = cr.DcpResource;
         var modelContainer = cr.ModelResource;
 
-        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext.ServiceProvider, cToken).ConfigureAwait(false);
+        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext.ServiceProvider, logger, cToken).ConfigureAwait(false);
 
         var spec = dcpContainer.Spec;
 
@@ -803,7 +804,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return (runArgs, failedToApplyArgs);
     }
 
-    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, IServiceProvider serviceProvider, ILogger logger, CancellationToken cancellationToken)
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
@@ -854,6 +855,18 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 Args = dcpBuildArgs,
                 Secrets = dcpBuildSecrets
             };
+
+#pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
+            var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
+                serviceProvider,
+                logger,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (buildOptionsContext.TargetPlatform is { } targetPlatform)
+            {
+                dcpContainerResource.Spec.Build.Platform = targetPlatform.ToRuntimePlatformString();
+            }
+#pragma warning restore ASPIREPIPELINES003
         }
     }
 

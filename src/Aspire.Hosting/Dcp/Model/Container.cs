@@ -126,6 +126,10 @@ internal sealed class BuildContext
     // Optional labels to apply to the built image
     [JsonPropertyName("labels")]
     public List<ContainerLabel>? Labels { get; set; }
+
+    // Optional target platform for the build (e.g. "linux/amd64")
+    [JsonPropertyName("platform")]
+    public string? Platform { get; set; }
 }
 
 internal sealed class BuildContextSecret

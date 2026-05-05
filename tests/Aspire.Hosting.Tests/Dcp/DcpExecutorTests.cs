@@ -13,6 +13,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
@@ -50,6 +51,31 @@ public class DcpExecutorTests
         // Assert
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         Assert.Equal("CustomName", container.Metadata.Annotations["otel-service-name"]);
+    }
+
+    [Fact]
+    public async Task DockerfileContainerBuildSpecIncludesPlatform()
+    {
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+
+        var builder = DistributedApplication.CreateBuilder();
+#pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
+        builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+               .WithContainerBuildOptions(ctx => ctx.TargetPlatform = ContainerTargetPlatform.LinuxArm64);
+#pragma warning restore ASPIREPIPELINES003
+
+        var kubernetesService = new TestKubernetesService();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Build);
+        Assert.Equal("linux/arm64", container.Spec.Build!.Platform);
     }
 
     [Fact]
