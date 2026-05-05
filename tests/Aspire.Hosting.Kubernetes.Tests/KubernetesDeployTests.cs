@@ -709,7 +709,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Theory]
     [InlineData("latest")]
     [InlineData("release-candidate")]
-    [InlineData("1.0")]
+    [InlineData("1.0.0.0")]
+    [InlineData("01.2.3")]
     public void HelmChartOptions_WithChartVersion_ThrowsOnInvalidVersion(string value)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -718,6 +719,60 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             {
                 Assert.Throws<ArgumentException>(() => helm.WithChartVersion(value));
             });
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("1.2")]
+    [InlineData("1.2.3")]
+    [InlineData("1.2.3-beta.1")]
+    [InlineData("1.2.3-beta.1+ef365")]
+    [InlineData("v1")]
+    [InlineData("v1.2")]
+    [InlineData("v1.2.3")]
+    [InlineData("V1.2.3")]
+    public void HelmChartOptions_WithChartVersion_AcceptsHelmCompatibleVersions(string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                helm.WithChartVersion(value);
+            });
+    }
+
+    [Fact]
+    public async Task WithHelm_PublishThrowsWhenResolvedParameterChartVersionIsInvalid()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var versionParam = builder.AddParameter("chart-version", "not-a-version");
+
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartVersion(versionParam));
+        builder.AddContainer("svc", "nginx");
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecutePipelineAsync(app));
+        Assert.Contains("not-a-version", ex.Message);
+        Assert.IsType<ArgumentException>(ex.InnerException);
+    }
+
+    private static Task ExecutePipelineAsync(DistributedApplication app)
+    {
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<KubernetesDeployTests>>(),
+            CancellationToken.None);
+
+        return pipeline.ExecuteAsync(context);
     }
 
     [Fact]

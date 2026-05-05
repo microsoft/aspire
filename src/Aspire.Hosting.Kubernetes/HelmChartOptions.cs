@@ -121,13 +121,18 @@ public sealed partial class HelmChartOptions
     /// <summary>
     /// Sets the Helm chart version for deployment.
     /// </summary>
-    /// <param name="version">The chart version (e.g., "1.0.0").</param>
+    /// <param name="version">
+    /// The chart version. Helm accepts strict SemVer 2.0 strings (e.g. <c>"1.2.3"</c>,
+    /// <c>"1.2.3-beta.1+ef365"</c>) as well as partial versions (<c>"1"</c>, <c>"1.2"</c>) and
+    /// versions with a leading <c>v</c> (<c>"v1.2.3"</c>), which are coerced to a full
+    /// semantic version. Leading zeros are not allowed.
+    /// </param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
     public HelmChartOptions WithChartVersion(string version)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
-        ValidateChartVersion(version);
+        ValidateChartVersion(version, nameof(version));
 
         var expression = ReferenceExpression.Create($"{version}");
         EnvironmentBuilder.WithAnnotation(new HelmChartVersionAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
@@ -263,11 +268,17 @@ public sealed partial class HelmChartOptions
         }
     }
 
-    private static void ValidateChartVersion(string version)
+    // Matches Helm's own chart-version validation, which uses the lenient SemVer parser
+    // (Masterminds/semver/v3 NewVersion) — see helm/helm pkg/chart/v2/metadata.go isValidSemver.
+    // Helm accepts a leading "v" and partial versions (e.g. "v1", "1", "1.2"), coercing them
+    // to a full semantic version. Leading zeros are not allowed.
+    internal const SemVersionStyles ChartVersionStyles = SemVersionStyles.AllowV | SemVersionStyles.OptionalMinorPatch;
+
+    internal static void ValidateChartVersion(string version, string paramName)
     {
-        if (!SemVersion.TryParse(version, SemVersionStyles.Strict, out _))
+        if (!SemVersion.TryParse(version, ChartVersionStyles, out _))
         {
-            throw new ArgumentException($"Helm chart version '{version}' is invalid. Use a semantic version such as '1.0.0' or '1.0.0-beta.1'.", nameof(version));
+            throw new ArgumentException($"Helm chart version '{version}' is invalid. Helm accepts versions such as '1.2.3', '1.2.3-beta.1+ef365', '1', '1.2', or 'v1.2.3'.", paramName);
         }
     }
 

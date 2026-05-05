@@ -342,6 +342,7 @@ internal sealed class KubernetesPublishingContext(
             var version = await versionAnnotation.Version.GetValueAsync(cancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(version))
             {
+                HelmChartOptions.ValidateChartVersion(version, nameof(HelmChartOptions.WithChartVersion));
                 environment.HelmChartVersion = version;
             }
         }
