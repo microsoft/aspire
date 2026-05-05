@@ -134,6 +134,28 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout
 
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $reason = '$(Build.Reason)'
+              $branch = '$(Build.SourceBranch)'
+              $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
+              $versionKind = $versionKind.Trim()
+              Write-Host "Build.Reason: '$reason'  SourceBranch: '$branch'  DotNetFinalVersionKind: '$versionKind'"
+
+              if ($reason -eq 'PullRequest') {
+                $aspireCliChannel = 'pr'
+              } elseif ($versionKind -eq 'release') {
+                $aspireCliChannel = 'stable'
+              } elseif ($branch -match 'refs/heads/(internal/)?release/') {
+                $aspireCliChannel = 'staging'
+              } else {
+                $aspireCliChannel = 'daily'
+              }
+
+              Write-Host "AspireCliChannel: $aspireCliChannel"
+              Write-Host "##vso[task.setvariable variable=aspireCliChannel]$aspireCliChannel"
+            displayName: 🟣Compute AspireCliChannel (pr/stable/staging/daily)
+
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)
               -ci
@@ -143,6 +165,7 @@ jobs:
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
+              /p:AspireCliChannel=$(aspireCliChannel)
               $(_buildArgs)
               ${{ parameters.extraBuildArgs }}
               /bl:$(Build.Arcade.LogsPath)Build.binlog
