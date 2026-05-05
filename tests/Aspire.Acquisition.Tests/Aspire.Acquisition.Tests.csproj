@@ -20,13 +20,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Make Aspire.TestUtilities.ProcessExtensions visible to the linked ToolCommand.cs
-         (which calls Process.CloseAndKillProcessIfRunning without an explicit using). -->
-    <Using Include="Aspire.TestUtilities" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="$(RepoRoot)tests\Shared\Playwright\TestUtils.cs" Link="TestUtils.cs" />
+    <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ScriptCommand.cs" Link="Common\ScriptCommand.cs" />
     <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommand.cs" Link="Common\ToolCommand.cs" />
     <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\CommandResult.cs" Link="Common\CommandResult.cs" />
     <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommandException.cs" Link="Common\ToolCommandException.cs" />

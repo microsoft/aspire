@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Templates.Tests;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -23,7 +24,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     public AutoRerunTransientCiFailuresTests(ITestOutputHelper output)
     {
         _output = output;
-        _repoRoot = FindRepoRoot();
+        _repoRoot = TestUtils.RepoRoot;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "auto-rerun-transient-ci-failures.harness.js");
     }
 
@@ -2066,23 +2067,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 Conclusion = "failure"
             }).ToArray()
         };
-
-    private static string FindRepoRoot()
-    {
-        string? current = AppContext.BaseDirectory;
-
-        while (current is not null)
-        {
-            if (File.Exists(Path.Combine(current, "Aspire.slnx")))
-            {
-                return current;
-            }
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root containing Aspire.slnx");
-    }
 
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));

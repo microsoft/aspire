@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Templates.Tests;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -18,7 +19,7 @@ public sealed class DownloadFailingJobLogsFixture : IAsyncLifetime
 
     public ValueTask InitializeAsync()
     {
-        RepoRoot = FindRepoRoot();
+        RepoRoot = TestUtils.RepoRoot;
         ToolPath = Path.Combine(RepoRoot, "tools", "scripts", "DownloadFailingJobLogs.cs");
         DotNetPath = Path.Combine(RepoRoot, "dotnet.sh");
 
@@ -37,19 +38,4 @@ public sealed class DownloadFailingJobLogsFixture : IAsyncLifetime
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Aspire.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not find repository root (looking for Aspire.slnx).");
-    }
 }

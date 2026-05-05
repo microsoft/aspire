@@ -32,8 +32,7 @@ public sealed class ScriptHostFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         // Resolve the scripts directory from the repo root
-        var repoRoot = TestUtils.FindRepoRoot()?.FullName
-            ?? throw new InvalidOperationException("Could not find repository root");
+        var repoRoot = TestUtils.RepoRoot;
         _scriptsDirectory = Path.Combine(repoRoot, "eng", "scripts");
 
         if (!Directory.Exists(_scriptsDirectory))
