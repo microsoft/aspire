@@ -299,6 +299,8 @@ internal sealed class KubernetesPublishingContext(
 
     private async Task WriteKubernetesHelmChartAsync(KubernetesEnvironmentResource environment)
     {
+        await ResolveHelmChartMetadataAsync(environment).ConfigureAwait(false);
+
         var helmChart = new HelmChart
         {
             Name = environment.HelmChartName,
@@ -315,6 +317,45 @@ internal sealed class KubernetesPublishingContext(
         var outputFile = Path.Combine(OutputPath, "Chart.yaml");
         Directory.CreateDirectory(OutputPath);
         await File.WriteAllTextAsync(outputFile, chartYaml, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves Helm chart name/version/description annotations (set via
+    /// <see cref="HelmChartOptions"/>) and assigns the resolved values onto the
+    /// environment's internal <c>HelmChart*</c> properties so that Chart.yaml is
+    /// generated with the user-configured values on the first write.
+    /// </summary>
+    private async Task ResolveHelmChartMetadataAsync(KubernetesEnvironmentResource environment)
+    {
+        if (environment.TryGetLastAnnotation<HelmChartNameAnnotation>(out var nameAnnotation))
+        {
+            var name = await nameAnnotation.Name.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                HelmChartOptions.ValidateChartName(name, nameof(HelmChartOptions.WithChartName));
+                environment.HelmChartName = name;
+            }
+        }
+
+        if (environment.TryGetLastAnnotation<HelmChartVersionAnnotation>(out var versionAnnotation))
+        {
+            var version = await versionAnnotation.Version.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(version))
+            {
+                HelmChartOptions.ValidateChartVersion(version, nameof(HelmChartOptions.WithChartVersion));
+                environment.HelmChartVersion = version;
+            }
+        }
+
+        if (environment.TryGetLastAnnotation<HelmChartDescriptionAnnotation>(out var descriptionAnnotation))
+        {
+            var description = await descriptionAnnotation.Description.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                HelmChartOptions.ValidateChartDescription(description, nameof(HelmChartOptions.WithChartDescription));
+                environment.HelmChartDescription = description;
+            }
+        }
     }
 
     private static void ApplyNodePoolSelector(KubernetesResource serviceResource, KubernetesNodePoolResource nodePool)
