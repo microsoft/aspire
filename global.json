@@ -1,6 +1,6 @@
 {
   "sdk": {
-    "version": "10.0.201",
+    "version": "11.0.100-preview.4.26203.108",
     "rollForward": "major",
     "allowPrerelease": true,
     "paths": [
@@ -10,7 +10,7 @@
     "errorMessage": "The .NET SDK could not be found. Run ./restore.sh (Linux/macOS) or ./restore.cmd (Windows) to install the local SDK."
   },
   "tools": {
-    "dotnet": "10.0.201",
+    "dotnet": "11.0.100-preview.4.26203.108",
     "runtimes": {
       "dotnet/x64": [
         "$(DotNetRuntimePreviousVersionForTesting)",

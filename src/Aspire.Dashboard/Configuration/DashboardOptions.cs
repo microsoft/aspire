@@ -426,7 +426,9 @@ public sealed class DebugSessionOptions
 
             try
             {
+#pragma warning disable SYSLIB0057 // Type or member is obsolete
                 _serverCertificate = new X509Certificate2(data);
+#pragma warning restore SYSLIB0057 // Type or member is obsolete
             }
             catch (Exception ex)
             {
