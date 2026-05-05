@@ -750,19 +750,6 @@ public static class JavaScriptHostingExtensions
 
                     if (c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                     {
-                        // pnpm + workspace + PublishAsNpmScript is unsupported in v1: pnpm uses symlinks
-                        // rather than hoisting, so the prod-deps overlay (`COPY --from=prod-deps /app/node_modules ./`)
-                        // does not produce a runnable layout.
-                        if (workspace is not null && publishMode?.Mode == JavaScriptPublishMode.NpmScript &&
-                            string.Equals(packageManager.ExecutableName, "pnpm", StringComparison.Ordinal))
-                        {
-                            throw new DistributedApplicationException(
-                                "PublishAsNpmScript is not supported with pnpm in workspace mode. " +
-                                "pnpm relies on symlinks rather than node_modules hoisting, so the production-deps stage " +
-                                "cannot be flattened into a runnable image. Use PublishAsNodeServer with a bundler such as " +
-                                "tsup/esbuild, or remove the workspace annotation.");
-                        }
-
                         // Get custom base image from annotation, if present
                         dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
                         var baseImage = baseImageAnnotation?.BuildImage ?? GetDefaultBaseImage(appDirectory, "slim", dockerfileContext.Services);
@@ -853,6 +840,45 @@ public static class JavaScriptHostingExtensions
                             {
                                 var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services);
 
+                                // pnpm in workspace mode: use 'pnpm deploy' to materialize a self-contained
+                                // bundle. The standard prod-deps overlay does not work with pnpm workspaces
+                                // because pnpm uses a symlinked node_modules layout (per-app node_modules,
+                                // virtual store under .pnpm, workspace package symlinks pointing into the
+                                // source tree). 'pnpm deploy' copies the target package and its production
+                                // dependencies (workspace deps materialized as content) into a portable
+                                // directory that runs without the workspace tree.
+                                // 'npm_config_force_legacy_deploy=true' allows deploy to operate without
+                                // requiring users to set 'inject-workspace-packages=true' in their pnpm
+                                // config. The env var is portable: pnpm 10+ honors it (equivalent to
+                                // setting 'force-legacy-deploy=true' in .npmrc), while pnpm 8/9 already
+                                // default to the legacy behavior and ignore the unrecognized config key.
+                                // The --legacy CLI flag was added in pnpm 9.4 and is rejected by pnpm 8,
+                                // so the env var form is preferred for cross-version compatibility.
+                                // See https://pnpm.io/cli/deploy.
+                                if (workspace is not null && string.Equals(packageManager.ExecutableName, "pnpm", StringComparison.Ordinal))
+                                {
+                                    dockerBuilder.Run($"npm_config_force_legacy_deploy=true pnpm --filter={workspace.AppName} --prod deploy /prod/deploy");
+
+                                    var deployRuntimeStage = dockerfileContext.Builder
+                                        .From(runtimeImage, "runtime")
+                                        .WorkDir("/app")
+                                        .CopyFrom("build", "/prod/deploy", "/app");
+
+                                    packageManager.InitializeDockerBuildStage?.Invoke(deployRuntimeStage);
+
+                                    IReadOnlyList<string> deployRunArgs = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
+                                        ? []
+                                        : [publishMode.RunScriptArguments];
+                                    var deployRunArgv = new List<string> { "pnpm", "run", publishMode.StartScriptName! };
+                                    deployRunArgv.AddRange(deployRunArgs);
+                                    var deployRunCommand = string.Join(' ', deployRunArgv);
+
+                                    deployRuntimeStage
+                                        .Env("NODE_ENV", "production")
+                                        .Entrypoint(["sh", "-c", $"exec {deployRunCommand}"]);
+                                    break;
+                                }
+
                                 // Production dependencies stage for optimized image
                                 var prodDepsStage = dockerfileContext.Builder
                                     .From(baseImage, "prod-deps")
@@ -897,16 +923,24 @@ public static class JavaScriptHostingExtensions
 
                                 // Runtime stage: copy build output then overlay prod deps
                                 IReadOnlyList<string> runArgs = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
-                                    ? Array.Empty<string>()
+                                    ? []
                                     : [publishMode.RunScriptArguments];
                                 var runArgv = BuildPackageManagerCommand(packageManager, publishMode.StartScriptName!, runArgs, workspace);
                                 var runCommand = string.Join(' ', runArgv);
 
-                                dockerfileContext.Builder
+                                var runtimeStage = dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir(workspaceAppDir)
                                     .CopyFrom("build", "/app", "/app")
-                                    .CopyFrom("prod-deps", "/app/node_modules", "/app/node_modules")
+                                    .CopyFrom("prod-deps", "/app/node_modules", "/app/node_modules");
+
+                                // Initialize runtime with package-manager-specific setup (e.g. corepack
+                                // enable pnpm) so the entrypoint can invoke the package manager directly.
+                                // Currently only pnpm requires this; for npm/yarn/bun the hook is null and
+                                // this is a no-op.
+                                packageManager.InitializeDockerBuildStage?.Invoke(runtimeStage);
+
+                                runtimeStage
                                     .Env("NODE_ENV", "production")
                                     .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
                                 break;

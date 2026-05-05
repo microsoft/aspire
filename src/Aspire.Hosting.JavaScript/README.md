@@ -57,7 +57,7 @@ The generated Dockerfile will:
    - `bun --filter <app-package-name> run <script>`
 5. Set the runtime stage `WORKDIR` to `/app/<app-relative-path>` so existing entrypoint paths keep working.
 
-> **Note**: `PublishAsNpmScript` is **not** supported with pnpm in workspace mode. pnpm uses symlinked `node_modules` rather than hoisting, so the production-deps stage cannot be flattened into a runnable image. Use `PublishAsNodeServer` with a bundler (tsup, esbuild) instead.
+> **pnpm + `PublishAsNpmScript`**: pnpm's symlinked `node_modules` layout cannot be flattened via the standard production-deps overlay used for npm/yarn/bun. For pnpm workspace apps that use `PublishAsNpmScript`, the generated Dockerfile uses [`pnpm deploy`](https://pnpm.io/cli/deploy) to materialize the target package and its production dependencies (workspace deps copied as content) into a self-contained directory. The runtime stage runs `pnpm run <start-script>` against this deployed bundle. The deploy command is prefixed with `npm_config_force_legacy_deploy=true` to enable legacy deploy mode without requiring `inject-workspace-packages=true` in your pnpm config; this env var form is portable across pnpm 8/9/10+ (the CLI `--legacy` flag was added in pnpm 9.4 and is rejected by pnpm 8).
 
 ### Required `.dockerignore`
 

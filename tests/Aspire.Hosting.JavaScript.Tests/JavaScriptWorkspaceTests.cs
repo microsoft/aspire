@@ -389,7 +389,7 @@ public class JavaScriptWorkspaceTests
     }
 
     [Fact]
-    public async Task PublishAsNpmScript_PnpmWorkspace_Throws()
+    public async Task PublishAsNpmScript_PnpmWorkspace_UsesPnpmDeploy()
     {
         using var tempDir = new TestTempDirectory();
         WritePnpmWorkspace(tempDir.Path, ["packages/api"]);
@@ -405,10 +405,76 @@ public class JavaScriptWorkspaceTests
             .WithPnpm()
             .PublishAsNpmScript("start");
 
-        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
-            () => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+        await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
 
-        Assert.Contains("PublishAsNpmScript is not supported with pnpm in workspace mode", ex.Message);
+        var dockerfile = ReadDockerfile(tempDir.Path, "api");
+
+        // pnpm + workspace + NpmScript uses 'pnpm deploy' instead of the prod-deps overlay.
+        // The npm_config_force_legacy_deploy=true env var prefix forces legacy deploy mode,
+        // which is portable across pnpm 8/9/10+ (the CLI --legacy flag is rejected by pnpm 8).
+        Assert.Contains("RUN npm_config_force_legacy_deploy=true pnpm --filter=@example/api --prod deploy /prod/deploy", dockerfile);
+        Assert.Contains("COPY --from=build /prod/deploy /app", dockerfile);
+        Assert.Contains("ENTRYPOINT [\"sh\",\"-c\",\"exec pnpm run start\"]", dockerfile);
+
+        // The deploy-based path skips the prod-deps stage entirely.
+        Assert.DoesNotContain("AS prod-deps", dockerfile);
+        Assert.DoesNotContain("--from=prod-deps", dockerfile);
+
+        // pnpm must be available in both build and runtime stages (the deployed bundle is
+        // executed via 'pnpm run <script>').
+        var corepackOccurrences = System.Text.RegularExpressions.Regex.Matches(dockerfile, "corepack enable pnpm").Count;
+        Assert.Equal(2, corepackOccurrences);
+    }
+
+    [Fact]
+    public async Task PublishAsNpmScript_PnpmWorkspace_PassesRunScriptArguments()
+    {
+        using var tempDir = new TestTempDirectory();
+        WritePnpmWorkspace(tempDir.Path, ["packages/api"]);
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"start":"node dist/index.js"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var app = builder.AddJavaScriptApp("api", appDir, runScriptName: "start")
+            .WithWorkspaceRoot(tempDir.Path)
+            .WithPnpm()
+            .PublishAsNpmScript("start", "-- --port $PORT");
+
+        await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+
+        var dockerfile = ReadDockerfile(tempDir.Path, "api");
+
+        Assert.Contains("ENTRYPOINT [\"sh\",\"-c\",\"exec pnpm run start -- --port $PORT\"]", dockerfile);
+    }
+
+    [Fact]
+    public async Task PublishAsNpmScript_NpmWorkspace_UsesProdDepsOverlay()
+    {
+        using var tempDir = new TestTempDirectory();
+        WriteNpmWorkspace(tempDir.Path, ["packages/api"]);
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"start":"node dist/index.js"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var app = builder.AddJavaScriptApp("api", appDir, runScriptName: "start")
+            .WithWorkspaceRoot(tempDir.Path)
+            .PublishAsNpmScript("start");
+
+        await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+
+        var dockerfile = ReadDockerfile(tempDir.Path, "api");
+
+        // npm in workspace mode keeps the existing prod-deps overlay (no pnpm deploy).
+        Assert.Contains("AS prod-deps", dockerfile);
+        Assert.Contains("--from=prod-deps /app/node_modules", dockerfile);
+        Assert.DoesNotContain("pnpm deploy", dockerfile);
+        Assert.Contains("ENTRYPOINT [\"sh\",\"-c\",\"exec npm run start --workspace=@example/api\"]", dockerfile);
     }
 
     private static void WriteNpmWorkspace(string rootPath, string[] patterns)
