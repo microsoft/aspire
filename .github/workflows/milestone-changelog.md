@@ -970,7 +970,7 @@ Field definitions:
 - **mergedAt**: ISO 8601 UTC merge timestamp
 - **number**: Docs PR number (in `${DOCS_REPO}`)
 - **runDate**: ISO 8601 UTC timestamp of the workflow run that processed this docs PR
-- **status**: One of `"included"` (processed) or `"excluded"` (not relevant to the milestone)
+- **status**: One of `"included"` (matched to at least one changelog entry) or `"excluded"` (no match found, or not relevant to the milestone)
 - **title**: Original docs PR title
 
 After writing each file, **normalize formatting** by running:
