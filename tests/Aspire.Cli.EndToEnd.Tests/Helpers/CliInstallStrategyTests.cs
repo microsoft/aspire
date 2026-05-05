@@ -315,6 +315,8 @@ public class CliInstallStrategyTests
         using var environment = new EnvironmentVariableScope(
             (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-java:prebuilt"),
             (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
         var options = new DockerContainerOptions();
 
@@ -375,6 +377,8 @@ public class CliInstallStrategyTests
         using var environment = new EnvironmentVariableScope(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
         var options = new DockerContainerOptions();
 
