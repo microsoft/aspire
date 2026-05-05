@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Removes broken integration-data auto-merge workflow - docs repo CI infrastructure, not a product feature doc",
+  "mergedAt": "2026-04-09T21:21:28Z",
+  "number": 696,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "Remove broken integration-data auto-merge workflow"
+}

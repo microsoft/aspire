@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Adds CredScan suppressions for docs placeholder credentials - security tooling, not a product feature doc",
+  "mergedAt": "2026-04-06T20:53:34Z",
+  "number": 680,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "Add .config/CredScanSuppressions.json for docs placeholder credentials"
+}

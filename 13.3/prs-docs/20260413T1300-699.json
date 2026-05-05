@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Updates Aspire 13.2 what's new page - targets 13.2 content, not 13.3 milestone",
+  "mergedAt": "2026-04-13T13:00:42Z",
+  "number": 699,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "Replace .npmrc Docker builds line with file-based build secrets in Aspire 13.2 what's new"
+}

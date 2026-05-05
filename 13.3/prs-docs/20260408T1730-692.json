@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI fix for integration data workflow app token - docs repo infrastructure, not a product feature doc",
+  "mergedAt": "2026-04-08T17:30:05Z",
+  "number": 692,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "fix: use app token for integration data workflow PRs"
+}

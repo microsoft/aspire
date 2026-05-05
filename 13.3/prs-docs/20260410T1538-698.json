@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Documents Azure Network Security Perimeter (NSP) support - matches product PR 15711 (aspire-network-security-perimeter-support)",
+  "mergedAt": "2026-04-10T15:38:29Z",
+  "number": 698,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "included",
+  "title": "Add docs for Azure Network Security Perimeter (NSP) support"
+}

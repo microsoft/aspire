@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Adds OTLP client certificate auth details to dashboard config - no matching 13.3 change file with docsRequired=true found",
+  "mergedAt": "2026-04-11T23:53:25Z",
+  "number": 703,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "Add OTLP client certificate auth details to dashboard config"
+}

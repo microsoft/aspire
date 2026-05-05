@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Follow-up fix for Lunaria CI git history - docs repo CI infrastructure, not a product feature doc",
+  "mergedAt": "2026-04-13T22:43:38Z",
+  "number": 708,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "fix: fetch PR head history for Lunaria builds"
+}

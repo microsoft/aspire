@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Fixes Lunaria CI git history issue - docs repo CI infrastructure, not a product feature doc",
+  "mergedAt": "2026-04-13T17:00:01Z",
+  "number": 707,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "fix: unshallow git history before Lunaria build to prevent CI failures on new docs"
+}

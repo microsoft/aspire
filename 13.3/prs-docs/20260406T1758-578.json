@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Adds tests for custom API doc generation tools - docs tooling infrastructure, not a product feature doc",
+  "mergedAt": "2026-04-06T17:58:36Z",
+  "number": 578,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "Add tests for custom tools (used to generate API docs)"
+}

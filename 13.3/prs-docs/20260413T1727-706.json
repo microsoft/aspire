@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CSS fix for inline code in table cells - docs site UI fix, not a product feature doc",
+  "mergedAt": "2026-04-13T17:27:53Z",
+  "number": 706,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "fix: prevent inline code white-space: normal from applying inside table cells"
+}

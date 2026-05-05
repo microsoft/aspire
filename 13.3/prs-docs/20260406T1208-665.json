@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Adds .editorconfig to docs repo - tooling change, not a product feature doc",
+  "mergedAt": "2026-04-06T12:08:49Z",
+  "number": 665,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "Add .editorconfig with settings aligned to dotnet/aspire"
+}

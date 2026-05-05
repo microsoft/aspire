@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Broad AppHost docs refactoring and site tour addition - structural refactoring, no specific 13.3 product PR reference",
+  "mergedAt": "2026-04-07T16:54:14Z",
+  "number": 666,
+  "runDate": "2026-05-05T23:45:44Z",
+  "status": "excluded",
+  "title": "Refactor AppHost docs and add a localized site tour"
+}

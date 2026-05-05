@@ -7,7 +7,8 @@
   "description": "The new `aspire dashboard` command launches a standalone Aspire Dashboard instance directly from the CLI, displaying the dashboard URL, OTLP gRPC/HTTP endpoints, and log file path on startup. Supports options for custom frontend and OTLP URLs, anonymous access, and pass-through configuration flags.",
   "docsPrs": [
     587,
-    588
+    588,
+    677
   ],
   "docsRequired": true,
   "emoji": "📺",
