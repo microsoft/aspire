@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
@@ -168,5 +169,22 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("--quality dev", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DryRun_WritesSidecarWithScriptRoute()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Sidecar not found at: {sidecarPath}");
+
+        var json = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
     }
 }

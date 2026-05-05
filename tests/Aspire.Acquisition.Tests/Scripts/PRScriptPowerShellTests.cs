@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -317,5 +318,75 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WhatIf_InstallsBinaryToPrSpecificPath()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var binaryPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-12345", "bin", "aspire.exe");
+        Assert.True(File.Exists(binaryPath), $"Binary not found at: {binaryPath}");
+    }
+
+    [Fact]
+    public async Task WhatIf_WritesSidecarWithPrRouteAndUpdateCommand()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-12345", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Sidecar not found at: {sidecarPath}");
+
+        var json = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal("pr", doc.RootElement.GetProperty("route").GetString());
+        var updateCommand = doc.RootElement.GetProperty("updateCommand").GetString();
+        Assert.NotNull(updateCommand);
+        Assert.Contains("12345", updateCommand);
+    }
+
+    [Fact]
+    public async Task WhatIf_DoesNotWriteChannelToGlobalAspireConfig()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var globalConfigPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        if (File.Exists(globalConfigPath))
+        {
+            var json = await File.ReadAllTextAsync(globalConfigPath);
+            using var doc = JsonDocument.Parse(json);
+            Assert.False(
+                doc.RootElement.TryGetProperty("channel", out _),
+                "Global aspire.config.json must not contain 'channel' field after PR install");
+        }
+    }
+
+    [Fact]
+    public async Task WhatIf_PrintsPathHint()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        Assert.Contains("PATH", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pr-12345", result.Output);
     }
 }
