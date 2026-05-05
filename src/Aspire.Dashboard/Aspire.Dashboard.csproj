@@ -15,8 +15,8 @@
     <!-- This Application is a framework-dependent application that targets .NET 8.0. This means that the
     application is not able to run if the place where it is deployed does not have the .NET 8.0 runtime installed.
     Given we want to be able to support people running on environments where they only have the 9.0 SDK/runtime installed,
-    we allow roll-forward to the next major in order to support these customers.-->
-    <RollForward>Major</RollForward>
+    we allow roll-forward to the latest major in order to support these customers and take advantage of newer runtime features.-->
+    <RollForward>LatestMajor</RollForward>
 
     <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD</DefineConstants>
 
