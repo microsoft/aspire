@@ -51,7 +51,6 @@ internal sealed class ProcessInvocationOptions
 
     public bool NoLaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
-    public bool NoExtensionLaunch { get; set; }
     public bool Debug { get; set; }
 
     /// <summary>
@@ -119,7 +118,6 @@ internal sealed class DotNetCliRunner(
         {
             if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
                 && projectFile is not null
-                && !options.NoExtensionLaunch
                 && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.Project, cancellationToken))
             {
                 await extensionInteractionService.LaunchAppHostAsync(

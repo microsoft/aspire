@@ -525,10 +525,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = runOutputCollector.AppendOutput,
             StandardErrorCallback = runOutputCollector.AppendError,
             NoLaunchProfile = true,
-            StartDebugSession = context.StartDebugSession,
-            // When not starting a debug session, prevent DotNetCliRunner from delegating the
-            // apphost launch to the extension — pipeline commands should run the apphost directly.
-            NoExtensionLaunch = !context.StartDebugSession,
+            StartDebugSession = context.StartDebugSession
         };
 
         if (isSingleFileAppHost)
