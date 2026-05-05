@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Certificate docs update; no confident match to a specific 13.3 docsRequired entry",
+  "mergedAt": "2026-03-23T03:51:13Z",
+  "number": 582,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Fix certificate docs: validate TS samples, use aspire certs, remove .NET-isms"
+}

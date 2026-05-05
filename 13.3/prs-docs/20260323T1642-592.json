@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "13.2 what's new link fix, not related to 13.3 entries",
+  "mergedAt": "2026-03-23T16:42:36Z",
+  "number": 592,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Fix extension link in what's new, use aka.ms link in other 2 refs"
+}

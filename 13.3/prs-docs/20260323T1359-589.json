@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Sample link fix, not related to any 13.3 docsRequired entry",
+  "mergedAt": "2026-03-23T13:59:27Z",
+  "number": 589,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Fix aspire-samples links from microsoft to dotnet org"
+}

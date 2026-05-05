@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI workflow deletion in docs repo, not a 13.3 product changelog entry",
+  "mergedAt": "2026-03-24T15:47:10Z",
+  "number": 599,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Delete .github/workflows/security-scan.yml"
+}

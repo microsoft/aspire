@@ -1,1 +1,20 @@
-{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"New features","communityContributors":[],"description":"The new `aspire dashboard` command launches a standalone Aspire Dashboard instance directly from the CLI, displaying the dashboard URL, OTLP gRPC/HTTP endpoints, and log file path on startup. Supports options for custom frontend and OTLP URLs, anonymous access, and pass-through configuration flags.","docsRequired":true,"emoji":"📺","firstMergedAt":"2026-04-04T00:12:09Z","lastMergedAt":"2026-04-04T00:12:09Z","name":"New `aspire dashboard` CLI command","prs":[15607]}
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The new `aspire dashboard` command launches a standalone Aspire Dashboard instance directly from the CLI, displaying the dashboard URL, OTLP gRPC/HTTP endpoints, and log file path on startup. Supports options for custom frontend and OTLP URLs, anonymous access, and pass-through configuration flags.",
+  "docsPrs": [
+    587,
+    588
+  ],
+  "docsRequired": true,
+  "emoji": "📺",
+  "firstMergedAt": "2026-04-04T00:12:09Z",
+  "lastMergedAt": "2026-04-04T00:12:09Z",
+  "name": "New `aspire dashboard` CLI command",
+  "prs": [
+    15607
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documents Foundry rename from a previous milestone (aspire#14149), no matching 13.3 docsRequired entry",
+  "mergedAt": "2026-03-21T15:00:37Z",
+  "number": 518,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Update Foundry integration naming: Aspire.Hosting.Azure.AIFoundry → Aspire.Hosting.Foundry"
+}

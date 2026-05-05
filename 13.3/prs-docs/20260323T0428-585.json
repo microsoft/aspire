@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents Dashboard API config (docsRequired: false on matching entry); no docsRequired: true match",
+  "mergedAt": "2026-03-23T04:28:15Z",
+  "number": 585,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Update dashboard configuration docs to match C# source code"
+}

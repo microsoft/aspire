@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "13.2 release doc fix, not related to 13.3 entries",
+  "mergedAt": "2026-03-23T03:54:07Z",
+  "number": 586,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Fix broken links and malformed install code blocks in Aspire 13.2 What's New doc"
+}

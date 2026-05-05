@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Revert of #535, no 13.3 docsRequired entry match",
+  "mergedAt": "2026-03-23T15:36:24Z",
+  "number": 591,
+  "runDate": "2026-05-05T17:17:02Z",
+  "status": "excluded",
+  "title": "Revert \"Updates for Agent-ready messaging for 13.2 release (#535)\""
+}
