@@ -25,6 +25,16 @@ if (OperatingSystem.IsWindows())
     // Linux and macOS.
     builder.AddExecutable("shell", "cmd.exe", ".")
         .WithTerminal();
+
+    // Container resource exercising the container-side WithTerminal() path.
+    // We launch a long-running Node.js LTS image with bash as the entry point
+    // so the terminal attaches to an interactive shell where `npx`, `node`,
+    // and friends are available. `WithContainerRuntimeArgs("-i")` is not
+    // needed here — DCP injects `-t -i` automatically when the spec has
+    // Terminal enabled (see internal/docker/cli_orchestrator.go).
+    builder.AddContainer("nodebox", "node", "lts")
+        .WithEntrypoint("/bin/bash")
+        .WithTerminal();
 }
 
 #if !SKIP_DASHBOARD_REFERENCE
