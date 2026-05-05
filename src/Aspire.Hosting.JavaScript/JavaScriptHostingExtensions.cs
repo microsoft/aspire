@@ -217,7 +217,7 @@ public static class JavaScriptHostingExtensions
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
                             builderStage.EmptyLine()
-                                .Run(string.Join(' ', BuildPackageManagerCommand(packageManager, buildCommand.ScriptName, buildCommand.Args, workspace)));
+                                .Run(string.Join(' ', BuildPackageManagerCommand(packageManager, buildCommand.ScriptName, buildCommand.Args, workspace, buildCommand.IncludeWorkspaceDependencies)));
                         }
                     }
                     else
@@ -683,11 +683,19 @@ public static class JavaScriptHostingExtensions
         JavaScriptPackageManagerAnnotation packageManager,
         string scriptName,
         IReadOnlyList<string> scriptArgs,
-        JavaScriptWorkspaceAnnotation? workspace)
+        JavaScriptWorkspaceAnnotation? workspace,
+        bool includeWorkspaceDependencies = false)
     {
         if (workspace is not null && packageManager.WorkspaceCommandFactory is { } factory)
         {
-            return factory(workspace.AppName, scriptName, scriptArgs);
+            return factory(workspace.AppName, scriptName, scriptArgs, includeWorkspaceDependencies);
+        }
+
+        if (includeWorkspaceDependencies)
+        {
+            throw new DistributedApplicationException(
+                "WithBuildScript(includeWorkspaceDependencies: true) requires the resource to be configured with WithWorkspaceRoot(...). " +
+                "Topological dependency builds are only meaningful inside a workspace.");
         }
 
         var commandArgs = new List<string> { packageManager.ExecutableName };
@@ -808,7 +816,7 @@ public static class JavaScriptHostingExtensions
 
                         if (c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            dockerBuilder.Run(string.Join(' ', BuildPackageManagerCommand(packageManager, buildCommand.ScriptName, buildCommand.Args, workspace)));
+                            dockerBuilder.Run(string.Join(' ', BuildPackageManagerCommand(packageManager, buildCommand.ScriptName, buildCommand.Args, workspace, buildCommand.IncludeWorkspaceDependencies)));
                         }
 
                         // In workspace mode, build outputs land under /app/<AppRelativePath>/...; in single-app
@@ -1406,9 +1414,17 @@ public static class JavaScriptHostingExtensions
     private static string? TryGetWorkspaceRoot(IResource resource) =>
         resource.TryGetLastAnnotation<JavaScriptWorkspaceAnnotation>(out var ws) ? ws.RootPath : null;
 
-    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_npmWorkspaceCommandFactory =
-        static (workspaceName, scriptName, scriptArgs) =>
+    private static readonly Func<string, string, IReadOnlyList<string>, bool, IReadOnlyList<string>> s_npmWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs, includeWorkspaceDependencies) =>
         {
+            if (includeWorkspaceDependencies)
+            {
+                throw new DistributedApplicationException(
+                    "WithBuildScript(includeWorkspaceDependencies: true) is not supported with npm workspaces. " +
+                    "npm does not support topological dependency filtering for workspace scripts. " +
+                    "Switch to pnpm via WithPnpm() or run the build via a custom script that builds the target's dependencies first.");
+            }
+
             var argv = new List<string> { "npm", "run", scriptName, $"--workspace={workspaceName}" };
             if (scriptArgs.Count > 0)
             {
@@ -1418,25 +1434,43 @@ public static class JavaScriptHostingExtensions
             return argv;
         };
 
-    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_yarnWorkspaceCommandFactory =
-        static (workspaceName, scriptName, scriptArgs) =>
+    private static readonly Func<string, string, IReadOnlyList<string>, bool, IReadOnlyList<string>> s_yarnWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs, includeWorkspaceDependencies) =>
         {
+            if (includeWorkspaceDependencies)
+            {
+                throw new DistributedApplicationException(
+                    "WithBuildScript(includeWorkspaceDependencies: true) is not supported with yarn workspaces. " +
+                    "Yarn classic has no equivalent filter, and yarn berry uses a different command shape (yarn workspaces foreach). " +
+                    "Switch to pnpm via WithPnpm() or run the build via a custom script that builds the target's dependencies first.");
+            }
+
             var argv = new List<string> { "yarn", "workspace", workspaceName, "run", scriptName };
             argv.AddRange(scriptArgs);
             return argv;
         };
 
-    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_pnpmWorkspaceCommandFactory =
-        static (workspaceName, scriptName, scriptArgs) =>
+    private static readonly Func<string, string, IReadOnlyList<string>, bool, IReadOnlyList<string>> s_pnpmWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs, includeWorkspaceDependencies) =>
         {
-            var argv = new List<string> { "pnpm", "--filter", workspaceName, "run", scriptName };
+            // pnpm filter syntax: "<name>..." (suffix) selects <name> AND its workspace dependencies
+            // in topological order. See https://pnpm.io/filtering.
+            var filter = includeWorkspaceDependencies ? $"{workspaceName}..." : workspaceName;
+            var argv = new List<string> { "pnpm", "--filter", filter, "run", scriptName };
             argv.AddRange(scriptArgs);
             return argv;
         };
 
-    private static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> s_bunWorkspaceCommandFactory =
-        static (workspaceName, scriptName, scriptArgs) =>
+    private static readonly Func<string, string, IReadOnlyList<string>, bool, IReadOnlyList<string>> s_bunWorkspaceCommandFactory =
+        static (workspaceName, scriptName, scriptArgs, includeWorkspaceDependencies) =>
         {
+            if (includeWorkspaceDependencies)
+            {
+                throw new DistributedApplicationException(
+                    "WithBuildScript(includeWorkspaceDependencies: true) is not currently supported with bun workspaces. " +
+                    "Switch to pnpm via WithPnpm() or run the build via a custom script that builds the target's dependencies first.");
+            }
+
             var argv = new List<string> { "bun", "--filter", workspaceName, "run", scriptName };
             argv.AddRange(scriptArgs);
             return argv;
@@ -1689,6 +1723,32 @@ public static class JavaScriptHostingExtensions
     public static IResourceBuilder<TResource> WithBuildScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args = null) where TResource : JavaScriptAppResource
     {
         return resource.WithAnnotation(new JavaScriptBuildScriptAnnotation(scriptName, args));
+    }
+
+    /// <summary>
+    /// Adds a build script annotation to the resource builder, optionally extending the build invocation
+    /// to the target package's workspace dependencies.
+    /// </summary>
+    /// <typeparam name="TResource">The type of JavaScript application resource being configured.</typeparam>
+    /// <param name="resource">The resource builder to which the build script annotation will be added.</param>
+    /// <param name="scriptName">The name of the script to be executed when the resource is built.</param>
+    /// <param name="args">An array of command-line arguments to use for the build script. Pass <see langword="null"/> when no extra arguments are required.</param>
+    /// <param name="includeWorkspaceDependencies">
+    /// When <see langword="true"/>, the generated Dockerfile invokes the build script across the target
+    /// package and every workspace package it depends on (in topological order). Required when consumed
+    /// workspace packages produce build outputs the target needs at runtime. Currently supported with
+    /// pnpm workspaces (uses <c>--filter &lt;name&gt;...</c> filter syntax). Throws when used without
+    /// <see cref="JavaScriptWorkspaceExtensions.WithWorkspaceRoot{T}"/>, or when the active package
+    /// manager does not support topological filtering.
+    /// </param>
+    /// <returns>The same resource builder instance with the build script annotation applied.</returns>
+    [AspireExport(Description = "Specifies an npm script to run before starting the application, optionally including workspace dependencies in topological order")]
+    public static IResourceBuilder<TResource> WithBuildScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args, bool includeWorkspaceDependencies) where TResource : JavaScriptAppResource
+    {
+        return resource.WithAnnotation(new JavaScriptBuildScriptAnnotation(scriptName, args)
+        {
+            IncludeWorkspaceDependencies = includeWorkspaceDependencies,
+        });
     }
 
     /// <summary>

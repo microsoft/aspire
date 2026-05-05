@@ -361,6 +361,151 @@ public class JavaScriptWorkspaceTests
         Assert.Contains("workspace", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task WithBuildScript_PnpmWorkspace_IncludeWorkspaceDependencies_AppendsTopologicalFilter()
+    {
+        using var tempDir = new TestTempDirectory();
+        WritePnpmWorkspace(tempDir.Path, ["packages/api", "packages/logger"]);
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"build":"echo build"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddNodeApp("api", appDir, "dist/index.cjs")
+            .WithWorkspaceRoot(tempDir.Path)
+            .WithPnpm()
+            .WithBuildScript("build", args: null, includeWorkspaceDependencies: true);
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfile = ReadDockerfile(tempDir.Path, "api");
+
+        // pnpm filter "<name>..." (suffix) selects target package + workspace deps in topological order.
+        Assert.Contains("RUN pnpm --filter @example/api... run build", dockerfile);
+        // The plain non-topological form should NOT appear.
+        Assert.DoesNotContain("RUN pnpm --filter @example/api run build", dockerfile);
+    }
+
+    [Fact]
+    public async Task WithBuildScript_PnpmWorkspace_DefaultBehavior_UnchangedFilter()
+    {
+        using var tempDir = new TestTempDirectory();
+        WritePnpmWorkspace(tempDir.Path, ["packages/api"]);
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"build":"echo build"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddNodeApp("api", appDir, "dist/index.cjs")
+            .WithWorkspaceRoot(tempDir.Path)
+            .WithPnpm()
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfile = ReadDockerfile(tempDir.Path, "api");
+
+        // Default behavior (no flag) preserves the single-package filter.
+        Assert.Contains("RUN pnpm --filter @example/api run build", dockerfile);
+        Assert.DoesNotContain("--filter @example/api...", dockerfile);
+    }
+
+    [Fact]
+    public async Task WithBuildScript_NpmWorkspace_IncludeWorkspaceDependencies_Throws()
+    {
+        using var tempDir = new TestTempDirectory();
+        WriteNpmWorkspace(tempDir.Path, ["packages/api"]);
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"build":"echo build"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddNodeApp("api", appDir, "dist/index.cjs")
+            .WithWorkspaceRoot(tempDir.Path)
+            .WithBuildScript("build", args: null, includeWorkspaceDependencies: true);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+            await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path));
+
+        Assert.Contains("not supported with npm", ex.Message);
+    }
+
+    [Fact]
+    public async Task WithBuildScript_YarnWorkspace_IncludeWorkspaceDependencies_Throws()
+    {
+        using var tempDir = new TestTempDirectory();
+        WriteNpmWorkspace(tempDir.Path, ["packages/api"]);
+        File.WriteAllText(Path.Combine(tempDir.Path, "yarn.lock"), "");
+        File.Delete(Path.Combine(tempDir.Path, "package-lock.json"));
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"build":"echo build"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddNodeApp("api", appDir, "dist/index.cjs")
+            .WithWorkspaceRoot(tempDir.Path)
+            .WithYarn()
+            .WithBuildScript("build", args: null, includeWorkspaceDependencies: true);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+            await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path));
+
+        Assert.Contains("not supported with yarn", ex.Message);
+    }
+
+    [Fact]
+    public async Task WithBuildScript_BunWorkspace_IncludeWorkspaceDependencies_Throws()
+    {
+        using var tempDir = new TestTempDirectory();
+        WriteNpmWorkspace(tempDir.Path, ["packages/api"]);
+        File.WriteAllText(Path.Combine(tempDir.Path, "bun.lockb"), "");
+        File.Delete(Path.Combine(tempDir.Path, "package-lock.json"));
+        var appDir = Path.Combine(tempDir.Path, "packages", "api");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"build":"echo build"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddNodeApp("api", appDir, "dist/index.cjs")
+            .WithWorkspaceRoot(tempDir.Path)
+            .WithBun()
+            .WithBuildScript("build", args: null, includeWorkspaceDependencies: true);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+            await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path));
+
+        Assert.Contains("not currently supported with bun", ex.Message);
+    }
+
+    [Fact]
+    public async Task WithBuildScript_IncludeWorkspaceDependencies_WithoutWorkspaceRoot_Throws()
+    {
+        using var tempDir = new TestTempDirectory();
+        var appDir = Path.Combine(tempDir.Path, "app");
+        WriteAppPackageJson(appDir, "@example/api", scripts: """{"build":"echo build"}""");
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path)
+            .WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddNodeApp("api", appDir, "dist/index.cjs")
+            .WithBuildScript("build", args: null, includeWorkspaceDependencies: true);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+            await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path));
+
+        Assert.Contains("requires the resource to be configured with WithWorkspaceRoot", ex.Message);
+    }
+
     private static void WriteNpmWorkspace(string rootPath, string[] patterns)
     {
         Directory.CreateDirectory(rootPath);
