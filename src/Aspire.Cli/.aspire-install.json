@@ -1,0 +1,1 @@
+{ "route": "dotnet-tool", "updateCommand": "dotnet tool update -g Aspire.Cli" }
