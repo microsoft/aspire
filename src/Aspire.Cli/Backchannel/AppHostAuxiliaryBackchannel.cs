@@ -76,6 +76,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
+    /// <inheritdoc />
+    public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
+
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.
     /// </summary>

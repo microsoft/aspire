@@ -42,6 +42,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsV2 { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the AppHost advertises the
+    /// <c>terminals.v1</c> capability — the per-replica terminal info
+    /// surface returned by <see cref="GetTerminalInfoAsync"/>.
+    /// </summary>
+    bool SupportsTerminalsV1 { get; }
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
