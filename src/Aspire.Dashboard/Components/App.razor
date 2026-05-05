@@ -32,9 +32,10 @@
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
     @*
-        Use Blazor JS shipped in dashboard's wwwroot. This is done because the dashboard is currently built for .NET 8, and in .NET 8 the Blazor JS is embedded in the components assembly.
-        But in .NET 10 and later the Blazor JS file is an asset. We can rely on Blazor JS always being available. Remove and use asset file in the future once .NET 10 is the minimum version.
-        This file is copied from .NET 10 P4.
+        The dashboard is built for .NET 8 but can run on newer runtimes via RollForward.
+        In .NET 8/9, Blazor JS is embedded in the components assembly and served from wwwroot/framework/.
+        In .NET 10+, Blazor JS is a static asset served via MapStaticAssets from the _framework/ path.
+        The wwwroot/framework/blazor.web.js copy is kept for pre-.NET 10 runtimes.
     *@
     @if (Environment.Version.Major >= 10)
     {

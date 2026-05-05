@@ -976,7 +976,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// Calls MapStaticAssets via reflection. Available in .NET 10 and later.
     /// The dashboard targets .NET 8 so this API isn't directly available.
     /// This is used to correctly serve Blazor's static assets from the _framework path.
-    /// It's required because blazor.web.js are loaded from assets in .NET 10 and later.
+    /// It's required because blazor.web.js is loaded from assets in .NET 10 and later.
     /// </summary>
     private static bool TryMapStaticAssets(WebApplication app, ILogger logger)
     {
@@ -1001,7 +1001,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         // MapStaticAssets(IEndpointRouteBuilder endpoints, string? staticAssetsManifestPath = null)
-        method.Invoke(null, [app, null]);
-        return true;
+        try
+        {
+            method.Invoke(null, [app, null]);
+            return true;
+        }
+        catch (TargetInvocationException ex)
+        {
+            logger.LogWarning(ex, "MapStaticAssets invocation failed. The dashboard may fail to load.");
+            return false;
+        }
     }
 }
