@@ -211,9 +211,12 @@ internal sealed class LayoutBuilder : IDisposable
 
         Log($"Creating archive: {archivePath}");
 
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
         {
-            // Use .NET TarWriter + GZip on Windows (no system tar available)
+            // Use .NET TarWriter + GZip on Windows (no system tar available) and on macOS
+            // (BSD tar emits PAX extended attributes that .NET's TarReader cannot parse, breaking
+            // bundle extraction at runtime — see https://github.com/dotnet/runtime issues around
+            // PAX extended-header parsing).
             var fileStream = File.Create(archivePath);
             await using (fileStream.ConfigureAwait(false))
             {
@@ -234,6 +237,12 @@ internal sealed class LayoutBuilder : IDisposable
                                 {
                                     DataStream = dataStream
                                 };
+                                if (!OperatingSystem.IsWindows())
+                                {
+                                    // Preserve unix file permissions (notably the executable bit) so payloads
+                                    // like aspire-managed remain executable after the consumer extracts the tar.
+                                    entry.Mode = File.GetUnixFileMode(filePath);
+                                }
                                 await tarWriter.WriteEntryAsync(entry).ConfigureAwait(false);
                             }
                         }
