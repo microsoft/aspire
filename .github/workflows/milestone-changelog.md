@@ -771,8 +771,8 @@ any cross-references. Match by:
    entry named "Redis clustering support").
 3. **No match** — if the docs PR cannot be confidently matched to any
    changelog entry with `docsRequired: true`, record it as `"excluded"` in
-   the docs PR tracker (Step 6d) with an empty `matchedChanges` array and a
-   comment explaining why (e.g., "No matching changelog entry found").
+   the docs PR tracker (Step 6d) with a comment explaining why (e.g.,
+   "No matching changelog entry found").
 
 When a match is found:
 - Add the docs PR number to the matched change file’s `docsPrs` array.
@@ -953,7 +953,6 @@ Schema:
 {
   "author": "username",
   "comment": "Documents new CLI scaffolding command",
-  "matchedChanges": ["20260422T1830-new-cli-command.json"],
   "mergedAt": "2026-04-25T10:00:00Z",
   "number": 456,
   "runDate": "2026-04-27T03:49:58Z",
@@ -965,12 +964,10 @@ Schema:
 Field definitions:
 - **author**: GitHub username of the docs PR author
 - **comment**: Brief explanation of why the docs PR was included or excluded
-- **matchedChanges**: Array of change file names (from `changes/`) that this docs PR
-  documents. Empty array if no changelog entries were matched.
 - **mergedAt**: ISO 8601 UTC merge timestamp
 - **number**: Docs PR number (in `${DOCS_REPO}`)
 - **runDate**: ISO 8601 UTC timestamp of the workflow run that processed this docs PR
-- **status**: One of `"included"` (matched to at least one changelog entry) or `"excluded"` (no match found, or not relevant to the milestone)
+- **status**: One of `"included"` (processed) or `"excluded"` (not relevant to the milestone)
 - **title**: Original docs PR title
 
 After writing each file, **normalize formatting** by running:
