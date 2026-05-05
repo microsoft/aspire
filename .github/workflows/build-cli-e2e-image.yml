@@ -1,0 +1,43 @@
+name: Build CLI E2E Docker Image
+
+on:
+  workflow_call:
+
+env:
+  CLI_E2E_DOTNET_IMAGE_ARTIFACT: cli-e2e-dotnet-image
+  CLI_E2E_DOTNET_IMAGE_TAG: aspire-cli-e2e-dotnet:${{ github.sha }}
+
+jobs:
+  build:
+    name: Build CLI E2E Docker image
+    runs-on: ${{ github.repository_owner == 'microsoft' && '8-core-ubuntu-latest' || 'ubuntu-latest' }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Verify Docker is running
+        run: docker info
+
+      - name: Build CLI E2E Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker build \
+            --build-arg SKIP_SOURCE_BUILD=true \
+            --build-arg UBUNTU_APT_MIRROR=http://azure.archive.ubuntu.com/ubuntu/ \
+            -f tests/Shared/Docker/Dockerfile.e2e \
+            -t "$CLI_E2E_DOTNET_IMAGE_TAG" \
+            .
+
+          mkdir -p artifacts/cli-e2e-image
+          docker save "$CLI_E2E_DOTNET_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
+
+      - name: Upload CLI E2E Docker image
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.CLI_E2E_DOTNET_IMAGE_ARTIFACT }}
+          path: artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
+          retention-days: 1

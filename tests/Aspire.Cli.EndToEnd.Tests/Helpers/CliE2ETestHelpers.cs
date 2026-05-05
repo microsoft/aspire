@@ -18,6 +18,7 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    internal const string DotNetImageEnvironmentVariableName = "ASPIRE_E2E_DOTNET_IMAGE";
     internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
     internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
@@ -158,14 +159,8 @@ internal static class CliE2ETestHelpers
     {
         var recordingPath = GetTestResultsRecordingPath(testName);
         RegisterCaptureFile("recording.cast", recordingPath);
-        var dockerfileName = variant switch
-        {
-            DockerfileVariant.DotNet => "Dockerfile.e2e",
-            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
-            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
-            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
-        };
-        var dockerfilePath = Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+        var dockerfilePath = GetDockerfilePath(repoRoot, variant);
+        var dotNetImageName = GetDotNetImageName(variant);
 
         if (variant is DockerfileVariant.PolyglotJava)
         {
@@ -177,7 +172,8 @@ internal static class CliE2ETestHelpers
         output.WriteLine($"  Strategy:       {strategy}");
         output.WriteLine($"  Expected ver:   {strategy.ExpectedVersion ?? "(not available)"}");
         output.WriteLine($"  Variant:        {variant}");
-        output.WriteLine($"  Dockerfile:     {dockerfilePath}");
+        output.WriteLine($"  Dockerfile:     {(dotNetImageName is null ? dockerfilePath : "(prebuilt image)")}");
+        output.WriteLine($"  Image:          {dotNetImageName ?? "(build from Dockerfile)"}");
         output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");
         output.WriteLine($"  Docker socket:  {mountDockerSocket}");
         output.WriteLine($"  Dimensions:     {width}x{height}");
@@ -189,8 +185,7 @@ internal static class CliE2ETestHelpers
             .WithAsciinemaRecording(recordingPath)
             .WithDockerContainer(c =>
             {
-                c.DockerfilePath = dockerfilePath;
-                c.BuildContext = repoRoot;
+                ConfigureDockerContainerSource(c, repoRoot, variant);
 
                 if (mountDockerSocket)
                 {
@@ -223,6 +218,48 @@ internal static class CliE2ETestHelpers
             });
 
         return builder.Build();
+    }
+
+    internal static void ConfigureDockerContainerSource(DockerContainerOptions options, string repoRoot, DockerfileVariant variant)
+    {
+        var dotNetImageName = GetDotNetImageName(variant);
+        if (dotNetImageName is not null)
+        {
+            options.Image = dotNetImageName;
+            return;
+        }
+
+        if (variant is DockerfileVariant.DotNet && IsRunningInCI)
+        {
+            throw new InvalidOperationException($"{DotNetImageEnvironmentVariableName} must be set when running CLI E2E tests in CI.");
+        }
+
+        options.DockerfilePath = GetDockerfilePath(repoRoot, variant);
+        options.BuildContext = repoRoot;
+    }
+
+    private static string? GetDotNetImageName(DockerfileVariant variant)
+    {
+        if (variant is not DockerfileVariant.DotNet)
+        {
+            return null;
+        }
+
+        var imageName = Environment.GetEnvironmentVariable(DotNetImageEnvironmentVariableName);
+        return string.IsNullOrWhiteSpace(imageName) ? null : imageName.Trim();
+    }
+
+    private static string GetDockerfilePath(string repoRoot, DockerfileVariant variant)
+    {
+        var dockerfileName = variant switch
+        {
+            DockerfileVariant.DotNet => "Dockerfile.e2e",
+            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
+            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
+            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
+        };
+
+        return Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
     }
 
     /// <summary>

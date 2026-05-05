@@ -187,6 +187,63 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void ConfigureDockerContainerSource_UsesDotNetImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+
+        Assert.Equal("aspire-cli-e2e-dotnet:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_FallsBackToDockerfileOutsideCI()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", null));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresDotNetImageInCI()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet));
+
+        Assert.Contains(CliE2ETestHelpers.DotNetImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_IgnoresDotNetImageForPolyglotVariant()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
     public void Detect_DotnetTool_WhenEnvironmentVariableIsSet()
     {
         using var environment = new EnvironmentVariableScope(
