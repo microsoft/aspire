@@ -11,11 +11,17 @@ namespace Aspire.TerminalHost;
 ///
 /// The relay is a <see cref="Hex1bTerminal"/> that:
 /// <list type="number">
-///   <item>Consumes HMP v1 frames from the producer UDS (DCP listens here).</item>
+///   <item>Listens on the producer UDS for an HMP v1 server connection (DCP dials
+///         in once the underlying PTY-attached process is ready).</item>
 ///   <item>Maintains internal terminal state via Hex1b's headless presentation.</item>
 ///   <item>Re-broadcasts HMP v1 frames over the consumer UDS so any number of
 ///         viewers (Dashboard, CLI) can attach with full state replay.</item>
 /// </list>
+///
+/// Connection direction note: the producer side has the terminal host listening
+/// and DCP dialing, not the other way around. This guarantees the host is
+/// receiving from the very first byte the PTY emits — important for shells
+/// whose initial prompt arrives before any dashboard viewer connects.
 ///
 /// One <see cref="TerminalReplica"/> is owned by the host per replica. They are
 /// independent — a crash or exit on one replica does not affect the others.
@@ -86,7 +92,21 @@ internal sealed class TerminalReplica : IAsyncDisposable
 
         var terminal = Hex1bTerminal.CreateBuilder()
             .WithDimensions(columns, rows)
-            .WithHmp1UdsClient(producerUdsPath)
+            // Producer side: terminal host LISTENS on producerUdsPath; DCP
+            // dials in. Hex1b plays the HMP1 protocol CLIENT role over that
+            // accepted stream (consuming Hello/Output/StateSync/Exit and
+            // forwarding Input/Resize back). Composing WithHmp1Client with
+            // a listen-and-accept transport lets us flip the TCP direction
+            // without flipping the HMP1 protocol direction (DCP, holding
+            // the PTY, must remain the protocol server).
+            .WithHmp1Client(async ct =>
+            {
+                await foreach (var stream in Hmp1Transports.ListenUnixSocket(producerUdsPath, ct).ConfigureAwait(false))
+                {
+                    return stream;
+                }
+                throw new OperationCanceledException("Producer UDS listener was cancelled before any client connected.");
+            })
             .WithHmp1UdsServer(consumerUdsPath)
             .Build();
 
