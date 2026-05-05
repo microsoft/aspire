@@ -73,6 +73,26 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GetUniqueDefaultOutputPath_StripsInvalidPathCharacters()
+    {
+        using var workspace = Utils.TemporaryWorkspace.Create(outputHelper);
+
+        var result = OutputPathHelper.GetUniqueDefaultOutputPath("my\0app", workspace.WorkspaceRoot.FullName);
+
+        Assert.Equal("./myapp", result);
+    }
+
+    [Fact]
+    public void GetUniqueDefaultOutputPath_FallsBackToOutput_WhenAllCharsInvalid()
+    {
+        using var workspace = Utils.TemporaryWorkspace.Create(outputHelper);
+
+        var result = OutputPathHelper.GetUniqueDefaultOutputPath("\0", workspace.WorkspaceRoot.FullName);
+
+        Assert.Equal("./output", result);
+    }
+
+    [Fact]
     public void ValidateOutputPath_ReturnsNull_WhenDirectoryDoesNotExist()
     {
         using var workspace = Utils.TemporaryWorkspace.Create(outputHelper);

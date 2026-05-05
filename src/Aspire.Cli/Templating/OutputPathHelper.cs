@@ -11,11 +11,15 @@ internal static class OutputPathHelper
 {
     /// <summary>
     /// Returns a unique default output path based on the given base name.
+    /// Invalid path characters are stripped from <paramref name="baseName"/>.
+    /// If all characters are invalid, <c>"output"</c> is used as the fallback name.
     /// If <c>./{baseName}</c> already exists and is non-empty, appends
     /// a numeric suffix (<c>-2</c>, <c>-3</c>, …) until an available name is found.
     /// </summary>
     internal static string GetUniqueDefaultOutputPath(string baseName, string workingDirectory)
     {
+        baseName = SanitizeBaseName(baseName);
+
         var candidate = $"./{baseName}";
         if (!IsNonEmptyDirectory(candidate, workingDirectory))
         {
@@ -90,6 +94,13 @@ internal static class OutputPathHelper
         }
 
         return null;
+    }
+
+    private static string SanitizeBaseName(string baseName)
+    {
+        var invalidChars = Path.GetInvalidPathChars();
+        var sanitized = string.Concat(baseName.Where(c => !invalidChars.Contains(c)));
+        return sanitized.Length > 0 ? sanitized : "output";
     }
 
     private static bool ContainsInvalidPathChars(string path)
