@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Docs site restructuring; no confident single docsRequired entry match",
+  "mergedAt": "2026-03-19T20:39:38Z",
+  "number": 563,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "excluded",
+  "title": "Add multi-language architecture page, remove redundant TypeScript AppHost docs"
+}

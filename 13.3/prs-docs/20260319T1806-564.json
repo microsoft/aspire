@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documenting 13.2 ASPIREEXPORT diagnostics; no matching 13.3 docsRequired entry",
+  "mergedAt": "2026-03-19T18:06:15Z",
+  "number": 564,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "excluded",
+  "title": "Add ASPIREEXPORT001-010 diagnostics articles for Polyglot support"
+}

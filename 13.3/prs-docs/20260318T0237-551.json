@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site infrastructure change, not an Aspire product feature",
+  "mergedAt": "2026-03-18T02:37:24Z",
+  "number": 551,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "excluded",
+  "title": "feat: add support for HTTPS proxy in fetch requests"
+}

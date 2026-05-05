@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Matches changelog entry for improved AI agent init with location selection and standard skill support",
+  "mergedAt": "2026-03-19T19:38:47Z",
+  "number": 561,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "included",
+  "title": "Restructure AI coding agents docs: skill-first, MCP as sub-pages"
+}

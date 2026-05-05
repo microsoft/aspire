@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Broad docs site restructuring for TypeScript getting started; no single docsRequired changelog entry match",
+  "mergedAt": "2026-03-19T13:12:24Z",
+  "number": 556,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "excluded",
+  "title": "Replace polyglot AppHost with TypeScript AppHost, fork getting started paths"
+}

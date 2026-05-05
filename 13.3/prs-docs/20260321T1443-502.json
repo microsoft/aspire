@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents aspire describe command which was introduced in an earlier milestone; no matching 13.3 docsRequired entry",
+  "mergedAt": "2026-03-21T14:43:49Z",
+  "number": 502,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "excluded",
+  "title": "Add `aspire describe` CLI command documentation"
+}

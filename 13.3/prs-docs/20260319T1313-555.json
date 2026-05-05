@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Docs site accessibility fix, not an Aspire product feature",
+  "mergedAt": "2026-03-19T13:13:59Z",
+  "number": 555,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "excluded",
+  "title": "fix: add `aria-pressed` to toggle buttons for screen reader accessibility"
+}

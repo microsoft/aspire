@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency bump in docs site frontend",
+  "mergedAt": "2026-03-17T13:14:33Z",
+  "number": 548,
+  "runDate": "2026-05-05T17:06:10Z",
+  "status": "excluded",
+  "title": "chore(deps): bump simple-git from 3.30.0 to 3.33.0 in /src/frontend"
+}
