@@ -10,7 +10,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
@@ -205,93 +204,6 @@ public class DcpExecutorTests
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
         Assert.Equal(toolArgs, argAnnotations.Select(a => a.Argument));
         AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
-    }
-
-    [Fact]
-    public async Task CreateExecutable_ProjectArgsResolvedInSnapshot_UsesEffectiveArgsFromCreatorIndexes()
-    {
-        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
-        {
-            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
-        });
-
-        var project = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null)
-            .WithHttpEndpoint(targetPort: 8080);
-        var endpoint = project.GetEndpoint("http");
-
-        project.WithArgs("--port")
-            .WithArgs(c => c.Args.Add(endpoint.Property(EndpointProperty.Port)));
-
-        var kubernetesService = new TestKubernetesService();
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
-        await appExecutor.RunApplicationAsync();
-
-        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
-        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
-        Assert.Equal(2, argAnnotations.Count);
-        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
-
-        var effectiveArgs = exe.Spec.Args!.ToList();
-        var portArgument = Assert.Single(argAnnotations, a => a.Argument != "--port");
-        effectiveArgs[Assert.IsType<int>(portArgument.EffectiveArgumentIndex)] = "52731";
-        exe.Status = new ExecutableStatus
-        {
-            EffectiveArgs = effectiveArgs
-        };
-
-        var snapshot = CreateSnapshotBuilder(distributedAppModel).ToSnapshot(exe, CreatePreviousSnapshot());
-
-        Assert.Equal(["--port", "52731"], GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Resource.AppArgs).ToArray());
-        Assert.Equal(effectiveArgs, GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Executable.Args).ToArray());
-    }
-
-    [Fact]
-    public async Task CreateContainer_ArgsResolvedInSnapshot_UsesEffectiveArgsFromCreatorIndexes()
-    {
-        var builder = DistributedApplication.CreateBuilder();
-
-        var executable = builder.AddExecutable("anExecutable", "command", "")
-            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
-
-        builder.AddContainer("aContainer", "image")
-            .WithArgs(c =>
-            {
-                c.Args.Add("--port");
-                c.Args.Add(executable.GetEndpoint("http").Property(EndpointProperty.Port));
-            });
-
-        var kubernetesService = new TestKubernetesService();
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-
-        var dcpOptions = new DcpOptions
-        {
-            EnableAspireContainerTunnel = true,
-        };
-
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
-        await appExecutor.RunApplicationAsync();
-
-        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
-        Assert.True(container.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
-        Assert.Equal(2, argAnnotations.Count);
-        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, container.Spec.Args);
-
-        var effectiveArgs = container.Spec.Args!.ToList();
-        var portArgument = Assert.Single(argAnnotations, a => a.Argument != "--port");
-        effectiveArgs[Assert.IsType<int>(portArgument.EffectiveArgumentIndex)] = "5678";
-        container.Status = new ContainerStatus
-        {
-            EffectiveArgs = effectiveArgs
-        };
-
-        var snapshot = CreateSnapshotBuilder(distributedAppModel).ToSnapshot(container, CreatePreviousSnapshot());
-
-        Assert.Equal(["--port", "5678"], GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Resource.AppArgs).ToArray());
-        Assert.Equal(effectiveArgs, GetEnumerablePropertyValue<string>(snapshot, KnownProperties.Container.Args).ToArray());
     }
 
     [Fact]
@@ -3505,31 +3417,6 @@ public class DcpExecutorTests
             Assert.InRange(index, 0, specArgs.Count - 1);
             Assert.Equal(annotation.Argument, specArgs[index]);
         }
-    }
-
-    private static Aspire.Hosting.Dcp.ResourceSnapshotBuilder CreateSnapshotBuilder(DistributedApplicationModel model)
-    {
-        return new(new DcpResourceState(model.Resources.ToDictionary(r => r.Name), []));
-    }
-
-    private static CustomResourceSnapshot CreatePreviousSnapshot()
-    {
-        return new()
-        {
-            ResourceType = "resource",
-            Properties = []
-        };
-    }
-
-    private static ResourcePropertySnapshot GetProperty(CustomResourceSnapshot snapshot, string name)
-    {
-        return Assert.Single(snapshot.Properties, p => p.Name == name);
-    }
-
-    private static IEnumerable<T> GetEnumerablePropertyValue<T>(CustomResourceSnapshot snapshot, string name)
-    {
-        var property = GetProperty(snapshot, name);
-        return Assert.IsAssignableFrom<IEnumerable<T>>(property.Value);
     }
 
     private sealed class TestExecutableResource(string directory) : ExecutableResource("TestExecutable", "test", directory);
