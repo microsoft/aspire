@@ -25,7 +25,15 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- (a) Channel baked into the binary at build time. CI overrides via /p:AspireCliChannel=...
+         Local dev falls back to "daily". -->
+    <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">daily</AspireCliChannel>
   </PropertyGroup>
+
+  <!-- (b) Emit the channel as immutable assembly metadata so PR2 can read it at runtime. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
+  </ItemGroup>
 
   <!-- Set the nuget properties when building as a global tool. -->
   <PropertyGroup Condition="'$(IsCliToolProject)' == 'true'">
@@ -57,6 +65,15 @@
     <RemoveDir Directories="$(PublishDir)" />
     <MakeDir Directories="$(PublishDir)" />
     <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+
+    <!-- (c+d) Copy the dotnet-tool route sidecar into the RID-specific nupkg only.
+         RuntimeIdentifier is set for RID-specific packs but not for the pointer nupkg
+         (see _PackRidSpecificDotnetTool vs _PackPointerDotnetTool in eng/clipack/Common.projitems). -->
+    <Error Condition="'$(RuntimeIdentifier)' != '' and !Exists('.aspire-install.json')"
+           Text="Could not find .aspire-install.json in $(MSBuildProjectDirectory). This file must exist for packing the RID-specific dotnet-tool package." />
+    <Copy SourceFiles=".aspire-install.json"
+          DestinationFolder="$(PublishDir)"
+          Condition="'$(RuntimeIdentifier)' != ''" />
   </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
