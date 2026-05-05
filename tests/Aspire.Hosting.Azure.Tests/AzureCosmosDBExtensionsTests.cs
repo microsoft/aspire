@@ -547,6 +547,16 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void RunAsPreviewEmulatorAppliesOtlpExporterAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var cosmos = builder.AddAzureCosmosDB("cosmos")
+                           .RunAsPreviewEmulator();
+
+        Assert.NotEmpty(cosmos.Resource.Annotations.OfType<OtlpExporterAnnotation>());
+    }
+
+    [Fact]
     public void AddAsExistingResource_ShouldBeIdempotent_ForAzureCosmosDBResource()
     {
         // Arrange
