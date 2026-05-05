@@ -3,7 +3,7 @@
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 using System.Globalization;
 using Aspire.Hosting.Browsers.Resources;
@@ -31,7 +31,7 @@ internal sealed class BrowserLogsConfigurationManager(
     private const string GlobalScopeValue = "global";
     private const string BrowserDefaultProfileValue = "__aspire_browser_default__";
 
-    public async Task<ExecuteCommandResult> ConfigureAsync(BrowserLogsResource resource, CancellationToken cancellationToken)
+    public async Task<ExecuteCommandResult> ConfigureAsync(BrowserAutomationResource resource, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
@@ -64,9 +64,9 @@ internal sealed class BrowserLogsConfigurationManager(
         var resolvedConfigurations = ResolveEffectiveConfigurations(resource, selected);
         Apply(resource, selected);
 
-        foreach (var (browserLogsResource, browserConfiguration) in resolvedConfigurations)
+        foreach (var (browserAutomationResource, browserConfiguration) in resolvedConfigurations)
         {
-            await PublishConfigurationSnapshotAsync(browserLogsResource, browserConfiguration).ConfigureAwait(false);
+            await PublishConfigurationSnapshotAsync(browserAutomationResource, browserConfiguration).ConfigureAwait(false);
         }
 
         var scopeName = selected.Scope == BrowserLogsConfigurationScope.Resource
@@ -86,7 +86,7 @@ internal sealed class BrowserLogsConfigurationManager(
         };
     }
 
-    private List<InteractionInput> CreateInputs(BrowserLogsResource resource, BrowserConfiguration currentConfiguration)
+    private List<InteractionInput> CreateInputs(BrowserAutomationResource resource, BrowserConfiguration currentConfiguration)
     {
         var scopeInput = new InteractionInput
         {
@@ -261,7 +261,7 @@ internal sealed class BrowserLogsConfigurationManager(
         return profile.DirectoryName;
     }
 
-    private Task ValidateInputsAsync(BrowserLogsResource resource, InputsDialogValidationContext context)
+    private Task ValidateInputsAsync(BrowserAutomationResource resource, InputsDialogValidationContext context)
     {
         var inputs = context.Inputs;
         var browser = inputs[BrowserInputName];
@@ -299,7 +299,7 @@ internal sealed class BrowserLogsConfigurationManager(
         {
             try
             {
-                // Resolve the final effective configuration so explicit WithBrowserLogs values are validated before
+                // Resolve the final effective configuration so explicit WithBrowserAutomation values are validated before
                 // applying runtime settings or mutating user secrets.
                 _ = ResolveEffectiveConfigurations(resource, BrowserLogsConfigurationSelection.FromInputs(inputs));
             }
@@ -312,13 +312,13 @@ internal sealed class BrowserLogsConfigurationManager(
         return Task.CompletedTask;
     }
 
-    private List<(BrowserLogsResource Resource, BrowserConfiguration Configuration)> ResolveEffectiveConfigurations(
-        BrowserLogsResource commandResource,
+    private List<(BrowserAutomationResource Resource, BrowserConfiguration Configuration)> ResolveEffectiveConfigurations(
+        BrowserAutomationResource commandResource,
         BrowserLogsConfigurationSelection selected)
     {
         var selectedConfiguration = ToBrowserConfiguration(selected);
-        IEnumerable<BrowserLogsResource> resources = selected.Scope == BrowserLogsConfigurationScope.Global
-            ? applicationModel.Resources.OfType<BrowserLogsResource>()
+        IEnumerable<BrowserAutomationResource> resources = selected.Scope == BrowserLogsConfigurationScope.Global
+            ? applicationModel.Resources.OfType<BrowserAutomationResource>()
             : [commandResource];
 
         return [.. resources.Select(resource =>
@@ -326,8 +326,8 @@ internal sealed class BrowserLogsConfigurationManager(
     }
 
     private BrowserConfiguration ResolveEffectiveConfiguration(
-        BrowserLogsResource resource,
-        BrowserLogsResource commandResource,
+        BrowserAutomationResource resource,
+        BrowserAutomationResource commandResource,
         BrowserLogsConfigurationSelection selected,
         BrowserConfiguration selectedConfiguration)
     {
@@ -358,21 +358,21 @@ internal sealed class BrowserLogsConfigurationManager(
             configuration["AppHost:PathSha256"]);
     }
 
-    private void Apply(BrowserLogsResource resource, BrowserLogsConfigurationSelection selected)
+    private void Apply(BrowserAutomationResource resource, BrowserLogsConfigurationSelection selected)
     {
         var configurationPrefix = selected.Scope == BrowserLogsConfigurationScope.Resource
-            ? $"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{resource.ParentResource.Name}"
-            : BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName;
+            ? $"{BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName}:{resource.ParentResource.Name}"
+            : BrowserAutomationBuilderExtensions.BrowserAutomationConfigurationSectionName;
 
         if (selected.SaveToUserSecrets)
         {
             // IUserSecretsManager persists one key at a time, so a later failure can leave earlier secret mutations
             // on disk. Only update the runtime store after every requested mutation succeeds, so the current AppHost
             // never observes a partial save.
-            SaveValue($"{configurationPrefix}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}", selected.Browser);
-            SaveValue($"{configurationPrefix}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}", selected.UserDataMode.ToString());
+            SaveValue($"{configurationPrefix}:{BrowserAutomationBuilderExtensions.BrowserConfigurationKey}", selected.Browser);
+            SaveValue($"{configurationPrefix}:{BrowserAutomationBuilderExtensions.UserDataModeConfigurationKey}", selected.UserDataMode.ToString());
 
-            var profileKey = $"{configurationPrefix}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}";
+            var profileKey = $"{configurationPrefix}:{BrowserAutomationBuilderExtensions.ProfileConfigurationKey}";
             if (selected.Profile is { } profile)
             {
                 SaveValue(profileKey, profile);
@@ -410,7 +410,7 @@ internal sealed class BrowserLogsConfigurationManager(
         }
     }
 
-    private Task PublishConfigurationSnapshotAsync(BrowserLogsResource resource, BrowserConfiguration browserConfiguration)
+    private Task PublishConfigurationSnapshotAsync(BrowserAutomationResource resource, BrowserConfiguration browserConfiguration)
     {
         return resourceNotificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
@@ -423,12 +423,12 @@ internal sealed class BrowserLogsConfigurationManager(
         BrowserConfiguration browserConfiguration)
     {
         properties = properties
-            .SetResourceProperty(BrowserLogsBuilderExtensions.BrowserPropertyName, browserConfiguration.Browser)
-            .SetResourceProperty(BrowserLogsBuilderExtensions.UserDataModePropertyName, browserConfiguration.UserDataMode.ToString());
+            .SetResourceProperty(BrowserAutomationBuilderExtensions.BrowserPropertyName, browserConfiguration.Browser)
+            .SetResourceProperty(BrowserAutomationBuilderExtensions.UserDataModePropertyName, browserConfiguration.UserDataMode.ToString());
 
         return browserConfiguration.Profile is { } profile
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, profile)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.ProfilePropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.ProfilePropertyName, profile)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.ProfilePropertyName);
     }
 
     private static System.Collections.Immutable.ImmutableArray<ResourcePropertySnapshot> RemoveProperty(

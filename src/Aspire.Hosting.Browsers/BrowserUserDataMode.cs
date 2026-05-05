@@ -8,7 +8,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Selects the Chromium user data directory used by tracked browser sessions.
 /// </summary>
-[Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental("ASPIREBROWSERAUTOMATION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum BrowserUserDataMode
 {
     /// <summary>

@@ -27,7 +27,7 @@ internal static class BrowserMessageStrings
     internal static string BrowserLogsInvalidProfileMetadata => GetString(nameof(BrowserLogsInvalidProfileMetadata));
     internal static string BrowserLogsProfileNotFound => GetString(nameof(BrowserLogsProfileNotFound));
     internal static string BrowserLogsAmbiguousProfile => GetString(nameof(BrowserLogsAmbiguousProfile));
-    internal static string BrowserLogsResourceMissingHttpEndpoint => GetString(nameof(BrowserLogsResourceMissingHttpEndpoint));
+    internal static string BrowserAutomationResourceMissingHttpEndpoint => GetString(nameof(BrowserAutomationResourceMissingHttpEndpoint));
     internal static string BrowserLogsEndpointNotAllocated => GetString(nameof(BrowserLogsEndpointNotAllocated));
 
     private static string GetString(string name) => s_resourceManager.GetString(name, Culture)!;

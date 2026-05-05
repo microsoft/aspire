@@ -6,7 +6,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
 
-internal sealed class BrowserLogsResource(
+internal sealed class BrowserAutomationResource(
     string name,
     IResourceWithEndpoints parentResource,
     BrowserConfiguration initialConfiguration,

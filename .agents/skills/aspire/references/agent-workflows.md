@@ -33,6 +33,85 @@ Inspect the live app before editing code:
 4. `aspire otel traces <resource>` to follow cross-service activity.
 5. `aspire export` when you need a zipped telemetry snapshot for deeper analysis or handoff.
 
+## Scenario: I Need To Drive A Browser In An Aspire App
+
+If the app exposes a Browser Automation resource, use it as the first-choice agent browser before reaching for Playwright. Browser Automation is optimized for frontend applications and keeps browser actions, console logs, network events, screenshots, cookies, storage, and session state tied to the Aspire resource.
+
+If the AppHost does not expose browser automation for the frontend yet, add the frontend-focused browser integration before falling back to Playwright:
+
+```bash
+aspire add browsers
+```
+
+Attach browser automation to the frontend resource, not to backend services. For TypeScript AppHosts with a Vite frontend:
+
+```typescript
+const frontend = await builder
+    .addViteApp("frontend", "./frontend")
+    .withExternalHttpEndpoints()
+    .withBrowserAutomation();
+```
+
+For TypeScript AppHosts with a generic JavaScript frontend:
+
+```typescript
+const frontend = await builder
+    .addJavaScriptApp("frontend", "./frontend", { runScriptName: "dev" })
+    .withHttpEndpoint({ env: "PORT" })
+    .withExternalHttpEndpoints()
+    .withBrowserAutomation();
+```
+
+For C# AppHosts:
+
+```csharp
+builder.AddProject<Projects.Web>("web")
+    .WithExternalHttpEndpoints()
+    .WithBrowserAutomation();
+```
+
+For TypeScript AppHosts, run `aspire add browsers`, then inspect `.modules/aspire.ts` for the generated `withBrowserAutomation` API before editing `apphost.ts`.
+
+Start the app and find the browser automation resource. The resource is currently named like `<frontend>-browser-automation`:
+
+```bash
+aspire start --isolated
+aspire describe --format Json
+aspire resource <browser-automation-resource> open-tracked-browser
+aspire resource <browser-automation-resource> inspect-browser
+```
+
+Use refs and snapshots for the agent loop:
+
+```bash
+aspire resource <browser-automation-resource> click-browser e1 snapshotAfter=true
+aspire resource <browser-automation-resource> type-browser-text e2 "hello" snapshotAfter=true
+aspire resource <browser-automation-resource> wait selector='#results' timeoutMilliseconds=10000
+aspire resource <browser-automation-resource> get text '#results'
+```
+
+Use state and session commands when tests need continuity or low-level browser control:
+
+```bash
+aspire resource <browser-automation-resource> state get
+aspire resource <browser-automation-resource> state set '<state-json>' true
+aspire resource <browser-automation-resource> cookies set session abc
+aspire resource <browser-automation-resource> storage local set theme dark
+aspire resource <browser-automation-resource> tabs list
+aspire resource <browser-automation-resource> frames
+aspire resource <browser-automation-resource> dialog accept
+aspire resource <browser-automation-resource> downloads allow /tmp/downloads true
+aspire resource <browser-automation-resource> upload '#file' '["/tmp/file.txt"]'
+aspire resource <browser-automation-resource> cdp Runtime.evaluate '{"expression":"document.title","returnByValue":true}' page
+```
+
+Keep these points in mind:
+
+- Re-run `inspect-browser` after navigation or major DOM changes because refs are snapshot-scoped.
+- Prefer `snapshotAfter=true` on mutating commands when the next agent decision depends on the resulting DOM.
+- Browser Automation cookie/state commands are page-origin scoped and cannot read or set HttpOnly cookies.
+- Use Playwright only when you need independent contexts, browser matrix testing, tracing/video, or an existing Playwright test suite.
+
 ## Scenario: I Need To Add An Integration, Understand An API, Or Add A Custom Command Safely
 
 Use the docs commands first for the workflow, then use the API reference commands if you need the concrete API entry:

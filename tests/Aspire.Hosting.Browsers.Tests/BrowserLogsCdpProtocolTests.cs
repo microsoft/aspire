@@ -96,6 +96,91 @@ public class BrowserLogsCdpProtocolTests
     }
 
     [Fact]
+    public void ParseRuntimeEvaluateResponse_ReturnsRemoteObject()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "id": 9,
+              "result": {
+                "result": {
+                  "type": "string",
+                  "value": "{\"action\":\"snapshot\"}"
+                }
+              }
+            }
+            """);
+
+        var result = BrowserLogsCdpProtocol.ParseRuntimeEvaluateResponse(payload);
+        var value = Assert.IsType<BrowserLogsCdpProtocolStringValue>(result.Result?.Value);
+
+        Assert.Equal("""{"action":"snapshot"}""", value.Value);
+    }
+
+    [Fact]
+    public void ParseRuntimeEvaluateResponse_ThrowsForExceptionDetails()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "id": 9,
+              "result": {
+                "result": {
+                  "type": "object"
+                },
+                "exceptionDetails": {
+                  "text": "Uncaught",
+                  "exception": {
+                    "description": "Error: boom"
+                  }
+                }
+              }
+            }
+            """);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => BrowserLogsCdpProtocol.ParseRuntimeEvaluateResponse(payload));
+
+        Assert.Equal("Error: boom", exception.Message);
+    }
+
+    [Fact]
+    public void ParseRawCommandResponse_ReturnsResultJson()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "id": 9,
+              "result": {
+                "value": 42,
+                "nested": {
+                  "ok": true
+                }
+              }
+            }
+            """);
+
+        var result = BrowserLogsCdpProtocol.ParseRawCommandResponse(payload);
+
+        Assert.Equal("""{"value":42,"nested":{"ok":true}}""", result);
+    }
+
+    [Fact]
+    public void ParseRawCommandResponse_ThrowsForProtocolError()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "id": 9,
+              "error": {
+                "code": -32601,
+                "message": "Method not found"
+              }
+            }
+            """);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => BrowserLogsCdpProtocol.ParseRawCommandResponse(payload));
+
+        Assert.Contains("Method not found", exception.Message);
+        Assert.Contains("-32601", exception.Message);
+    }
+
+    [Fact]
     public void ParseEvent_TargetDetachedFromTarget_UsesParameterSessionId()
     {
         var payload = Encoding.UTF8.GetBytes("""

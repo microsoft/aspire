@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 namespace Aspire.Hosting.Browsers.Tests;
 
@@ -541,8 +541,8 @@ public class BrowserLogsSessionManagerTests
             NullLogger<BrowserLogsSessionManager>.Instance,
             artifactWriter: null,
             sessionFactory: sessionFactory);
-        var resource = new BrowserLogsResource(
-            "web-browser-logs",
+        var resource = new BrowserAutomationResource(
+            "web-browser-automation",
             new TestResourceWithEndpoints("web"),
             new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated, AppHostKey: "test-apphost"),
             new BrowserConfigurationExplicitValues());

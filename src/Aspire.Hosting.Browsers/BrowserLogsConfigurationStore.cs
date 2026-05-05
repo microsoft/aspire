@@ -3,7 +3,7 @@
 
 namespace Aspire.Hosting;
 
-// Stores browser-log configuration chosen from the dashboard for the current AppHost process. User secrets persist the
+// Stores browser automation configuration chosen from the dashboard for the current AppHost process. User secrets persist the
 // same values for the next run, but the store makes the next command execution use the new values immediately without
 // depending on configuration reload timing.
 internal sealed class BrowserLogsConfigurationStore

@@ -81,7 +81,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
                 // In Playwright terms, the user data directory is the persistent-context boundary: multiple pages can
                 // share one browser process/context, while requests for a different named profile are rejected.
                 // In the playground this shows up as one browser window/process with additional tracked page targets
-                // as more resources start browser-log sessions, rather than one browser process per session.
+                // as more resources start browser automation sessions, rather than one browser process per session.
                 ValidateProfileCompatibility(identity, entry.ProfileDirectoryName, userDataDirectory.ProfileDirectoryName);
                 entry.ReferenceCount++;
                 _logger.LogInformation("Reusing tracked browser host '{BrowserExecutable}' at '{Endpoint}'. Active leases: {ReferenceCount}.", identity.ExecutablePath, FormatDebugEndpoint(entry.Host.DebugEndpoint), entry.ReferenceCount);

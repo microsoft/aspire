@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
@@ -401,18 +401,18 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Scanner_BrowsersAssembly_WithBrowserLogsCapability()
+    public void Scanner_BrowsersAssembly_WithBrowserAutomationCapability()
     {
         var capabilities = ScanCapabilitiesFromBrowsersAssembly();
 
-        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting.Browsers/withBrowserLogs");
-        Assert.NotNull(withBrowserLogs);
-        Assert.Equal("withBrowserLogs", withBrowserLogs.MethodName);
-        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", withBrowserLogs.TargetTypeId);
-        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "browser" && p.Type?.TypeId == "string" && p.IsOptional);
-        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "profile" && p.Type?.TypeId == "string" && p.IsOptional);
-        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "userDataMode" && p.IsOptional);
-        Assert.True(withBrowserLogs.ReturnsBuilder);
+        var withBrowserAutomation = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting.Browsers/withBrowserAutomation");
+        Assert.NotNull(withBrowserAutomation);
+        Assert.Equal("withBrowserAutomation", withBrowserAutomation.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", withBrowserAutomation.TargetTypeId);
+        Assert.Contains(withBrowserAutomation.Parameters, p => p.Name == "browser" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.Contains(withBrowserAutomation.Parameters, p => p.Name == "profile" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.Contains(withBrowserAutomation.Parameters, p => p.Name == "userDataMode" && p.IsOptional);
+        Assert.True(withBrowserAutomation.ReturnsBuilder);
     }
 
     [Fact]
@@ -933,7 +933,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromBrowsersAssembly()
     {
-        var browsersAssembly = typeof(global::Aspire.Hosting.BrowserLogsBuilderExtensions).Assembly;
+        var browsersAssembly = typeof(global::Aspire.Hosting.BrowserAutomationBuilderExtensions).Assembly;
         var result = AtsCapabilityScanner.ScanAssembly(browsersAssembly);
         return result.Capabilities;
     }

@@ -6,18 +6,24 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
+using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using DashboardInputType = Aspire.DashboardService.Proto.V1.InputType;
+using DashboardInteractionInput = Aspire.DashboardService.Proto.V1.InteractionInput;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -645,6 +651,82 @@ public partial class ConsoleLogsTests : DashboardTestContext
             var highlightedCommands = cut.FindAll(".highlighted-command");
             Assert.Empty(highlightedCommands);
         });
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_WithArgumentInputs_SubmitsArgumentsFromDialog()
+    {
+        var testResource = ModelTestHelpers.CreateResource(
+            resourceName: "test-resource",
+            state: KnownResourceState.Running,
+            commands:
+            [
+                new CommandViewModel(
+                    "click-browser",
+                    CommandViewModelState.Enabled,
+                    "Click",
+                    "Click an element",
+                    confirmationMessage: "",
+                    argumentInputs:
+                    [
+                        new DashboardInteractionInput { Name = "selector", Label = "Selector", InputType = DashboardInputType.Text, Required = true },
+                        new DashboardInteractionInput { Name = "snapshotAfter", Label = "Snapshot after", InputType = DashboardInputType.Boolean }
+                    ],
+                    isHighlighted: true,
+                    iconName: string.Empty,
+                    iconVariant: IconVariant.Regular)
+            ]);
+        var subscribedResourceNameTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var commandArgumentsTcs = new TaskCompletionSource<Value?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: name =>
+            {
+                subscribedResourceNameTcs.TrySetResult(name);
+                return consoleLogsChannel;
+            },
+            resourceChannelProvider: () => resourceChannel,
+            executeResourceCommand: (_, _, _, arguments, _) =>
+            {
+                commandArgumentsTcs.TrySetResult(arguments);
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            },
+            initialResources: [testResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        Services.RemoveAll<IDialogService>();
+        Services.AddSingleton<IDialogService>(new TestDialogService(onShowDialog: async (data, _) =>
+        {
+            var viewModel = Assert.IsType<InteractionsInputsDialogViewModel>(data);
+            viewModel.Interaction.InputsDialog.InputItems.Single(i => i.Name == "selector").Value = "#submit";
+            viewModel.Interaction.InputsDialog.InputItems.Single(i => i.Name == "snapshotAfter").Value = "true";
+
+            await viewModel.OnSubmitCallback(viewModel.Interaction, false).ConfigureAwait(false);
+            return new DialogReference("arguments", null!);
+        }));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "test-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+        var highlightedCommand = Assert.Single(cut.FindAll(".highlighted-command"));
+
+        highlightedCommand.Click();
+
+        var arguments = await commandArgumentsTcs.Task.DefaultTimeout();
+        Assert.NotNull(arguments);
+        Assert.Equal(Value.KindOneofCase.StructValue, arguments.KindCase);
+        Assert.Equal("#submit", arguments.StructValue.Fields["selector"].StringValue);
+        Assert.True(arguments.StructValue.Fields["snapshotAfter"].BoolValue);
     }
 
     [Fact]

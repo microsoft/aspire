@@ -176,16 +176,28 @@ internal sealed class BrowserLogsCdpConnectionMultiplexer : IAsyncDisposable
             return owner._innerConnection.EnablePageInstrumentationAsync(sessionId, cancellationToken);
         }
 
-        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
-            return owner._innerConnection.CaptureScreenshotAsync(sessionId, cancellationToken);
+            return owner._innerConnection.CaptureScreenshotAsync(sessionId, options, cancellationToken);
         }
 
         public Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
             return owner._innerConnection.NavigateAsync(sessionId, url, cancellationToken);
+        }
+
+        public Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            ThrowIfDisposed();
+            return owner._innerConnection.EvaluateAsync(sessionId, expression, timeout, cancellationToken);
+        }
+
+        public Task<string> SendRawCommandAsync(string? sessionId, string method, string? parametersJson, CancellationToken cancellationToken)
+        {
+            ThrowIfDisposed();
+            return owner._innerConnection.SendRawCommandAsync(sessionId, method, parametersJson, cancellationToken);
         }
 
         public async ValueTask DisposeAsync()

@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -36,7 +36,7 @@ public class BrowserLogsRunningSessionTests
                 });
 
             var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
-            var resourceName = "web-browser-logs";
+            var resourceName = "web-browser-automation";
             BrowserLogsRunningSession? session = null;
             var logs = await ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount: 5, () =>
             {
@@ -164,9 +164,24 @@ public class BrowserLogsRunningSessionTests
 
         public int DisposeCount { get; private set; }
 
-        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken)
+        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
             return Task.FromResult(new BrowserLogsCaptureScreenshotResult { Data = Convert.ToBase64String([0x89, 0x50, 0x4e, 0x47]) });
+        }
+
+        public Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"action":"evaluate"}""");
+        }
+
+        public Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"action":"cdp"}""");
         }
 
         public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)

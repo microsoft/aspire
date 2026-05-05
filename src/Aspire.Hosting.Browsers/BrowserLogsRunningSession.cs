@@ -25,7 +25,13 @@ internal interface IBrowserLogsRunningSession
 
     Task StartCompletionObserver(Func<int?, Exception?, Task> onCompleted);
 
-    Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken);
+    Task<byte[]> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken);
+
+    Task NavigateAsync(Uri url, CancellationToken cancellationToken);
+
+    Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken);
+
+    Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken);
 
     Task StopAsync(CancellationToken cancellationToken);
 }
@@ -173,10 +179,10 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         return ObserveCompletionAsync(onCompleted);
     }
 
-    public async Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken)
+    public async Task<byte[]> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
     {
         var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
-        var result = await pageSession.CaptureScreenshotAsync(cancellationToken).ConfigureAwait(false);
+        var result = await pageSession.CaptureScreenshotAsync(options, cancellationToken).ConfigureAwait(false);
 
         var data = result.Data ?? throw new InvalidOperationException("Tracked browser screenshot capture returned no image data.");
 
@@ -190,11 +196,29 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
     }
 
+    public async Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        await pageSession.NavigateAsync(url, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        return await pageSession.EvaluateJsonAsync(expression, timeout, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        return await pageSession.SendCdpCommandJsonAsync(method, parametersJson, session, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         try { _stopCts.Cancel(); } catch (ObjectDisposedException) { }
 
-        // Stopping a dashboard browser-log session should close only the page target it created. The shared browser
+        // Stopping a dashboard browser automation session should close only the page target it created. The shared browser
         // process/window is released through the lease and may stay alive while other resource sessions are still active.
         await DisposePageSessionAsync().ConfigureAwait(false);
         await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);

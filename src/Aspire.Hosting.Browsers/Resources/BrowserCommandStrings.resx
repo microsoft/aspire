@@ -13,7 +13,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="OpenTrackedBrowserDescription" xml:space="preserve">
-    <value>Open the app in a tracked browser session and stream browser logs to this resource.</value>
+    <value>Open the app in a tracked browser session and stream browser diagnostics to this resource.</value>
   </data>
   <data name="OpenTrackedBrowserName" xml:space="preserve">
     <value>Open tracked browser</value>
@@ -25,7 +25,7 @@
     <value>Configure tracked browser</value>
   </data>
   <data name="ConfigureTrackedBrowserPromptMessage" xml:space="preserve">
-    <value>Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</value>
+    <value>Choose tracked browser settings. Resource-specific settings override global Browser Automation settings.</value>
   </data>
   <data name="ConfigureTrackedBrowserSaveButton" xml:space="preserve">
     <value>Apply</value>
@@ -38,10 +38,10 @@
     <comment>{0} is the Aspire resource name</comment>
   </data>
   <data name="ConfigureTrackedBrowserGlobalScopeOption" xml:space="preserve">
-    <value>All BrowserLogs resources</value>
+    <value>All Browser Automation resources</value>
   </data>
   <data name="ConfigureTrackedBrowserGlobalScopeResult" xml:space="preserve">
-    <value>all BrowserLogs resources</value>
+    <value>all Browser Automation resources</value>
   </data>
   <data name="ConfigureTrackedBrowserBrowserLabel" xml:space="preserve">
     <value>Browser</value>
@@ -115,5 +115,689 @@
   </data>
   <data name="CaptureScreenshotName" xml:space="preserve">
     <value>Capture screenshot</value>
+  </data>
+  <data name="InspectBrowserDescription" xml:space="preserve">
+    <value>Return a JSON snapshot of the active tracked browser page, including URL, title, visible text, and actionable elements with selectors.</value>
+  </data>
+  <data name="InspectBrowserName" xml:space="preserve">
+    <value>Inspect browser page</value>
+  </data>
+  <data name="InspectBrowserSucceeded" xml:space="preserve">
+    <value>Captured browser page snapshot.</value>
+  </data>
+  <data name="GetBrowserDescription" xml:space="preserve">
+    <value>Return a structured value from the active tracked browser page, such as title, URL, text, HTML, field value, attribute, count, box, or styles.</value>
+  </data>
+  <data name="GetBrowserName" xml:space="preserve">
+    <value>Get browser value</value>
+  </data>
+  <data name="GetBrowserSucceeded" xml:space="preserve">
+    <value>Retrieved browser value.</value>
+  </data>
+  <data name="IsBrowserDescription" xml:space="preserve">
+    <value>Check whether a selected browser element is visible, enabled, or checked.</value>
+  </data>
+  <data name="IsBrowserName" xml:space="preserve">
+    <value>Check browser element state</value>
+  </data>
+  <data name="IsBrowserSucceeded" xml:space="preserve">
+    <value>Checked browser element state.</value>
+  </data>
+  <data name="FindBrowserDescription" xml:space="preserve">
+    <value>Find a browser element by role, text, label, placeholder, alt text, title, test ID, or selector position and return its snapshot details.</value>
+  </data>
+  <data name="FindBrowserName" xml:space="preserve">
+    <value>Find browser element</value>
+  </data>
+  <data name="FindBrowserSucceeded" xml:space="preserve">
+    <value>Found browser element.</value>
+  </data>
+  <data name="HighlightBrowserDescription" xml:space="preserve">
+    <value>Highlight an element in the active tracked browser page for visual debugging.</value>
+  </data>
+  <data name="HighlightBrowserName" xml:space="preserve">
+    <value>Highlight browser element</value>
+  </data>
+  <data name="HighlightBrowserSucceeded" xml:space="preserve">
+    <value>Highlighted browser element.</value>
+  </data>
+  <data name="EvaluateBrowserDescription" xml:space="preserve">
+    <value>Evaluate a JavaScript expression in the active tracked browser page and return the JSON-serializable result.</value>
+  </data>
+  <data name="EvaluateBrowserName" xml:space="preserve">
+    <value>Evaluate browser script</value>
+  </data>
+  <data name="EvaluateBrowserSucceeded" xml:space="preserve">
+    <value>Evaluated browser script.</value>
+  </data>
+  <data name="CookiesBrowserDescription" xml:space="preserve">
+    <value>Get, set, or clear cookies visible to the active tracked browser page.</value>
+  </data>
+  <data name="CookiesBrowserName" xml:space="preserve">
+    <value>Manage browser cookies</value>
+  </data>
+  <data name="CookiesBrowserSucceeded" xml:space="preserve">
+    <value>Updated browser cookies.</value>
+  </data>
+  <data name="StorageBrowserDescription" xml:space="preserve">
+    <value>Get, set, or clear localStorage or sessionStorage entries for the active tracked browser page.</value>
+  </data>
+  <data name="StorageBrowserName" xml:space="preserve">
+    <value>Manage browser storage</value>
+  </data>
+  <data name="StorageBrowserSucceeded" xml:space="preserve">
+    <value>Updated browser storage.</value>
+  </data>
+  <data name="StateBrowserDescription" xml:space="preserve">
+    <value>Get, restore, or clear browser page state including cookies, localStorage, and sessionStorage.</value>
+  </data>
+  <data name="StateBrowserName" xml:space="preserve">
+    <value>Manage browser state</value>
+  </data>
+  <data name="StateBrowserSucceeded" xml:space="preserve">
+    <value>Updated browser state.</value>
+  </data>
+  <data name="CdpBrowserDescription" xml:space="preserve">
+    <value>Send a raw Chrome DevTools Protocol command to the active tracked browser page or browser connection.</value>
+  </data>
+  <data name="CdpBrowserName" xml:space="preserve">
+    <value>Send CDP command</value>
+  </data>
+  <data name="CdpBrowserSucceeded" xml:space="preserve">
+    <value>Sent CDP command.</value>
+  </data>
+  <data name="TabsBrowserDescription" xml:space="preserve">
+    <value>List, open, or close browser page targets in the tracked browser.</value>
+  </data>
+  <data name="TabsBrowserName" xml:space="preserve">
+    <value>Manage browser tabs</value>
+  </data>
+  <data name="TabsBrowserSucceeded" xml:space="preserve">
+    <value>Managed browser tabs.</value>
+  </data>
+  <data name="FramesBrowserDescription" xml:space="preserve">
+    <value>List frame elements in the active tracked browser page.</value>
+  </data>
+  <data name="FramesBrowserName" xml:space="preserve">
+    <value>List browser frames</value>
+  </data>
+  <data name="FramesBrowserSucceeded" xml:space="preserve">
+    <value>Listed browser frames.</value>
+  </data>
+  <data name="DialogBrowserDescription" xml:space="preserve">
+    <value>Accept or dismiss the currently open JavaScript dialog in the active tracked browser page.</value>
+  </data>
+  <data name="DialogBrowserName" xml:space="preserve">
+    <value>Handle browser dialog</value>
+  </data>
+  <data name="DialogBrowserSucceeded" xml:space="preserve">
+    <value>Handled browser dialog.</value>
+  </data>
+  <data name="DownloadsBrowserDescription" xml:space="preserve">
+    <value>Configure download behavior for the tracked browser.</value>
+  </data>
+  <data name="DownloadsBrowserName" xml:space="preserve">
+    <value>Configure browser downloads</value>
+  </data>
+  <data name="DownloadsBrowserSucceeded" xml:space="preserve">
+    <value>Configured browser downloads.</value>
+  </data>
+  <data name="UploadBrowserDescription" xml:space="preserve">
+    <value>Attach one or more local files to a file input in the active tracked browser page.</value>
+  </data>
+  <data name="UploadBrowserName" xml:space="preserve">
+    <value>Upload browser files</value>
+  </data>
+  <data name="UploadBrowserSucceeded" xml:space="preserve">
+    <value>Uploaded browser files.</value>
+  </data>
+  <data name="BrowserUrlDescription" xml:space="preserve">
+    <value>Return the current URL, title, and ready state for the active tracked browser page.</value>
+  </data>
+  <data name="BrowserUrlName" xml:space="preserve">
+    <value>Get browser URL</value>
+  </data>
+  <data name="BrowserUrlSucceeded" xml:space="preserve">
+    <value>Returned browser URL.</value>
+  </data>
+  <data name="BackBrowserDescription" xml:space="preserve">
+    <value>Navigate the active tracked browser page back in its history.</value>
+  </data>
+  <data name="BackBrowserName" xml:space="preserve">
+    <value>Go back</value>
+  </data>
+  <data name="BackBrowserSucceeded" xml:space="preserve">
+    <value>Navigated browser back.</value>
+  </data>
+  <data name="ForwardBrowserDescription" xml:space="preserve">
+    <value>Navigate the active tracked browser page forward in its history.</value>
+  </data>
+  <data name="ForwardBrowserName" xml:space="preserve">
+    <value>Go forward</value>
+  </data>
+  <data name="ForwardBrowserSucceeded" xml:space="preserve">
+    <value>Navigated browser forward.</value>
+  </data>
+  <data name="ReloadBrowserDescription" xml:space="preserve">
+    <value>Reload the active tracked browser page.</value>
+  </data>
+  <data name="ReloadBrowserName" xml:space="preserve">
+    <value>Reload browser</value>
+  </data>
+  <data name="ReloadBrowserSucceeded" xml:space="preserve">
+    <value>Reloaded browser.</value>
+  </data>
+  <data name="NavigateBrowserDescription" xml:space="preserve">
+    <value>Navigate the active tracked browser page to an absolute URL.</value>
+  </data>
+  <data name="NavigateBrowserName" xml:space="preserve">
+    <value>Navigate browser</value>
+  </data>
+  <data name="NavigateBrowserSucceeded" xml:space="preserve">
+    <value>Navigated browser page.</value>
+  </data>
+  <data name="ClickBrowserDescription" xml:space="preserve">
+    <value>Click an element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="ClickBrowserName" xml:space="preserve">
+    <value>Click browser element</value>
+  </data>
+  <data name="ClickBrowserSucceeded" xml:space="preserve">
+    <value>Clicked browser element.</value>
+  </data>
+  <data name="DoubleClickBrowserDescription" xml:space="preserve">
+    <value>Double-click an element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="DoubleClickBrowserName" xml:space="preserve">
+    <value>Double-click browser element</value>
+  </data>
+  <data name="DoubleClickBrowserSucceeded" xml:space="preserve">
+    <value>Double-clicked browser element.</value>
+  </data>
+  <data name="FillBrowserDescription" xml:space="preserve">
+    <value>Fill an input, textarea, or editable element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="FillBrowserName" xml:space="preserve">
+    <value>Fill browser field</value>
+  </data>
+  <data name="FillBrowserSucceeded" xml:space="preserve">
+    <value>Filled browser field.</value>
+  </data>
+  <data name="CheckBrowserDescription" xml:space="preserve">
+    <value>Check a checkbox or other checkable element in the active tracked browser page.</value>
+  </data>
+  <data name="CheckBrowserName" xml:space="preserve">
+    <value>Check browser element</value>
+  </data>
+  <data name="CheckBrowserSucceeded" xml:space="preserve">
+    <value>Checked browser element.</value>
+  </data>
+  <data name="UncheckBrowserDescription" xml:space="preserve">
+    <value>Uncheck a checkbox or other checkable element in the active tracked browser page.</value>
+  </data>
+  <data name="UncheckBrowserName" xml:space="preserve">
+    <value>Uncheck browser element</value>
+  </data>
+  <data name="UncheckBrowserSucceeded" xml:space="preserve">
+    <value>Unchecked browser element.</value>
+  </data>
+  <data name="FocusBrowserElementDescription" xml:space="preserve">
+    <value>Focus an element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="FocusBrowserElementName" xml:space="preserve">
+    <value>Focus browser element</value>
+  </data>
+  <data name="FocusBrowserElementSucceeded" xml:space="preserve">
+    <value>Focused browser element.</value>
+  </data>
+  <data name="TypeBrowserTextDescription" xml:space="preserve">
+    <value>Type text into an input, textarea, or editable element in the active tracked browser page.</value>
+  </data>
+  <data name="TypeBrowserTextName" xml:space="preserve">
+    <value>Type browser text</value>
+  </data>
+  <data name="TypeBrowserTextSucceeded" xml:space="preserve">
+    <value>Typed browser text.</value>
+  </data>
+  <data name="PressBrowserKeyDescription" xml:space="preserve">
+    <value>Press a key on a selected or currently focused element in the active tracked browser page.</value>
+  </data>
+  <data name="PressBrowserKeyName" xml:space="preserve">
+    <value>Press browser key</value>
+  </data>
+  <data name="PressBrowserKeySucceeded" xml:space="preserve">
+    <value>Pressed browser key.</value>
+  </data>
+  <data name="KeyDownBrowserDescription" xml:space="preserve">
+    <value>Dispatch a keydown event on a selected or currently focused element in the active tracked browser page.</value>
+  </data>
+  <data name="KeyDownBrowserName" xml:space="preserve">
+    <value>Key down in browser</value>
+  </data>
+  <data name="KeyDownBrowserSucceeded" xml:space="preserve">
+    <value>Dispatched browser keydown.</value>
+  </data>
+  <data name="KeyUpBrowserDescription" xml:space="preserve">
+    <value>Dispatch a keyup event on a selected or currently focused element in the active tracked browser page.</value>
+  </data>
+  <data name="KeyUpBrowserName" xml:space="preserve">
+    <value>Key up in browser</value>
+  </data>
+  <data name="KeyUpBrowserSucceeded" xml:space="preserve">
+    <value>Dispatched browser keyup.</value>
+  </data>
+  <data name="HoverBrowserElementDescription" xml:space="preserve">
+    <value>Move the pointer over an element in the active tracked browser page using a CSS selector.</value>
+  </data>
+  <data name="HoverBrowserElementName" xml:space="preserve">
+    <value>Hover browser element</value>
+  </data>
+  <data name="HoverBrowserElementSucceeded" xml:space="preserve">
+    <value>Hovered browser element.</value>
+  </data>
+  <data name="SelectBrowserOptionDescription" xml:space="preserve">
+    <value>Select an option in a browser select element by option value or visible text.</value>
+  </data>
+  <data name="SelectBrowserOptionName" xml:space="preserve">
+    <value>Select browser option</value>
+  </data>
+  <data name="SelectBrowserOptionSucceeded" xml:space="preserve">
+    <value>Selected browser option.</value>
+  </data>
+  <data name="ScrollBrowserDescription" xml:space="preserve">
+    <value>Scroll the active tracked browser page or a selected scrollable element.</value>
+  </data>
+  <data name="ScrollBrowserName" xml:space="preserve">
+    <value>Scroll browser</value>
+  </data>
+  <data name="ScrollBrowserSucceeded" xml:space="preserve">
+    <value>Scrolled browser.</value>
+  </data>
+  <data name="ScrollIntoViewBrowserDescription" xml:space="preserve">
+    <value>Scroll an element in the active tracked browser page into view.</value>
+  </data>
+  <data name="ScrollIntoViewBrowserName" xml:space="preserve">
+    <value>Scroll element into view</value>
+  </data>
+  <data name="ScrollIntoViewBrowserSucceeded" xml:space="preserve">
+    <value>Scrolled browser element into view.</value>
+  </data>
+  <data name="MouseBrowserDescription" xml:space="preserve">
+    <value>Dispatch low-level mouse input at viewport coordinates in the active tracked browser page.</value>
+  </data>
+  <data name="MouseBrowserName" xml:space="preserve">
+    <value>Dispatch browser mouse input</value>
+  </data>
+  <data name="MouseBrowserSucceeded" xml:space="preserve">
+    <value>Dispatched browser mouse input.</value>
+  </data>
+  <data name="WaitForBrowserDescription" xml:space="preserve">
+    <value>Wait until a selector is visible, text appears on the page, or both conditions are met.</value>
+  </data>
+  <data name="WaitForBrowserName" xml:space="preserve">
+    <value>Wait for browser page</value>
+  </data>
+  <data name="WaitForBrowserSucceeded" xml:space="preserve">
+    <value>Browser wait condition was met.</value>
+  </data>
+  <data name="WaitBrowserDescription" xml:space="preserve">
+    <value>Wait until a browser condition is met. Supports selectors, text, URL matches, load states, element states, and JavaScript predicates.</value>
+  </data>
+  <data name="WaitBrowserName" xml:space="preserve">
+    <value>Wait</value>
+  </data>
+  <data name="WaitBrowserSucceeded" xml:space="preserve">
+    <value>Browser wait condition was met.</value>
+  </data>
+  <data name="WaitForBrowserUrlDescription" xml:space="preserve">
+    <value>Wait until the active tracked browser page URL matches the expected value.</value>
+  </data>
+  <data name="WaitForBrowserUrlName" xml:space="preserve">
+    <value>Wait for browser URL</value>
+  </data>
+  <data name="WaitForBrowserUrlSucceeded" xml:space="preserve">
+    <value>Browser URL wait condition was met.</value>
+  </data>
+  <data name="WaitForBrowserLoadStateDescription" xml:space="preserve">
+    <value>Wait until the active tracked browser page reaches a load state.</value>
+  </data>
+  <data name="WaitForBrowserLoadStateName" xml:space="preserve">
+    <value>Wait for browser load state</value>
+  </data>
+  <data name="WaitForBrowserLoadStateSucceeded" xml:space="preserve">
+    <value>Browser load state wait condition was met.</value>
+  </data>
+  <data name="WaitForBrowserElementStateDescription" xml:space="preserve">
+    <value>Wait until a selected element reaches a state such as visible, hidden, enabled, disabled, checked, or unchecked.</value>
+  </data>
+  <data name="WaitForBrowserElementStateName" xml:space="preserve">
+    <value>Wait for browser element state</value>
+  </data>
+  <data name="WaitForBrowserElementStateSucceeded" xml:space="preserve">
+    <value>Browser element state wait condition was met.</value>
+  </data>
+  <data name="CloseTrackedBrowserDescription" xml:space="preserve">
+    <value>Close the active tracked browser page for this resource.</value>
+  </data>
+  <data name="CloseTrackedBrowserName" xml:space="preserve">
+    <value>Close tracked browser</value>
+  </data>
+  <data name="CloseTrackedBrowserSucceeded" xml:space="preserve">
+    <value>Closed tracked browser page.</value>
+  </data>
+  <data name="SelectorArgumentLabel" xml:space="preserve">
+    <value>Selector</value>
+  </data>
+  <data name="SelectorArgumentDescription" xml:space="preserve">
+    <value>CSS selector or snapshot ref for the target element. Use refs such as e1 returned by Inspect browser page when possible.</value>
+  </data>
+  <data name="SnapshotAfterArgumentLabel" xml:space="preserve">
+    <value>Snapshot after</value>
+  </data>
+  <data name="SnapshotAfterArgumentDescription" xml:space="preserve">
+    <value>Return a fresh browser page snapshot with the action result for immediate verification.</value>
+  </data>
+  <data name="ValueArgumentLabel" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="ValueArgumentDescription" xml:space="preserve">
+    <value>Text value to assign to the target field.</value>
+  </data>
+  <data name="PropertyArgumentLabel" xml:space="preserve">
+    <value>Property</value>
+  </data>
+  <data name="PropertyArgumentDescription" xml:space="preserve">
+    <value>Browser value to read: title, url, text, html, value, attr, count, box, or styles.</value>
+  </data>
+  <data name="NameArgumentLabel" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="NameArgumentDescription" xml:space="preserve">
+    <value>Optional attribute name, CSS property name, accessible name, or other command-specific qualifier.</value>
+  </data>
+  <data name="KindArgumentLabel" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="KindArgumentDescription" xml:space="preserve">
+    <value>Find strategy: role, text, label, placeholder, alt, title, testid, first, last, or nth.</value>
+  </data>
+  <data name="FindValueArgumentLabel" xml:space="preserve">
+    <value>Find value</value>
+  </data>
+  <data name="FindValueArgumentDescription" xml:space="preserve">
+    <value>Search text, role, test ID, or CSS selector depending on the find strategy.</value>
+  </data>
+  <data name="IndexArgumentLabel" xml:space="preserve">
+    <value>Index</value>
+  </data>
+  <data name="IndexArgumentDescription" xml:space="preserve">
+    <value>One-based element index used by nth find strategy.</value>
+  </data>
+  <data name="ExpressionArgumentLabel" xml:space="preserve">
+    <value>Expression</value>
+  </data>
+  <data name="ExpressionArgumentDescription" xml:space="preserve">
+    <value>JavaScript expression or zero-argument function to evaluate in the browser page.</value>
+  </data>
+  <data name="ActionArgumentLabel" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="CookiesActionArgumentDescription" xml:space="preserve">
+    <value>Cookie action to perform: get, set, or clear.</value>
+  </data>
+  <data name="CookieNameArgumentLabel" xml:space="preserve">
+    <value>Cookie name</value>
+  </data>
+  <data name="CookieNameArgumentDescription" xml:space="preserve">
+    <value>Optional cookie name. Required when setting a cookie.</value>
+  </data>
+  <data name="CookieValueArgumentLabel" xml:space="preserve">
+    <value>Cookie value</value>
+  </data>
+  <data name="CookieValueArgumentDescription" xml:space="preserve">
+    <value>Cookie value to set. Empty text clears the cookie value.</value>
+  </data>
+  <data name="CookieDomainArgumentLabel" xml:space="preserve">
+    <value>Cookie domain</value>
+  </data>
+  <data name="CookieDomainArgumentDescription" xml:space="preserve">
+    <value>Optional cookie domain used when setting or clearing a cookie.</value>
+  </data>
+  <data name="CookiePathArgumentLabel" xml:space="preserve">
+    <value>Cookie path</value>
+  </data>
+  <data name="CookiePathArgumentDescription" xml:space="preserve">
+    <value>Optional cookie path used when setting or clearing a cookie. Defaults to /.</value>
+  </data>
+  <data name="StorageAreaArgumentLabel" xml:space="preserve">
+    <value>Storage area</value>
+  </data>
+  <data name="StorageAreaArgumentDescription" xml:space="preserve">
+    <value>Browser storage area: local or session.</value>
+  </data>
+  <data name="StorageActionArgumentDescription" xml:space="preserve">
+    <value>Storage action to perform: get, set, or clear.</value>
+  </data>
+  <data name="StorageKeyArgumentLabel" xml:space="preserve">
+    <value>Storage key</value>
+  </data>
+  <data name="StorageKeyArgumentDescription" xml:space="preserve">
+    <value>Optional storage key. Required when setting a storage value.</value>
+  </data>
+  <data name="StorageValueArgumentLabel" xml:space="preserve">
+    <value>Storage value</value>
+  </data>
+  <data name="StorageValueArgumentDescription" xml:space="preserve">
+    <value>Storage value to set. Empty text stores an empty string.</value>
+  </data>
+  <data name="StateActionArgumentDescription" xml:space="preserve">
+    <value>Browser state action to perform: get, set, or clear.</value>
+  </data>
+  <data name="StateJsonArgumentLabel" xml:space="preserve">
+    <value>State JSON</value>
+  </data>
+  <data name="StateJsonArgumentDescription" xml:space="preserve">
+    <value>Browser state JSON returned by the get action. Required when setting browser state.</value>
+  </data>
+  <data name="ClearExistingArgumentLabel" xml:space="preserve">
+    <value>Clear existing</value>
+  </data>
+  <data name="ClearExistingArgumentDescription" xml:space="preserve">
+    <value>Clear existing cookies and storage before restoring state.</value>
+  </data>
+  <data name="CdpMethodArgumentLabel" xml:space="preserve">
+    <value>CDP method</value>
+  </data>
+  <data name="CdpMethodArgumentDescription" xml:space="preserve">
+    <value>Chrome DevTools Protocol method name, such as Runtime.evaluate or Target.getTargets.</value>
+  </data>
+  <data name="CdpParamsArgumentLabel" xml:space="preserve">
+    <value>CDP parameters</value>
+  </data>
+  <data name="CdpParamsArgumentDescription" xml:space="preserve">
+    <value>Optional JSON object for the CDP command parameters.</value>
+  </data>
+  <data name="CdpSessionArgumentLabel" xml:space="preserve">
+    <value>CDP session</value>
+  </data>
+  <data name="CdpSessionArgumentDescription" xml:space="preserve">
+    <value>Send the command to the attached page session or the browser-level connection.</value>
+  </data>
+  <data name="TabsActionArgumentDescription" xml:space="preserve">
+    <value>Tab action to perform: list, open, or close.</value>
+  </data>
+  <data name="TabUrlArgumentDescription" xml:space="preserve">
+    <value>Absolute URL for a new tab. Required when opening a tab.</value>
+  </data>
+  <data name="TargetIdArgumentLabel" xml:space="preserve">
+    <value>Target ID</value>
+  </data>
+  <data name="TargetIdArgumentDescription" xml:space="preserve">
+    <value>Browser target ID. Required when closing a tab.</value>
+  </data>
+  <data name="DialogActionArgumentDescription" xml:space="preserve">
+    <value>Dialog action to perform: accept or dismiss.</value>
+  </data>
+  <data name="PromptTextArgumentLabel" xml:space="preserve">
+    <value>Prompt text</value>
+  </data>
+  <data name="PromptTextArgumentDescription" xml:space="preserve">
+    <value>Optional text to enter before accepting a prompt dialog.</value>
+  </data>
+  <data name="DownloadBehaviorArgumentLabel" xml:space="preserve">
+    <value>Download behavior</value>
+  </data>
+  <data name="DownloadBehaviorArgumentDescription" xml:space="preserve">
+    <value>Browser download behavior: allow, allowAndName, deny, or default.</value>
+  </data>
+  <data name="DownloadPathArgumentLabel" xml:space="preserve">
+    <value>Download path</value>
+  </data>
+  <data name="DownloadPathArgumentDescription" xml:space="preserve">
+    <value>Directory path for downloaded files. Required for allow and allowAndName behavior.</value>
+  </data>
+  <data name="DownloadEventsEnabledArgumentLabel" xml:space="preserve">
+    <value>Download events enabled</value>
+  </data>
+  <data name="DownloadEventsEnabledArgumentDescription" xml:space="preserve">
+    <value>Enable browser download progress events when supported by the browser.</value>
+  </data>
+  <data name="FilesArgumentLabel" xml:space="preserve">
+    <value>Files</value>
+  </data>
+  <data name="FilesArgumentDescription" xml:space="preserve">
+    <value>File path to upload, or a JSON array of file paths for multiple files.</value>
+  </data>
+  <data name="ScreenshotFormatArgumentLabel" xml:space="preserve">
+    <value>Screenshot format</value>
+  </data>
+  <data name="ScreenshotFormatArgumentDescription" xml:space="preserve">
+    <value>Image format for the screenshot: png, jpeg, or webp.</value>
+  </data>
+  <data name="ScreenshotQualityArgumentLabel" xml:space="preserve">
+    <value>Screenshot quality</value>
+  </data>
+  <data name="ScreenshotQualityArgumentDescription" xml:space="preserve">
+    <value>Optional image quality from 0 to 100 for jpeg or webp screenshots.</value>
+  </data>
+  <data name="FullPageArgumentLabel" xml:space="preserve">
+    <value>Full page</value>
+  </data>
+  <data name="FullPageArgumentDescription" xml:space="preserve">
+    <value>Capture beyond the current viewport when supported by the browser.</value>
+  </data>
+  <data name="TypeTextArgumentDescription" xml:space="preserve">
+    <value>Text to type into the target element.</value>
+  </data>
+  <data name="SelectValueArgumentDescription" xml:space="preserve">
+    <value>Option value or visible option text to select.</value>
+  </data>
+  <data name="KeyArgumentLabel" xml:space="preserve">
+    <value>Key</value>
+  </data>
+  <data name="KeyArgumentDescription" xml:space="preserve">
+    <value>Keyboard key to press, such as Enter, Escape, Tab, or a single character.</value>
+  </data>
+  <data name="TextArgumentLabel" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="TextArgumentDescription" xml:space="preserve">
+    <value>Visible page text to wait for.</value>
+  </data>
+  <data name="UrlContainsArgumentLabel" xml:space="preserve">
+    <value>URL contains</value>
+  </data>
+  <data name="UrlContainsArgumentDescription" xml:space="preserve">
+    <value>URL fragment to wait for in the active browser page.</value>
+  </data>
+  <data name="DeltaYArgumentLabel" xml:space="preserve">
+    <value>Delta Y</value>
+  </data>
+  <data name="DeltaYArgumentDescription" xml:space="preserve">
+    <value>Vertical scroll distance in CSS pixels. Positive values scroll down and negative values scroll up.</value>
+  </data>
+  <data name="DeltaXArgumentLabel" xml:space="preserve">
+    <value>Delta X</value>
+  </data>
+  <data name="DeltaXArgumentDescription" xml:space="preserve">
+    <value>Horizontal scroll distance in CSS pixels. Positive values scroll right and negative values scroll left.</value>
+  </data>
+  <data name="MouseActionArgumentDescription" xml:space="preserve">
+    <value>Mouse action to dispatch: move, down, up, click, or wheel.</value>
+  </data>
+  <data name="XCoordinateArgumentLabel" xml:space="preserve">
+    <value>X coordinate</value>
+  </data>
+  <data name="XCoordinateArgumentDescription" xml:space="preserve">
+    <value>Viewport X coordinate in CSS pixels.</value>
+  </data>
+  <data name="YCoordinateArgumentLabel" xml:space="preserve">
+    <value>Y coordinate</value>
+  </data>
+  <data name="YCoordinateArgumentDescription" xml:space="preserve">
+    <value>Viewport Y coordinate in CSS pixels.</value>
+  </data>
+  <data name="MouseButtonArgumentLabel" xml:space="preserve">
+    <value>Mouse button</value>
+  </data>
+  <data name="MouseButtonArgumentDescription" xml:space="preserve">
+    <value>Mouse button for down, up, and click actions.</value>
+  </data>
+  <data name="UrlArgumentLabel" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="UrlArgumentDescription" xml:space="preserve">
+    <value>Absolute URL to navigate to.</value>
+  </data>
+  <data name="WaitUrlArgumentDescription" xml:space="preserve">
+    <value>URL value to wait for. It can be a full URL, URL fragment, or regular expression depending on the match mode.</value>
+  </data>
+  <data name="MatchArgumentLabel" xml:space="preserve">
+    <value>Match</value>
+  </data>
+  <data name="MatchArgumentDescription" xml:space="preserve">
+    <value>How the current browser URL should be compared with the URL argument.</value>
+  </data>
+  <data name="StateArgumentLabel" xml:space="preserve">
+    <value>State</value>
+  </data>
+  <data name="StateArgumentDescription" xml:space="preserve">
+    <value>Element state to check: visible, enabled, or checked.</value>
+  </data>
+  <data name="LoadStateArgumentLabel" xml:space="preserve">
+    <value>Load state</value>
+  </data>
+  <data name="LoadStateArgumentDescription" xml:space="preserve">
+    <value>Page load state to wait for: domcontentloaded, load, complete, or networkidle.</value>
+  </data>
+  <data name="ElementStateArgumentLabel" xml:space="preserve">
+    <value>Element state</value>
+  </data>
+  <data name="ElementStateArgumentDescription" xml:space="preserve">
+    <value>Element state to wait for: attached, detached, visible, hidden, enabled, disabled, checked, or unchecked.</value>
+  </data>
+  <data name="FunctionArgumentLabel" xml:space="preserve">
+    <value>Function</value>
+  </data>
+  <data name="FunctionArgumentDescription" xml:space="preserve">
+    <value>JavaScript expression or zero-argument function to evaluate until it returns a truthy value.</value>
+  </data>
+  <data name="TimeoutMillisecondsArgumentLabel" xml:space="preserve">
+    <value>Timeout (milliseconds)</value>
+  </data>
+  <data name="TimeoutMillisecondsArgumentDescription" xml:space="preserve">
+    <value>Maximum time to wait before the browser command fails.</value>
+  </data>
+  <data name="MaxElementsArgumentLabel" xml:space="preserve">
+    <value>Maximum elements</value>
+  </data>
+  <data name="MaxElementsArgumentDescription" xml:space="preserve">
+    <value>Maximum number of actionable elements to include in the page snapshot.</value>
+  </data>
+  <data name="MaxTextLengthArgumentLabel" xml:space="preserve">
+    <value>Maximum text length</value>
+  </data>
+  <data name="MaxTextLengthArgumentDescription" xml:space="preserve">
+    <value>Maximum number of visible page text characters to include in the page snapshot.</value>
   </data>
 </root>

@@ -25,9 +25,13 @@ internal interface IBrowserLogsCdpConnection : IAsyncDisposable
 
     Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken);
 
-    Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken);
+    Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken);
 
     Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken);
+
+    Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken);
+
+    Task<string> SendRawCommandAsync(string? sessionId, string method, string? parametersJson, CancellationToken cancellationToken);
 }
 
 // Owns one browser-level CDP transport. Protocol parsing stays in BrowserLogsCdpProtocol, while page lifecycle and
@@ -173,15 +177,23 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
         await SendCommandAsync(BrowserLogsCdpProtocol.NetworkEnableMethod, sessionId, writeParameters: null, BrowserLogsCdpProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+    public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
     {
         return SendCommandAsync(
             BrowserLogsCdpProtocol.PageCaptureScreenshotMethod,
             sessionId,
-            static writer =>
+            writer =>
             {
-                writer.WriteString("format", "png");
+                writer.WriteString("format", options.Format);
                 writer.WriteBoolean("fromSurface", true);
+                if (options.Quality is { } quality)
+                {
+                    writer.WriteNumber("quality", quality);
+                }
+                if (options.FullPage)
+                {
+                    writer.WriteBoolean("captureBeyondViewport", true);
+                }
             },
             BrowserLogsCdpProtocol.ParseCaptureScreenshotResponse,
             cancellationToken,
@@ -195,6 +207,39 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
             sessionId,
             writer => writer.WriteString("url", url.ToString()),
             BrowserLogsCdpProtocol.ParseCommandAckResponse,
+            cancellationToken);
+    }
+
+    public Task<BrowserLogsRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expression);
+
+        return SendCommandAsync(
+            BrowserLogsCdpProtocol.RuntimeEvaluateMethod,
+            sessionId,
+            writer =>
+            {
+                writer.WriteString("expression", expression);
+                writer.WriteBoolean("awaitPromise", true);
+                writer.WriteBoolean("returnByValue", true);
+                writer.WriteBoolean("userGesture", true);
+            },
+            BrowserLogsCdpProtocol.ParseRuntimeEvaluateResponse,
+            cancellationToken,
+            timeout);
+    }
+
+    public Task<string> SendRawCommandAsync(string? sessionId, string method, string? parametersJson, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+
+        return SendCommandAsync(
+            method,
+            sessionId,
+            string.IsNullOrWhiteSpace(parametersJson)
+                ? null
+                : writer => BrowserLogsCdpProtocol.WriteRawCommandParameters(writer, parametersJson),
+            BrowserLogsCdpProtocol.ParseRawCommandResponse,
             cancellationToken);
     }
 
