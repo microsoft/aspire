@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17419;http://localhost:15260",
+      "applicationUrl": "https://HealthChecks.dev.localhost:17419;http://HealthChecks.dev.localhost:15260",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21133",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22217"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15260",
+      "applicationUrl": "http://HealthChecks.dev.localhost:15260",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19016",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20047"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "generate-manifest": {
@@ -30,11 +26,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
-      "applicationUrl": "http://localhost:16210",
+      "applicationUrl": "http://HealthChecks.dev.localhost:16210",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17420"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

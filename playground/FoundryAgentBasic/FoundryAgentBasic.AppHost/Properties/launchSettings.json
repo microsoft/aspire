@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17231;http://localhost:15013",
+      "applicationUrl": "https://FoundryAgentBasic.dev.localhost:17231;http://FoundryAgentBasic.dev.localhost:15013",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21116",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22280"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15013",
+      "applicationUrl": "http://FoundryAgentBasic.dev.localhost:15013",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19179",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20112"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }
