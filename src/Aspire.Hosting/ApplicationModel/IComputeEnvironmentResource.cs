@@ -28,9 +28,11 @@ public interface IComputeEnvironmentResource : IResource
     /// <param name="endpointReferenceExpression">The endpoint reference expression for which to retrieve a deployed endpoint property.</param>
     /// <returns>A <see cref="ReferenceExpression"/> representing the deployed endpoint property.</returns>
     /// <remarks>
-    /// This method is used by deployment publishers to resolve endpoint properties from deployed compute infrastructure without
-    /// requiring a local endpoint allocation. The default implementation composes values from <see cref="GetHostAddressExpression(EndpointReference)"/>,
-    /// the endpoint scheme, and endpoint ports. HTTP and HTTPS endpoints use ports 80 and 443 respectively when no explicit port is configured.
+    /// Use this method when an endpoint property should be represented as a compute-environment-specific
+    /// <see cref="ReferenceExpression"/> instead of being resolved from a local endpoint allocation.
+    /// The default implementation composes values from <see cref="GetHostAddressExpression(EndpointReference)"/>,
+    /// the endpoint scheme, and endpoint ports. HTTP and HTTPS endpoints use ports 80 and 443 respectively
+    /// when no explicit port is configured.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="endpointReferenceExpression"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the requested endpoint property is unsupported, or when a non-HTTP/HTTPS endpoint does not specify a port.</exception>
