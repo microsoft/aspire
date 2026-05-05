@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO.Pipelines;
 using System.Security.Cryptography.X509Certificates;
@@ -2839,6 +2840,79 @@ public class DcpExecutorTests
         }
     }
 
+    [Fact]
+    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("aContainer", "image")
+            .WithEnvironment("URL", new HostUrl("https://localhost:17092/path"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync();
+
+        var dcpContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        Assert.NotNull(dcpContainer.Spec.Env);
+        var url = Assert.Single(dcpContainer.Spec.Env, e => e.Name == "URL").Value;
+        Assert.Equal("https://host.docker.internal:17092/path", url);
+
+        Assert.DoesNotContain(kubernetesService.CreatedResources.OfType<Service>(),
+            s => s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+    }
+
+    [Fact]
+    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var executable = builder.AddExecutable("anExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("aContainer", "image")
+            .WithEnvironment("URL", new HostUrl("https://localhost:5678/path"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var failedResources = new ConcurrentBag<string>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failedResources.Add(context.Resource.Name);
+            return Task.CompletedTask;
+        });
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, events: events);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.DoesNotContain("aContainer", failedResources);
+
+        var dcpContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        var tunnelService = Assert.Single(kubernetesService.CreatedResources.OfType<Service>(),
+            s => s.AppModelResourceName == executable.Resource.Name
+                && s.EndpointName == "http"
+                && s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+
+        Assert.NotNull(dcpContainer.Spec.Env);
+        var url = Assert.Single(dcpContainer.Spec.Env, e => e.Name == "URL").Value;
+        Assert.Equal($"https://{KnownHostNames.DefaultContainerTunnelHostName}:{tunnelService.AllocatedPort}/path", url);
+    }
+
     // Verifies that environment value callbacks are invoked only once per container startup.
     [Fact]
     public async Task EnvironmentCallbacksInvokedOnceOnContainer()
@@ -3350,6 +3424,7 @@ public class DcpExecutorTests
             {
                 ServiceProvider = new TestServiceProvider(configuration)
                     .AddService<IDeveloperCertificateService>(developerCertificateService)
+                    .AddService(distributedAppModel)
                     .AddService(Options.Create(dcpOptions))
                     .AddService(resourceLoggerService)
             });
