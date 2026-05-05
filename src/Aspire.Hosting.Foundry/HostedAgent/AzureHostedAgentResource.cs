@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
@@ -91,7 +92,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     /// <summary>
     /// Convert all dynamic values into concrete values for deployment.
     /// </summary>
-    public async Task<HostedAgentConfiguration> ToHostedAgentConfigurationAsync(PipelineStepContext context)
+    private async Task<HostedAgentConfiguration> ToHostedAgentConfigurationAsync(PipelineStepContext context)
     {
         var imageName = await ((IValueProvider)Image).GetValueAsync(context.CancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(imageName))
@@ -102,7 +103,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var def = new HostedAgentConfiguration(imageName)
         {
             // ProcessEnvironmentVariableValuesAsync does not resolve values properly in the deploy context
-            EnvironmentVariables = await GetResolvedEnvironmentVariablesAsync(context.ExecutionContext, Target, context.Logger, context.CancellationToken).ConfigureAwait(false),
+            EnvironmentVariables = await GetResolvedEnvironmentVariablesAsync(context.ExecutionContext, this, Target, context.Logger, context.CancellationToken).ConfigureAwait(false),
         };
         if (Configure is not null)
         {
@@ -114,7 +115,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     /// <summary>
     /// Publishes the hosted agent during the manifest publishing phase.
     /// </summary>
-    public async Task PublishAsync(ManifestPublishingContext ctx)
+    private async Task PublishAsync(ManifestPublishingContext ctx)
     {
         // Write agent manifest
         ctx.Writer.WriteString("type", "azure.ai.agent.v0");
@@ -128,7 +129,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     /// <summary>
     /// Deploys the specified agent to the given Microsoft Foundry project.
     /// </summary>
-    public async Task<ProjectsAgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
+    private async Task<ProjectsAgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -149,6 +150,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
     internal static async Task<Dictionary<string, string>> GetResolvedEnvironmentVariablesAsync(
         DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
         IResource resource,
         ILogger logger,
         CancellationToken cancellationToken)
@@ -183,10 +185,10 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                     resolvedEnvVars[key] = s;
                     break;
                 case IValueProvider provider:
-                    resolvedEnvVars[key] = await provider.GetValueAsync(cancellationToken).ConfigureAwait(false) ?? string.Empty;
+                    resolvedEnvVars[key] = await ResolveValueProviderAsync(provider, context, hostedAgent, resource, key, cancellationToken).ConfigureAwait(false) ?? string.Empty;
                     break;
                 case IFormattable f:
-                    resolvedEnvVars[key] = f.ToString(null, System.Globalization.CultureInfo.InvariantCulture);
+                    resolvedEnvVars[key] = f.ToString(null, CultureInfo.InvariantCulture);
                     break;
                 default:
                     logger.LogWarning("Environment variable '{Key}' for resource '{Name}' has unknown value of type '{type}' and will be skipped.", key, resource.Name, value.GetType().FullName);
@@ -194,6 +196,138 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             }
         }
         return resolvedEnvVars;
+    }
+
+    private static async ValueTask<string?> ResolveValueProviderAsync(
+        IValueProvider provider,
+        DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        CancellationToken cancellationToken)
+    {
+        if (context.IsPublishMode)
+        {
+            switch (provider)
+            {
+                case EndpointReference endpointReference:
+                    return await ResolvePublishedEndpointAsync(endpointReference.Property(EndpointProperty.Url), context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                case EndpointReferenceExpression endpointReferenceExpression:
+                    return await ResolvePublishedEndpointAsync(endpointReferenceExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                case ReferenceExpression referenceExpression:
+                    return await ResolveReferenceExpressionAsync(referenceExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                case ConnectionStringReference connectionStringReference:
+                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.Resource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(connectionString) && !connectionStringReference.Optional)
+                    {
+                        throw new DistributedApplicationException($"The connection string for the resource '{connectionStringReference.Resource.Name}' is not available.");
+                    }
+
+                    return connectionString;
+                case IResourceWithConnectionString connectionStringResource and not ParameterResource:
+                    return await ResolveReferenceExpressionAsync(connectionStringResource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return await provider.GetValueAsync(
+            new ValueProviderContext
+            {
+                ExecutionContext = context,
+                Caller = resource
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async ValueTask<string?> ResolveReferenceExpressionAsync(
+        ReferenceExpression expression,
+        DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        CancellationToken cancellationToken)
+    {
+        if (expression.IsConditional)
+        {
+            var conditionValue = await ResolveValueProviderAsync(expression.Condition!, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+            var branch = string.Equals(conditionValue, expression.MatchValue, StringComparison.OrdinalIgnoreCase) ? expression.WhenTrue! : expression.WhenFalse!;
+
+            return await ResolveReferenceExpressionAsync(branch, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (expression.Format.Length == 0)
+        {
+            return null;
+        }
+
+        var args = new object?[expression.ValueProviders.Count];
+        for (var i = 0; i < expression.ValueProviders.Count; i++)
+        {
+            args[i] = await ResolveValueProviderAsync(expression.ValueProviders[i], context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+
+            if (expression.StringFormats[i] is string stringFormat && args[i] is string value)
+            {
+                args[i] = FormatValue(value, stringFormat);
+            }
+        }
+
+        return string.Format(CultureInfo.InvariantCulture, expression.Format, args);
+    }
+
+    private static async ValueTask<string?> ResolvePublishedEndpointAsync(
+        EndpointReferenceExpression endpointReferenceExpression,
+        DistributedApplicationExecutionContext context,
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        CancellationToken cancellationToken)
+    {
+        var endpointReference = endpointReferenceExpression.Endpoint;
+        var endpoint = endpointReference.EndpointAnnotation;
+
+        if (endpointReference.Resource != hostedAgent.Target && !endpoint.IsExternal)
+        {
+            throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, $"Endpoint '{endpoint.Name}' is internal. Foundry hosted agents can only reference externally exposed endpoints during publish.");
+        }
+
+        var deploymentTarget = endpointReference.Resource.GetDeploymentTargetAnnotation();
+        if (deploymentTarget?.ComputeEnvironment is not { } computeEnvironment)
+        {
+            var reason = $"Resource '{endpointReference.Resource.Name}' does not have an ComputeEnvironment deployment target.";
+            throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, reason);
+        }
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = computeEnvironment.GetEndpointPropertyExpression(endpointReferenceExpression);
+#pragma warning restore ASPIRECOMPUTE002
+
+        return await expression.GetValueAsync(
+            new ValueProviderContext
+            {
+                ExecutionContext = context,
+                Caller = resource
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static InvalidOperationException CreateEndpointResolutionException(
+        AzureHostedAgentResource hostedAgent,
+        IResource resource,
+        string environmentVariableName,
+        EndpointReference endpointReference,
+        string reason)
+    {
+        return new InvalidOperationException(
+            $"Unable to resolve environment variable '{environmentVariableName}' for Foundry hosted agent '{hostedAgent.Name}' from target resource '{resource.Name}'. " +
+            $"Endpoint '{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}' cannot be used. {reason}");
+    }
+
+    private static string FormatValue(string value, string format)
+    {
+        return format.ToLowerInvariant() switch
+        {
+            "uri" => Uri.EscapeDataString(value),
+            _ => throw new NotSupportedException($"The format '{format}' is not supported. Supported formats are 'uri' (encodes a URI)")
+        };
     }
 }
 
