@@ -89,6 +89,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
     /// <inheritdoc />
+    public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
     public bool SupportsV3 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V3);
 
     /// <summary>
