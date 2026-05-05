@@ -602,9 +602,16 @@ export class AppHostParentOutputFilter {
   private _lastCategory: string | undefined;
 
   filter(output: string, category: string | undefined): AppHostParentOutput | undefined {
-    if (category === 'debug') {
+    // Per the DAP spec the `category` field is optional; clients should treat a
+    // missing category as `'console'`. Normalize once at the boundary so state
+    // tracking and per-line classification see a consistent value, and so
+    // category-less debug-adapter output gets the same suppression as `'console'`
+    // instead of being mirrored to the parent debug console as stdout.
+    const normalizedCategory = category ?? 'console';
+
+    if (normalizedCategory === 'debug') {
       this.resetState();
-      this._lastCategory = category;
+      this._lastCategory = normalizedCategory;
       return undefined;
     }
 
@@ -612,19 +619,19 @@ export class AppHostParentOutputFilter {
     // logical stream. When the DAP category changes (e.g. console -> stdout) we are
     // looking at a different stream and previous indented-continuation context no
     // longer applies.
-    if (category !== this._lastCategory) {
+    if (normalizedCategory !== this._lastCategory) {
       this.resetState();
     }
-    this._lastCategory = category;
+    this._lastCategory = normalizedCategory;
 
     const segments = output.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(segment => segment.length > 0) ?? [];
     let filteredOutput = '';
     // If the DAP delivered this chunk on stderr, keep the whole emitted message on
     // stderr — the channel itself is authoritative regardless of per-line classification.
-    let hasErrorOutput = category === 'stderr';
+    let hasErrorOutput = normalizedCategory === 'stderr';
 
     for (const segment of segments) {
-      const outputCategory = this.getLineCategory(segment, category);
+      const outputCategory = this.getLineCategory(segment, normalizedCategory);
       if (outputCategory) {
         filteredOutput += segment;
         hasErrorOutput ||= outputCategory === 'stderr';
@@ -641,7 +648,7 @@ export class AppHostParentOutputFilter {
     };
   }
 
-  private getLineCategory(segment: string, category: string | undefined): 'stdout' | 'stderr' | undefined {
+  private getLineCategory(segment: string, category: string): 'stdout' | 'stderr' | undefined {
     const line = segment.replace(/(?:\r\n|\r|\n)$/, '');
     const trimmedLine = line.trim();
 
@@ -676,11 +683,11 @@ export class AppHostParentOutputFilter {
     return this.getCurrentCategory(category);
   }
 
-  private shouldMirrorConsoleOutput(category: string | undefined): boolean {
+  private shouldMirrorConsoleOutput(category: string): boolean {
     return category !== 'console' || this._continuingErrorBlock;
   }
 
-  private getCurrentCategory(category: string | undefined): 'stdout' | 'stderr' {
+  private getCurrentCategory(category: string): 'stdout' | 'stderr' {
     return category === 'stderr' || this._continuingErrorBlock ? 'stderr' : 'stdout';
   }
 

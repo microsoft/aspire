@@ -201,6 +201,21 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.deepStrictEqual(filter.filter(indentedStdoutLine, 'stdout'), { output: indentedStdoutLine, category: 'stdout' });
     });
 
+    test('treats missing DAP category as console so debugger noise does not leak as stdout', () => {
+        const filter = new AppHostParentOutputFilter();
+        // Per the DAP spec a missing category should be treated as 'console'. The
+        // .NET debug adapter sometimes emits output events without a category, and
+        // this debugger chatter must be suppressed the same way as explicit
+        // 'console'-category lines instead of being mirrored as stdout.
+        const debuggerChatter = "'TestShop.AppHost' (CoreCLR: clrhost): Loaded '/dotnet/System.Private.CoreLib.dll'. Skipped loading symbols.\n";
+        assert.strictEqual(filter.filter(debuggerChatter, undefined), undefined);
+
+        // Severe runtime output without a category is still kept and promoted to stderr,
+        // matching the existing 'console'-category behavior.
+        const unhandledException = 'Unhandled exception. System.InvalidOperationException: boom\n';
+        assert.deepStrictEqual(filter.filter(unhandledException, undefined), { output: unhandledException, category: 'stderr' });
+    });
+
     test('project is built when C# dev kit is installed and executable not found', async () => {
         const outputPath = 'C:\\temp\\bin\\Debug\\net7.0\\TestProject.dll';
         const { extension, dotNetService } = createDebuggerExtension(outputPath, null, true, false);
