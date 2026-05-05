@@ -4,8 +4,7 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ROLL_FORWARD_TO_PRERELEASE": "1"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "applicationUrl": "https://localhost:15888"
     },
