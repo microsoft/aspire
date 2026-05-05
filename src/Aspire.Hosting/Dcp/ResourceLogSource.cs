@@ -1,24 +1,26 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Channels;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Shared.ConsoleLogs;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
-using LogEntry = (string Content, bool IsErrorMessage);
-using LogEntryList = IReadOnlyList<(string Content, bool IsErrorMessage)>;
+internal readonly record struct ResourceLogEntry(string Content, bool IsErrorMessage, DateTime? Timestamp = null, string? RawContent = null);
 
 internal sealed class ResourceLogSource<TResource>(
     ILogger logger,
     IKubernetesService kubernetesService,
     TResource resource,
     bool follow) :
-    IAsyncEnumerable<LogEntryList>
+    IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>
     where TResource : CustomResource, IKubernetesStaticMetadata
 {
-    public async IAsyncEnumerator<LogEntryList> GetAsyncEnumerator(CancellationToken cancellationToken)
+    public async IAsyncEnumerator<IReadOnlyList<ResourceLogEntry>> GetAsyncEnumerator(CancellationToken cancellationToken)
     {
         // For follow mode, we require a cancellable token to stop streaming.
         // For non-follow mode (snapshot), streams complete naturally so we create our own cancellable token if needed.
@@ -35,7 +37,7 @@ internal sealed class ResourceLogSource<TResource>(
             cancellationToken = ownedCts.Token;
         }
 
-        var channel = Channel.CreateUnbounded<LogEntry>(new UnboundedChannelOptions
+        var channel = Channel.CreateUnbounded<ResourceLogEntry>(new UnboundedChannelOptions
         {
             AllowSynchronousContinuations = false,
             SingleReader = true,
@@ -46,24 +48,21 @@ internal sealed class ResourceLogSource<TResource>(
         {
             try
             {
-                using var sr = new StreamReader(stream, leaveOpen: false);
-                while (!cancellationToken.IsCancellationRequested)
+                await foreach (var rawLine in ReadLogLinesAsync(stream, cancellationToken).ConfigureAwait(false))
                 {
-                    var line = await sr.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-                    if (line is null)
-                    {
-                        return; // No more data
-                    }
+                    var line = NormalizeCarriageReturns(rawLine);
+                    DateTime? timestamp = null;
+                    var rawContent = line;
 
                     // Parse DCP logs if requested
-                    if (parseDcpLogs && DcpLogParser.TryParseDcpLog(line, out var parsedMessage, out _, out var isErrorLevel))
+                    if (parseDcpLogs && DcpLogParser.TryParseDcpLog(line, out var parsedMessage, out _, out var isErrorLevel, out var dcpTimestamp))
                     {
                         // Format system logs with [sys] prefix and improved readability
                         line = DcpLogParser.FormatSystemLog(parsedMessage);
                         isError = isErrorLevel;
+                        timestamp = dcpTimestamp?.UtcDateTime;
                     }
-
-                    var succeeded = channel.Writer.TryWrite((line, isError));
+                    var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, isError, timestamp, rawContent));
                     if (!succeeded)
                     {
                         logger.LogWarning("Failed to write log entry to channel. Logs for {Kind} {Name} may be incomplete", resource.Kind, resource.Metadata.Name);
@@ -128,5 +127,69 @@ internal sealed class ResourceLogSource<TResource>(
         {
             ownedCts?.Dispose();
         }
+    }
+
+    private static async IAsyncEnumerable<string> ReadLogLinesAsync(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var sr = new StreamReader(stream, leaveOpen: false);
+        var sb = new StringBuilder();
+        var buffer = new char[4096];
+
+        while (true)
+        {
+            var read = await sr.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                if (sb.Length > 0)
+                {
+                    yield return sb.ToString();
+                }
+
+                yield break;
+            }
+
+            for (var i = 0; i < read; i++)
+            {
+                var ch = buffer[i];
+                if (ch == '\n')
+                {
+                    if (sb.Length > 0 && sb[^1] == '\r')
+                    {
+                        sb.Length--;
+                    }
+
+                    yield return sb.ToString();
+                    sb.Clear();
+                }
+                else
+                {
+                    sb.Append(ch);
+                }
+            }
+        }
+    }
+
+    private static string NormalizeCarriageReturns(string line)
+    {
+        var carriageReturnIndex = line.IndexOf('\r');
+        if (carriageReturnIndex < 0)
+        {
+            return line;
+        }
+
+        if (TimestampParser.TryParseConsoleTimestamp(line, out var timestampParseResult))
+        {
+            var prefixLength = line.Length - timestampParseResult.Value.ModifiedText.Length;
+            var prefix = line[..prefixLength];
+            return prefix + GetFinalCarriageReturnSegment(timestampParseResult.Value.ModifiedText);
+        }
+
+        return GetFinalCarriageReturnSegment(line);
+    }
+
+    private static string GetFinalCarriageReturnSegment(string text)
+    {
+        var carriageReturnIndex = text.LastIndexOf('\r');
+        return carriageReturnIndex >= 0 ? text[(carriageReturnIndex + 1)..] : text;
     }
 }

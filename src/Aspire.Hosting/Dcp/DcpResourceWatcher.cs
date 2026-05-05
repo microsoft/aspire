@@ -328,7 +328,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     public async IAsyncEnumerable<IReadOnlyList<LogEntry>> GetAllLogsAsync(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        IAsyncEnumerable<IReadOnlyList<(string, bool)>>? enumerable = null;
+        IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>? enumerable = null;
         if (_resourceState.ContainersMap.TryGetValue(resourceName, out var container))
         {
             enumerable = new ResourceLogSource<Container>(_logger, _kubernetesService, container, follow: false);
@@ -357,26 +357,27 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
-    private static IEnumerable<LogEntry> CreateLogEntries(IReadOnlyList<(string, bool)> batch)
+    private static IEnumerable<LogEntry> CreateLogEntries(IReadOnlyList<ResourceLogEntry> batch)
     {
-        foreach (var (content, logEntryType) in batch)
+        foreach (var entry in batch)
         {
-            DateTime? timestamp = null;
-            var resolvedContent = content;
+            var timestamp = entry.Timestamp;
+            var resolvedContent = entry.Content;
+            var rawContent = entry.RawContent ?? entry.Content;
 
-            if (TimestampParser.TryParseConsoleTimestamp(resolvedContent, out var result))
+            if (timestamp is null && TimestampParser.TryParseConsoleTimestamp(resolvedContent, out var result))
             {
                 resolvedContent = result.Value.ModifiedText;
                 timestamp = result.Value.Timestamp.UtcDateTime;
             }
 
-            yield return LogEntry.Create(timestamp, resolvedContent, content, logEntryType, resourcePrefix: null);
+            yield return LogEntry.Create(timestamp, resolvedContent, rawContent, entry.IsErrorMessage, resourcePrefix: null);
         }
     }
 
     private void StartLogStream<T>(T resource) where T : CustomResource, IKubernetesStaticMetadata
     {
-        IAsyncEnumerable<IReadOnlyList<(string, bool)>>? enumerable = resource switch
+        IAsyncEnumerable<IReadOnlyList<ResourceLogEntry>>? enumerable = resource switch
         {
             Container c when c.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true),
             Executable e when e.LogsAvailable => new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: true),
