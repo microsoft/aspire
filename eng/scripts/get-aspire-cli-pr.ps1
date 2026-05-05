@@ -28,8 +28,19 @@
 
 .PARAMETER InstallPath
     Directory prefix to install (default: $HOME/.aspire on Unix, %USERPROFILE%\.aspire on Windows)
-    CLI will be installed to InstallPath\bin (or InstallPath/bin on Unix)
-    NuGet packages will be installed to InstallPath\hives\pr-PRNUMBER\packages
+    CLI will be installed to InstallPath\bin (or InstallPath/bin on Unix) in archive mode.
+    NuGet packages will be installed to InstallPath\hives\pr-PRNUMBER\packages.
+    In tool mode (-InstallMode Tool), an explicitly supplied custom -InstallPath is rejected
+    because the Aspire.Cli dotnet tool is installed globally and would not live under InstallPath\bin.
+
+.PARAMETER InstallMode
+    How to install the CLI: 'Archive' (default) installs from the cli-native-archives-<rid>
+    artifact, 'Tool' installs the Aspire.Cli dotnet tool globally from the PR's NuGet hive.
+
+.PARAMETER Force
+    Tool mode only: when an existing global Aspire.Cli is detected, update it to the exact PR
+    package version (allows downgrades). Without -Force, the script fails fast if Aspire.Cli is
+    already installed globally.
 
 .PARAMETER OS
     Override OS detection (win, linux, linux-musl, osx)
@@ -83,6 +94,15 @@
     .\get-aspire-cli-pr.ps1 1234 -SkipPath
 
 .EXAMPLE
+    .\get-aspire-cli-pr.ps1 1234 -InstallMode Tool
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 1234 -InstallMode Tool -Force
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts" -InstallMode Tool
+
+.EXAMPLE
     Piped execution
     iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>
 
@@ -114,6 +134,13 @@ param(
 
     [Parameter(HelpMessage = "Directory prefix to install")]
     [string]$InstallPath = "",
+
+    [Parameter(HelpMessage = "How to install the CLI: 'Archive' (default) or 'Tool' (install Aspire.Cli dotnet tool globally from the PR hive)")]
+    [ValidateSet("Archive", "Tool")]
+    [string]$InstallMode = "Archive",
+
+    [Parameter(HelpMessage = "Tool mode only: when Aspire.Cli is already installed globally, update it to the PR's exact package version (allows downgrades)")]
+    [switch]$Force,
 
     [Parameter(HelpMessage = "Override OS detection")]
     [ValidateSet("", "win", "linux", "linux-musl", "osx")]
@@ -980,6 +1007,164 @@ function Get-VersionSuffixFromPackages {
     }
 }
 
+# =============================================================================
+# Tool-mode helpers (installing the Aspire.Cli dotnet global tool)
+# =============================================================================
+
+# Resolve the dotnet global tools directory.
+# Honors DOTNET_CLI_HOME if set, otherwise uses the user's home directory.
+function Get-DotnetToolsDir {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param()
+
+    $homeDir = if ($env:DOTNET_CLI_HOME) {
+        $env:DOTNET_CLI_HOME
+    } elseif ($env:HOME) {
+        $env:HOME
+    } elseif ($env:USERPROFILE) {
+        $env:USERPROFILE
+    } else {
+        $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($homeDir)) {
+        throw "Unable to determine home directory for dotnet global tools (HOME, USERPROFILE, and DOTNET_CLI_HOME are all unset)"
+    }
+
+    return Join-Path $homeDir ".dotnet" "tools"
+}
+
+# Resolve the path of the global aspire shim installed by 'dotnet tool install --global Aspire.Cli'.
+function Get-AspireToolShimPath {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param()
+
+    $toolsDir = Get-DotnetToolsDir
+    $exeName = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
+    return Join-Path $toolsDir $exeName
+}
+
+# Verify that 'dotnet' is available in PATH (required for tool mode).
+function Test-DotnetDependency {
+    [CmdletBinding()]
+    param()
+
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        Write-Message "The .NET SDK 'dotnet' command is required for -InstallMode Tool but was not found in PATH." -Level Error
+        Write-Message "Install the .NET SDK from https://dotnet.microsoft.com/download and ensure 'dotnet' is on your PATH." -Level Info
+        throw ".NET SDK 'dotnet' dependency not met"
+    }
+
+    Write-Message "dotnet found: $((& dotnet --version 2>&1 | Select-Object -First 1))" -Level Verbose
+}
+
+# Find the unique Aspire.Cli.<version>.nupkg in the given directory and return its exact version.
+# Throws if zero or more than one matching package is present.
+function Find-AspireCliPackageVersion {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SearchDir
+    )
+
+    if ($WhatIfPreference -and -not (Test-Path $SearchDir)) {
+        # Return a synthetic version so WhatIf flows can show realistic command lines.
+        return "13.3.0-pr.1234.a1b2c3d4"
+    }
+
+    if (-not (Test-Path $SearchDir -PathType Container)) {
+        throw "Cannot find Aspire.Cli package: directory does not exist: $SearchDir"
+    }
+
+    # Strict match: 'Aspire.Cli.' followed by a digit (so we don't pick up Aspire.Cli.PackageManager.*).
+    $packageMatches = @(
+        Get-ChildItem -Path $SearchDir -Filter "Aspire.Cli.*.nupkg" -Recurse -File |
+            Where-Object { $_.Name -match '^Aspire\.Cli\.([0-9][^\s]*)\.nupkg$' }
+    )
+
+    if ($packageMatches.Count -eq 0) {
+        throw "No Aspire.Cli.<version>.nupkg package found under: $SearchDir. Tool mode requires the Aspire.Cli dotnet tool package to be present in the NuGet hive."
+    }
+    if ($packageMatches.Count -gt 1) {
+        $listing = ($packageMatches | ForEach-Object { "  $($_.FullName)" }) -join [Environment]::NewLine
+        throw "Multiple Aspire.Cli.<version>.nupkg packages found (expected exactly one):`n$listing"
+    }
+
+    $name = $packageMatches[0].Name
+    if ($name -notmatch '^Aspire\.Cli\.(.+)\.nupkg$') {
+        throw "Failed to parse version from Aspire.Cli package filename: $name"
+    }
+    return $Matches[1]
+}
+
+# Returns $true if Aspire.Cli is currently installed as a global dotnet tool.
+function Test-AspireCliGloballyInstalled {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param()
+
+    if ($WhatIfPreference) {
+        # In WhatIf we never claim the tool is already installed.
+        return $false
+    }
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+    $listOutput = & dotnet tool list --global 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $listOutput) {
+        return $false
+    }
+    # 'dotnet tool list --global' uses lowercase package id 'aspire.cli'.
+    # First two lines are the table header — skip them.
+    $lines = @($listOutput) | Select-Object -Skip 2
+    foreach ($line in $lines) {
+        $first = ($line.Trim() -split '\s+', 2)[0]
+        if ($first -and $first.ToLowerInvariant() -eq 'aspire.cli') {
+            return $true
+        }
+    }
+    return $false
+}
+
+# Install or update the Aspire.Cli global dotnet tool from the populated hive.
+function Install-AspireCliGlobalTool {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$HiveDir,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$AlreadyInstalled
+    )
+
+    $version = Find-AspireCliPackageVersion -SearchDir $HiveDir
+
+    $args = if ($AlreadyInstalled) {
+        @("tool", "update", "--global", "Aspire.Cli", "--version", $version, "--add-source", $HiveDir, "--allow-downgrade")
+    } else {
+        @("tool", "install", "--global", "Aspire.Cli", "--version", $version, "--add-source", $HiveDir)
+    }
+
+    $description = "$($args[1]) global Aspire.Cli tool from $HiveDir (version $version)"
+    if (-not $PSCmdlet.ShouldProcess("Aspire.Cli", $description)) {
+        Write-Message "[WhatIf] Would run: dotnet $($args -join ' ')" -Level Info
+        return
+    }
+
+    Write-Message "Installing Aspire.Cli global dotnet tool (version $version) from $HiveDir" -Level Info
+    Write-Message "Running: dotnet $($args -join ' ')" -Level Verbose
+
+    & dotnet @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to $($args[1]) global Aspire.Cli tool from $HiveDir (exit code: $LASTEXITCODE)"
+    }
+
+    Write-Message "Aspire.Cli global dotnet tool installed (version $version)" -Level Success
+}
+
 # Function to find workflow run for SHA
 function Find-WorkflowRun {
     [CmdletBinding()]
@@ -1282,11 +1467,13 @@ function Start-InstallFromLocalDir {
     # Install CLI from local directory
     if ($HiveOnly) {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
+    } elseif ($InstallMode -eq 'Tool') {
+        Write-Message "Skipping CLI archive lookup in local directory (install mode: Tool)" -Level Verbose
     } else {
         Install-AspireCliFromDownload -DownloadDir $LocalDirPath -CliBinDir $cliBinDir
     }
 
-    # Install NuGet packages from local directory
+    # Install NuGet packages from local directory (always — tool mode also needs the hive)
     Install-BuiltNugets -DownloadDir $LocalDirPath -NugetHiveDir $nugetHiveDir
 
     # Extract and print the version suffix from packages
@@ -1298,10 +1485,20 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
+    # In tool mode, install/update the global dotnet tool from the populated hive
+    if (-not $HiveOnly -and $InstallMode -eq 'Tool') {
+        $alreadyInstalled = Test-AspireCliGloballyInstalled
+        Install-AspireCliGlobalTool -HiveDir $nugetHiveDir -AlreadyInstalled $alreadyInstalled
+    }
+
     # Save the global channel setting
     if (-not $HiveOnly) {
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
+        if ($InstallMode -eq 'Tool') {
+            $cliPath = Get-AspireToolShimPath
+        } else {
+            $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
+            $cliPath = Join-Path $cliBinDir $cliExe
+        }
         Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
@@ -1310,7 +1507,8 @@ function Start-InstallFromLocalDir {
         if ($SkipPath) {
             Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
         } else {
-            Update-PathEnvironment -CliBinDir $cliBinDir
+            $pathToAdd = if ($InstallMode -eq 'Tool') { Get-DotnetToolsDir } else { $cliBinDir }
+            Update-PathEnvironment -CliBinDir $pathToAdd
         }
     }
 }
@@ -1361,6 +1559,8 @@ function Start-DownloadAndInstall {
     # First, download artifacts
     if ($HiveOnly) {
         Write-Message "Skipping CLI download due to -HiveOnly flag" -Level Info
+    } elseif ($InstallMode -eq 'Tool') {
+        Write-Message "Skipping CLI native archive download (install mode: Tool)" -Level Verbose
     } else {
         $cliDownloadDir = Get-AspireCliFromArtifact -RunId $runId -RID $rid -TempDir $TempDir
     }
@@ -1387,10 +1587,18 @@ function Start-DownloadAndInstall {
     Write-Message "Installing artifacts..." -Level Info
     if ($HiveOnly) {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
+    } elseif ($InstallMode -eq 'Tool') {
+        Write-Message "Skipping CLI archive installation (install mode: Tool)" -Level Verbose
     } else {
         Install-AspireCliFromDownload -DownloadDir $cliDownloadDir -CliBinDir $cliBinDir
     }
     Install-BuiltNugets -DownloadDir $nugetDownloadDir -NugetHiveDir $nugetHiveDir
+
+    # In tool mode, install/update the global dotnet tool from the populated hive
+    if (-not $HiveOnly -and $InstallMode -eq 'Tool') {
+        $alreadyInstalled = Test-AspireCliGloballyInstalled
+        Install-AspireCliGlobalTool -HiveDir $nugetHiveDir -AlreadyInstalled $alreadyInstalled
+    }
 
     # Install VS Code extension if downloaded
     if ($extensionDownloadDir -and -not $SkipExtension) {
@@ -1402,9 +1610,12 @@ function Start-DownloadAndInstall {
     # Save the global channel setting to the PR hive channel
     # This allows 'aspire new' and 'aspire init' to use the same channel by default
     if (-not $HiveOnly) {
-        # Determine CLI path
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
+        if ($InstallMode -eq 'Tool') {
+            $cliPath = Get-AspireToolShimPath
+        } else {
+            $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
+            $cliPath = Join-Path $cliBinDir $cliExe
+        }
         Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
@@ -1413,7 +1624,8 @@ function Start-DownloadAndInstall {
         if ($SkipPath) {
             Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
         } else {
-            Update-PathEnvironment -CliBinDir $cliBinDir
+            $pathToAdd = if ($InstallMode -eq 'Tool') { Get-DotnetToolsDir } else { $cliBinDir }
+            Update-PathEnvironment -CliBinDir $pathToAdd
         }
     }
 }
@@ -1444,6 +1656,8 @@ OPTIONS:
     -LocalDir <string>      Use pre-downloaded artifacts from a local directory
     -HiveLabel <string>     Override the NuGet hive label
     -InstallPath <string>   Directory prefix to install
+    -InstallMode <string>   How to install the CLI: 'Archive' (default) or 'Tool'
+    -Force                  Tool mode only: update an existing global Aspire.Cli to the PR's exact version
     -OS <string>            Override OS detection (win, linux, linux-musl, osx)
     -Architecture <string>  Override architecture detection (x64, arm64)
     -HiveOnly               Only install NuGet packages to the hive, skip CLI download
@@ -1470,6 +1684,32 @@ OPTIONS:
 
     # Set host OS for PATH environment updates
     $script:HostOS = Get-OperatingSystem
+
+    # Tool-mode-only validations. -HiveOnly wins over install mode and skips these checks
+    # so that callers can populate just the hive without needing dotnet or worrying about
+    # an existing global Aspire.Cli install.
+    $installPathExplicit = $PSBoundParameters.ContainsKey('InstallPath') -and -not [string]::IsNullOrWhiteSpace($InstallPath)
+    if ($InstallMode -eq 'Tool' -and -not $HiveOnly) {
+        if ($installPathExplicit) {
+            Write-Message "Error: -InstallPath is not supported with -InstallMode Tool because the Aspire.Cli dotnet tool is installed globally." -Level Error
+            Write-Message "Either omit -InstallPath, or use the default -InstallMode Archive." -Level Info
+            if ($InvokedFromFile) { exit 1 } else { return 1 }
+        }
+
+        Test-DotnetDependency
+
+        if (Test-AspireCliGloballyInstalled) {
+            if (-not $Force) {
+                $listing = (& dotnet tool list --global 2>$null | Where-Object { $_ -match '^\s*aspire\.cli\s' } | Select-Object -First 1)
+                if (-not $listing) { $listing = 'aspire.cli' }
+                Write-Message "Error: Aspire.Cli is already installed as a global dotnet tool: $listing" -Level Error
+                Write-Message "Re-run with -Force to update it to the PR's exact package version (downgrades are allowed)." -Level Info
+                if ($InvokedFromFile) { exit 1 } else { return 1 }
+            } else {
+                Write-Message "Existing global Aspire.Cli detected; -Force is set, will update to PR version." -Level Verbose
+            }
+        }
+    }
 
     # Check gh dependency (not needed for -LocalDir mode)
     if (-not $LocalDir) {
