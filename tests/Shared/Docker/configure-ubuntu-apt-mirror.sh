@@ -7,6 +7,18 @@ if [ -z "$ubuntu_apt_mirror" ]; then
     exit 0
 fi
 
+if [ ! -f /etc/os-release ]; then
+    echo "Skipping UBUNTU_APT_MIRROR because /etc/os-release was not found." >&2
+    exit 0
+fi
+
+. /etc/os-release
+
+if [ "${ID:-}" != "ubuntu" ]; then
+    echo "Skipping UBUNTU_APT_MIRROR because current image ID is '${ID:-unknown}', not 'ubuntu'." >&2
+    exit 0
+fi
+
 case "$ubuntu_apt_mirror" in
     *://*) ;;
     *)
@@ -14,13 +26,6 @@ case "$ubuntu_apt_mirror" in
         exit 1
         ;;
 esac
-
-. /etc/os-release
-
-if [ "${ID:-}" != "ubuntu" ]; then
-    echo "UBUNTU_APT_MIRROR can only be used with Ubuntu images. Current image ID is '${ID:-unknown}'." >&2
-    exit 1
-fi
 
 if [ -z "${VERSION_CODENAME:-}" ]; then
     echo "Could not determine the Ubuntu version codename from /etc/os-release." >&2
