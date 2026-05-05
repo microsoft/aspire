@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <Target Name="PublishToDisk"
-      DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_PrepareOutputPathForPublishToDisk" />
+          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_PrepareOutputPathForPublishToDisk" />
 
   <Target Name="_PrepareOutputPathForPublishToDisk">
     <!-- TODO: avoid generating the file instead of manually deleting it here -->
