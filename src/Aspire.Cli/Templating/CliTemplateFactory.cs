@@ -231,25 +231,25 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
     {
         var outputPath = inputs.Output;
         var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
-        var wasExplicitlyProvided = outputPath is not null;
+        var wasExplicitlyProvided = !string.IsNullOrWhiteSpace(outputPath);
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var defaultOutputPath = pathDeriver(_executionContext, projectName);
             outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken);
         }
-        outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 
-        // Validate the resolved output path when --output was explicitly provided.
-        // When the user interactively accepted the default, the prompt validator already ran.
+        // Validate before calling Path.GetFullPath to avoid exceptions from invalid characters.
         if (wasExplicitlyProvided)
         {
-            var validationError = OutputPathHelper.ValidateOutputPath(outputPath);
-            if (validationError is not null)
+            var earlyError = OutputPathHelper.ValidateOutputPath(outputPath, _executionContext.WorkingDirectory.FullName);
+            if (earlyError is not null)
             {
-                _interactionService.DisplayError(validationError);
+                _interactionService.DisplayError(earlyError);
                 return null;
             }
         }
+
+        outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 
         return outputPath;
     }

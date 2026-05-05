@@ -78,7 +78,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
         using var workspace = Utils.TemporaryWorkspace.Create(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, "new-dir");
 
-        var result = OutputPathHelper.ValidateOutputPath(path);
+        var result = OutputPathHelper.ValidateOutputPath(path, workspace.WorkspaceRoot.FullName);
 
         Assert.Null(result);
     }
@@ -89,7 +89,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
         using var workspace = Utils.TemporaryWorkspace.Create(outputHelper);
         var dir = workspace.CreateDirectory("empty-dir");
 
-        var result = OutputPathHelper.ValidateOutputPath(dir.FullName);
+        var result = OutputPathHelper.ValidateOutputPath(dir.FullName, workspace.WorkspaceRoot.FullName);
 
         Assert.Null(result);
     }
@@ -101,7 +101,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
         var dir = workspace.CreateDirectory("non-empty-dir");
         File.WriteAllText(Path.Combine(dir.FullName, "file.txt"), "content");
 
-        var result = OutputPathHelper.ValidateOutputPath(dir.FullName);
+        var result = OutputPathHelper.ValidateOutputPath(dir.FullName, workspace.WorkspaceRoot.FullName);
 
         Assert.NotNull(result);
         Assert.Contains(dir.FullName, result);

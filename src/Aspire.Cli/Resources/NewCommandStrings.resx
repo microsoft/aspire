@@ -157,4 +157,7 @@
   <data name="OutputDirectoryNotEmpty" xml:space="preserve">
     <value>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</value>
   </data>
+  <data name="OutputPathContainsInvalidCharacters" xml:space="preserve">
+    <value>The output path '{0}' contains invalid characters.</value>
+  </data>
 </root>

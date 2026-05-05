@@ -156,5 +156,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputDirectoryNotEmpty", resourceCulture);
             }
         }
+
+        public static string OutputPathContainsInvalidCharacters {
+            get {
+                return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
+            }
+        }
     }
 }

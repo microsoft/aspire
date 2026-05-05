@@ -2248,4 +2248,45 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal("./aspire-starter-2", capturedDefaultPath);
     }
+
+    [Fact]
+    public async Task NewCommandRejectsExplicitOutputWithInvalidPathCharacters()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        TestInteractionService? testInteractionService = null;
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var invalidPath = "output\0path";
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-starter --name TestApp --output {invalidPath} --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.FailedToCreateNewProject, exitCode);
+        Assert.NotNull(testInteractionService);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputPathContainsInvalidCharacters, invalidPath);
+        var e = Assert.Single(testInteractionService.DisplayedErrors);
+        Assert.Equal(expectedError, e);
+    }
+
+    [Fact]
+    public void OutputPathValidatorRejectsPathWithInvalidCharacters()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var validator = OutputPathHelper.CreateOutputPathValidator(workspace.WorkspaceRoot.FullName);
+
+        var invalidPath = "output\0path";
+        var validationResult = validator(invalidPath);
+
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputPathContainsInvalidCharacters, invalidPath);
+        Assert.Equal(expectedMessage, validationResult.Message);
+    }
 }

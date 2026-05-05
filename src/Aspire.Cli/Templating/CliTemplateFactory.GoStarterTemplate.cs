@@ -11,12 +11,12 @@ namespace Aspire.Cli.Templating;
 
 internal sealed partial class CliTemplateFactory
 {
-    private async Task<TemplateResult> ApplyGoStarterTemplateAsync(CallbackTemplate _, TemplateInputs inputs, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<TemplateResult> ApplyGoStarterTemplateAsync(CallbackTemplate template, TemplateInputs inputs, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
         var projectName = inputs.Name;
         if (string.IsNullOrWhiteSpace(projectName))
         {
-            var defaultName = _.Name;
+            var defaultName = template.Name;
             projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
@@ -27,7 +27,7 @@ internal sealed partial class CliTemplateFactory
         }
 
         var aspireVersion = inputs.Version;
-        var outputPath = await ResolveOutputPathAsync(inputs, _.PathDeriver, projectName, parseResult, cancellationToken);
+        var outputPath = await ResolveOutputPathAsync(inputs, template.PathDeriver, projectName, parseResult, cancellationToken);
         if (outputPath is null)
         {
             return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);

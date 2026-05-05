@@ -57,6 +57,11 @@
         <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
         <note />
       </trans-unit>
+      <trans-unit id="OutputPathContainsInvalidCharacters">
+        <source>The output path '{0}' contains invalid characters.</source>
+        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">Résolution en cours de la version du modèle…</target>
