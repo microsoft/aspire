@@ -1237,6 +1237,11 @@ function Install-AspireCli {
             Expand-AspireCliArchive -ArchiveFile $archivePath -DestinationPath $InstallPath -OS $targetOS
 
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
+
+            # Write install-route sidecar so Aspire CLI can identify this as a script-route install
+            $sidecarDir = Split-Path -Parent $InstallPath
+            $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+            '{ "route": "script" }' | Set-Content -Path $sidecarPath -Encoding UTF8
         }
 
         # Save the global channel setting if using quality-based download (not version-specific)
