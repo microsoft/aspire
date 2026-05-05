@@ -263,7 +263,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         try
         {
-            if (!watch && !context.NoBuild)
+            if (!context.NoBuild)
             {
                 // Build in CLI if either not running under extension host, or the extension reports 'build-dotnet-using-cli' capability.
                 var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
@@ -338,7 +338,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Start the apphost - the runner will signal the backchannel when ready
         try
         {
-            // noBuild: true if either watch mode is off (we already built above) or --no-build was passed
+            // The app host may already have been built above (in the CLI, or by the extension).
+            // For non-watch runs we pass noBuild=true so dotnet run doesn't rebuild. For watch runs
+            // we leave builds enabled unless the user explicitly requested --no-build, so dotnet watch
+            // can perform its own build/incremental build and hot reload even if an up-front build
+            // already happened earlier in this method.
             // noRestore: only relevant when noBuild is false (since --no-build implies --no-restore)
             var noBuild = !watch || context.NoBuild;
             return await _runner.RunAsync(
