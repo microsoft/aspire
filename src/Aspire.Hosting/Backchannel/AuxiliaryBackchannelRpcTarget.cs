@@ -41,7 +41,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2]
+            Capabilities =
+            [
+                AuxiliaryBackchannelCapabilities.V1,
+                AuxiliaryBackchannelCapabilities.V2,
+                AuxiliaryBackchannelCapabilities.Terminals_V1
+            ]
         });
     }
 
@@ -241,11 +246,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
-    /// Gets terminal information for a resource.
+    /// Gets terminal information for a resource. When the resource is configured with
+    /// <c>WithTerminal()</c>, this enumerates the per-replica consumer-side UDS endpoints by
+    /// asking the hidden terminal host process over its control UDS. Returns
+    /// <see cref="GetTerminalInfoResponse.IsAvailable"/> = false on any failure (no annotation,
+    /// host not running, control RPC timeout, etc.) so the caller can fall back to a
+    /// "terminal unavailable" UI without an exception.
     /// </summary>
-    public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(GetTerminalInfoRequest request, CancellationToken cancellationToken = default)
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(GetTerminalInfoRequest request, CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken; // Required by RPC contract
         ArgumentNullException.ThrowIfNull(request);
 
         var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
@@ -253,26 +262,73 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         if (resource is null)
         {
-            return Task.FromResult(new GetTerminalInfoResponse { IsAvailable = false });
+            logger.LogDebug("GetTerminalInfo: resource '{ResourceName}' not found.", request.ResourceName);
+            return new GetTerminalInfoResponse { IsAvailable = false };
         }
 
         var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
         if (terminalAnnotation is null)
         {
-            return Task.FromResult(new GetTerminalInfoResponse { IsAvailable = false });
+            logger.LogDebug("GetTerminalInfo: resource '{ResourceName}' has no TerminalAnnotation.", request.ResourceName);
+            return new GetTerminalInfoResponse { IsAvailable = false };
         }
 
-        return Task.FromResult(new GetTerminalInfoResponse
+        var layout = terminalAnnotation.TerminalHost.Layout;
+        Aspire.Shared.TerminalHost.TerminalHostReplicasResponse hostReplicas;
+        try
         {
-            // Phase 5 of WithTerminal will populate per-replica info (consumer UDS
-            // paths from TerminalAnnotation.TerminalHost.Layout) over the host's
-            // control UDS. Until that work lands the response shape only carries
-            // the legacy single-socket fields, so we report unavailable rather than
-            // mis-route a stale path that the new host design no longer publishes.
-            IsAvailable = false,
+            hostReplicas = await TerminalHostControlClient.GetReplicasAsync(
+                layout.ControlUdsPath,
+                totalTimeout: TimeSpan.FromSeconds(3),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogDebug(
+                "GetTerminalInfo: timed out waiting for terminal host control RPC for resource '{ResourceName}' (control path '{ControlPath}').",
+                request.ResourceName, layout.ControlUdsPath);
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogDebug(
+                ex,
+                "GetTerminalInfo: terminal host control RPC failed for resource '{ResourceName}' (control path '{ControlPath}').",
+                request.ResourceName, layout.ControlUdsPath);
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var replicas = new List<TerminalReplicaInfo>(hostReplicas.Replicas.Length);
+        foreach (var hostReplica in hostReplicas.Replicas)
+        {
+            // The AppHost is the source of truth for the consumer UDS layout. The host echoes
+            // it back, but if the host's index is out of range we drop the entry rather than
+            // throw, so a bug in the host can never crash a backchannel call.
+            if (hostReplica.Index < 0 || hostReplica.Index >= layout.ConsumerUdsPaths.Count)
+            {
+                logger.LogWarning(
+                    "GetTerminalInfo: terminal host for resource '{ResourceName}' returned out-of-range replica index {Index} (replica count {Count}); skipping.",
+                    request.ResourceName, hostReplica.Index, layout.ConsumerUdsPaths.Count);
+                continue;
+            }
+
+            replicas.Add(new TerminalReplicaInfo
+            {
+                ReplicaIndex = hostReplica.Index,
+                Label = $"replica {hostReplica.Index}",
+                ConsumerUdsPath = layout.ConsumerUdsPaths[hostReplica.Index],
+                IsAlive = hostReplica.IsAlive,
+                ExitCode = hostReplica.ExitCode,
+            });
+        }
+
+        return new GetTerminalInfoResponse
+        {
+            IsAvailable = true,
+            Replicas = [.. replicas],
             Columns = terminalAnnotation.Options.Columns,
-            Rows = terminalAnnotation.Options.Rows
-        });
+            Rows = terminalAnnotation.Options.Rows,
+        };
     }
 
     /// <summary>

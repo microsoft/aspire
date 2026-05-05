@@ -43,6 +43,13 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Version 2 capabilities (13.2+): Request objects, new methods.
     /// </summary>
     public const string V2 = "aux.v2";
+
+    /// <summary>
+    /// Terminal feature flag (13.4+): <see cref="GetTerminalInfoResponse.Replicas"/> is populated for
+    /// resources configured with WithTerminal. Older clients ignore the new array; new clients
+    /// gate UI/CLI affordances on the presence of this capability.
+    /// </summary>
+    public const string Terminals_V1 = "terminals.v1";
 }
 
 #endregion
@@ -1127,6 +1134,43 @@ internal sealed class GetTerminalInfoRequest
 }
 
 /// <summary>
+/// Per-replica endpoint information for an interactive terminal session. One entry per
+/// replica of a resource configured with WithTerminal. Returned inside
+/// <see cref="GetTerminalInfoResponse.Replicas"/> when the auxiliary backchannel reports
+/// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+/// </summary>
+internal sealed class TerminalReplicaInfo
+{
+    /// <summary>
+    /// Gets the zero-based replica index. Stable across the lifetime of the AppHost run.
+    /// </summary>
+    public required int ReplicaIndex { get; init; }
+
+    /// <summary>
+    /// Gets a short human-readable label for the replica, suitable for selection prompts and logs.
+    /// </summary>
+    public required string Label { get; init; }
+
+    /// <summary>
+    /// Gets the consumer-side Unix domain socket path that viewers (Dashboard, CLI) connect to in
+    /// order to attach to this replica's PTY via Hex1b's HMP v1 protocol.
+    /// </summary>
+    public required string ConsumerUdsPath { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether this replica's relay terminal is still running. False once
+    /// the upstream PTY has exited.
+    /// </summary>
+    public required bool IsAlive { get; init; }
+
+    /// <summary>
+    /// Gets the exit code of the upstream process if the replica has terminated, or null while it
+    /// is still alive.
+    /// </summary>
+    public int? ExitCode { get; init; }
+}
+
+/// <summary>
 /// Response containing terminal information for a resource.
 /// </summary>
 internal sealed class GetTerminalInfoResponse
@@ -1137,17 +1181,28 @@ internal sealed class GetTerminalInfoResponse
     public required bool IsAvailable { get; init; }
 
     /// <summary>
-    /// Gets the UDS socket path for terminal I/O, if available.
+    /// Gets the per-replica endpoint information when <see cref="IsAvailable"/> is true.
+    /// Null for older AppHosts that predate the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public TerminalReplicaInfo[]? Replicas { get; init; }
+
+    /// <summary>
+    /// Gets the legacy single-socket UDS path. Always null in 13.4+; preserved on the wire
+    /// so older CLI builds that deserialize this response keep working without crashing on an
+    /// unexpected schema.
     /// </summary>
     public string? SocketPath { get; init; }
 
     /// <summary>
-    /// Gets the current terminal width in columns.
+    /// Gets the AppHost-configured initial terminal width in columns. Hint only; viewers may
+    /// negotiate a different size after attaching.
     /// </summary>
     public int Columns { get; init; }
 
     /// <summary>
-    /// Gets the current terminal height in rows.
+    /// Gets the AppHost-configured initial terminal height in rows. Hint only; viewers may
+    /// negotiate a different size after attaching.
     /// </summary>
     public int Rows { get; init; }
 }

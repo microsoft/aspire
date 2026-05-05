@@ -773,8 +773,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             [request],
             cancellationToken).ConfigureAwait(false);
 
-        _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, socket={Socket}",
-            resourceName, response.IsAvailable, response.SocketPath);
+        _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, replicas={ReplicaCount}",
+            resourceName, response.IsAvailable, response.Replicas?.Length ?? 0);
 
         return response;
     }
