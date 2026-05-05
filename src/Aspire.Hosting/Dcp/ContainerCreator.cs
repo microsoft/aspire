@@ -303,6 +303,40 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
         spec.PemCertificates = pemCertificates;
 
+        // Configure the terminal spec if the resource has a TerminalAnnotation.
+        // Containers are always single-replica, so the layout's index 0 paths
+        // are used directly. DCP currently implements PTY support on Windows
+        // only; on other platforms we leave Terminal unset and log a warning.
+        if (modelContainer.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+                {
+                    logger.LogWarning(
+                        "WithTerminal() is currently only supported on Windows. Container resource '{ResourceName}' will run without an attachable terminal in this Aspire version.",
+                        modelContainer.Name);
+                }
+                else if (terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths.Count > 0)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        Enabled = true,
+                        UdsPath = terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths[0],
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Could not determine a producer UDS path for container resource '{ResourceName}'; terminal will not be attached.",
+                        modelContainer.Name);
+                }
+            }
+        }
+
         var dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: cToken).ConfigureAwait(false);
         if (dcpInfo is not null)
         {
