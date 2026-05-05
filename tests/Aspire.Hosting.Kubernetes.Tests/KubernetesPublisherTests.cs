@@ -310,6 +310,173 @@ public class KubernetesPublisherTests()
         await Verify(actualContent);
     }
 
+    [Fact]
+    public async Task PublishAsync_SupportsProjectedSecretVolumes()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "projected-secrets",
+                    Projected = new()
+                    {
+                        DefaultMode = 420,
+                        Sources =
+                        {
+                            new()
+                            {
+                                Secret = new()
+                                {
+                                    Name = "first-secret",
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Key = "username",
+                                            Path = "first/username"
+                                        }
+                                    }
+                                }
+                            },
+                            new()
+                            {
+                                Secret = new()
+                                {
+                                    Name = "second-secret",
+                                    Optional = true,
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Key = "password",
+                                            Mode = 256,
+                                            Path = "second/password"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "projected-secrets",
+                    MountPath = "/mnt/secrets",
+                    ReadOnly = true
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(tempDir.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_SupportsProjectedConfigMapDownwardApiAndServiceAccountTokenVolumes()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                var podTemplate = serviceResource.Workload!.PodTemplate;
+                podTemplate.Spec.Volumes.Add(new()
+                {
+                    Name = "projected-config",
+                    Projected = new()
+                    {
+                        Sources =
+                        {
+                            new()
+                            {
+                                ConfigMap = new()
+                                {
+                                    Name = "app-config",
+                                    Optional = true,
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Key = "appsettings.json",
+                                            Path = "config/appsettings.json"
+                                        }
+                                    }
+                                }
+                            },
+                            new()
+                            {
+                                DownwardApi = new()
+                                {
+                                    Items =
+                                    {
+                                        new()
+                                        {
+                                            Path = "pod/name",
+                                            FieldRef = new()
+                                            {
+                                                FieldPath = "metadata.name"
+                                            }
+                                        },
+                                        new()
+                                        {
+                                            Mode = 256,
+                                            Path = "resources/cpu-limit",
+                                            ResourceFieldRef = new()
+                                            {
+                                                ContainerName = "myapp",
+                                                Resource = "limits.cpu"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            new()
+                            {
+                                ServiceAccountToken = new()
+                                {
+                                    Audience = "api",
+                                    ExpirationSeconds = 3600,
+                                    Path = "tokens/api-token"
+                                }
+                            }
+                        }
+                    }
+                });
+
+                podTemplate.Spec.Containers[0].VolumeMounts.Add(new()
+                {
+                    Name = "projected-config",
+                    MountPath = "/mnt/config",
+                    ReadOnly = true
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var deploymentPath = Path.Combine(tempDir.Path, "templates/myapp/deployment.yaml");
+        var deployment = await File.ReadAllTextAsync(deploymentPath);
+
+        await Verify(deployment, "yaml");
+    }
+
     private sealed class KedaScaledObject() : BaseKubernetesResource("keda.sh/v1alpha1", "ScaledObject")
     {
         [YamlMember(Alias = "spec")]
