@@ -163,6 +163,13 @@ try {
         throw "Expected binary at '$expectedBinaryPath', but found '$relativeBinaryPath'."
     }
 
+    $expectedSidecarPath = "tools/net10.0/$Rid/.aspire-install.json"
+    $sidecarFile = Join-Path $ridExtract ($expectedSidecarPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar))
+    if (-not (Test-Path -LiteralPath $sidecarFile)) {
+        throw "RID package $($ridPackage.Name) is missing sidecar at '$expectedSidecarPath'."
+    }
+    Write-Step "Sidecar present in RID package at: $expectedSidecarPath"
+
     if ($ArchivePath) {
         Expand-CliArchive $ArchivePath $archiveExtract
         $archiveBinaryPath = Join-Path $archiveExtract $binaryName
@@ -194,6 +201,12 @@ try {
     if ($pointerBinary) {
         throw "Pointer package should not contain native binaries: $($pointerBinary.Name -join ', ')"
     }
+
+    $pointerSidecar = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter '.aspire-install.json' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pointerSidecar) {
+        throw "Pointer package must not contain '.aspire-install.json': found at '$($pointerSidecar.FullName.Substring($pointerExtract.Length + 1))'."
+    }
+    Write-Step "Sidecar absent from pointer package (correct)."
 
     $pointerNuspec = Get-ChildItem -Path $pointerExtract -Filter '*.nuspec' -File | Select-Object -First 1
     if (-not $pointerNuspec) {
