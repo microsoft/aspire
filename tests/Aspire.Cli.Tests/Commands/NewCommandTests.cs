@@ -2278,6 +2278,52 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandCreatesProjectInCurrentDirectoryWithOutputDot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create an empty subdirectory to use as the CLI working directory.
+        // Keep options.WorkingDirectory as the workspace root so test infra
+        // (.aspire/logs, settings files) doesn't pollute the project dir.
+        var projectDir = workspace.CreateDirectory("my-project");
+        string? capturedOutputPath = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliExecutionContextFactory = _ =>
+            {
+                var root = workspace.WorkspaceRoot.FullName;
+                return new CliExecutionContext(
+                    projectDir,
+                    new DirectoryInfo(Path.Combine(root, ".aspire", "hives")),
+                    new DirectoryInfo(Path.Combine(root, ".aspire", "cache")),
+                    new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")),
+                    new DirectoryInfo(Path.Combine(root, ".aspire", "logs")),
+                    Path.Combine(root, ".aspire", "logs", "test.log"));
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = CreateTestRunnerWithStandardPackages();
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    capturedOutputPath = outputPath;
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-starter --name TestApp --output . --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(projectDir.FullName, capturedOutputPath);
+    }
+
+    [Fact]
     public void OutputPathValidatorRejectsPathWithInvalidCharacters()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
