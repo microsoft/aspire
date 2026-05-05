@@ -183,7 +183,9 @@ internal sealed class DashboardClient : IDashboardClient
                 var filePath = _dashboardOptions.ResourceServiceClient.ClientCertificate.FilePath;
                 var password = _dashboardOptions.ResourceServiceClient.ClientCertificate.Password;
 
+#pragma warning disable SYSLIB0057 // Type or member is obsolete
                 return [new X509Certificate2(filePath, password)];
+#pragma warning restore SYSLIB0057 // Type or member is obsolete
             }
 
             X509CertificateCollection GetKeyStoreCertificate()
