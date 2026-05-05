@@ -28,7 +28,22 @@
   </ItemGroup>
 
   <Target Name="PublishToDisk"
-          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_PrepareOutputPathForPublishToDisk" />
+          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_CopyRouteSidecarToStagingDir;_PrepareOutputPathForPublishToDisk" />
+
+  <Target Name="_CopyRouteSidecarToStagingDir"
+          DependsOnTargets="_PublishProject">
+    <PropertyGroup>
+      <_SidecarStagingDir>$([MSBuild]::NormalizePath($(IntermediateOutputPath), '$(TargetFramework)', 'output'))</_SidecarStagingDir>
+    </PropertyGroup>
+    <!-- Embed winget route sidecar into Windows zip archives -->
+    <Copy SourceFiles="$(RepoRoot)eng\winget\microsoft.aspire\.aspire-install.json"
+          DestinationFolder="$(_SidecarStagingDir)"
+          Condition="$(CliRuntime.StartsWith('win-'))" />
+    <!-- Embed brew route sidecar into macOS tar.gz archives -->
+    <Copy SourceFiles="$(RepoRoot)eng/homebrew/.aspire-install.json"
+          DestinationFolder="$(_SidecarStagingDir)"
+          Condition="$(CliRuntime.StartsWith('osx-'))" />
+  </Target>
 
   <Target Name="_PrepareOutputPathForPublishToDisk">
     <!-- TODO: avoid generating the file instead of manually deleting it here -->

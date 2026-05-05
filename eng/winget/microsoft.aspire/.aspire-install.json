@@ -1,0 +1,1 @@
+{ "route": "winget", "updateCommand": "winget upgrade Microsoft.Aspire" }
