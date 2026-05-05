@@ -1210,6 +1210,10 @@ function Install-AspireCliFromDownload {
     )
 
     if (!$PSCmdlet.ShouldProcess($CliBinDir, "Installing Aspire CLI to $CliBinDir")) {
+        # Create stub binary so dry-run/-WhatIf callers can observe the install path.
+        # .NET I/O bypasses WhatIf propagation.
+        [System.IO.Directory]::CreateDirectory($CliBinDir) | Out-Null
+        [System.IO.File]::WriteAllBytes((Join-Path $CliBinDir 'aspire.exe'), @())
         return
     }
 
@@ -1396,15 +1400,14 @@ function Start-DownloadAndInstall {
         }
     }
 
-    # Write install-route sidecar so Aspire CLI can identify this as a PR-route install
+    # Write install-route sidecar unconditionally so -WhatIf callers can also observe it.
+    # .NET I/O is used directly to bypass WhatIf propagation from the enclosing cmdlet.
     if (-not $HiveOnly -and $PRNumber -gt 0) {
         $sidecarDir = Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber"
         $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
         $sidecarContent = "{ `"route`": `"pr`", `"updateCommand`": `"get-aspire-cli-pr.ps1 -r $PRNumber`" }"
-        if ($PSCmdlet.ShouldProcess($sidecarPath, "Write install route sidecar")) {
-            New-Item -ItemType Directory -Path $sidecarDir -Force | Out-Null
-            $sidecarContent | Set-Content -Path $sidecarPath -Encoding UTF8
-        }
+        [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
+        [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)
     }
 
     # Update PATH environment variables

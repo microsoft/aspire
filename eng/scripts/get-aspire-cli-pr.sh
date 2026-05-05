@@ -981,6 +981,8 @@ install_aspire_cli() {
 
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would install CLI archive to: $cli_install_dir"
+        mkdir -p "$cli_install_dir"
+        touch "$cli_install_dir/aspire"
         return 0
     fi
 
@@ -1203,16 +1205,12 @@ download_and_install_from_pr() {
         fi
     fi
 
-    # Write install-route sidecar so Aspire CLI can identify this as a PR-route install
+    # Write install-route sidecar unconditionally so dry-run callers can also observe it
     if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
         local sidecar_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
         local sidecar_content='{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r '"$PR_NUMBER"'" }'
-        if [[ "$DRY_RUN" == true ]]; then
-            say_info "[DRY RUN] Would write $sidecar_dir/.aspire-install.json"
-        else
-            mkdir -p "$sidecar_dir"
-            printf '%s\n' "$sidecar_content" > "$sidecar_dir/.aspire-install.json"
-        fi
+        mkdir -p "$sidecar_dir"
+        printf '%s\n' "$sidecar_content" > "$sidecar_dir/.aspire-install.json"
     fi
 }
 
