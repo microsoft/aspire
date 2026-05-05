@@ -17,6 +17,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private ElementReference _terminalElement;
     private IJSObjectReference? _jsModule;
     private int _terminalId;
+    private string? _connectedResourceName;
+    private int _connectedReplicaIndex = -1;
 
     /// <summary>
     /// Gets or sets the user-facing display name of the resource that owns the
@@ -40,9 +42,32 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !string.IsNullOrEmpty(ResourceName))
+        if (string.IsNullOrEmpty(ResourceName))
+        {
+            return;
+        }
+
+        if (firstRender)
         {
             await InitializeTerminalAsync();
+            _connectedResourceName = ResourceName;
+            _connectedReplicaIndex = ReplicaIndex;
+            return;
+        }
+
+        // The same TerminalView instance is reused across resource/replica
+        // switches in the parent (e.g. ConsoleLogs page selects a different
+        // terminal-enabled resource). Detect that here and rebind the
+        // underlying WebSocket; xterm.js is preserved and just gets cleared
+        // and refilled by the new connection's StateSync replay.
+        if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
+            ReplicaIndex != _connectedReplicaIndex)
+        {
+            var newResource = ResourceName;
+            var newReplica = ReplicaIndex;
+            await ReconnectAsync(newResource, newReplica);
+            _connectedResourceName = newResource;
+            _connectedReplicaIndex = newReplica;
         }
     }
 
