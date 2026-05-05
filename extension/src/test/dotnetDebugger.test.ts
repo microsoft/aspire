@@ -5,7 +5,7 @@ import { createProjectDebuggerExtension, projectDebuggerExtension } from '../deb
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
 import { ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
-import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 
 class TestDotNetService {
     private _getDotNetTargetPathStub: sinon.SinonStub;
@@ -125,6 +125,47 @@ suite('Dotnet Debugger Extension Tests', () => {
             && message.body.output.includes(startError.message)), false);
 
         outputSubscription.dispose();
+    });
+
+    test('filters AppHost debugger noise from Aspire parent debug console', () => {
+        const filter = new AppHostParentOutputFilter();
+
+        assert.strictEqual(filter.filter("'TestShop.AppHost' (CoreCLR: clrhost): Loaded '/dotnet/System.Private.CoreLib.dll'. Skipped loading symbols.\n", 'console'), undefined);
+        assert.strictEqual(filter.filter("TestShop.AppHost.dll (29067): Loaded '/usr/local/share/dotnet/shared/Microsoft.NETCore.App/8.0.14/System.Private.CoreLib.dll'. No se puede encontrar o abrir el archivo PDB.\n", 'console'), undefined);
+        assert.strictEqual(filter.filter("Loaded '/dotnet/System.Net.Http.dll'. Skipped loading symbols.\n", 'console'), undefined);
+        assert.strictEqual(filter.filter("Exception thrown: 'System.InvalidOperationException' in TestShop.AppHost.dll\n", 'console'), undefined);
+        assert.strictEqual(filter.filter('debug adapter details\n', 'debug'), undefined);
+        assert.strictEqual(filter.filter('-------------------------------------------------------------------------------\n', 'console'), undefined);
+        assert.strictEqual(filter.filter('You may only use the Microsoft Visual Studio .NET/C/C++ Debugger with Visual Studio Code.\n', 'console'), undefined);
+        assert.strictEqual(filter.filter('Usando la configuración de inicio de "/workspace/Properties/launchSettings.json" [perfil "https"]...\n', 'console'), undefined);
+        assert.strictEqual(filter.filter("dbug: Aspire.Hosting.Health.ResourceHealthCheckService[0]\n      Resource 'apigateway' is ready.\n", 'stdout'), undefined);
+        assert.strictEqual(filter.filter("Aspire.Hosting.Health.ResourceHealthCheckService: Debug: Resource 'apigateway' is ready.\n", 'stdout'), undefined);
+    });
+
+    test('keeps AppHost fatal output in Aspire parent debug console', () => {
+        const filter = new AppHostParentOutputFilter();
+        const criticalLog = "crit: TestShop.AppHost[0]\n      Host terminated unexpectedly.\n";
+        const unhandledException = 'Unhandled exception. System.InvalidOperationException: boom\n';
+        const unhandledBaseException = 'Unhandled exception. System.Exception: This code snippet is for illustrative purposes only.\n   at Program.<Main>$(String[] args) in /workspace/AppHost.cs:line 8\n';
+        const javascriptException = 'Uncaught TypeError: Cannot read properties of undefined\n    at file:///workspace/apphost.js:8:3\n';
+        const nodeModuleException = "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@microsoft/aspire'\n    at packageResolve (node:internal/modules/esm/resolve:857:9)\n";
+        const consoleError = 'Fatal error: unable to bind port\n';
+
+        assert.deepStrictEqual(filter.filter(criticalLog, 'stdout'), { output: criticalLog, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(unhandledException, 'console'), { output: unhandledException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(unhandledBaseException, 'console'), { output: unhandledBaseException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(javascriptException, 'console'), { output: javascriptException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(nodeModuleException, 'console'), { output: nodeModuleException, category: 'stderr' });
+        assert.deepStrictEqual(filter.filter(consoleError, 'console'), { output: consoleError, category: 'stderr' });
+    });
+
+    test('keeps AppHost warning and information output that is not debugger console chatter', () => {
+        const filter = new AppHostParentOutputFilter();
+        const warningLog = "warn: TestShop.AppHost[0]\n      Port is already allocated.\n";
+        const normalOutput = 'Now listening on: https://localhost:5001\n';
+
+        assert.deepStrictEqual(filter.filter(warningLog, 'stdout'), { output: warningLog, category: 'stdout' });
+        assert.deepStrictEqual(filter.filter(normalOutput, 'stdout'), { output: normalOutput, category: 'stdout' });
     });
 
     test('project is built when C# dev kit is installed and executable not found', async () => {

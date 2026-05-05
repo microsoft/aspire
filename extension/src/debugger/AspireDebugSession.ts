@@ -25,6 +25,7 @@ export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' |
 export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _onDidSendMessage = new EventEmitter<any>();
   private _messageSeq = 1;
+  private readonly _appHostParentOutputFilter = new AppHostParentOutputFilter();
 
   private readonly _session: vscode.DebugSession;
   private readonly _rpcServer: AspireRpcServer;
@@ -256,7 +257,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           }
           return false;
         },
-        (output, category) => this.sendMessage(output, false, category)
+        (output, category) => this.sendAppHostMessage(output, category)
       );
 
       let appHostArgs: string[];
@@ -520,6 +521,13 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this.sendMessage(`${emoji}  ${message}`, addNewLine, category);
   }
 
+  private sendAppHostMessage(message: string, category: string | undefined) {
+    const filteredMessage = this._appHostParentOutputFilter.filter(message, category);
+    if (filteredMessage) {
+      this.sendMessage(filteredMessage.output, false, filteredMessage.category);
+    }
+  }
+
   sendMessage(message: string, addNewLine: boolean = true, category: 'stdout' | 'stderr' = 'stdout') {
     this.sendEvent({
       type: 'event',
@@ -539,4 +547,122 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
 function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
   return err instanceof Error && (err as Error & { debugConsoleOutputAlreadyWritten?: boolean }).debugConsoleOutputAlreadyWritten === true;
+}
+
+export interface AppHostParentOutput {
+  output: string;
+  category: 'stdout' | 'stderr';
+}
+
+export class AppHostParentOutputFilter {
+  private _continuingDroppedLog = false;
+  private _continuingErrorBlock = false;
+
+  filter(output: string, category: string | undefined): AppHostParentOutput | undefined {
+    if (category === 'debug') {
+      this.resetState();
+      return undefined;
+    }
+
+    const segments = output.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g)?.filter(segment => segment.length > 0) ?? [];
+    let filteredOutput = '';
+    let hasErrorOutput = category === 'stderr';
+
+    for (const segment of segments) {
+      const outputCategory = this.getLineCategory(segment, category);
+      if (outputCategory) {
+        filteredOutput += segment;
+        hasErrorOutput ||= outputCategory === 'stderr';
+      }
+    }
+
+    if (filteredOutput.length === 0) {
+      return undefined;
+    }
+
+    return {
+      output: filteredOutput,
+      category: hasErrorOutput ? 'stderr' : 'stdout'
+    };
+  }
+
+  private getLineCategory(segment: string, category: string | undefined): 'stdout' | 'stderr' | undefined {
+    const line = segment.replace(/(?:\r\n|\r|\n)$/, '');
+    const trimmedLine = line.trim();
+
+    if (trimmedLine.length === 0) {
+      return !this._continuingDroppedLog && this.shouldMirrorConsoleOutput(category) ? this.getCurrentCategory(category) : undefined;
+    }
+
+    if (this._continuingDroppedLog && isIndentedContinuation(line)) {
+      return undefined;
+    }
+
+    if (this._continuingErrorBlock && isIndentedContinuation(line)) {
+      return 'stderr';
+    }
+
+    const logSeverity = getConsoleLogSeverity(trimmedLine);
+    if (logSeverity) {
+      this._continuingDroppedLog = logSeverity === 'low';
+      this._continuingErrorBlock = logSeverity === 'severe';
+
+      return logSeverity === 'low' ? undefined : this.getCurrentCategory(category);
+    }
+
+    const isSevereOutput = isSevereRuntimeOutputLine(trimmedLine);
+    this._continuingDroppedLog = false;
+    this._continuingErrorBlock = isSevereOutput;
+
+    if (category === 'console' && !isSevereOutput) {
+      return undefined;
+    }
+
+    return this.getCurrentCategory(category);
+  }
+
+  private shouldMirrorConsoleOutput(category: string | undefined): boolean {
+    return category !== 'console' || this._continuingErrorBlock;
+  }
+
+  private getCurrentCategory(category: string | undefined): 'stdout' | 'stderr' {
+    return category === 'stderr' || this._continuingErrorBlock ? 'stderr' : 'stdout';
+  }
+
+  private resetState() {
+    this._continuingDroppedLog = false;
+    this._continuingErrorBlock = false;
+  }
+}
+
+function getConsoleLogSeverity(line: string): 'low' | 'normal' | 'severe' | undefined {
+  const defaultConsoleLogLevel = /^(trce|dbug|info|warn|fail|crit):\s/.exec(line)?.[1];
+  if (defaultConsoleLogLevel) {
+    return defaultConsoleLogLevel === 'trce' || defaultConsoleLogLevel === 'dbug'
+      ? 'low'
+      : defaultConsoleLogLevel === 'fail' || defaultConsoleLogLevel === 'crit'
+        ? 'severe'
+        : 'normal';
+  }
+
+  const simpleConsoleLogLevel = /^[^:]+:\s*(Trace|Debug|Information|Warning|Error|Critical):\s/.exec(line)?.[1];
+  if (simpleConsoleLogLevel) {
+    return simpleConsoleLogLevel === 'Trace' || simpleConsoleLogLevel === 'Debug'
+      ? 'low'
+      : simpleConsoleLogLevel === 'Error' || simpleConsoleLogLevel === 'Critical'
+        ? 'severe'
+        : 'normal';
+  }
+
+  return undefined;
+}
+
+function isIndentedContinuation(line: string): boolean {
+  return /^\s+\S/.test(line);
+}
+
+function isSevereRuntimeOutputLine(line: string): boolean {
+  return /(?:^|\s)(?:[A-Za-z_][\w`]*\.)+(?:[A-Za-z_][\w`]*Exception|Exception):/.test(line)
+    || /(?:^|\s)(?:Uncaught\s+)?(?:[A-Za-z_$][\w$]*Error|Error)(?:\s+\[[^\]]+\])?:/.test(line)
+    || /\b(?:fatal|fail(?:ed|ure)?|error|critical)\b/i.test(line);
 }
