@@ -40,21 +40,42 @@ internal sealed class DashboardServiceData : IDisposable
         {
             static GenericResourceSnapshot CreateResourceSnapshot(IResource resource, string resourceId, DateTime creationTimestamp, CustomResourceSnapshot snapshot)
             {
-                // If the resource has a TerminalAnnotation, add a terminal property to the snapshot
-                // so the Dashboard can detect terminal-enabled resources.
+                // If the resource has a TerminalAnnotation, stamp the per-replica terminal
+                // properties onto the snapshot so the Dashboard can:
+                //   * detect that a terminal is available (HasTerminal),
+                //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
+                //     at the right replica (TryGetTerminalReplicaInfo).
+                //
+                // The actual consumer UDS path is *intentionally* not surfaced in the
+                // snapshot. The dashboard resolves it server-side via
+                // ITerminalConnectionResolver so an authenticated browser cannot coerce
+                // the dashboard into connecting to arbitrary UDS endpoints.
                 var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
                 if (terminalAnnotation is not null)
                 {
-                    snapshot = snapshot with
-                    {
-                        Properties = snapshot.Properties.Add(
-                            new ResourcePropertySnapshot(KnownProperties.Terminal.Enabled, "true") { IsSensitive = false })
-                    };
+                    var consumerUdsPaths = terminalAnnotation.TerminalHost.Layout.ConsumerUdsPaths;
+                    var replicaCount = consumerUdsPaths.Count;
+                    var replicaIndex = ResolveReplicaIndex(resource, resourceId);
+                    var consumerUdsPath = (uint)replicaIndex < (uint)consumerUdsPaths.Count
+                        ? consumerUdsPaths[replicaIndex]
+                        : null;
 
-                    // Phase 7 of WithTerminal replaces this single-socket property with
-                    // a per-replica view sourced from TerminalAnnotation.TerminalHost.Layout
-                    // and routed through the dashboard backchannel; the snapshot just
-                    // signals availability for now.
+                    var properties = snapshot.Properties
+                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.Enabled, "true") { IsSensitive = false })
+                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaIndex, replicaIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)) { IsSensitive = false })
+                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaCount, replicaCount.ToString(System.Globalization.CultureInfo.InvariantCulture)) { IsSensitive = false });
+
+                    if (consumerUdsPath is not null)
+                    {
+                        // Mark the UDS path sensitive so the dashboard masks it in the
+                        // resource details panel. The path still flows through gRPC to
+                        // the dashboard process (which is intentional - it needs the
+                        // path to open the local socket on the user's behalf).
+                        properties = properties.Add(
+                            new ResourcePropertySnapshot(KnownProperties.Terminal.ConsumerUdsPath, consumerUdsPath) { IsSensitive = true });
+                    }
+
+                    snapshot = snapshot with { Properties = properties };
                 }
 
                 return new GenericResourceSnapshot(snapshot)
@@ -79,6 +100,30 @@ internal sealed class DashboardServiceData : IDisposable
                     IconName = snapshot.IconName,
                     IconVariant = snapshot.IconVariant
                 };
+            }
+
+            // Maps the per-replica DCP resourceId (e.g. "myapp-abc123") back to its
+            // stable 0-based replica index by consulting DcpInstancesAnnotation, which
+            // DcpNameGenerator populates at instance-allocation time. Falls back to 0
+            // for non-DCP resources or when the annotation isn't present yet (e.g.
+            // initial pre-DCP snapshots).
+            static int ResolveReplicaIndex(IResource resource, string resourceId)
+            {
+                var instances = resource.Annotations.OfType<DcpInstancesAnnotation>().FirstOrDefault();
+                if (instances is null)
+                {
+                    return 0;
+                }
+
+                foreach (var instance in instances.Instances)
+                {
+                    if (string.Equals(instance.Name, resourceId, StringComparison.Ordinal))
+                    {
+                        return instance.Index;
+                    }
+                }
+
+                return 0;
             }
 
             var timestamp = DateTime.UtcNow;

@@ -160,7 +160,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private LogViewer? _logViewerRef;
     private Controls.TerminalView? _terminalViewRef;
     private bool _selectedResourceHasTerminal;
-    private string? _terminalSocketPath;
+    private string? _terminalResourceName;
+    private int _terminalReplicaIndex;
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
@@ -399,16 +400,18 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         // Detect whether the selected resource has terminal support
         _selectedResourceHasTerminal = false;
-        _terminalSocketPath = null;
+        _terminalResourceName = null;
+        _terminalReplicaIndex = 0;
 
         if (!isAllSelected && selectedResourceName is not null &&
             _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
             selectedResource.HasTerminal() &&
-            selectedResource.TryGetTerminalSocketPath(out var socketPath))
+            selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))
         {
             _selectedResourceHasTerminal = true;
-            _terminalSocketPath = socketPath;
-            Logger.LogDebug("Resource '{ResourceName}' has terminal at {SocketPath}", selectedResourceName, socketPath);
+            _terminalResourceName = selectedResource.DisplayName;
+            _terminalReplicaIndex = replicaIndex;
+            Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
 
             // Don't subscribe to console logs for terminal resources —
             // the terminal view replaces the log viewer.

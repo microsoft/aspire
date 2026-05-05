@@ -9,7 +9,8 @@ namespace Aspire.Dashboard.Components.Controls;
 
 /// <summary>
 /// Renders an interactive terminal using xterm.js, connected to the resource's
-/// terminal session via WebSocket → Aspire Terminal Protocol over UDS.
+/// per-replica terminal session via a WebSocket bridge to the AppHost-owned
+/// terminal host (HMP v1 over Unix domain socket).
 /// </summary>
 public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 {
@@ -17,8 +18,19 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private IJSObjectReference? _jsModule;
     private int _terminalId;
 
+    /// <summary>
+    /// Gets or sets the user-facing display name of the resource that owns the
+    /// terminal session (e.g. <c>myapp</c>, not the per-replica DCP suffix).
+    /// </summary>
     [Parameter]
-    public string? SocketPath { get; set; }
+    public string? ResourceName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the stable 0-based replica index for the terminal session.
+    /// Defaults to <c>0</c> for single-replica resources.
+    /// </summary>
+    [Parameter]
+    public int ReplicaIndex { get; set; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -28,7 +40,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && SocketPath is not null)
+        if (firstRender && !string.IsNullOrEmpty(ResourceName))
         {
             await InitializeTerminalAsync();
         }
@@ -41,14 +53,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             _jsModule = await JS.InvokeAsync<IJSObjectReference>(
                 "import", "/Components/Controls/TerminalView.razor.js");
 
-            // Build the WebSocket URL for the terminal proxy.
-            // The Dashboard exposes a WebSocket endpoint at /api/terminal?socketPath=...
-            var baseUri = new Uri(NavigationManager.BaseUri);
-            var wsScheme = baseUri.Scheme == "https" ? "wss" : "ws";
-            var wsUrl = $"{wsScheme}://{baseUri.Host}:{baseUri.Port}/api/terminal?socketPath={Uri.EscapeDataString(SocketPath!)}";
-
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, wsUrl);
+                "initTerminal", _terminalElement, BuildWebSocketUrl(ResourceName!, ReplicaIndex));
         }
         catch (JSDisconnectedException)
         {
@@ -57,33 +63,39 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
-    /// Called when the socket path changes (e.g., resource selection changes).
+    /// Reconnects the terminal to a different resource/replica. When both
+    /// arguments match the current values this is a no-op.
     /// </summary>
-    public async Task ReconnectAsync(string? newSocketPath)
+    public async Task ReconnectAsync(string? newResourceName, int newReplicaIndex)
     {
         if (_jsModule is null || _terminalId == 0)
         {
-            SocketPath = newSocketPath;
-            if (newSocketPath is not null)
+            ResourceName = newResourceName;
+            ReplicaIndex = newReplicaIndex;
+            if (!string.IsNullOrEmpty(newResourceName))
             {
                 await InitializeTerminalAsync();
             }
             return;
         }
 
-        if (newSocketPath is null)
+        if (string.IsNullOrEmpty(newResourceName))
         {
             await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
             _terminalId = 0;
             return;
         }
 
-        SocketPath = newSocketPath;
+        ResourceName = newResourceName;
+        ReplicaIndex = newReplicaIndex;
+        await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalId, BuildWebSocketUrl(newResourceName, newReplicaIndex));
+    }
+
+    private string BuildWebSocketUrl(string resource, int replica)
+    {
         var baseUri = new Uri(NavigationManager.BaseUri);
         var wsScheme = baseUri.Scheme == "https" ? "wss" : "ws";
-        var wsUrl = $"{wsScheme}://{baseUri.Host}:{baseUri.Port}/api/terminal?socketPath={Uri.EscapeDataString(newSocketPath)}";
-
-        await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalId, wsUrl);
+        return $"{wsScheme}://{baseUri.Authority}/api/terminal?resource={Uri.EscapeDataString(resource)}&replica={replica}";
     }
 
     public async ValueTask DisposeAsync()

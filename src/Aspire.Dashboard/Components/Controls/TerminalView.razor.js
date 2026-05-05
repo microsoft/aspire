@@ -7,6 +7,7 @@
 
 const terminals = new Map();
 let nextId = 1;
+const textEncoder = new TextEncoder();
 
 function ensureXtermLoaded() {
     return new Promise((resolve, reject) => {
@@ -80,10 +81,12 @@ export async function initTerminal(element, wsUrl) {
         }
     });
 
-    // Handle user input
+    // Handle user input. Send keystrokes as binary frames so the server can
+    // distinguish them from text-mode JSON control frames (resize, etc.) by
+    // WebSocket frame type rather than by content sniffing.
     term.onData((data) => {
         if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-            state.ws.send(data);
+            state.ws.send(textEncoder.encode(data));
         }
     });
 

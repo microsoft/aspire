@@ -104,9 +104,9 @@
         </MobilePageTitleToolbarSection>
 
         <MainSection>
-            @if (_selectedResourceHasTerminal && _terminalSocketPath is not null)
+            @if (_selectedResourceHasTerminal && _terminalResourceName is not null)
             {
-                <TerminalView @ref="_terminalViewRef" SocketPath="@_terminalSocketPath" />
+                <TerminalView @ref="_terminalViewRef" ResourceName="@_terminalResourceName" ReplicaIndex="@_terminalReplicaIndex" />
             }
             else
             {
