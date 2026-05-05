@@ -513,6 +513,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
 
+        // MapStaticAssets is available in .NET 10+. Use reflection because the dashboard targets .NET 8.
+        // MapStaticAssets correctly serves Blazor's static assets from the _framework path.
+        TryMapStaticAssets(_app, _logger);
+
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
         // OTLP HTTP services.
@@ -969,4 +973,37 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Calls MapStaticAssets via reflection. Available in .NET 10 and later.
+    /// The dashboard targets .NET 8 so this API isn't directly available.
+    /// This is used to correctly serve Blazor's static assets from the _framework path.
+    /// It's required because blazor.web.js is loaded from assets in .NET 10 and later.
+    /// </summary>
+    private static bool TryMapStaticAssets(WebApplication app, ILogger logger)
+    {
+        if (Environment.Version.Major < 10)
+        {
+            return false;
+        }
+
+        // MapStaticAssets is an extension method on StaticAssetsEndpointRouteBuilderExtensions.
+        var type = Type.GetType("Microsoft.AspNetCore.Builder.StaticAssetsEndpointRouteBuilderExtensions, Microsoft.AspNetCore.StaticAssets");
+        if (type is null)
+        {
+            logger.LogWarning("Could not find StaticAssetsEndpointRouteBuilderExtensions type. MapStaticAssets will not be called and the dashboard may fail to load.");
+            return false;
+        }
+
+        var method = type.GetMethod("MapStaticAssets", BindingFlags.Public | BindingFlags.Static, [typeof(IEndpointRouteBuilder), typeof(string)]);
+        if (method is null)
+        {
+            logger.LogWarning("Could not find MapStaticAssets method on {Type}. MapStaticAssets will not be called and the dashboard may fail to load.", type.FullName);
+            return false;
+        }
+
+        // MapStaticAssets(IEndpointRouteBuilder endpoints, string? staticAssetsManifestPath = null)
+        method.Invoke(null, [app, null]);
+        return true;
+    }
 }
