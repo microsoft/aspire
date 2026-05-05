@@ -224,7 +224,7 @@ internal static class CliE2ETestHelpers
     {
         // Delegate all mode-specific Docker config to the strategy.
         strategy.ConfigureContainer(options);
-        if (!string.IsNullOrEmpty(options.Image))
+        if (string.IsNullOrEmpty(options.DockerfilePath))
         {
             options.BuildArgs.Clear();
         }

@@ -220,6 +220,24 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void ConfigureContainer_PreservesBuildArgsForDockerfileVariant()
+    {
+        using var environment = new EnvironmentVariableScope(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
+            (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
+        CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("true", options.BuildArgs["SKIP_SOURCE_BUILD"]);
+        Assert.Equal("http://azure.archive.ubuntu.com/ubuntu/", options.BuildArgs[CliInstallStrategy.UbuntuAptMirrorBuildArgName]);
+    }
+
+    [Fact]
     public void ConfigureDockerContainerSource_FallsBackToDockerfileOutsideCI()
     {
         using var environment = new EnvironmentVariableScope(
