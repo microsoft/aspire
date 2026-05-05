@@ -54,6 +54,8 @@ internal sealed class TerminalHostApp : IAsyncDisposable
                     ConsumerUdsPath = r.ConsumerUdsPath,
                     IsAlive = r.IsAlive,
                     ExitCode = r.ExitCode,
+                    ProducerConnected = r.ProducerConnected,
+                    RestartCount = r.RestartCount,
                 };
             }
             return snap;

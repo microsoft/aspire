@@ -1290,16 +1290,34 @@ internal sealed class TerminalReplicaInfo
     public required string ConsumerUdsPath { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether this replica's relay terminal is still running. False once
-    /// the upstream PTY has exited.
+    /// Gets a value indicating whether this replica's upstream producer is currently attached.
+    /// True while the underlying PTY is actively delivering bytes to the host. False transiently
+    /// between automatic recycles (when DCP relaunches the underlying process and rebinds), and
+    /// permanently when the host is shutting down. Identical in meaning to
+    /// <see cref="ProducerConnected"/>; both are populated for backwards compatibility with
+    /// older clients that branched on this name.
     /// </summary>
     public required bool IsAlive { get; init; }
 
     /// <summary>
-    /// Gets the exit code of the upstream process if the replica has terminated, or null while it
-    /// is still alive.
+    /// Gets the exit code from the most recently-completed producer cycle for this replica,
+    /// or null if no cycle has completed yet. Updates each time the upstream producer
+    /// disconnects.
     /// </summary>
     public int? ExitCode { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the upstream producer is currently attached to this
+    /// replica. Synonym for <see cref="IsAlive"/> with clearer naming.
+    /// </summary>
+    public bool ProducerConnected { get; init; }
+
+    /// <summary>
+    /// Gets the number of completed producer cycles for this replica. Increments each time
+    /// the upstream producer disconnects and the host rebinds. Useful as a diagnostic — an
+    /// unexpectedly high count indicates the upstream process is crashing repeatedly.
+    /// </summary>
+    public int RestartCount { get; init; }
 }
 
 /// <summary>

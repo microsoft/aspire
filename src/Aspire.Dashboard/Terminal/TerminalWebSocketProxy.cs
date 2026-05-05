@@ -93,9 +93,25 @@ internal static class TerminalWebSocketProxy
             using var ws = await context.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
             var adapter = new Hmp1WorkloadAdapter(producerStream);
 
+            // Cap the upstream handshake so a wedged or mid-recycle terminal
+            // host can't tie up the WS, the I/O thread, and an HMP1 connection
+            // indefinitely. The dashboard JS has its own reconnect loop and
+            // will retry — failing fast here keeps the server healthy under
+            // load (e.g. when many tabs reconnect in lockstep after a
+            // resource restart).
+            using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+            handshakeCts.CancelAfter(TimeSpan.FromSeconds(5));
+
             try
             {
-                await adapter.ConnectAsync(context.RequestAborted).ConfigureAwait(false);
+                await adapter.ConnectAsync(handshakeCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (handshakeCts.IsCancellationRequested && !context.RequestAborted.IsCancellationRequested)
+            {
+                logger.LogWarning("HMP v1 handshake timed out for {Resource}/{Replica}.", resourceName, replicaIndex);
+                await TryCloseAsync(ws, WebSocketCloseStatus.InternalServerError, "Handshake timed out").ConfigureAwait(false);
+                producerStream.Dispose();
+                return;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -108,7 +124,17 @@ internal static class TerminalWebSocketProxy
             using var pumpCts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
 
             // Producer → browser: VT bytes flow as Binary frames so xterm.js can
-            // hand them straight to terminal.write().
+            // hand them straight to terminal.write(). The catch is intentionally
+            // broad — a stop/restart of the upstream resource can surface as
+            // many different exception types depending on how abruptly the
+            // producer-side connection is closed (graceful EOF vs reset vs
+            // mid-frame drop). Letting any of those escape this Task.Run would
+            // leave an unobserved task exception in the dashboard process; the
+            // outer await on outboundPump in the finally block does observe it
+            // (so the process won't crash either way), but logging at debug
+            // here gives us per-replica diagnostic visibility instead of just
+            // "swallowed in finally". OperationCanceledException is the
+            // expected shutdown signal and stays silent.
             var outboundPump = Task.Run(async () =>
             {
                 try
@@ -131,7 +157,7 @@ internal static class TerminalWebSocketProxy
                     }
                 }
                 catch (OperationCanceledException) { }
-                catch (Exception ex) when (ex is WebSocketException or IOException or ObjectDisposedException)
+                catch (Exception ex)
                 {
                     logger.LogDebug(ex, "Outbound terminal pump ended for {Resource}/{Replica}.", resourceName, replicaIndex);
                 }
@@ -144,6 +170,8 @@ internal static class TerminalWebSocketProxy
             //     {"type":"resize","cols":N,"rows":N}.
             // Splitting keystrokes from controls by frame type avoids the
             // ambiguity of trying to JSON-parse arbitrary user input.
+            // Catch is intentionally broad — see outbound pump for the
+            // rationale; the outer await observes the exception either way.
             var inboundPump = Task.Run(async () =>
             {
                 var pool = ArrayPool<byte>.Shared;
@@ -178,13 +206,13 @@ internal static class TerminalWebSocketProxy
                                 break;
 
                             case WebSocketMessageType.Text:
-                                TryHandleControlFrame(payload.Span, adapter, logger, resourceName, replicaIndex, pumpCts.Token);
+                                await TryHandleControlFrameAsync(payload, adapter, logger, resourceName, replicaIndex, pumpCts.Token).ConfigureAwait(false);
                                 break;
                         }
                     }
                 }
                 catch (OperationCanceledException) { }
-                catch (Exception ex) when (ex is WebSocketException or IOException or ObjectDisposedException)
+                catch (Exception ex)
                 {
                     logger.LogDebug(ex, "Inbound terminal pump ended for {Resource}/{Replica}.", resourceName, replicaIndex);
                 }
@@ -211,22 +239,36 @@ internal static class TerminalWebSocketProxy
         }).RequireAuthorization(FrontendAuthorizationDefaults.PolicyName);
     }
 
-    private static void TryHandleControlFrame(ReadOnlySpan<byte> payload,
-                                              Hmp1WorkloadAdapter adapter,
-                                              ILogger logger,
-                                              string resourceName,
-                                              int replicaIndex,
-                                              CancellationToken cancellationToken)
+    private static async Task TryHandleControlFrameAsync(ReadOnlyMemory<byte> payload,
+                                                         Hmp1WorkloadAdapter adapter,
+                                                         ILogger logger,
+                                                         string resourceName,
+                                                         int replicaIndex,
+                                                         CancellationToken cancellationToken)
     {
         // Expected control-frame format (UTF-8 text):
         //   { "type": "resize", "cols": <int>, "rows": <int> }
         // Anything else is logged at debug and discarded.
+        //
+        // We parse synchronously inside this method but await the resize call.
+        // The earlier fire-and-forget version (`_ = adapter.ResizeAsync(...).AsTask();`)
+        // was a bug: a resize that arrives during a producer recycle (e.g. when
+        // the user clicks Stop on the resource and the upstream PTY is being
+        // torn down) can throw an exception type that ResizeAsync's internal
+        // catch list (IOException, ObjectDisposedException) doesn't cover —
+        // notably OperationCanceledException, NullReferenceException from a
+        // disposed-mid-write transport, or InvalidOperationException from
+        // HMP1Protocol if the stream EOFs between the dimension write and the
+        // header write. Those would become unobserved task exceptions in the
+        // dashboard process and pollute the AppDomain's UnobservedTaskException
+        // event. Awaiting and explicitly catching keeps everything tidy.
+        int? cols = null;
+        int? rows = null;
+        string? type = null;
+
         try
         {
-            var reader = new Utf8JsonReader(payload);
-            string? type = null;
-            int? cols = null;
-            int? rows = null;
+            var reader = new Utf8JsonReader(payload.Span);
 
             if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
             {
@@ -262,16 +304,33 @@ internal static class TerminalWebSocketProxy
                         break;
                 }
             }
-
-            if (type == "resize" && cols is { } c && rows is { } r && c > 0 && r > 0)
-            {
-                _ = adapter.ResizeAsync(c, r, cancellationToken).AsTask();
-            }
         }
         catch (JsonException ex)
         {
             logger.LogDebug(ex, "Discarding malformed terminal control frame for {Resource}/{Replica}: {Payload}",
-                resourceName, replicaIndex, Encoding.UTF8.GetString(payload));
+                resourceName, replicaIndex, Encoding.UTF8.GetString(payload.Span));
+            return;
+        }
+
+        if (type != "resize" || cols is not { } c || rows is not { } r || c <= 0 || r <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await adapter.ResizeAsync(c, r, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            // The upstream HMP1 transport can be in any state when a resize
+            // arrives — including mid-recycle on the producer side after a
+            // resource Stop. Swallow at debug; the next reconnect will resend
+            // dimensions on its own (the dashboard JS calls sendResize() in
+            // ws.onopen).
+            logger.LogDebug(ex, "Resize for {Resource}/{Replica} ({Cols}x{Rows}) failed.",
+                resourceName, replicaIndex, c, r);
         }
     }
 

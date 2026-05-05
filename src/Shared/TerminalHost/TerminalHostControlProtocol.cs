@@ -52,16 +52,40 @@ internal sealed class TerminalHostReplicaInfo
     public required string ConsumerUdsPath { get; init; }
 
     /// <summary>
-    /// True when the replica's relay terminal is still running.
-    /// False once the upstream PTY has exited or the relay was torn down.
+    /// True while the replica's most recent <c>Hex1bTerminal</c> cycle has
+    /// an attached upstream producer. Becomes false transiently between recycles
+    /// (when DCP relaunches the underlying process), and permanently when the
+    /// replica is torn down with the host.
+    ///
+    /// Historically this meant "the replica is permanently terminated" — that
+    /// has not been a useful signal since the host gained recycle support, so
+    /// we now report transient connectivity. Callers that previously branched
+    /// on <c>!IsAlive</c> to mean "show exit info" should treat a transient
+    /// false as "currently waiting for the producer to come back".
     /// </summary>
     public required bool IsAlive { get; init; }
 
     /// <summary>
-    /// Exit code of the upstream process if the replica has terminated.
-    /// Null while the replica is still alive.
+    /// Exit code from the most recently-completed <c>Hex1bTerminal</c>
+    /// cycle, or null if no cycle has completed yet.
     /// </summary>
     public int? ExitCode { get; init; }
+
+    /// <summary>
+    /// True when the replica's current cycle has an attached upstream producer.
+    /// Identical in meaning to <see cref="IsAlive"/>; exposed under a clearer name
+    /// for callers that want explicit "is the producer connected right now?"
+    /// semantics. Both fields are populated for backwards compatibility.
+    /// </summary>
+    public bool ProducerConnected { get; init; }
+
+    /// <summary>
+    /// Number of completed <c>Hex1bTerminal</c> cycles for this replica.
+    /// Increments each time the producer disconnects and the replica rebinds.
+    /// Zero on first cycle. Useful as a diagnostic signal — e.g. an unexpectedly
+    /// high count indicates the upstream process is crashing repeatedly.
+    /// </summary>
+    public int RestartCount { get; init; }
 }
 
 /// <summary>

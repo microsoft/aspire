@@ -60,12 +60,33 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         // terminal-enabled resource). Detect that here and rebind the
         // underlying WebSocket; xterm.js is preserved and just gets cleared
         // and refilled by the new connection's StateSync replay.
+        //
+        // ALL exceptions are swallowed at this layer because OnAfterRenderAsync
+        // is a Blazor lifecycle method: an unhandled exception here can fail
+        // the SignalR circuit and tear down the entire dashboard tab. Failing
+        // to switch terminals is a localized, recoverable issue (the JS side
+        // will keep retrying or the user can reload); a circuit failure is not.
         if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
             ReplicaIndex != _connectedReplicaIndex)
         {
             var newResource = ResourceName;
             var newReplica = ReplicaIndex;
-            await ReconnectAsync(newResource, newReplica);
+            try
+            {
+                await ReconnectAsync(newResource, newReplica);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Component is being disposed; don't bother updating tracked state.
+                return;
+            }
+            catch (Exception)
+            {
+                // Defensive: any other JS-side error must not bubble out of
+                // a Blazor lifecycle method. The reconnect loop on the JS
+                // side keeps retrying so a transient hiccup heals itself.
+                return;
+            }
             _connectedResourceName = newResource;
             _connectedReplicaIndex = newReplica;
         }
@@ -104,16 +125,23 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (string.IsNullOrEmpty(newResourceName))
+        try
         {
-            await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
-            _terminalId = 0;
-            return;
-        }
+            if (string.IsNullOrEmpty(newResourceName))
+            {
+                await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
+                _terminalId = 0;
+                return;
+            }
 
-        ResourceName = newResourceName;
-        ReplicaIndex = newReplicaIndex;
-        await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalId, BuildWebSocketUrl(newResourceName, newReplicaIndex));
+            ResourceName = newResourceName;
+            ReplicaIndex = newReplicaIndex;
+            await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalId, BuildWebSocketUrl(newResourceName, newReplicaIndex));
+        }
+        catch (JSDisconnectedException)
+        {
+            // Component disposed mid-call; nothing to do.
+        }
     }
 
     private string BuildWebSocketUrl(string resource, int replica)
