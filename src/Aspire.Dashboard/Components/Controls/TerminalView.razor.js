@@ -75,11 +75,7 @@ export async function initTerminal(element, wsUrl) {
     });
     resizeObserver.observe(element);
 
-    term.onResize(({ cols, rows }) => {
-        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-            state.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
-        }
-    });
+    term.onResize(() => sendResize(state));
 
     // Handle user input. Send keystrokes as binary frames so the server can
     // distinguish them from text-mode JSON control frames (resize, etc.) by
@@ -95,12 +91,29 @@ export async function initTerminal(element, wsUrl) {
     return id;
 }
 
+function sendResize(state) {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        // Use xterm's authoritative dimensions (post-fit) rather than the
+        // values reported by the onResize event, so this helper can be
+        // shared between explicit "send current size" calls and the
+        // onResize-triggered path.
+        state.ws.send(JSON.stringify({ type: 'resize', cols: state.term.cols, rows: state.term.rows }));
+    }
+}
+
 function connectWebSocket(state, wsUrl) {
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
-        state.fitAddon.fit();
+        // Re-fit in case the container size changed between init and connect,
+        // then proactively tell the host our dimensions BEFORE any output is
+        // rendered. The host sends its initial StateSync at its own producer
+        // dimensions as soon as the consumer connects; this resize lets the
+        // host re-emit a StateSync in the viewer's coordinate system before
+        // anything user-visible relies on the wrong-size first frame.
+        try { state.fitAddon.fit(); } catch { /* ignore */ }
+        sendResize(state);
     };
 
     ws.onmessage = (event) => {
