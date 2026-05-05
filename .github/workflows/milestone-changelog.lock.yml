@@ -1,4 +1,4 @@
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"fa74ca6093929f11ee1aaf8c22c1ec34db3867eff21fdab6f9ceff7b0b7d3554","compiler_version":"v0.71.1","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"42ff2508e396b4d8e762cf7982a8d702403d8e4d1e54aa092c0bdb38bf1ecc95","compiler_version":"v0.71.1","strict":true,"agent_id":"copilot"}
 # gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"v6.0.2"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"ea165f8d65b6e75b540449e92b4886f43607fa02","version":"v4"},{"repo":"github/gh-aw-actions/setup","sha":"239aec45b78c8799417efdd5bc6d8cc036629ec1","version":"v0.71.1"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.25.28","digest":"sha256:a8834e285807654bf680154faa710d43fe4365a0868142f5c20e48c85e137a7a","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.25.28@sha256:a8834e285807654bf680154faa710d43fe4365a0868142f5c20e48c85e137a7a"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.28","digest":"sha256:93290f2393752252911bd7c39a047f776c0b53063575e7bde4e304962a9a61cb","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.28@sha256:93290f2393752252911bd7c39a047f776c0b53063575e7bde4e304962a9a61cb"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.25.28","digest":"sha256:844c18280f82cd1b06345eb2f4e91966b34185bfc51c9f237c3e022e848fb474","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.25.28@sha256:844c18280f82cd1b06345eb2f4e91966b34185bfc51c9f237c3e022e848fb474"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.0"},{"image":"ghcr.io/github/github-mcp-server:v1.0.2"},{"image":"node:lts-alpine","digest":"sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f","pinned_image":"node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f"}]}
 #    ___                   _   _      
 #   / _ \                 | | (_)     
@@ -30,7 +30,9 @@
 #
 # Frontmatter env variables:
 #   - BATCH_SIZE: (main workflow)
+#   - DOCS_REPO: (main workflow)
 #   - MILESTONE: (main workflow)
+#   - MILESTONE_START: (main workflow)
 #   - PRODUCT: (main workflow)
 #   - REPO: (main workflow)
 #
@@ -79,7 +81,9 @@ run-name: "Milestone Changelog Generator"
 
 env:
   BATCH_SIZE: "20"
+  DOCS_REPO: microsoft/aspire.dev
   MILESTONE: "13.3"
+  MILESTONE_START: "2026-03-01"
   PRODUCT: Aspire
   REPO: microsoft/aspire
 
@@ -194,14 +198,14 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_1e70ebed00fa04b9_EOF'
+          cat << 'GH_AW_PROMPT_ba28a8c0fe0e61fc_EOF'
           <system>
-          GH_AW_PROMPT_1e70ebed00fa04b9_EOF
+          GH_AW_PROMPT_ba28a8c0fe0e61fc_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_1e70ebed00fa04b9_EOF'
+          cat << 'GH_AW_PROMPT_ba28a8c0fe0e61fc_EOF'
           <safe-output-tools>
           Tools: missing_tool, missing_data, noop, publish
           </safe-output-tools>
@@ -233,12 +237,12 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_1e70ebed00fa04b9_EOF
+          GH_AW_PROMPT_ba28a8c0fe0e61fc_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_1e70ebed00fa04b9_EOF'
+          cat << 'GH_AW_PROMPT_ba28a8c0fe0e61fc_EOF'
           </system>
           {{#runtime-import .github/workflows/milestone-changelog.md}}
-          GH_AW_PROMPT_1e70ebed00fa04b9_EOF
+          GH_AW_PROMPT_ba28a8c0fe0e61fc_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
@@ -426,9 +430,9 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
-          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_55500e9bb1cdc916_EOF'
+          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_2ef151aa002f7ef2_EOF'
           {"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"publish":{"description":"Publish the wiki page, push state to the memory branch, and ensure the feedback issue exists","output":"Wiki page published and memory branch updated!"},"report_incomplete":{}}
-          GH_AW_SAFE_OUTPUTS_CONFIG_55500e9bb1cdc916_EOF
+          GH_AW_SAFE_OUTPUTS_CONFIG_2ef151aa002f7ef2_EOF
       - name: Write Safe Outputs Tools
         env:
           GH_AW_TOOLS_META_JSON: |
@@ -600,7 +604,7 @@ jobs:
           
           mkdir -p /home/runner/.copilot
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_3ed5b3e1a56a2e03_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_3f9fc849f1166d2a_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
               "github": {
@@ -644,7 +648,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_3ed5b3e1a56a2e03_EOF
+          GH_AW_MCP_CONFIG_3f9fc849f1166d2a_EOF
       - name: Clean git credentials
         continue-on-error: true
         run: bash "${RUNNER_TEMP}/gh-aw/actions/clean_git_credentials.sh"
@@ -1198,6 +1202,7 @@ jobs:
           MEMORY_REF="memory/milestone-changelog"
           MEMORY_DIR="$DATA_DIR/memory/$MILESTONE"
           PROCESSED_NUMBERS="[]"
+          PROCESSED_DOCS_NUMBERS="[]"
           FEEDBACK_FROM_MEMORY=""
           MEMORY_TMP=$(mktemp -d)
           CLONE_ERR=$(mktemp)
@@ -1232,6 +1237,17 @@ jobs:
                 PROCESSED_NUMBERS="$PRS_LISTING"
               fi
               echo "Extracted $(echo "$PROCESSED_NUMBERS" | jq length) processed PR numbers from filenames"
+            fi
+
+            DOCS_PRS_DIR="$MEMORY_DIR/prs-docs"
+            if [ -d "$DOCS_PRS_DIR" ]; then
+              DOCS_PRS_LISTING=$(ls "$DOCS_PRS_DIR" 2>/dev/null \
+                | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
+                | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
+              if echo "$DOCS_PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
+                PROCESSED_DOCS_NUMBERS="$DOCS_PRS_LISTING"
+              fi
+              echo "Extracted $(echo "$PROCESSED_DOCS_NUMBERS" | jq length) processed docs PR numbers from filenames"
             fi
 
             # Also grab the feedback issue number from memory
@@ -1272,10 +1288,37 @@ jobs:
           echo "Already processed: $PROCESSED_COUNT"
           echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
 
-          # 3. Check if there is work to do (unprocessed PRs or updated feedback)
+          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date
+          DOCS_REPO="${{ env.DOCS_REPO }}"
+          MILESTONE_START="${{ env.MILESTONE_START }}"
+          gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
+            --search "merged:>=${MILESTONE_START}" \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
+            | jq 'sort_by(.mergedAt)' \
+            > "$DATA_DIR/all-docs-prs.json"
+
+          DOCS_TOTAL=$(jq length "$DATA_DIR/all-docs-prs.json")
+          echo "Total docs PRs merged since $MILESTONE_START: $DOCS_TOTAL"
+
+          jq --argjson processed "$PROCESSED_DOCS_NUMBERS" \
+             --argjson batch_size "$BATCH_SIZE" \
+             '($processed | map({(tostring): true}) | add // {}) as $set | [.[] | select($set[.number | tostring] | not)] | .[0:$batch_size]' \
+             "$DATA_DIR/all-docs-prs.json" \
+             > "$DATA_DIR/batch-docs-prs.json"
+
+          DOCS_BATCH_COUNT=$(jq length "$DATA_DIR/batch-docs-prs.json")
+          DOCS_PROCESSED_COUNT=$(echo "$PROCESSED_DOCS_NUMBERS" | jq length)
+          echo "Docs PRs already processed: $DOCS_PROCESSED_COUNT"
+          echo "Docs PRs batch (oldest $BATCH_SIZE unprocessed): $DOCS_BATCH_COUNT"
+
+          # 3. Check if there is work to do (unprocessed PRs, unprocessed docs PRs, or updated feedback)
           HAS_WORK="false"
           if [ "$BATCH_COUNT" -gt 0 ]; then
             echo "Has $BATCH_COUNT unprocessed PRs"
+            HAS_WORK="true"
+          fi
+          if [ "$DOCS_BATCH_COUNT" -gt 0 ]; then
+            echo "Has $DOCS_BATCH_COUNT unprocessed docs PRs"
             HAS_WORK="true"
           fi
 
