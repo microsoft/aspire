@@ -964,7 +964,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
             Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
             return ExitCodeUnexpectedError;
         }
     }

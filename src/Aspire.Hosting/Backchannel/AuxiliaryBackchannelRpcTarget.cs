@@ -490,6 +490,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 ConsumerUdsPath = layout.ConsumerUdsPaths[hostReplica.Index],
                 IsAlive = hostReplica.IsAlive,
                 ExitCode = hostReplica.ExitCode,
+                ProducerConnected = hostReplica.ProducerConnected,
+                RestartCount = hostReplica.RestartCount,
             });
         }
 
