@@ -19,6 +19,7 @@ internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
     internal const string DotNetImageEnvironmentVariableName = "ASPIRE_E2E_DOTNET_IMAGE";
+    internal const string RequireDotNetImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_DOTNET_IMAGE";
     internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
     internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
@@ -229,15 +230,17 @@ internal static class CliE2ETestHelpers
             return;
         }
 
-        if (variant is DockerfileVariant.DotNet && IsRunningInCI)
+        if (variant is DockerfileVariant.DotNet && IsDotNetImageRequired())
         {
-            throw new InvalidOperationException($"{DotNetImageEnvironmentVariableName} must be set when running CLI E2E tests in CI.");
+            throw new InvalidOperationException($"{DotNetImageEnvironmentVariableName} must be set when the prebuilt CLI E2E .NET image is required.");
         }
 
         options.DockerfilePath = GetDockerfilePath(repoRoot, variant);
         options.BuildContext = repoRoot;
     }
 
+    // The prebuilt workflow artifact currently covers only the default .NET image,
+    // which is the image shared by most split CLI E2E jobs.
     private static string? GetDotNetImageName(DockerfileVariant variant)
     {
         if (variant is not DockerfileVariant.DotNet)
@@ -260,6 +263,13 @@ internal static class CliE2ETestHelpers
         };
 
         return Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+    }
+
+    private static bool IsDotNetImageRequired()
+    {
+        var value = Environment.GetEnvironmentVariable(RequireDotNetImageEnvironmentVariableName);
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

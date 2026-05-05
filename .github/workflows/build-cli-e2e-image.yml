@@ -1,3 +1,6 @@
+# Builds the default .NET CLI E2E image used by DockerfileVariant.DotNet.
+# Polyglot and Podman variants use separate Dockerfiles with variant-specific
+# base image behavior and are intentionally left on their existing per-job paths.
 name: Build CLI E2E Docker Image
 
 on:

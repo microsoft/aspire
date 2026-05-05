@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
+      is_cli_e2e: ${{ steps.detect_cli_e2e.outputs.is_cli_e2e }}
     steps:
       - name: Validate configuration
         shell: bash
@@ -89,6 +90,16 @@ jobs:
 
           if [[ $ERRORS -ne 0 ]]; then exit 1; fi
 
+      - name: Detect CLI E2E project
+        id: detect_cli_e2e
+        shell: bash
+        run: |
+          if [ "${{ env.TEST_PROJECT }}" = "Cli.EndToEnd" ]; then
+            echo "is_cli_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_cli_e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Generate runner matrix
         id: generate
         shell: bash
@@ -113,9 +124,21 @@ jobs:
           echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
           echo "Total test executions: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
 
+  build_cli_e2e_image:
+    name: Build CLI E2E Docker image
+    needs: setup
+    if: ${{ needs.setup.outputs.is_cli_e2e == 'true' }}
+    uses: ./.github/workflows/build-cli-e2e-image.yml
+
   reproduce:
     name: "${{ matrix.os }} #${{ matrix.index }}"
-    needs: setup
+    needs: [setup, build_cli_e2e_image]
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.setup.result == 'success' &&
+        (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
+      }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -157,6 +180,25 @@ jobs:
       - name: Verify Docker is running (Linux)
         if: runner.os == 'Linux'
         run: docker info
+
+      - name: Download prebuilt CLI E2E Docker image
+        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-e2e-dotnet-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
+      - name: Load prebuilt CLI E2E Docker image
+        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker load -i "${{ github.workspace }}/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz"
+          docker tag "aspire-cli-e2e-dotnet:${{ github.sha }}" "aspire-cli-e2e-dotnet:prebuilt"
+          docker image inspect "aspire-cli-e2e-dotnet:prebuilt" > /dev/null
+          echo "ASPIRE_E2E_DOTNET_IMAGE=aspire-cli-e2e-dotnet:prebuilt" >> "$GITHUB_ENV"
+          echo "ASPIRE_E2E_REQUIRE_DOTNET_IMAGE=true" >> "$GITHUB_ENV"
 
       - name: Unlock macOS keychain
         if: runner.os == 'macOS'
