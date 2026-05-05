@@ -982,7 +982,7 @@ public class DcpExecutorTests
         Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:01.0000000Z 100%"));
         Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:02.0000000Z Windows line"));
         Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:03.0000000Z Done"));
-        Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("0%"));
+        Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("  0%"));
         Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("50%"));
     }
 
