@@ -1,11 +1,15 @@
 .vscode/**
+.vscode-test
 .vscode-test/**
+out
 out/**
+node_modules
 node_modules/**
 src/**
 .gitignore
 .yarnrc
 .yarnrc.yml
+.yarn
 .yarn/**
 webpack.config.js
 vsc-extension-quickstart.md
