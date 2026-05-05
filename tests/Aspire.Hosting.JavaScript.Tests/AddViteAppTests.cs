@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
@@ -523,9 +524,8 @@ public class AddViteAppTests
     {
         using var tempDir = new TestTempDirectory();
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(tempDir.Path, "node_modules"));
 
         // Create a vite config file
         var viteConfigPath = Path.Combine(tempDir.Path, "vite.config.js");
@@ -551,7 +551,7 @@ public class AddViteAppTests
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
@@ -565,14 +565,14 @@ public class AddViteAppTests
         // Invoke the callback
         await certConfigAnnotation.Callback(context);
 
-        // Verify a new --config was added with Aspire-specific path
+        // Verify the existing --config was replaced with the Aspire wrapper path
         var configIndex = args.IndexOf("--config");
         Assert.True(configIndex >= 0);
         Assert.True(configIndex + 1 < args.Count);
         var newConfigPath = args[configIndex + 1] as string;
         Assert.NotNull(newConfigPath);
         Assert.Contains("aspire.", newConfigPath);
-        Assert.Contains("node_modules", newConfigPath);
+        Assert.Contains(Path.Combine("node_modules", ".aspire"), newConfigPath);
 
         // Verify environment variables were set
         Assert.Contains("TLS_CONFIG_PFX", env.Keys);
@@ -584,9 +584,8 @@ public class AddViteAppTests
     {
         using var tempDir = new TestTempDirectory();
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(tempDir.Path, "node_modules"));
 
         // Create a default vite config file that would be auto-detected
         var viteConfigPath = Path.Combine(tempDir.Path, "vite.config.js");
@@ -605,13 +604,13 @@ public class AddViteAppTests
             .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
             .Single();
 
-        // Set up a context without --config argument (simulating default behavior)
+        // Set up a context without --config argument
         var args = new List<object> { "run", "dev", "--", "--port", "3000" };
         var env = new Dictionary<string, object>();
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
@@ -651,6 +650,8 @@ public class AddViteAppTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
 
+        // AspireHttpsConfigPath is null (SubscribeHttpsEndpointsUpdate did not generate a wrapper)
+
         // Get the HttpsCertificateConfigurationCallbackAnnotation
         var certConfigAnnotation = nodeResource.Annotations
             .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
@@ -676,10 +677,10 @@ public class AddViteAppTests
         // Invoke the callback
         await certConfigAnnotation.Callback(context);
 
-        // Verify no --config was added since no default config file exists
+        // Verify no --config was added
         Assert.DoesNotContain("--config", args);
 
-        // Environment variables should NOT be set if there was no config to wrap
+        // Environment variables should NOT be set
         Assert.Empty(env);
     }
 
@@ -688,9 +689,8 @@ public class AddViteAppTests
     {
         using var tempDir = new TestTempDirectory();
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(tempDir.Path, "node_modules"));
 
         // Create a vite config file
         var viteConfigPath = Path.Combine(tempDir.Path, "vite.config.js");
@@ -718,7 +718,7 @@ public class AddViteAppTests
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
@@ -739,43 +739,44 @@ public class AddViteAppTests
     }
 
     [Fact]
-    public async Task AddViteApp_ServerAuthCertConfig_EscapesBackslashesInAbsoluteConfigPath()
+    public async Task AddViteApp_HttpsEndpointsUpdate_WritesWrapperToNearestNodeModules()
     {
         using var tempDir = new TestTempDirectory();
 
-        // Create a subdirectory path that will contain backslashes on Windows
-        var subDir = Path.Combine(tempDir.Path, "my-app", "frontend");
-        Directory.CreateDirectory(subDir);
+        // Simulate a hoisted monorepo layout: node_modules is at the repo root, not in the app directory
+        var repoRoot = Path.Combine(tempDir.Path, "repo");
+        var appDir = Path.Combine(repoRoot, "packages", "frontend");
+        Directory.CreateDirectory(appDir);
+        Directory.CreateDirectory(Path.Combine(repoRoot, "node_modules"));
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(subDir, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
-
-        // Create a vite config file
-        var viteConfigPath = Path.Combine(subDir, "vite.config.js");
+        // Create a vite config file in the app directory
+        var viteConfigPath = Path.Combine(appDir, "vite.config.ts");
         File.WriteAllText(viteConfigPath, "export default {}");
 
-        var builder = DistributedApplication.CreateBuilder();
-        var viteApp = builder.AddViteApp("test-app", subDir);
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        builder.AddViteApp("test-app", appDir)
+            .WithHttpsDeveloperCertificate();
 
         using var app = builder.Build();
 
-        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        // Execute the before-start hooks which triggers SubscribeHttpsEndpointsUpdate (endpoint scheme change)
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
-        // Get the HttpsCertificateConfigurationCallbackAnnotation
-        var certConfigAnnotation = nodeResource.Annotations
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var viteResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+
+        // Now invoke the cert config callback which generates the wrapper file
+        var certConfigAnnotation = viteResource.Annotations
             .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
             .Single();
 
-        // Set up a context without --config argument (simulating default behavior)
         var args = new List<object> { "run", "dev", "--", "--port", "3000" };
         var env = new Dictionary<string, object>();
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
-            Resource = nodeResource,
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = app.Services }),
+            Resource = viteResource,
             Arguments = args,
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
@@ -785,30 +786,33 @@ public class AddViteAppTests
             CancellationToken = CancellationToken.None
         };
 
-        // Invoke the callback
         await certConfigAnnotation.Callback(context);
 
-        // Verify a --config was added with Aspire-specific path
+        // Verify the wrapper was written under the hoisted node_modules/.aspire (repo root, not app dir)
+        var expectedDir = Path.Combine(repoRoot, "node_modules", ".aspire");
+        Assert.True(Directory.Exists(expectedDir), $"Expected .aspire directory at {expectedDir}");
+
+        var wrapperFiles = Directory.GetFiles(expectedDir, "aspire.vite.config.ts");
+        Assert.Single(wrapperFiles);
+
+        // Verify the --config argument points to the wrapper in the hoisted location
         var configIndex = args.IndexOf("--config");
         Assert.True(configIndex >= 0);
-        Assert.True(configIndex + 1 < args.Count);
-        var newConfigPath = args[configIndex + 1] as string;
-        Assert.NotNull(newConfigPath);
+        var configPath = args[configIndex + 1] as string;
+        Assert.NotNull(configPath);
+        Assert.StartsWith(expectedDir, configPath);
 
-        // Read the generated Aspire Vite config file
-        var generatedConfigContent = File.ReadAllText(newConfigPath);
+        // Verify wrapper content
+        var wrapperContent = File.ReadAllText(wrapperFiles[0]);
 
-        // Verify the generated config contains the absolute path with properly escaped backslashes
-        // The absolute path should have backslashes escaped as \\\\ in the JavaScript string
+        // The import path should be a relative path with forward slashes (no backslashes)
+        Assert.Contains("import config from '", wrapperContent);
+        Assert.DoesNotMatch(@"import config from '[^']*\\[^']*'", wrapperContent);
+
+        // The console.log line should contain properly escaped backslashes for JavaScript
         var absoluteConfigPath = Path.GetFullPath(viteConfigPath);
         var expectedEscapedPath = absoluteConfigPath.Replace("\\", "\\\\");
-
-        Assert.Contains($"console.log('Found original Vite configuration at \"{expectedEscapedPath}\"')", generatedConfigContent);
-
-        // Verify the import statement uses forward slashes for the relative path
-        Assert.Contains("import config from '", generatedConfigContent);
-        // The import path should use forward slashes (not backslashes)
-        Assert.DoesNotMatch(@"import config from '[^']*\\[^']*'", generatedConfigContent);
+        Assert.Contains($"Found original Vite configuration at \"{expectedEscapedPath}\"", wrapperContent);
     }
 
     [Theory]
@@ -822,9 +826,8 @@ public class AddViteAppTests
     {
         using var tempDir = new TestTempDirectory();
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(tempDir.Path, "node_modules"));
 
         // Create the specific config file format
         var viteConfigPath = Path.Combine(tempDir.Path, configFileName);
@@ -849,7 +852,7 @@ public class AddViteAppTests
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
@@ -933,6 +936,9 @@ public class AddViteAppTests
     }
 
     // Helper class for testing IValueProvider
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
     private sealed class TestValueProvider : IValueProvider
     {
         private readonly string _value;

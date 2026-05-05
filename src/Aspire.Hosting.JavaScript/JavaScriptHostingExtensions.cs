@@ -36,18 +36,18 @@ public static class JavaScriptHostingExtensions
     private static readonly string[] s_defaultConfigFiles = ["vite.config.js", "vite.config.mjs", "vite.config.ts", "vite.config.cjs", "vite.config.mts", "vite.config.cts"];
 
     // The token to replace with the relative path to the user's Vite config file
-    private const string AspireViteRelativeConfigToken = "%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%";
+    private const string AspireViteConfigPathToken = "%%ASPIRE_VITE_CONFIG_PATH%%";
 
     // The token to replace with the absolute path to the original Vite config file
     private const string AspireViteAbsoluteConfigToken = "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%";
 
     // A template Vite config that loads an existing config provides a default https configuration if one isn't present
     // Uses environment variables to configure a TLS certificate in PFX format and its password if specified
-    // The value of %%ASPIRE_VITE_RELATIVE_CONFIG_PATH%% is replaced with the path to the user's actual Vite config file at runtime
+    // The value of %%ASPIRE_VITE_CONFIG_PATH%% is replaced with the relative path to the user's actual Vite config file at runtime
     // Vite only supports module style config files, so we don't have to handle commonjs style imports or exports here
     private const string AspireViteConfig = """
     import { defineConfig } from 'vite'
-    import config from '%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%'
+    import config from '%%ASPIRE_VITE_CONFIG_PATH%%'
 
     console.log('Applying Aspire specific Vite configuration for HTTPS support.')
     console.log('Found original Vite configuration at "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%"')
@@ -1006,18 +1006,35 @@ public static class JavaScriptHostingExtensions
                     {
                         // Determine the absolute path to the original config file
                         var absoluteConfigPath = Path.GetFullPath(configTarget, appDirectory);
-                        // Determine the relative path from the Aspire vite config to the original config file
-                        var relativeConfigPath = Path.GetRelativePath(Path.Join(appDirectory, "node_modules", ".bin"), absoluteConfigPath);
 
-                        // If we are expecting to run the vite app with HTTPS termination, generate an Aspire specific Vite config file that can mutate the user's original config
+                        // Find the nearest node_modules directory by walking up from the app directory.
+                        // This handles package managers that hoist dependencies (e.g. yarn workspaces)
+                        // where node_modules lives at the repo root rather than in the app directory.
+                        // Writing inside node_modules ensures Node.js module resolution can find
+                        // bare imports like 'vite' in the generated wrapper config.
+                        var nodeModulesDir = FindNearestNodeModules(appDirectory);
+                        if (nodeModulesDir is null)
+                        {
+                            var resourceLoggerService = ctx.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                            var resourceLogger = resourceLoggerService.GetLogger(resource);
+                            resourceLogger.LogWarning("Could not find a node_modules directory in or above '{AppDirectory}' for resource '{ResourceName}'. Automatic HTTPS configuration won't be available. Ensure packages are installed before starting the app.", appDirectory, resource.Name);
+                            return;
+                        }
+
+                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire");
+                        Directory.CreateDirectory(aspireConfigDir);
+
+                        // Compute the relative path from the wrapper location to the original config
+                        var relativeConfigPath = Path.GetRelativePath(aspireConfigDir, absoluteConfigPath).Replace("\\", "/");
+
+                        // Generate an Aspire specific Vite config file that wraps the user's original config with HTTPS support
                         var aspireConfig = AspireViteConfig
-                            .Replace(AspireViteRelativeConfigToken, relativeConfigPath.Replace("\\", "/"), StringComparison.Ordinal)
+                            .Replace(AspireViteConfigPathToken, relativeConfigPath, StringComparison.Ordinal)
                             .Replace(AspireViteAbsoluteConfigToken, absoluteConfigPath.Replace("\\", "\\\\"), StringComparison.Ordinal);
-                        var aspireConfigPath = Path.Join(appDirectory, "node_modules", ".bin", $"aspire.{Path.GetFileName(configTarget)}");
+                        var aspireConfigPath = Path.Join(aspireConfigDir, $"aspire.{Path.GetFileName(configTarget)}");
                         File.WriteAllText(aspireConfigPath, aspireConfig);
 
-                        // Override the path to the Vite config file to use the Aspire generated one. If we made it here, we
-                        // know there isn't an existing --config argument present.
+                        // Override the path to the Vite config file to use the Aspire generated one
                         ctx.Arguments.Add("--config");
                         ctx.Arguments.Add(aspireConfigPath);
 
@@ -1047,7 +1064,8 @@ public static class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsRunMode)
         {
             // Vite only supports a single endpoint, so we have to modify the existing endpoint to use HTTPS instead of
-            // adding a new one.
+            // adding a new one. The user explicitly opted into HTTPS via WithHttpsDeveloperCertificate(), so the scheme
+            // change is unconditional here.
             resourceBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
@@ -1804,6 +1822,31 @@ public static class JavaScriptHostingExtensions
                 throw new ArgumentException($"The apiPath must contain only URL-safe path characters (alphanumeric, '/', '-', '_'). Invalid character: '{c}'", nameof(apiPath));
             }
         }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="startDirectory"/> to find the nearest <c>node_modules</c> directory.
+    /// </summary>
+    private static string? FindNearestNodeModules(string startDirectory)
+    {
+        var current = Path.GetFullPath(startDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Join(current, "node_modules");
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (parent == current)
+            {
+                break;
+            }
+            current = parent;
+        }
+
+        return null;
     }
 
     private static string NormalizeRelativePath(string path)
