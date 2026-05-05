@@ -327,6 +327,9 @@ extends:
                   publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
                   vscePublishToken: $(VscePublishToken)
                   vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
+                  targetRids:
+                    - win-x64
+                    - win-arm64
 
               # Extract the Aspire version from a generated nupkg filename so downstream
               # stages can use it. Aspire.Hosting.AppHost has no RID in its filename and

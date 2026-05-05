@@ -236,6 +236,9 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
+                  targetRids:
+                    - win-x64
+                    - win-arm64
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"

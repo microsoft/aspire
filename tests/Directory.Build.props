@@ -6,7 +6,6 @@
 
   <PropertyGroup>
     <TestArchiveTestsDir Condition="'$(TestArchiveTestsDir)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'tests'))</TestArchiveTestsDir>
-    <TestArchiveTestsDirForTemplateTests Condition="'$(TestArchiveTestsDirForTemplateTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'templates-tests'))</TestArchiveTestsDirForTemplateTests>
     <TestArchiveTestsDirForEndToEndTests Condition="'$(TestArchiveTestsDirForEndToEndTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'e2e-tests'))</TestArchiveTestsDirForEndToEndTests>
     <TestArchiveTestsDirForBuildOnHelixTests Condition="'$(TestArchiveTestsDirForBuildOnHelixTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'build-on-helix-tests'))</TestArchiveTestsDirForBuildOnHelixTests>
     <TestArchiveTestsDirForCliEndToEndTests Condition="'$(TestArchiveTestsDirForCliEndToEndTests)' == ''">$([MSBuild]::NormalizeDirectory($(ArtifactsDir), 'helix', 'cli-e2e-tests'))</TestArchiveTestsDirForCliEndToEndTests>
@@ -20,12 +19,6 @@
 
   <PropertyGroup>
     <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
-  </PropertyGroup>
-
-  <Import Project="Shared\Aspire.Templates.Testing.props" Condition="'$(IsTemplateTestProject)' == 'true'" />
-
-  <PropertyGroup Condition="'$(IsTemplateTestProject)' == 'true'">
-    <BuiltNuGetsDir>$(ArtifactsShippingPackagesDir)</BuiltNuGetsDir>
   </PropertyGroup>
 
   <PropertyGroup>

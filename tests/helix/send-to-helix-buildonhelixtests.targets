@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <BuildHelixWorkItemsDependsOn>$(BuildHelixWorkItemsDependsOn);BuildHelixWorkItemsForBuildOnHelixTests</BuildHelixWorkItemsDependsOn>
-    <NeedsSdksForTesting>true</NeedsSdksForTesting>
     <NeedsPlaywright>true</NeedsPlaywright>
     <NeedsAzureFunctionsCli>true</NeedsAzureFunctionsCli>
 
@@ -48,8 +47,6 @@
       <_TestRunCommand>dotnet build -bl:$(_HelixLogsPath)/build.binlog /p:TreatWarningsAsErrors=true $(_ShellCommandSeparator) $(_TestRunCommand)</_TestRunCommand>
       <_TestRunCommand Condition="'$(HelixPerWorkItemPreCommand)' != ''">$(HelixPerWorkItemPreCommand) $(_ShellCommandSeparator) $(_TestRunCommand)</_TestRunCommand>
 
-      <_SetPathEnvVar Condition="'$(OS)' != 'Windows_NT'">PATH=${SDK_FOR_TEMPLATES_TESTING_PATH}:$PATH</_SetPathEnvVar>
-      <_SetPathEnvVar Condition="'$(OS)' == 'Windows_NT'">PATH=%SDK_FOR_TEMPLATES_TESTING_PATH%%3B%PATH%</_SetPathEnvVar>
     </PropertyGroup>
 
     <ItemGroup>
@@ -58,7 +55,7 @@
       <HelixWorkItem Include="@(_DefaultWorkItems -> '%(FileName)')">
         <PayloadArchive>%(Identity)</PayloadArchive>
 
-        <PreCommands>$(_EnvVarSetKeyword) &quot;TEST_NAME=%(FileName)&quot; $(_ShellCommandSeparator) $(_EnvVarSetKeyword) &quot;$(_SetPathEnvVar)&quot;</PreCommands>
+        <PreCommands>$(_EnvVarSetKeyword) &quot;TEST_NAME=%(FileName)&quot;</PreCommands>
 
         <Command>cd tests/%(FileName) %3B $(_TestRunCommand)</Command>
         <Timeout>00:15:00</Timeout>

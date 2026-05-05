@@ -1,8 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <_DotNetInstallScriptName Condition="!$([MSBuild]::IsOSPlatform('windows'))">dotnet-install.sh</_DotNetInstallScriptName>
-    <_DotNetInstallScriptName Condition=" $([MSBuild]::IsOSPlatform('windows'))">dotnet-install.ps1</_DotNetInstallScriptName>
-
-    <_DotNetInstallScriptPath>$(ArtifactsObjDir)$(_DotNetInstallScriptName)</_DotNetInstallScriptPath>
-  </PropertyGroup>
-</Project>

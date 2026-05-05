@@ -215,7 +215,7 @@ internal static class CliE2EAutomatorHelpers
             $"aspire new {AspireCliShellCommandHelpers.QuoteBashArg(templateName)} " +
             $"--name {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} " +
             $"--output {AspireCliShellCommandHelpers.QuoteBashArg(output)}" +
-            $"{channelArgument} --localhost-tld {localhostTldValue}";
+            $"{channelArgument} --localhost-tld {localhostTldValue} --suppress-agent-init";
     }
 
     private static async Task WaitForAspireNewEmptyAppHostCompletionAsync(
@@ -673,6 +673,89 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Enables the hidden dotnet-template entries for <c>aspire new</c>.
+    /// </summary>
+    internal static async Task EnableShowAllTemplatesAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:showAllTemplates true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Runs <c>aspire new &lt;template&gt;</c> non-interactively for a specific template subcommand.
+    /// </summary>
+    internal static async Task AspireNewSubcommandAsync(
+        this Hex1bTerminalAutomator auto,
+        string templateName,
+        string projectName,
+        SequenceCounter counter,
+        params string[] extraArgs)
+    {
+        var commandParts = new List<string>
+        {
+            "aspire",
+            "new",
+            templateName,
+            "--name",
+            AspireCliShellCommandHelpers.QuoteBashArg(projectName),
+            "--output",
+            AspireCliShellCommandHelpers.QuoteBashArg($"./{projectName}"),
+            "--suppress-agent-init",
+        };
+
+        foreach (var arg in extraArgs)
+        {
+            commandParts.Add(arg);
+        }
+
+        await auto.TypeAsync(string.Join(" ", commandParts));
+        await auto.EnterAsync();
+        await auto.CompleteAspireNewSubcommandPromptsAsync(counter);
+    }
+
+    private static async Task CompleteAspireNewSubcommandPromptsAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
+        var devLocalhostPrompt = new CellPatternSearcher()
+            .Find("Use *.dev.localhost URLs");
+        var agentInitPrompt = new CellPatternSearcher()
+            .Find("configure AI agent environments");
+
+        var devLocalhostPromptFound = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            if (devLocalhostPrompt.Search(snapshot).Count > 0)
+            {
+                devLocalhostPromptFound = true;
+                return true;
+            }
+
+            if (agentInitPrompt.Search(snapshot).Count > 0)
+            {
+                return true;
+            }
+
+            var successSearcher = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+            return successSearcher.Search(snapshot).Count > 0;
+        }, timeout: effectiveTimeout, description: $"dev localhost prompt, agent init prompt, or success prompt [{counter.Value} OK] $");
+
+        if (devLocalhostPromptFound)
+        {
+            await auto.EnterAsync();
+        }
+
+        await auto.DeclineAgentInitPromptAsync(counter, effectiveTimeout);
+    }
+
+    /// <summary>
     /// Installs a specific GA version of the Aspire CLI using the install script.
     /// </summary>
     internal static async Task InstallAspireCliVersionAsync(
@@ -684,6 +767,228 @@ internal static class CliE2EAutomatorHelpers
             CliInstallStrategy.FromVersion(version),
             AspireCliShellCommandHelpers.MainInstallScriptCommandPrefix);
         await auto.RunCommandFailFastAsync(command, counter, TimeSpan.FromSeconds(300));
+    }
+
+    /// <summary>
+    /// Runs <c>aspire run</c>, captures its transcript in the workspace, and waits for the AppHost to be ready.
+    /// </summary>
+    internal static async Task AspireRunUntilReadyAsync(
+        this Hex1bTerminalAutomator auto,
+        TemporaryWorkspace workspace,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(5);
+        var hostOutputPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, "_aspire-run.log");
+        var containerOutputPath = CliE2ETestHelpers.ToContainerPath(hostOutputPath, workspace);
+
+        CliE2ETestHelpers.RegisterCaptureFile("_aspire-run.log", hostOutputPath);
+
+        await auto.TypeAsync(
+            "(set -o pipefail; aspire run 2>&1 | tee " +
+            AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath) +
+            "; s=${PIPESTATUS[0]}; if [ \"$s\" -eq 130 ]; then exit 0; fi; exit \"$s\")");
+        await auto.EnterAsync();
+
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText("Select an AppHost to use:"))
+            {
+                throw new InvalidOperationException(
+                    "Unexpected apphost selection prompt detected! " +
+                    "This indicates multiple apphosts were incorrectly detected.");
+            }
+
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.")
+                || s.ContainsText("Press CTRL+C to stop the apphost and exit.");
+        }, timeout: effectiveTimeout, description: "Press CTRL+C message (aspire run started)");
+    }
+
+    /// <summary>
+    /// Copies the latest <c>aspire start --format json</c> transcript into the mounted workspace.
+    /// </summary>
+    internal static async Task PersistAspireStartJsonAsync(
+        this Hex1bTerminalAutomator auto,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter)
+    {
+        var hostOutputPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, "_aspire-start.json");
+        var containerOutputPath = CliE2ETestHelpers.ToContainerPath(hostOutputPath, workspace);
+
+        CliE2ETestHelpers.RegisterCaptureFile("_aspire-start.json", hostOutputPath);
+
+        await auto.RunCommandAsync(
+            $"if [ -f {AspireCliShellCommandHelpers.QuoteBashArg(AspireStartJsonFile)} ]; then cp {AspireCliShellCommandHelpers.QuoteBashArg(AspireStartJsonFile)} {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}; fi",
+            counter);
+    }
+
+    /// <summary>
+    /// Runs a JSON-producing CLI command and writes stdout to a workspace file for host-side assertions.
+    /// </summary>
+    internal static async Task<string> CaptureJsonOutputAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter,
+        string outputFileName)
+    {
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
+
+        await auto.RunCommandAsync($"{command} > {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}", counter);
+        return hostOutputPath;
+    }
+
+    /// <summary>
+    /// Runs a shell command and captures stdout and stderr to a workspace file.
+    /// </summary>
+    internal static async Task<string> CaptureCommandOutputAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter,
+        string outputFileName,
+        TimeSpan? timeout = null)
+    {
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
+
+        await auto.RunCommandFailFastAsync(
+            $"{command} > {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)} 2>&1",
+            counter,
+            timeout ?? TimeSpan.FromSeconds(500));
+
+        return hostOutputPath;
+    }
+
+    /// <summary>
+    /// Runs a shell command expected to fail and captures stdout and stderr to a workspace file.
+    /// </summary>
+    internal static async Task<string> CaptureFailingCommandOutputAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter,
+        string outputFileName,
+        TimeSpan? timeout = null)
+    {
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
+        var expectedCounter = counter.Value;
+        var succeeded = false;
+
+        await auto.TypeAsync($"{command} > {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)} 2>&1");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            var successSearcher = new CellPatternSearcher()
+                .FindPattern(expectedCounter.ToString())
+                .RightText(" OK] $ ");
+            if (successSearcher.Search(snapshot).Count > 0)
+            {
+                succeeded = true;
+                return true;
+            }
+
+            var errorSearcher = new CellPatternSearcher()
+                .FindPattern(expectedCounter.ToString())
+                .RightText(" ERR:");
+
+            return errorSearcher.Search(snapshot).Count > 0;
+        }, timeout: timeout ?? TimeSpan.FromSeconds(500), description: $"expected failing command [{expectedCounter} ERR]");
+
+        counter.Increment();
+
+        if (succeeded)
+        {
+            throw new InvalidOperationException($"Expected command to fail, but it succeeded. Output captured at {hostOutputPath}. Command: {command}");
+        }
+
+        return hostOutputPath;
+    }
+
+    /// <summary>
+    /// Copies the latest Aspire CLI log matching a glob from the container into the mounted workspace.
+    /// </summary>
+    internal static async Task<string> CaptureLatestAspireLogAsync(
+        this Hex1bTerminalAutomator auto,
+        string logGlob,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter,
+        string outputFileName)
+    {
+        var (hostOutputPath, containerOutputPath) = RegisterWorkspaceCaptureFile(workspace, outputFileName);
+
+        await auto.RunCommandAsync(
+            $"LOG=$(ls -t {logGlob} 2>/dev/null | head -1) && test -n \"$LOG\" && cp \"$LOG\" {AspireCliShellCommandHelpers.QuoteBashArg(containerOutputPath)}",
+            counter);
+
+        return hostOutputPath;
+    }
+
+    /// <summary>
+    /// Verifies a URL responds with HTTP 200 from inside the CLI test environment.
+    /// </summary>
+    internal static async Task AssertUrlRespondsAsync(
+        this Hex1bTerminalAutomator auto,
+        string url,
+        string label,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var failurePrefix = $"{label}-http-status=";
+
+        await auto.TypeAsync(
+            $"status=$(curl -ksSL -o /dev/null -w '%{{http_code}}' {AspireCliShellCommandHelpers.QuoteBashArg(url)}) && " +
+            $"{{ [ \"$status\" = \"200\" ] || {{ printf '%s%s\\n' {AspireCliShellCommandHelpers.QuoteBashArg(failurePrefix)} \"$status\"; exit 1; }}; }}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout ?? TimeSpan.FromSeconds(30));
+    }
+
+    private static async Task ExtractLocalHiveArchiveAsync(
+        this Hex1bTerminalAutomator auto,
+        string archivePath,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync($"mkdir -p ~/.aspire && tar -xzf {archivePath} -C ~/.aspire 2>/dev/null", counter, TimeSpan.FromSeconds(30));
+    }
+
+    private static async Task ConfigureLocalHiveAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync("aspire config set channel local -g", counter);
+        await auto.RunCommandAsync("SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g", counter);
+    }
+
+    private static (string HostOutputPath, string ContainerOutputPath) RegisterWorkspaceCaptureFile(
+        TemporaryWorkspace workspace,
+        string outputFileName)
+    {
+        var hostOutputPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, outputFileName);
+        var containerOutputPath = CliE2ETestHelpers.ToContainerPath(hostOutputPath, workspace);
+
+        CliE2ETestHelpers.RegisterCaptureFile(outputFileName, hostOutputPath);
+
+        return (hostOutputPath, containerOutputPath);
+    }
+
+    private static async Task RunCommandAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout);
+    }
+
+    private static async Task RunCommandFailFastAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        SequenceCounter counter,
+        TimeSpan timeout)
+    {
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout);
     }
 
     /// <summary>
@@ -854,13 +1159,16 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Stops a running Aspire AppHost with <c>aspire stop</c>.
+    /// Stops running Aspire AppHosts with <c>aspire stop --all</c>.
+    /// In the isolated Docker E2E environment each test owns its own container, so stopping all
+    /// avoids interactive selection prompts when the CLI cannot correlate the current directory to
+    /// the running AppHost path.
     /// </summary>
     internal static async Task AspireStopAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("aspire stop");
+        await auto.TypeAsync("aspire stop --all");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }

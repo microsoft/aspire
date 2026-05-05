@@ -8,8 +8,6 @@
     <IsTestProject>true</IsTestProject>
     <IsUnitTestProject>true</IsUnitTestProject>
     <OutputType>Exe</OutputType>
-    <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(IsGithubPullRequest)' != 'true' and '$(RunQuarantinedTests)' != 'true' and '$(RunOuterloopTests)' != 'true'">true</SkipTests>
-
     <SplitTestsOnCI>true</SplitTestsOnCI>
     <RequiresNugets>true</RequiresNugets>
     <RequiresCliArchive>true</RequiresCliArchive>
@@ -42,8 +40,9 @@
     <TestArchiveTestsDir>$(TestArchiveTestsDirForCliEndToEndTests)</TestArchiveTestsDir>
 
     <!-- Test session settings -->
-    <TestSessionTimeout>30m</TestSessionTimeout>
-    <TestHangTimeout>15m</TestHangTimeout>
+    <TestSessionTimeout>45m</TestSessionTimeout>
+    <TestHangTimeout>30m</TestHangTimeout>
+    <MtpBaseArgs>$(_MtpDiagnosticFlags) --hangdump-timeout $(TestHangTimeout) --timeout $(TestSessionTimeout)</MtpBaseArgs>
   </PropertyGroup>
 
   <ItemGroup>

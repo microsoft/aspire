@@ -15,7 +15,6 @@
   -->
   <ItemGroup>
     <CITestsProperty Include="requiresNugets" MSBuildProp="RequiresNugets" Default="false" />
-    <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
     <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
     <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
   </ItemGroup>

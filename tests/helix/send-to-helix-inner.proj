@@ -13,7 +13,7 @@
     <!-- Disable playwright tests on helix/linux. Issue: https://github.com/microsoft/aspire/issues/4921 -->
     <DisablePlaywrightTests Condition="'$(OS)' != 'Windows_NT'">true</DisablePlaywrightTests>
 
-    <DotNetCliVersion>$(DotNetSdkPreviousVersionForTesting)</DotNetCliVersion>
+    <DotNetCliVersion>$(DotNetSdkVersionForHelixWorkItems)</DotNetCliVersion>
 
     <!-- dotnet-coverage tool version -->
     <_DotNetToolJsonPath>$(RepoRoot).config/dotnet-tools.json</_DotNetToolJsonPath>
@@ -22,7 +22,6 @@
     <_AzureFunctionsCliUrl Condition="'$(OS)' == 'Windows_NT'">https://github.com/Azure/azure-functions-core-tools/releases/download/4.0.7512/Azure.Functions.Cli.min.win-x64.4.0.7512.zip</_AzureFunctionsCliUrl>
     <_AzureFunctionsCliUrl Condition="'$(OS)' != 'Windows_NT'">https://github.com/Azure/azure-functions-core-tools/releases/download/4.0.7512/Azure.Functions.Cli.linux-x64.4.0.7512.zip</_AzureFunctionsCliUrl>
 
-    <_DefaultSdkDirNameForTests>dotnet-tests</_DefaultSdkDirNameForTests>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -50,8 +49,8 @@
     <_DisableRyukForTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">if $(_UsesTestcontainersWorkItemCommand)%3B then echo "Disabling Testcontainers Ryuk for this Helix work item." $(_ShellCommandSeparator) export TESTCONTAINERS_RYUK_DISABLED=true%3B fi</_DisableRyukForTestcontainersWorkItemCommand>
     <_CleanupDockerForTestcontainersWorkItemCommand Condition="'$(OS)' != 'Windows_NT'">if $(_UsesTestcontainersWorkItemCommand)%3B then echo "Cleaning up Docker resources for this Testcontainers Helix work item." $(_ShellCommandSeparator) $(_ShutdownDockerContainersCommand) $(_ShellCommandSeparator) $(_DeleteDockerVolumesCommand) $(_ShellCommandSeparator) docker network prune -f%3B fi</_CleanupDockerForTestcontainersWorkItemCommand>
 
-    <_CleanupProcessesCommand Condition="'$(OS)' == 'Windows_NT'">powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; get-ciminstance win32_process | where-object ExecutablePath -Match 'dotnet-tests|dcp.exe' | foreach-object { echo $_.ProcessId $_.ExecutablePath %3B stop-process -id $_.ProcessId -force -ErrorAction SilentlyContinue }"</_CleanupProcessesCommand>
-    <_CleanupProcessesCommand Condition="'$(OS)' != 'Windows_NT'">pgrep -lf "dotnet-tests|dcp.exe" | awk '{print %3B system("kill -9 "$1)}'</_CleanupProcessesCommand>
+    <_CleanupProcessesCommand Condition="'$(OS)' == 'Windows_NT'">powershell -ExecutionPolicy ByPass -NoProfile -command "&amp; get-ciminstance win32_process | where-object ExecutablePath -Match 'dcp.exe' | foreach-object { echo $_.ProcessId $_.ExecutablePath %3B stop-process -id $_.ProcessId -force -ErrorAction SilentlyContinue }"</_CleanupProcessesCommand>
+    <_CleanupProcessesCommand Condition="'$(OS)' != 'Windows_NT'">pgrep -lf "dcp.exe" | awk '{print %3B system("kill -9 "$1)}'</_CleanupProcessesCommand>
 
     <_WaitForDcpCommand Condition="'$(OS)' != 'Windows_NT'">echo "Waiting for dcp process to exit..."; start_time=$(date +%s); echo "Start time: $start_time"; timeout=120; while pgrep -lf "dcp.exe" &gt; /dev/null &amp;&amp; [ $timeout -gt 0 ]; do sleep 1; timeout=$((timeout - 1)); done; end_time=$(date +%s); echo "End time: $end_time"; if pgrep -lf "dcp.exe" &gt; /dev/null; then echo "dcp process did not exit within the timeout period."; exit 1; fi</_WaitForDcpCommand>
     <!-- Figure out the powershell... -->
@@ -92,17 +91,7 @@
     <HelixPreCommand Condition="'$(OS)' != 'Windows_NT'" Include="export PLAYWRIGHT_BROWSERS_PATH=$HELIX_CORRELATION_PAYLOAD/playwright-deps" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(NeedsSdksForTesting)' == 'true'">
-    <!-- set path to dotnet-tests early, so any dotnet commands can run -->
-    <HelixPreCommand Condition="'$(OS)' == 'Windows_NT'" Include="set PATH=%HELIX_CORRELATION_PAYLOAD%\$(_DefaultSdkDirNameForTests)%3B%PATH%" />
-    <HelixPreCommand Condition="'$(OS)' != 'Windows_NT'" Include="export PATH=$HELIX_CORRELATION_PAYLOAD/$(_DefaultSdkDirNameForTests):$PATH" />
-
-    <HelixPreCommand Condition="'$(OS)' == 'Windows_NT'" Include="set SDK_FOR_TEMPLATES_TESTING_PATH=%HELIX_CORRELATION_PAYLOAD%\$(_DefaultSdkDirNameForTests)" />
-    <HelixPreCommand Condition="'$(OS)' != 'Windows_NT'" Include="export SDK_FOR_TEMPLATES_TESTING_PATH=$HELIX_CORRELATION_PAYLOAD/$(_DefaultSdkDirNameForTests)" />
-
-    <!-- needed till the 9.0 sdk drops the aspire manifest -->
-    <HelixPreCommand Include="$(_EnvVarSetKeyword) SkipAspireWorkloadManifest=true" />
-
+  <ItemGroup>
     <HelixPreCommand Condition="'$(OS)' == 'Windows_NT'" Include="set BUILT_NUGETS_PATH=%HELIX_CORRELATION_PAYLOAD%\built-nugets" />
     <HelixPreCommand Condition="'$(OS)' != 'Windows_NT'" Include="export BUILT_NUGETS_PATH=$HELIX_CORRELATION_PAYLOAD/built-nugets" />
 
@@ -160,14 +149,8 @@
     <HelixPostCommand Include="$(_WaitForDcpCommand)" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(NeedsSdksForTesting)' == 'true'">
-    <!-- Set this here so if dotnet-cli is overriding the path, then dotnet-tests overrides that and gets precedence -->
-    <HelixPerWorkItemPreCommand Condition="'$(OS)' == 'Windows_NT'">set PATH=%HELIX_CORRELATION_PAYLOAD%\$(_DefaultSdkDirNameForTests)%3B%PATH%</HelixPerWorkItemPreCommand>
-    <HelixPerWorkItemPreCommand Condition="'$(OS)' != 'Windows_NT'">export PATH=$HELIX_CORRELATION_PAYLOAD/$(_DefaultSdkDirNameForTests):$PATH</HelixPerWorkItemPreCommand>
-
-    <HelixPerWorkItemPreCommand Condition="'$(OS)' == 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp; set DOTNET_ROOT=%HELIX_CORRELATION_PAYLOAD%\$(_DefaultSdkDirNameForTests)</HelixPerWorkItemPreCommand>
-    <HelixPerWorkItemPreCommand Condition="'$(OS)' != 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp;&amp; export DOTNET_ROOT=$HELIX_CORRELATION_PAYLOAD/$(_DefaultSdkDirNameForTests)</HelixPerWorkItemPreCommand>
-    <HelixPerWorkItemPreCommand Condition="'$(OS)' != 'Windows_NT'">$(HelixPerWorkItemPreCommand) &amp;&amp; $(_DisableRyukForTestcontainersWorkItemCommand)</HelixPerWorkItemPreCommand>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <HelixPerWorkItemPreCommand>$(_DisableRyukForTestcontainersWorkItemCommand)</HelixPerWorkItemPreCommand>
   </PropertyGroup>
 
   <Target Name="PrepareDependencies" DependsOnTargets="$(PrepareDependenciesDependsOn)" />
@@ -194,8 +177,7 @@
       <HelixCorrelationPayload Condition="'$(DockerCliToolDir)' != ''" Include="$(DockerCliToolDir)" Destination="docker-cli" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$(NeedsSdksForTesting)' == 'true'">
-      <HelixCorrelationPayload Include="$(ArtifactsBinDir)$(_DefaultSdkDirNameForTests)" Destination="$(_DefaultSdkDirNameForTests)" />
+    <ItemGroup>
       <HelixCorrelationPayload Include="$(ArtifactsShippingPackagesDir)" Destination="built-nugets" />
     </ItemGroup>
 

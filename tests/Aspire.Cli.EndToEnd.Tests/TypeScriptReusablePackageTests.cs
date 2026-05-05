@@ -64,31 +64,17 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire restore");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireRestoreAndTypeCheckTypeScriptAsync(counter, typeCheckCommand: "npx --no-install tsc --noEmit");
 
         var helperModulesDirectory = Path.Combine(helperDirectory.FullName, ".modules");
         Assert.True(Directory.Exists(helperModulesDirectory), $".modules directory was not created for helper package at {helperModulesDirectory}");
         Assert.Contains("addRedis", File.ReadAllText(Path.Combine(helperModulesDirectory, "aspire.ts")));
 
-        await auto.TypeAsync("npx tsc --noEmit");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
-
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(appDirectory.FullName, workspace)}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire restore");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("npx tsc --noEmit");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.AspireRestoreAndTypeCheckTypeScriptAsync(counter, typeCheckCommand: "npx --no-install tsc --noEmit");
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();

@@ -23,12 +23,14 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG SKIP_SOURCE_BUILD=false
 ARG UBUNTU_APT_MIRROR=
 
+COPY tests/Shared/Docker/apt-retry.sh /usr/local/bin/apt-retry
+RUN chmod +x /usr/local/bin/apt-retry
+
 # Install native AOT build toolchain.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
 RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
-      apt-get update -qq && \
-      apt-get install -y --no-install-recommends clang zlib1g-dev && \
+      apt-retry install clang zlib1g-dev && \
       rm -rf /var/lib/apt/lists/*; \
     fi
 
@@ -53,11 +55,13 @@ FROM ubuntu:24.04 AS runtime
 
 ARG UBUNTU_APT_MIRROR=
 
-# Install base tools and Docker CLI.
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+COPY tests/Shared/Docker/apt-retry.sh /usr/local/bin/apt-retry
+RUN chmod +x /usr/local/bin/apt-retry
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
+
+# Install base tools and Docker CLI.
+RUN apt-retry install \
       ca-certificates curl gpg docker.io git libicu-dev unzip && \
     rm -rf /var/lib/apt/lists/*
 
@@ -66,15 +70,24 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list && \
-    apt-get update -qq && \
-    apt-get install -y --no-install-recommends gh && \
+    apt-retry install gh && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Node.js plus supported TypeScript AppHost toolchains.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
+    apt-retry install nodejs && \
     npm install -g yarn@1.22.22 pnpm@10 && \
-    curl -fsSL https://bun.sh/install | bash && \
+    for attempt in 1 2 3 4 5; do \
+      if curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh && \
+         bash /tmp/bun-install.sh && \
+         [ -x /root/.bun/bin/bun ]; then \
+        rm -f /tmp/bun-install.sh; \
+        break; \
+      fi; \
+      rm -f /tmp/bun-install.sh; \
+      if [ "$attempt" = "5" ]; then exit 1; fi; \
+      sleep 10; \
+    done && \
     ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
     ln -s /root/.bun/bin/bunx /usr/local/bin/bunx && \
     rm -rf /var/lib/apt/lists/*

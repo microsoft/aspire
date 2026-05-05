@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -43,10 +42,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
-        await auto.TypeAsync("aspire start");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireStartAsync(counter);
 
         // Wait a bit for resources to stabilize
         await auto.TypeAsync("sleep 5");
@@ -73,10 +69,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        await auto.TypeAsync("aspire stop");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireStopAsync(counter);
 
         // Exit the shell
         await auto.TypeAsync("exit");
@@ -147,10 +140,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         output.WriteLine("Modified AppHost.cs to add .WithReplicas(2) to apiservice and clear fixed endpoint target ports");
 
         // Start the AppHost in the background using aspire start
-        await auto.TypeAsync("aspire start");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireStartAsync(counter);
 
         // Wait for resources to stabilize
         await auto.TypeAsync("sleep 10");
@@ -198,10 +188,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
-        await auto.TypeAsync("aspire stop");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireStopAsync(counter);
 
         // Exit the shell
         await auto.TypeAsync("exit");

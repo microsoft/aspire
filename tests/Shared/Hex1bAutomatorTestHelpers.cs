@@ -457,12 +457,19 @@ internal static class Hex1bAutomatorTestHelpers
         var agentInitPrompt = new CellPatternSearcher()
             .Find("configure AI agent environments");
 
+        var agentInitWorkflowPromptFound = false;
         var agentInitFound = false;
         var errorPromptFound = false;
 
         // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
         await auto.WaitUntilAsync(s =>
         {
+            if (IsAgentInitWorkflowPromptVisible(s))
+            {
+                agentInitWorkflowPromptFound = true;
+                return true;
+            }
+
             if (agentInitPrompt.Search(s).Count > 0)
             {
                 agentInitFound = true;
@@ -488,6 +495,13 @@ internal static class Hex1bAutomatorTestHelpers
             throw new InvalidOperationException($"Command failed with error prompt [{counter.Value} ERR:*] while waiting for the agent init prompt or success prompt.");
         }
 
+        if (agentInitWorkflowPromptFound)
+        {
+            await auto.Ctrl().KeyAsync(Hex1bKey.C);
+            await auto.WaitForAnyPromptAsync(counter, effectiveTimeout);
+            return;
+        }
+
         if (!agentInitFound)
         {
             counter.Increment();
@@ -497,13 +511,65 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
 
-        // Do not send Enter after typing "n" — the Spectre Console [Y/n] confirmation
-        // prompt accepts a single character. Sending Enter risks a race: if aspire init
-        // exits after reading "n" but before the Enter is delivered, bash receives the
-        // Enter and executes a phantom blank command, advancing CMDCOUNT and desyncing
-        // the test counter from the shell counter.
+        // Some prompts accept a single "n" immediately, while others require Enter.
+        // Only send Enter if the command did not already finish to avoid a phantom
+        // blank shell command that advances CMDCOUNT and desyncs prompt tracking.
+        var successPromptFound = false;
+        try
+        {
+            await auto.WaitUntilAsync(s =>
+            {
+                var successSearcher = new CellPatternSearcher()
+                    .FindPattern(counter.Value.ToString())
+                    .RightText(" OK] $ ");
+                successPromptFound = successSearcher.Search(s).Count > 0;
 
+                return successPromptFound;
+            }, timeout: TimeSpan.FromSeconds(2), description: $"success prompt [{counter.Value} OK] $ after agent init response");
+        }
+        catch (Hex1bAutomationException)
+        {
+        }
+
+        if (successPromptFound)
+        {
+            counter.Increment();
+            return;
+        }
+
+        var agentInitWorkflowStarted = false;
+        try
+        {
+            await auto.WaitUntilAsync(s =>
+            {
+                agentInitWorkflowStarted = IsAgentInitWorkflowPromptVisible(s);
+                return agentInitWorkflowStarted;
+            }, timeout: TimeSpan.FromMilliseconds(500), description: "agent init workflow prompt after agent init response");
+        }
+        catch (Hex1bAutomationException)
+        {
+        }
+
+        if (agentInitWorkflowStarted)
+        {
+            await auto.Ctrl().KeyAsync(Hex1bKey.C);
+            await auto.WaitForAnyPromptAsync(counter, effectiveTimeout);
+            return;
+        }
+
+        await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+
+        static bool IsAgentInitWorkflowPromptVisible(Hex1bTerminalSnapshot snapshot)
+        {
+            var skillLocationPrompt = new CellPatternSearcher()
+                .Find("Where should skill files be installed?");
+            var skillsPrompt = new CellPatternSearcher()
+                .Find("Which skills should be installed?");
+
+            return skillLocationPrompt.Search(snapshot).Count > 0
+                || skillsPrompt.Search(snapshot).Count > 0;
+        }
     }
 
     /// <summary>
@@ -536,7 +602,7 @@ internal static class Hex1bAutomatorTestHelpers
             case AspireTemplate.JsReact:
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React, C# AppHost)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "JS React template selected");
                 await auto.EnterAsync();
@@ -546,7 +612,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (Express/React, TypeScript AppHost)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (Express/React").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Express React template selected");
                 await auto.EnterAsync();
@@ -557,7 +623,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React, TypeScript AppHost)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Python React template selected");
                 await auto.EnterAsync();
@@ -636,6 +702,7 @@ internal static class Hex1bAutomatorTestHelpers
             if (!useRedisCache)
             {
                 await auto.TypeAsync("n");
+                await auto.EnterAsync();
             }
             else
             {
@@ -655,6 +722,35 @@ internal static class Hex1bAutomatorTestHelpers
 
         // Step 8: Decline the agent init prompt and wait for success
         await auto.DeclineAgentInitPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Installs dependencies, runs <c>aspire restore</c>, and then type-checks the generated TypeScript project.
+    /// </summary>
+    internal static async Task AspireRestoreAndTypeCheckTypeScriptAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string typeCheckCommand = "npx --no-install tsc --noEmit --project tsconfig.apphost.json",
+        TimeSpan? installTimeout = null,
+        TimeSpan? restoreTimeout = null,
+        TimeSpan? typeCheckTimeout = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(typeCheckCommand);
+
+        await auto.TypeAsync("npm install");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, installTimeout ?? TimeSpan.FromMinutes(5));
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(
+            "SDK code restored successfully",
+            timeout: restoreTimeout ?? TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync(typeCheckCommand);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, typeCheckTimeout ?? TimeSpan.FromMinutes(2));
     }
 
     /// <summary>

@@ -8,13 +8,11 @@
     <PreReleaseVersionLabel>preview.1</PreReleaseVersionLabel>
     <DefaultTargetFramework>net8.0</DefaultTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net9.0;net10.0</AllTargetFrameworks>
-    <!-- dotnet versions for running tests -->
+    <!-- dotnet runtime versions restored into global.json by Arcade. -->
     <DotNetRuntimePreviousVersionForTesting>8.0.21</DotNetRuntimePreviousVersionForTesting>
     <DotNetRuntimeCurrentVersionForTesting>9.0.10</DotNetRuntimeCurrentVersionForTesting>
-    <!-- dotnet 8.0 versions for running tests - used for templates tests -->
-    <DotNetSdkPreviousVersionForTesting>8.0.415</DotNetSdkPreviousVersionForTesting>
-    <!-- dotnet 9.0 versions for running tests - used for templates tests -->
-    <DotNetSdkCurrentVersionForTesting>9.0.306</DotNetSdkCurrentVersionForTesting>
+    <!-- .NET SDK used as the Helix test work item runtime for net8.0 tests. -->
+    <DotNetSdkVersionForHelixWorkItems>8.0.415</DotNetSdkVersionForHelixWorkItems>
     <XunitV3Version>3.2.2</XunitV3Version>
     <XUnitAnalyzersVersion>1.21.0</XUnitAnalyzersVersion>
     <XunitRunnerVisualStudioVersion>3.1.5</XunitRunnerVisualStudioVersion>

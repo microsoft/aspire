@@ -1,11 +1,6 @@
 <Project>
-  <PropertyGroup>
-    <!-- This triggers the import of targets needed for template testing -->
-    <IsTemplateTestProject>true</IsTemplateTestProject>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(BaseOutputPath)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true' and '$(PrepareForHelix)' != 'true' ">
-    <BaseOutputPath >$([MSBuild]::NormalizeDirectory($([System.IO.Path]::GetTempPath()), $([System.IO.Path]::GetRandomFileName())))</BaseOutputPath>
+    <BaseOutputPath>$([MSBuild]::NormalizeDirectory($([System.IO.Path]::GetTempPath()), $([System.IO.Path]::GetRandomFileName())))</BaseOutputPath>
   </PropertyGroup>
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />

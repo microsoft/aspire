@@ -7,9 +7,11 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0
 ARG UBUNTU_APT_MIRROR=
 
 COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+COPY tests/Shared/Docker/apt-retry.sh /usr/local/bin/apt-retry
+RUN chmod +x /usr/local/bin/apt-retry
 RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
+
+RUN apt-retry install \
         curl \
         ca-certificates \
         gpg \
@@ -23,8 +25,7 @@ RUN apt-get update -qq && \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list && \
-    apt-get update -qq && \
-    apt-get install -y --no-install-recommends gh && \
+    apt-retry install gh && \
     rm -rf /var/lib/apt/lists/*
 
 # Rootful Podman-in-container is reliable here when it uses a dedicated vfs-backed storage root.

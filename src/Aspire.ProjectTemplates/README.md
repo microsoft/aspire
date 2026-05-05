@@ -24,4 +24,4 @@ dotnet pack ./src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
 
 ### Updating tests
 
-Template tests can be run using the standard test commands. You can follow the directions in *[repo_root]/tests/Aspire.Templates.Tests/README.md* to run them locally if desired, or simply send a PR and observe the test output there.
+Template end-to-end coverage lives in *[repo_root]/tests/Aspire.Cli.EndToEnd.Tests/*. For local runs, follow the directions in *[repo_root]/tests/Aspire.Cli.EndToEnd.Tests/README.md*.

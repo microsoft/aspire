@@ -58,7 +58,7 @@ This invokes `eng/TestEnumerationRunsheetBuilder/TestEnumerationRunsheetBuilder.
 - Writes a `.tests-metadata.json` file to `artifacts/helix/` containing:
   - `projectName`, `shortName`, `testProjectPath`
   - `supportedOSes` array (e.g., `["windows", "linux", "macos"]`)
-  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `requiresGitHubToken`, `enablePlaywrightInstall`
+  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresCliArchive`, `requiresGitHubToken`, `enablePlaywrightInstall`
   - `testSessionTimeout`, `testHangTimeout` values
   - `uncollectedTestsSessionTimeout`, `uncollectedTestsHangTimeout` values
   - `splitTests` flag
@@ -93,19 +93,18 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
 {
   "tests": [
     {
-      "name": "Templates-StarterTests",
-      "shortname": "Templates-StarterTests",
-      "testProjectPath": "tests/Aspire.Templates.Tests/...",
-      "supportedOSes": ["windows", "linux", "macos"],
+      "name": "Cli E2E / SmokeTests",
+      "shortname": "SmokeTests",
+      "testProjectPath": "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj",
+      "supportedOSes": ["linux"],
       "properties": {
         "requiresNugets": true,
-        "requiresTestSdk": true,
-        "requiresCliArchive": false,
+        "requiresCliArchive": true,
         "enablePlaywrightInstall": false
       },
-      "testSessionTimeout": "20m",
-      "testHangTimeout": "10m",
-      "extraTestArgs": "--filter-class \"...\""
+      "testSessionTimeout": "30m",
+      "testHangTimeout": "15m",
+      "extraTestArgs": "--filter-class \"Aspire.Cli.EndToEnd.Tests.SmokeTests\""
     },
     {
       "name": "Hosting-Docker",
@@ -114,7 +113,6 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
       "supportedOSes": ["linux"],
       "properties": {
         "requiresNugets": false,
-        "requiresTestSdk": false,
         "requiresCliArchive": false,
         "enablePlaywrightInstall": false
       },
@@ -253,8 +251,6 @@ For tests that need the built Aspire packages (e.g., template tests, end-to-end 
 ```xml
 <PropertyGroup>
   <RequiresNugets>true</RequiresNugets>
-  <!-- Also common for template tests -->
-  <RequiresTestSdk>true</RequiresTestSdk>
 </PropertyGroup>
 ```
 
@@ -299,14 +295,13 @@ This flag is tracked in the test metadata and controls whether Playwright browse
 
 ## CI Test Property Registry
 
-All boolean test properties (such as `RequiresNugets`, `RequiresTestSdk`, `RequiresCliArchive`, `EnablePlaywrightInstall`) are defined in a single source of truth:
+All boolean test properties (such as `RequiresNugets`, `RequiresCliArchive`, `EnablePlaywrightInstall`) are defined in a single source of truth:
 
 **`eng/testing/CITestsProperties.props`**
 
 ```xml
 <ItemGroup>
   <CITestsProperty Include="requiresNugets" MSBuildProp="RequiresNugets" Default="false" />
-  <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
   <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
   <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
 </ItemGroup>
@@ -395,7 +390,7 @@ To run enumeration locally and inspect the generated matrix:
 ./build.sh -test \
   /p:TestRunnerName=TestEnumerationRunsheetBuilder \
   /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json \
-  /p:IncludeTemplateTests=true \
+  /p:IncludeCliE2ETests=true \
   /p:GenerateCIPartitions=true
 ```
 
