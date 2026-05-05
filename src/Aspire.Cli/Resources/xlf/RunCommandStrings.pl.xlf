@@ -68,8 +68,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
-        <source>Aspire Dashboard failed to start.</source>
-        <target state="translated">Nie udało się uruchomić pulpitu nawigacyjnego Aspire.</target>
+        <source>Aspire Dashboard failed to start or is disabled.</source>
+        <target state="needs-review-translation">Nie udało się uruchomić pulpitu nawigacyjnego Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">

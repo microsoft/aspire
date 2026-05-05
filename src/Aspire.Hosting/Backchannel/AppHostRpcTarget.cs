@@ -156,8 +156,8 @@ internal class AppHostRpcTarget(
     {
         if (!options.DashboardEnabled)
         {
-            logger.LogError("Dashboard URL requested but dashboard is disabled.");
-            throw new InvalidOperationException("Dashboard URL requested but dashboard is disabled.");
+            logger.LogDebug("Dashboard URL requested but dashboard is disabled.");
+            return new DashboardUrlsState { DashboardHealthy = false };
         }
 
         return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);

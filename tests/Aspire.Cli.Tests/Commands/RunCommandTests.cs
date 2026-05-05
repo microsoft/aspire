@@ -425,13 +425,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenDashboardFailsToStart_ReturnsNonZeroExitCodeWithClearErrorMessage()
+    public async Task RunCommand_WhenDashboardFailsToStart_ContinuesWithWarning()
     {
 
         var backchannelFactory = (IServiceProvider sp) =>
         {
             var backchannel = new TestAppHostBackchannel();
-            // Configure the backchannel to throw DashboardStartupException when GetDashboardUrlsAsync is called
+            // Configure the backchannel to return unhealthy dashboard state
             backchannel.GetDashboardUrlsAsyncCallback = (ct) =>
             {
                 return Task.FromResult(new DashboardUrlsState
@@ -484,10 +484,16 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        // Assert that the command returns the expected failure exit code
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        // Simulate CTRL-C - the command should continue past the unhealthy dashboard
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        // The command should succeed even when the dashboard is unhealthy
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
     [Fact]
