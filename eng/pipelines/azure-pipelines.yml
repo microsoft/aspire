@@ -417,13 +417,10 @@ extends:
         and(
           succeeded(),
           or(
-            eq(variables['Build.Reason'], 'PullRequest'),
+            ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
             or(
-              ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
-              or(
-                eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-                startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
-              )
+              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
             )
           )
         )

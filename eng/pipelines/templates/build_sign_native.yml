@@ -146,9 +146,7 @@ jobs:
               }
               Write-Host "Build.Reason: '$reason'  SourceBranch: '$branch'  DotNetFinalVersionKind: '$versionKind'"
 
-              if ($reason -eq 'PullRequest') {
-                $aspireCliChannel = 'pr'
-              } elseif ($versionKind -eq 'release') {
+              if ($versionKind -eq 'release') {
                 $aspireCliChannel = 'stable'
               } elseif ($branch -match 'refs/heads/(internal/)?release/') {
                 $aspireCliChannel = 'staging'
