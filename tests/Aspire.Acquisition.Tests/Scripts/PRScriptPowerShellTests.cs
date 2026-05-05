@@ -387,6 +387,6 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         Assert.Contains("PATH", result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("pr-12345", result.Output);
+        Assert.Contains("dogfood/pr-12345", result.Output);
     }
 }

@@ -487,6 +487,6 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         Assert.Contains("export PATH", result.Output);
-        Assert.Contains("pr-12345", result.Output);
+        Assert.Contains("dogfood/pr-12345/bin", result.Output);
     }
 }
