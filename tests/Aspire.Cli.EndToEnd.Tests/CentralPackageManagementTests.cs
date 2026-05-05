@@ -173,7 +173,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis --non-interactive");
         await auto.EnterAsync();
 
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify the AppHost project does not end up with a version-pinned Redis PackageReference.
         {
