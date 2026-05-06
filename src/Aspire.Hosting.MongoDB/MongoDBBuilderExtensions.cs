@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MongoDB.Driver;
 
 namespace Aspire.Hosting;
@@ -73,12 +74,15 @@ public static class MongoDBBuilderExtensions
         });
 
         var healthCheckKey = $"{name}_check";
-        // cache the client so it is reused on subsequent calls to the health check
-        IMongoClient? client = null;
+        var healthCheck = new MongoDBServerHealthCheck(mongoDBContainer, () => connectionString);
         builder.Services.AddHealthChecks()
-            .AddMongoDb(
-                sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
-                name: healthCheckKey);
+            .Add(new HealthCheckRegistration(
+                healthCheckKey,
+                _ => healthCheck,
+                failureStatus: default,
+                tags: default,
+                timeout: default
+                ));
 
         return builder
             .AddResource(mongoDBContainer)
@@ -254,6 +258,67 @@ public static class MongoDBBuilderExtensions
         var importFullPath = Path.GetFullPath(source, builder.ApplicationBuilder.AppHostDirectory);
 
         return builder.WithContainerFiles(initPath, importFullPath);
+    }
+
+    /// <summary>
+    /// Configures the MongoDB container to start as a single-node replica set.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Enabling replica set mode is required for applications that use MongoDB transactions or change streams.
+    /// A keyfile is injected into the container to satisfy MongoDB's authentication requirements for replica
+    /// set mode. The keyfile content is generated as a high-entropy secret and persisted to the AppHost's user
+    /// secrets store, so it remains stable across runs (required for persistent containers — changing file
+    /// content would force container recreation).
+    /// </para>
+    /// </remarks>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="replicaSetName">The name of the replica set. Defaults to <c>rs0</c>.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport(Description = "Configures the MongoDB container to start as a single-node replica set")]
+    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string replicaSetName = "rs0")
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(replicaSetName);
+
+        if (builder.Resource.ReplicaSetName is not null)
+        {
+            throw new InvalidOperationException($"A replica set has already been configured for the '{builder.Resource.Name}' MongoDB resource.");
+        }
+
+        builder.Resource.ReplicaSetName = replicaSetName;
+
+        // High-entropy keyfile generated once and persisted to user secrets in run mode (via
+        // CreateGeneratedParameter's UserSecretsParameterDefault wrapping), so it is stable across runs —
+        // important because changing the file content would force the persistent container to be recreated.
+        // The default password alphabet (lower+upper+numeric, no special) is a strict subset of MongoDB's
+        // permitted base64 keyfile alphabet, so the generated value is a valid keyfile.
+        var keyFileParameter = ParameterResourceBuilderExtensions.CreateGeneratedParameter(
+            builder.ApplicationBuilder,
+            $"{builder.Resource.Name}-keyfile-content",
+            secret: true,
+            new GenerateParameterDefault
+            {
+                MinLength = 32,
+                Special = false,
+            });
+
+        builder.Resource.KeyFileContentParameter = keyFileParameter;
+
+        return builder
+            .WithArgs("--replSet", replicaSetName, "--keyFile", "/tmp/mongodb-keyfile", "--bind_ip_all")
+            .WithContainerFiles("/tmp", async (_, ct) =>
+            {
+                var contents = await keyFileParameter.GetValueAsync(ct).ConfigureAwait(false);
+                return [
+                    new ContainerFile
+                    {
+                        Name = "mongodb-keyfile",
+                        Contents = contents,
+                        Mode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                    }
+                ];
+            }, defaultOwner: 999, defaultGroup: 999);
     }
 
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)

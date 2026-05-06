@@ -246,6 +246,136 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithReplicaSetSetsReplicaSetNameToDefaultRs0()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+
+        Assert.Equal("rs0", mongo.Resource.ReplicaSetName);
+    }
+
+    [Fact]
+    public void WithReplicaSetSetsCustomReplicaSetName()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet("myset");
+
+        Assert.Equal("myset", mongo.Resource.ReplicaSetName);
+    }
+
+    [Fact]
+    public async Task WithReplicaSetAddsCorrectContainerArgs()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(mongo.Resource);
+
+        Assert.Contains("--replSet", args);
+        Assert.Contains("rs0", args);
+        Assert.Contains("--keyFile", args);
+        Assert.Contains("/tmp/mongodb-keyfile", args);
+        Assert.Contains("--bind_ip_all", args);
+    }
+
+    [Fact]
+    public void WithReplicaSetAddsContainerFileAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+
+        Assert.Single(mongo.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>(),
+            a => a.DestinationPath == "/tmp");
+    }
+
+    [Fact]
+    public async Task WithReplicaSetKeyfileContentIsHighEntropyAndStableForResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var mongo = builder.AddMongoDB("mongodb").WithReplicaSet();
+        using var app = builder.Build();
+        var annotation = mongo.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>()
+            .Single(a => a.DestinationPath == "/tmp");
+
+        var entries1 = await annotation.Callback(
+            new() { Model = mongo.Resource, ServiceProvider = app.Services },
+            CancellationToken.None);
+        var keyfile1 = Assert.IsType<ContainerFile>(Assert.Single(entries1));
+
+        // Resolving the callback again on the same resource must yield the same content; the parameter
+        // value is generated lazily and cached on the ParameterResource for the lifetime of the AppHost,
+        // and is persisted to user secrets so it stays stable across runs as well.
+        var entries2 = await annotation.Callback(
+            new() { Model = mongo.Resource, ServiceProvider = app.Services },
+            CancellationToken.None);
+        var keyfile2 = Assert.IsType<ContainerFile>(Assert.Single(entries2));
+
+        Assert.Equal("mongodb-keyfile", keyfile1.Name);
+        Assert.Equal(keyfile1.Contents, keyfile2.Contents);
+        Assert.NotNull(keyfile1.Contents);
+        Assert.True(keyfile1.Contents!.Length >= 32);
+        Assert.NotNull(mongo.Resource.KeyFileContentParameter);
+        Assert.Equal($"{mongo.Resource.Name}-keyfile-content", mongo.Resource.KeyFileContentParameter!.Name);
+    }
+
+    [Fact]
+    public async Task WithReplicaSetServerConnectionStringIncludesDirectConnectionWithAuth()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        appBuilder
+            .AddMongoDB("mongodb")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017))
+            .WithReplicaSet();
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var serverResource = Assert.Single(appModel.Resources.OfType<MongoDBServerResource>());
+
+        Assert.Equal(
+            "mongodb://admin:{mongodb-password.value}@{mongodb.bindings.tcp.host}:{mongodb.bindings.tcp.port}/?authSource=admin&authMechanism=SCRAM-SHA-256&directConnection=true",
+            serverResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void WithReplicaSetServerConnectionStringIncludesDirectConnectionWithoutAuth()
+    {
+        // Use AddResource to create a resource without a password so we can verify
+        // the '?' separator (no auth query string prefix) rather than '&'.
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var mongo = appBuilder.AddResource(new MongoDBServerResource("mongodb")).WithReplicaSet();
+
+        // No password configured → directConnection is appended with '?' not '&'
+        Assert.Null(mongo.Resource.PasswordParameter);
+        Assert.Contains("?directConnection=true", mongo.Resource.ConnectionStringExpression.ValueExpression);
+        Assert.DoesNotContain("&directConnection=true", mongo.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task WithReplicaSetDatabaseConnectionStringIncludesDirectConnection()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        appBuilder
+            .AddMongoDB("mongodb")
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 27017))
+            .WithReplicaSet()
+            .AddDatabase("mydb");
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dbResource = Assert.Single(appModel.Resources.OfType<MongoDBDatabaseResource>());
+
+        Assert.Contains("directConnection=true", dbResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void WithoutReplicaSetConnectionStringDoesNotIncludeDirectConnection()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var mongo = appBuilder.AddMongoDB("mongodb");
+
+        Assert.DoesNotContain("directConnection", mongo.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
     public void ThrowsWithIdenticalChildResourceNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
