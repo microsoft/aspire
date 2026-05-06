@@ -45,8 +45,12 @@ public class InstallPathResolverTests
     }
 
     [Fact]
-    public void Resolve_NoSidecar_ReturnsUnknown()
+    public void Resolve_NoSidecar_ReturnsUnknownWithBinaryDir()
     {
+        // Spec §2.4: when neither the Mode B sibling nor Mode A parent sidecar is present,
+        // the resolver returns (Unknown, binaryDir) — not (Unknown, ""). Downstream consumers
+        // (PR3) still need a real prefix so they can locate the binary in the no-sidecar
+        // fallback (an unmanaged install of the standalone archive on linux, for example).
         using var temp = new TestTempDirectory();
         var binDir = Path.Combine(temp.Path, "bin");
         Directory.CreateDirectory(binDir);
@@ -57,7 +61,36 @@ public class InstallPathResolverTests
         var (mode, prefix) = new InstallPathResolver().Resolve(binaryPath);
 
         Assert.Equal(InstallMode.Unknown, mode);
-        Assert.Equal(string.Empty, prefix);
+        Assert.Equal(Path.GetDirectoryName(binaryPath), prefix);
+    }
+
+    [Fact]
+    public void Resolve_NoSidecar_FollowsSymlink_ThenReturnsRealBinaryDirAsPrefix()
+    {
+        // Spec §2.4 + §2.3: even in the no-sidecar fallback, the resolver follows symlinks
+        // first and uses the *real* binary's directory as the prefix — not the launcher's.
+        // This matches the Mode B / Mode A behavior so callers see a consistent prefix
+        // semantic regardless of which branch they end up in.
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var temp = new TestTempDirectory();
+
+        var realInstallDir = Path.Combine(temp.Path, "real-install");
+        Directory.CreateDirectory(realInstallDir);
+        var realBinaryPath = Path.Combine(realInstallDir, "aspire");
+        File.WriteAllText(realBinaryPath, string.Empty);
+        // No sidecar anywhere.
+
+        var launcherDir = Path.Combine(temp.Path, "launcher");
+        Directory.CreateDirectory(launcherDir);
+        var launcherPath = Path.Combine(launcherDir, "aspire");
+        File.CreateSymbolicLink(launcherPath, realBinaryPath);
+
+        var (mode, prefix) = new InstallPathResolver().Resolve(launcherPath);
+
+        Assert.Equal(InstallMode.Unknown, mode);
+        Assert.Equal(realInstallDir, prefix);
     }
 
     [Fact]
