@@ -10,19 +10,19 @@ namespace Aspire.Hosting
 {
     public static partial class RabbitMQBuilderExtensions
     {
-        [AspireExport("addRabbitMQ", Description = "Adds a RabbitMQ container resource")]
+        [AspireExport(Description = "Adds a RabbitMQ container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> AddRabbitMQ(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a data bind mount to the RabbitMQ container")]
+        [AspireExport(Description = "Adds a data bind mount to the RabbitMQ container")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a data volume to the RabbitMQ container")]
+        [AspireExport(Description = "Adds a data volume to the RabbitMQ container")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withManagementPluginWithPort", Description = "Enables the RabbitMQ management plugin with a specific port")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithManagementPlugin(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, int? port) { throw null; }
 
-        [AspireExport("withManagementPlugin", Description = "Enables the RabbitMQ management plugin")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithManagementPlugin(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder) { throw null; }
     }
 }
@@ -30,7 +30,7 @@ namespace Aspire.Hosting
 namespace Aspire.Hosting.ApplicationModel
 {
     [AspireExport(ExposeProperties = true)]
-    public partial class RabbitMQServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IResourceWithEnvironment
+    public partial class RabbitMQServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, IResourceWithEnvironment
     {
         public RabbitMQServerResource(string name, ParameterResource? userName, ParameterResource password) : base(default!, default) { }
 

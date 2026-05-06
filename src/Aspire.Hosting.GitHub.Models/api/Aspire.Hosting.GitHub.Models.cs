@@ -16,10 +16,10 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "The polyglot overload uses the GitHubModelName enum instead. See the internal AddGitHubModel(GitHubModelName) overload.")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, string name, string model, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? organization = null) { throw null; }
 
-        [AspireExport("withApiKey", Description = "Configures the API key for the GitHub Model resource.")]
+        [AspireExport(Description = "Configures the API key for the GitHub Model resource.")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> WithApiKey(this ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> apiKey) { throw null; }
 
-        [AspireExport("enableHealthCheck", Description = "Adds a health check for the GitHub Model resource.")]
+        [AspireExport("enableHealthCheck", MethodName = "withHealthCheck", Description = "Adds a health check for the GitHub Model resource.")]
         public static ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> WithHealthCheck(this ApplicationModel.IResourceBuilder<GitHub.Models.GitHubModelResource> builder) { throw null; }
     }
 }
@@ -132,7 +132,7 @@ namespace Aspire.Hosting.GitHub
 namespace Aspire.Hosting.GitHub.Models
 {
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
-    public partial class GitHubModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public partial class GitHubModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public GitHubModelResource(string name, string model, ApplicationModel.ParameterResource? organization, ApplicationModel.ParameterResource key) : base(default!) { }
 

@@ -16,7 +16,7 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureSignalRResource> AddAzureSignalR(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport("runAsEmulator", Description = "Configures an Azure SignalR resource to be emulated. This resource requires an Azure SignalR resource to be added to the application model. Please note that the resource will be emulated in Serverless mode.", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Configures an Azure SignalR resource to be emulated. This resource requires an Azure SignalR resource to be added to the application model. Please note that the resource will be emulated in Serverless mode.", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureSignalRResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureSignalRResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureSignalREmulatorResource>>? configureContainer = null) { throw null; }
 
         [AspireExportIgnore(Reason = "SignalRBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureSignalRRole-based overload instead.")]
@@ -27,7 +27,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class AzureSignalRResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IResourceWithEndpoints, Azure.IAzurePrivateEndpointTarget
+    public partial class AzureSignalRResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, IResourceWithEndpoints, Azure.IAzurePrivateEndpointTarget
     {
         public AzureSignalRResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -47,7 +47,7 @@ namespace Aspire.Hosting.ApplicationModel
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
     }

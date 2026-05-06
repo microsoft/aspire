@@ -10,13 +10,13 @@ namespace Aspire.Hosting
 {
     public static partial class QdrantBuilderExtensions
     {
-        [AspireExport("addQdrant", Description = "Adds a Qdrant resource to the application. A container is used for local development.")]
+        [AspireExport(Description = "Adds a Qdrant resource to the application. A container is used for local development.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> AddQdrant(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? apiKey = null, int? grpcPort = null, int? httpPort = null) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a bind mount for the data folder to a Qdrant container resource.")]
+        [AspireExport(Description = "Adds a bind mount for the data folder to a Qdrant container resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a named volume for the data folder to a Qdrant container resource.")]
+        [AspireExport(Description = "Adds a named volume for the data folder to a Qdrant container resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
@@ -32,7 +32,7 @@ namespace Aspire.Hosting
 namespace Aspire.Hosting.ApplicationModel
 {
     [AspireExport(ExposeProperties = true)]
-    public partial class QdrantServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IResourceWithCustomWithReference<QdrantServerResource>
+    public partial class QdrantServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, IResourceWithCustomWithReference<QdrantServerResource>
     {
         public QdrantServerResource(string name, ParameterResource apiKey) : base(default!, default) { }
 

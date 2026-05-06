@@ -10,16 +10,16 @@ namespace Aspire.Hosting
 {
     public static partial class SeqBuilderExtensions
     {
-        [AspireExport("addSeq", Description = "Adds a Seq server container resource")]
+        [AspireExport(Description = "Adds a Seq server container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SeqResource> AddSeq(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? adminPassword, int? port = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Convenience overload. Use the overload with optional adminPassword parameter instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SeqResource> AddSeq(this IDistributedApplicationBuilder builder, string name, int? port = null) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a data bind mount for Seq")]
+        [AspireExport(Description = "Adds a data bind mount for Seq")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SeqResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.SeqResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a data volume for Seq")]
+        [AspireExport(Description = "Adds a data volume for Seq")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SeqResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.SeqResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
     }
 }
@@ -27,7 +27,7 @@ namespace Aspire.Hosting
 namespace Aspire.Hosting.ApplicationModel
 {
     [AspireExport(ExposeProperties = true)]
-    public partial class SeqResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class SeqResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public SeqResource(string name) : base(default!, default) { }
 
