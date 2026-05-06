@@ -216,4 +216,9 @@ internal sealed class ResourceCommandJson
     /// The description of the command.
     /// </summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// The confirmation message shown before executing the command.
+    /// </summary>
+    public string? ConfirmationMessage { get; set; }
 }

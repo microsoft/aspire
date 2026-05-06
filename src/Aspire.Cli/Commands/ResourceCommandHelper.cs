@@ -24,6 +24,7 @@ internal static class ResourceCommandHelper
     /// <param name="progressVerb">The verb to display during progress (e.g., "Starting", "Stopping").</param>
     /// <param name="baseVerb">The base verb for error messages (e.g., "start", "stop").</param>
     /// <param name="pastTenseVerb">The past tense verb for success messages (e.g., "started", "stopped").</param>
+    /// <param name="confirmationBinding">The binding that controls command confirmation prompts.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Exit code indicating success or failure.</returns>
     public static async Task<int> ExecuteResourceCommandAsync(
@@ -35,9 +36,16 @@ internal static class ResourceCommandHelper
         string progressVerb,
         string baseVerb,
         string pastTenseVerb,
+        PromptBinding<bool>? confirmationBinding,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("{Verb} resource '{ResourceName}'", progressVerb, resourceName);
+
+        if (!await ConfirmExecutionAsync(connection, interactionService, resourceName, commandName, confirmationBinding, cancellationToken).ConfigureAwait(false))
+        {
+            interactionService.DisplayMessage(KnownEmojis.Warning, $"{progressVerb} command for '{resourceName}' was canceled.");
+            return ExitCodeConstants.FailedToExecuteResourceCommand;
+        }
 
         var response = await interactionService.ShowStatusAsync(
             $"{progressVerb} resource '{resourceName}'...",
@@ -55,12 +63,19 @@ internal static class ResourceCommandHelper
         ILogger logger,
         string resourceName,
         string commandName,
+        PromptBinding<bool>? confirmationBinding,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
 
         // Route status messages to stderr so command results in stdout remain pipeable (e.g., | jq)
         interactionService.Console = ConsoleOutput.Error;
+
+        if (!await ConfirmExecutionAsync(connection, interactionService, resourceName, commandName, confirmationBinding, cancellationToken).ConfigureAwait(false))
+        {
+            interactionService.DisplayMessage(KnownEmojis.Warning, $"Command '{commandName}' on '{resourceName}' was canceled.");
+            return ExitCodeConstants.FailedToExecuteResourceCommand;
+        }
 
         var response = await interactionService.ShowStatusAsync(
             $"Executing command '{commandName}' on resource '{resourceName}'...",
@@ -89,6 +104,40 @@ internal static class ResourceCommandHelper
         }
 
         return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
+    }
+
+    private static async Task<bool> ConfirmExecutionAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        IInteractionService interactionService,
+        string resourceName,
+        string commandName,
+        PromptBinding<bool>? confirmationBinding,
+        CancellationToken cancellationToken)
+    {
+        var confirmationMessage = await GetConfirmationMessageAsync(connection, resourceName, commandName, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(confirmationMessage))
+        {
+            return true;
+        }
+
+        return await interactionService.PromptConfirmAsync(confirmationMessage, confirmationBinding, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<string?> GetConfirmationMessageAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        string resourceName,
+        string commandName,
+        CancellationToken cancellationToken)
+    {
+        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+        var resources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
+        if (resources.Count == 0)
+        {
+            return null;
+        }
+
+        var command = resources[0].Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparison.OrdinalIgnoreCase));
+        return command?.ConfirmationMessage;
     }
 
     private static int HandleResponse(

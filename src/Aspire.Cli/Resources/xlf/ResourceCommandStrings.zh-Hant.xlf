@@ -17,6 +17,11 @@
         <target state="needs-review-translation">要執行命令的資源名稱。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveOptionDescription">
+        <source>Execute without prompting for command confirmation</source>
+        <target state="new">Execute without prompting for command confirmation</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
         <target state="translated">連線至</target>

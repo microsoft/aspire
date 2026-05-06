@@ -33,6 +33,10 @@ internal sealed class ResourceCommand : BaseCommand
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
+    private static readonly Option<bool> s_nonInteractiveOption = new("--non-interactive")
+    {
+        Description = ResourceCommandStrings.NonInteractiveOptionDescription
+    };
 
     /// <summary>
     /// Well-known commands with their display metadata.
@@ -63,6 +67,7 @@ internal sealed class ResourceCommand : BaseCommand
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_commandArgument);
         Options.Add(s_appHostOption);
+        Options.Add(s_nonInteractiveOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -70,6 +75,7 @@ internal sealed class ResourceCommand : BaseCommand
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var confirmationBinding = PromptBinding.Create(parseResult, s_nonInteractiveOption);
 
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
@@ -95,6 +101,7 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.ProgressVerb,
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
+                confirmationBinding,
                 cancellationToken);
         }
 
@@ -104,6 +111,7 @@ internal sealed class ResourceCommand : BaseCommand
             _logger,
             resourceName,
             commandName,
+            confirmationBinding,
             cancellationToken);
     }
 }

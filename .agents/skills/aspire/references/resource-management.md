@@ -26,6 +26,7 @@ aspire resource <resource> start
 aspire resource <resource> stop
 aspire resource <resource> restart
 aspire resource <resource> <command>
+aspire resource <resource> <command> --non-interactive
 ```
 
 Keep these points in mind:
@@ -33,3 +34,4 @@ Keep these points in mind:
 - Prefer resource-scoped commands when the task does not require an AppHost-wide restart.
 - If the user says one resource is wedged, use `aspire resource <resource> restart` before escalating to `aspire start`.
 - Use `aspire resource <resource> <command>` when the AppHost exposes a resource-specific dashboard or operational command.
+- Resource commands that declare a confirmation message prompt before execution. Use `--non-interactive` only when automation should explicitly accept that confirmation without prompting.
