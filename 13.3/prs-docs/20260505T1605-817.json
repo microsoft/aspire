@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#15595 - --dashboard-url and --api-key CLI options",
+  "mergedAt": "2026-05-05T16:05:11Z",
+  "number": 817,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "included",
+  "title": "[docs] Add --dashboard-url and --api-key options to aspire agent mcp and aspire otel command docs"
+}

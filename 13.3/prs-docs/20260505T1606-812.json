@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "References aspire#16689 which is milestone 13.4, not 13.3",
+  "mergedAt": "2026-05-05T16:06:49Z",
+  "number": 812,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "excluded",
+  "title": "[docs] Document TypeScript validation before AppHost startup"
+}

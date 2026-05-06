@@ -1,1 +1,19 @@
-{"area":"Extensions","areaEmoji":"🧩","breaking":false,"changeType":"New features","communityContributors":[],"description":"The VS Code extension now automatically runs `aspire restore` when the workspace opens or when `aspire.config.json` changes (e.g., after switching git branches). Progress is shown in the status bar with concurrency-limited parallel restores, and the feature can be disabled via the `aspire.enableAutoRestore` setting.","docsRequired":false,"emoji":"🔄","firstMergedAt":"2026-04-03T15:59:30Z","lastMergedAt":"2026-04-03T15:59:30Z","name":"VS Code extension auto-restores packages on workspace open and config change","prs":[15546]}
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The VS Code extension now automatically runs `aspire restore` when the workspace opens or when `aspire.config.json` changes (e.g., after switching git branches). Progress is shown in the status bar with concurrency-limited parallel restores, and the feature can be disabled via the `aspire.enableAutoRestore` setting.",
+  "docsPrs": [
+    813
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd04",
+  "firstMergedAt": "2026-04-03T15:59:30Z",
+  "lastMergedAt": "2026-04-03T15:59:30Z",
+  "name": "VS Code extension auto-restores packages on workspace open and config change",
+  "prs": [
+    15546
+  ]
+}

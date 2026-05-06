@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "References aspire#16673 which is not in milestone 13.3 (milestone 13.4 falling back to main)",
+  "mergedAt": "2026-05-05T15:37:22Z",
+  "number": 805,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "excluded",
+  "title": "[docs] Add ASPIREJAVASCRIPT001 diagnostic documentation"
+}

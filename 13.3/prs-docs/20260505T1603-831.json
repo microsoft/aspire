@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Docs site structure fix, no matching changelog entry",
+  "mergedAt": "2026-05-05T16:03:14Z",
+  "number": 831,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "excluded",
+  "title": "Fix release build diagnostics sidebar"
+}

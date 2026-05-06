@@ -1,1 +1,19 @@
-{"area":"AppHost","areaEmoji":"🏠","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"Polyglot AppHosts (TypeScript, Python, Java) can now configure custom domains for Azure Container Apps using the same ConfigureCustomDomain API that was previously only available in C# AppHosts.","docsRequired":false,"emoji":"🌍","firstMergedAt":"2026-04-03T23:24:27Z","lastMergedAt":"2026-04-03T23:24:27Z","name":"Custom domain configuration in polyglot AppHosts for Azure Container Apps","prs":[15811]}
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Polyglot AppHosts (TypeScript, Python, Java) can now configure custom domains for Azure Container Apps using the same ConfigureCustomDomain API that was previously only available in C# AppHosts.",
+  "docsPrs": [
+    811
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf0d",
+  "firstMergedAt": "2026-04-03T23:24:27Z",
+  "lastMergedAt": "2026-04-03T23:24:27Z",
+  "name": "Custom domain configuration in polyglot AppHosts for Azure Container Apps",
+  "prs": [
+    15811
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site UI fix unrelated to milestone changelog entries",
+  "mergedAt": "2026-05-04T17:50:57Z",
+  "number": 806,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "excluded",
+  "title": "Fix AppHost builder code preview clipping on narrow phones"
+}

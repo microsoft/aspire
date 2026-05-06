@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Tiny docs build fix, no matching changelog entry",
+  "mergedAt": "2026-05-05T22:02:31Z",
+  "number": 843,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "excluded",
+  "title": "Fix build error"
+}

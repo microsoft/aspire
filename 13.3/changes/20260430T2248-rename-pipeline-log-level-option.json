@@ -1,12 +1,15 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "breaking": true,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "The --log-level option on pipeline commands (aspire do, aspire publish, aspire deploy, aspire destroy) has been renamed to --pipeline-log-level to avoid conflicting with the global --log-level flag. Users who pass --log-level to control pipeline verbosity must update their commands to --pipeline-log-level.",
+  "docsPrs": [
+    789
+  ],
   "docsRequired": true,
-  "emoji": "🔧",
+  "emoji": "\ud83d\udd27",
   "firstMergedAt": "2026-04-30T22:48:57Z",
   "lastMergedAt": "2026-04-30T22:48:57Z",
   "name": "Pipeline commands use --pipeline-log-level instead of --log-level",

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#15811 - polyglot ACA custom domain support",
+  "mergedAt": "2026-05-05T16:06:38Z",
+  "number": 811,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "included",
+  "title": "[docs] Add polyglot custom domain support for Azure Container Apps"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#15688 - VS Code editor state indicators",
+  "mergedAt": "2026-05-05T16:12:23Z",
+  "number": 816,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "included",
+  "title": "[docs] VS Code extension: Document editor indicators (gutter icons, code lens, health checks)"
+}

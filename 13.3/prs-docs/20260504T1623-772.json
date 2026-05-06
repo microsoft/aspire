@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#14557 - container tunnel enabled by default",
+  "mergedAt": "2026-05-04T16:23:22Z",
+  "number": 772,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "included",
+  "title": "[docs] Document container tunnel enabled by default in Aspire 13.3"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#16596 - --pipeline-log-level rename",
+  "mergedAt": "2026-05-05T06:53:05Z",
+  "number": 789,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "included",
+  "title": "[docs] Rename pipeline --log-level to --pipeline-log-level in CLI docs"
+}

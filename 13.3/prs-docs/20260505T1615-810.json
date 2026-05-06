@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#15896 - integratedBrowser dashboard default",
+  "mergedAt": "2026-05-05T16:15:52Z",
+  "number": 810,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "included",
+  "title": "[docs] Document integratedBrowser as default dashboard browser option for VS Code extension"
+}

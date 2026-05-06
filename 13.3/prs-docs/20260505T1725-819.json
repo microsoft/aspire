@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#15718 - ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE env var",
+  "mergedAt": "2026-05-05T17:25:46Z",
+  "number": 819,
+  "runDate": "2026-05-06T05:06:48Z",
+  "status": "included",
+  "title": "[docs] Document ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE environment variable"
+}
