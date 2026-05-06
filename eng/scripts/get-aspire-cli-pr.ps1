@@ -1327,7 +1327,7 @@ function Start-InstallFromLocalDir {
     if (-not $HiveOnly) {
         if ($PRNumber -gt 0) {
             $sidecarDir = Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber"
-            $sidecarContent = '{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r ' + $PRNumber + '" }'
+            $sidecarContent = '{ "route": "pr", "updateCommand": "get-aspire-cli-pr.ps1 -PRNumber ' + $PRNumber + '" }'
         } else {
             $sidecarDir = $resolvedInstallPrefix
             $sidecarContent = '{ "route": "script" }'
@@ -1455,7 +1455,7 @@ function Start-DownloadAndInstall {
     if (-not $HiveOnly -and $PRNumber -gt 0) {
         $sidecarDir = Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber"
         $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
-        $sidecarContent = '{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r ' + $PRNumber + '" }'
+        $sidecarContent = '{ "route": "pr", "updateCommand": "get-aspire-cli-pr.ps1 -PRNumber ' + $PRNumber + '" }'
         [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
         [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)
     }
