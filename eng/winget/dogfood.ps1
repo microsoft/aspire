@@ -43,7 +43,7 @@ if ($Uninstall) {
     Write-Host ""
 
     # Try to find the package via winget. v3 ships only the stable package
-    # (Microsoft.Aspire); the prerelease channel was retired in PR2-S7.
+    # (Microsoft.Aspire); the prerelease channel is no longer published.
     $packages = @("Microsoft.Aspire")
     foreach ($pkg in $packages) {
         Write-Host "Checking for $pkg..."

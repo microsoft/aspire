@@ -1,6 +1,6 @@
 # Reusable template for submitting WinGet manifests via wingetcreate.
 # Used by the release flow (release-publish-nuget.yml). v3 ships only the
-# stable channel; the winget prerelease flow was retired in PR2-S7.
+# stable channel; the winget prerelease flow is no longer published.
 
 parameters:
   - name: manifestArtifactPath
