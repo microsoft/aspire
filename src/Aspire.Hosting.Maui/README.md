@@ -186,6 +186,35 @@ builder.Build().Run();
 adb devices
 ```
 
+## Build Queue
+
+When multiple MAUI platform targets reference the same project (e.g., Android, iOS, and Mac Catalyst all using the same `.csproj`), MSBuild cannot handle concurrent builds of the same project file. The hosting integration automatically serializes these builds using a per-project queue.
+
+### How It Works
+
+1. When you start multiple platform resources simultaneously, only one builds at a time
+2. Other platforms show a **"Queued"** state in the dashboard while waiting
+3. Each build shows a **"Building"** state with live MSBuild output in the resource logs
+4. After a build completes and the app launches, the next queued build starts
+5. You can click **Stop** on a queued or building resource to cancel it — the resource shows an **"Exited"** state with an orange indicator
+
+### Key Behaviors
+
+- **Per-project serialization**: The queue is scoped to each `MauiProjectResource`. If you have two separate MAUI projects, they build in parallel. Only platform targets sharing the same project are serialized.
+- **Cancel support**: Clicking Stop on a Queued resource removes it from the queue. Clicking Stop on a Building resource kills the `dotnet build` process.
+- **Restart after cancel**: You can start a cancelled resource again — it re-enters the queue.
+- **Build timeout**: Builds that take longer than 10 minutes are automatically cancelled to prevent a hung build from blocking the queue.
+- **DCP launch hold**: The build lock is held until the app reaches Running state, preventing MSBuild concurrency between the explicit build and DCP's app launch phase.
+
+### Architecture
+
+The build queue is implemented via:
+
+- **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
+- **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
+- **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, and target framework used for the build subprocess
+- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build /t:Run` for MAUI projects
+
 ## Requirements
 
 - .NET 10.0 or later

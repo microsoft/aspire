@@ -9,6 +9,7 @@
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <PackageTags>aspire maui hosting</PackageTags>
     <PackageIconFullPath>$(SharedDir)Maui_265x.png</PackageIconFullPath>
+    <NoWarn>$(NoWarn);ASPIREMAUI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
