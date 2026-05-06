@@ -1,5 +1,6 @@
 # Reusable template for submitting WinGet manifests via wingetcreate.
-# Used by both the prerelease flow (azure-pipelines.yml) and the release flow (release-publish-nuget.yml).
+# Used by the release flow (release-publish-nuget.yml). v3 ships only the
+# stable channel; the winget prerelease flow was retired in PR2-S7.
 
 parameters:
   - name: manifestArtifactPath
@@ -11,7 +12,7 @@ parameters:
     displayName: 'Package version (used in PR title). If empty, extracted from manifest directory structure.'
   - name: packageIdentifier
     type: string
-    displayName: 'WinGet package identifier (e.g. Microsoft.Aspire or Microsoft.Aspire.Prerelease)'
+    displayName: 'WinGet package identifier (e.g. Microsoft.Aspire)'
   - name: dryRun
     type: boolean
     default: false
