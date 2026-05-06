@@ -1,16 +1,16 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Packages.props, $(MSBuildThisFileDirectory)..))" />
   <PropertyGroup>
-    <TestcontainersPackageVersion>4.8.1</TestcontainersPackageVersion>
+    <TestcontainersPackageVersion>4.11.0</TestcontainersPackageVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- unit test dependencies -->
-    <PackageVersion Include="bUnit" Version="1.36.0" /> <!-- Can't update passed to 1.37.x versions as those lift up LTS versions when targeting net8 -->
-    <PackageVersion Include="JsonSchema.Net" Version="7.4.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.2" />
+    <PackageVersion Include="bUnit" Version="2.7.2" /> <!-- Can't update passed to 1.37.x versions as those lift up LTS versions when targeting net8 -->
+    <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.3" />
     <PackageVersion Include="Microsoft.DotNet.RemoteExecutor" Version="$(MicrosoftDotNetRemoteExecutorVersion)" />
     <PackageVersion Include="Microsoft.DotNet.XUnitV3Extensions" Version="$(MicrosoftDotNetXUnitV3ExtensionsVersion)" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.55.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.59.0" />
     <PackageVersion Include="Testcontainers.Kafka" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers.MongoDb" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers.MsSql" Version="$(TestcontainersPackageVersion)" />
