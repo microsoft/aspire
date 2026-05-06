@@ -367,7 +367,7 @@ if (-not $SkipCli) {
   } else {
     # Framework-dependent CLI with embedded bundle payload
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.Tool.csproj"
-    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
+    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" $bundleRid "publish"
     if ($bundlePayloadArchive) {
       Write-Log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
       & dotnet publish $cliProj -c $effectiveConfig "/p:VersionSuffix=$VersionSuffix" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
@@ -376,7 +376,10 @@ if (-not $SkipCli) {
         exit 1
       }
     } elseif (-not (Test-Path -LiteralPath $cliPublishDir)) {
-      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
+      if (-not (Test-Path -LiteralPath $cliPublishDir)) {
+        $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+      }
     }
   }
 

@@ -68,11 +68,16 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="SuggestRemovingAspireAppHostSdkWhenUsingCliBundle" BeforeTargets="PrepareForBuild" Condition="'$(AspireUseCliBundle)' == 'true'">
+    <Message Importance="High"
+             Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=true. You can remove the Aspire.AppHost.Sdk reference, use Microsoft.NET.Sdk, and reference Aspire.Hosting.AppHost directly." />
+  </Target>
+
   <!-- This target extracts the version of Aspire.Hosting.AppHost referenced by the project, and adds
        a reference to Aspire.Dashboard.Sdk and Aspire.Hosting.Orchestration for the build-time platform using
        the same version. This is done here dynamically to avoid having to pull in DCP and Dashboard packages
        for all of the platforms. This mechanism can be disabled by setting `SkipAddAspireDefaultReferences` to `true` -->
-  <Target Name="AddReferenceToDashboardAndDCP" BeforeTargets="Restore;CollectPackageReferences" AfterTargets="AddImplicitAspireAppHostPackage" Condition="'$(SkipAddAspireDefaultReferences)' != 'true'">
+  <Target Name="AddReferenceToDashboardAndDCP" BeforeTargets="Restore;CollectPackageReferences" AfterTargets="AddImplicitAspireAppHostPackage" Condition="'$(SkipAddAspireDefaultReferences)' != 'true' and '$(AspireUseCliBundle)' != 'true'">
 
     <!-- First, we assume project is not using Central Package Management, and we try to extract the version
          from PackageReference Items. -->

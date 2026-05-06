@@ -4,6 +4,9 @@
     <!-- Aspire hosting projects aren't publishable right now until https://github.com/microsoft/aspire/issues/147 is good -->
     <IsPublishable Condition="'$(IsPublishable)' == ''">false</IsPublishable>
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
+    <!-- Satisfy the .NET SDK's deprecated Aspire workload check for projects that reference Aspire.Hosting.AppHost directly.
+         Aspire.Hosting.AppHost.targets emits Aspire-specific diagnostics for unsupported project shapes. -->
+    <AspireHostingSDKVersion Condition="'$(AspireHostingSDKVersion)' == ''">9.0.0</AspireHostingSDKVersion>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(Language)' == 'C#' AND ('$(ImplicitUsings)' == 'true' or '$(ImplicitUsings)' == 'enable')">

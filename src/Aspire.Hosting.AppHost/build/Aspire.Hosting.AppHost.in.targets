@@ -1,6 +1,8 @@
 <Project>
 
   <PropertyGroup>
+    <IsAspireHost Condition="'$(AspireUseCliBundle)' == 'true' and '$(IsAspireHost)' == ''">true</IsAspireHost>
+
     <!-- Similar to ASP.NET Core and Worker apps, set the default CWD of orchestrator projects to be the project directory. -->
     <RunWorkingDirectory Condition=" '$(RunWorkingDirectory)' == '' and '$(EnableDefaultRunWorkingDirectory)' != 'false' ">$(MSBuildProjectDirectory)</RunWorkingDirectory>
     <AspireGeneratedClassesVisibility Condition="'$(AspireGeneratedClassesVisibility)' == ''">public</AspireGeneratedClassesVisibility>
@@ -16,6 +18,8 @@
   <!-- Use TaskHostFactory when running in the repo so the Aspire.Hosting.Tasks.dll assembly is not locked. -->
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="GetNonExecutableReferences" AssemblyFile="$(_AspireTasksAssembly)" />
   <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="GetNonExecutableReferences" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' != 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" />
+  <UsingTask Condition="'$(_AspireUseTaskHostFactory)' == 'true'" TaskName="ResolveAspireCliBundle" AssemblyFile="$(_AspireTasksAssembly)" TaskFactory="TaskHostFactory" />
 
   <ItemGroup>
     <ProjectCapability Include="Aspire" Condition=" '$(IsAspireHost)' == 'true' " />
@@ -184,8 +188,36 @@ namespace Projects%3B
      and reference them for compilation. There will be a ClassName.ProjectMetadata.g.cs file for each referenced project. -->
   <Target Name="WriteAspireProjectMetadataSources" DependsOnTargets="$(WriteAspireProjectMetadataSourcesDependsOn)" BeforeTargets="CoreCompile" />
 
+  <Target Name="SetAspireHostingSdkVersionForCliBundle"
+          BeforeTargets="_CheckForAspireWorkloadDeprecation;PrepareForBuild"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(AspireHostingSDKVersion)' == ''">
+    <PropertyGroup>
+      <AspireHostingSDKVersion>@VERSION@</AspireHostingSDKVersion>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="ResolveAspireCliBundlePaths"
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
+    <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
+                             AspireCliPath="$(AspireCliPath)">
+      <Output TaskParameter="DcpDir" PropertyName="_AspireCliBundleDcpDir" />
+      <Output TaskParameter="AspireDashboardDir" PropertyName="_AspireCliBundleDashboardDir" />
+      <Output TaskParameter="AspireDashboardPath" PropertyName="_AspireCliBundleDashboardPath" />
+    </ResolveAspireCliBundle>
+
+    <PropertyGroup>
+      <DcpDir Condition="'$(DcpDir)' == ''">$(_AspireCliBundleDcpDir)</DcpDir>
+      <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
+      <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
+    </PropertyGroup>
+  </Target>
+
   <!-- This target registers the location of the Aspire orchestration dependencies -->
-  <Target Name="SetOrchestrationDiscoveryAttributes" BeforeTargets="GetAssemblyAttributes" Condition=" '$(DcpDir)' != '' ">
+  <Target Name="SetOrchestrationDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(DcpDir)' != '' or '$(AspireUseCliBundle)' == 'true' ">
+    <Error Code="ASPIRE009"
+           Condition="'$(DcpDir)' == ''"
+           Text="$(MSBuildProjectName) project is configured with AspireUseCliBundle=true, but the DCP path could not be resolved. Ensure 'aspire' is installed on PATH, set 'AspireCliBundlePath' to a valid bundle layout, or set 'DcpDir' explicitly." />
+
     <PropertyGroup>
       <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(DcpDir)'))</DcpDir>
       <DcpExtensionsDir Condition=" '$(DcpExtensionsDir)' == '' ">$([MSBuild]::NormalizePath($(DcpDir), 'ext'))</DcpExtensionsDir>
@@ -214,12 +246,17 @@ namespace Projects%3B
     </ItemGroup>
   </Target>
 
-  <Target Name="SetDashboardDiscoveryAttributes" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireDashboardDir)' != '' ">
+  <Target Name="SetDashboardDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireDashboardDir)' != '' or '$(AspireDashboardPath)' != '' or '$(AspireUseCliBundle)' == 'true' ">
+    <Error Code="ASPIRE009"
+           Condition="'$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''"
+           Text="$(MSBuildProjectName) project is configured with AspireUseCliBundle=true, but the Aspire Dashboard path could not be resolved. Ensure 'aspire' is installed on PATH, set 'AspireCliBundlePath' to a valid bundle layout, or set 'AspireDashboardDir' explicitly." />
+
     <PropertyGroup>
-      <AspireDashboardDir>$([MSBuild]::EnsureTrailingSlash('$(AspireDashboardDir)'))</AspireDashboardDir>
+      <AspireDashboardDir Condition=" '$(AspireDashboardDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireDashboardDir)'))</AspireDashboardDir>
+      <_AspireDashboardPathInferredFromDir Condition=" '$(AspireDashboardPath)' == '' and '$(AspireDashboardDir)' != '' ">true</_AspireDashboardPathInferredFromDir>
       <AspireDashboardPath Condition=" '$(AspireDashboardPath)' == '' ">$([MSBuild]::NormalizePath($(AspireDashboardDir), 'Aspire.Dashboard'))</AspireDashboardPath>
-      <AspireDashboardPath Condition=" '$(OS)' == 'Windows_NT' and !$(AspireDashboardPath.EndsWith('.exe')) ">$(AspireDashboardPath).exe</AspireDashboardPath>
-      <AspireDashboardPath Condition="$([MSBuild]::IsOsPlatform('OSX')) and !$(AspireDashboardPath.EndsWith('.dll'))">$(AspireDashboardPath).dll</AspireDashboardPath>
+      <AspireDashboardPath Condition=" '$(_AspireDashboardPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireDashboardPath.EndsWith('.exe')) ">$(AspireDashboardPath).exe</AspireDashboardPath>
+      <AspireDashboardPath Condition=" '$(_AspireDashboardPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireDashboardPath.EndsWith('.dll'))">$(AspireDashboardPath).dll</AspireDashboardPath>
     </PropertyGroup>
 
     <ItemGroup>
@@ -255,7 +292,7 @@ namespace Projects%3B
   </Target>
 
   <Target Name="__ErrorOnMininumSdkVersionMissing" BeforeTargets="PrepareForBuild"
-  Condition="'$(IsAspireHost)' == 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
+  Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' != 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
     <Error Code="ASPIRE007"
       Text="$(MSBuildProjectName) project requires a reference to &quot;Aspire.AppHost.Sdk&quot; with version &quot;9.0.0&quot; or greater to work correctly. Please add the following line after the Project declaration `&lt;Sdk Name=&quot;Aspire.AppHost.Sdk&quot; Version=&quot;9.0.0&quot; /&gt;`."
       File="$(MSBuildProjectFullPath)"
