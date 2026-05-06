@@ -435,6 +435,33 @@ public class AtsCapabilityScannerTests
         Assert.True(capability.RunSyncOnBackgroundThread);
     }
 
+    [Fact]
+    public void ScanAssembly_MethodNameCollision_PrefersConcreteTargetAndKeepsGenericElsewhere()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var testResourceTypeId = AtsTypeMapping.DeriveTypeId(typeof(TestResource));
+        var otherTestResourceTypeId = AtsTypeMapping.DeriveTypeId(typeof(OtherTestResource));
+
+        var genericCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testGenericCollision", StringComparison.Ordinal));
+        var concreteCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testConcreteCollision", StringComparison.Ordinal));
+
+        Assert.DoesNotContain(genericCapability.ExpandedTargetTypes, t => t.TypeId == testResourceTypeId);
+        Assert.Contains(genericCapability.ExpandedTargetTypes, t => t.TypeId == otherTestResourceTypeId);
+        Assert.Contains(concreteCapability.ExpandedTargetTypes, t => t.TypeId == testResourceTypeId);
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning &&
+            diagnostic.Message.Contains("testGenericCollision", StringComparison.Ordinal) &&
+            diagnostic.Message.Contains("testConcreteCollision", StringComparison.Ordinal) &&
+            diagnostic.Location is not null &&
+            diagnostic.Location.EndsWith("/testGenericCollision", StringComparison.Ordinal));
+
+        Assert.Contains(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/testGlobalCapability", StringComparison.Ordinal));
+    }
+
     #endregion
 
     #region Exported Value Tests
@@ -533,6 +560,13 @@ public class AtsCapabilityScannerTests
         }
     }
 
+    private sealed class OtherTestResource : Resource
+    {
+        public OtherTestResource(string name) : base(name)
+        {
+        }
+    }
+
     public sealed class AssemblyLevelExportedTestType
     {
     }
@@ -561,6 +595,32 @@ public class AtsCapabilityScannerTests
             _ = callback;
             return builder;
         }
+
+        [AspireExport("testGenericCollision", MethodName = "withCollision")]
+        public static IResourceBuilder<T> TestGenericCollision<T>(IResourceBuilder<T> builder)
+            where T : IResource
+        {
+            return builder;
+        }
+
+        [AspireExport("testConcreteCollision", MethodName = "withCollision")]
+        public static IResourceBuilder<TestResource> TestConcreteCollision(IResourceBuilder<TestResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport]
+        public static IResourceBuilder<OtherTestResource> TestOtherResource(IResourceBuilder<OtherTestResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport]
+        public static string TestGlobalCapability()
+        {
+            return "value";
+        }
+
     }
 
     private static class InvalidExportedValues

@@ -143,6 +143,11 @@ public class AzureCognitiveServicesProjectResource :
     /// </summary>
     public BicepOutputReference PrincipalId => new("principalId", this);
 
+    internal IReadOnlyList<CognitiveServicesBuiltInRole> ParentAccountRoleAssignments { get; set; } =
+    [
+        CognitiveServicesBuiltInRole.CognitiveServicesUser
+    ];
+
     internal BicepOutputReference ContainerRegistryUrl => new("AZURE_CONTAINER_REGISTRY_ENDPOINT", this);
     internal BicepOutputReference ContainerRegistryName => new("AZURE_CONTAINER_REGISTRY_NAME", this);
     // Mnaged identity used for client access to container registry

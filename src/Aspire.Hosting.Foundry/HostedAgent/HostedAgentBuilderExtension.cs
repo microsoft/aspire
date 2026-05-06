@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -322,6 +323,17 @@ public static class HostedAgentResourceBuilderExtensions
             ComputeEnvironment = projResource,
             ContainerRegistry = projResource.ContainerRegistry
         });
+
+        builder.ApplicationBuilder.CreateResourceBuilder(target)
+            .WithReferenceRelationship(projResource);
+
+        // Hosted agents deploy from the target compute resource, so the target needs the project role assignment.
+        if ((!target.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var roleAssignments) ||
+            !roleAssignments.Any(a => ReferenceEquals(a.Target, projResource))) &&
+            projResource.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaultRoleAssignments))
+        {
+            target.Annotations.Add(new RoleAssignmentAnnotation(projResource, defaultRoleAssignments.Roles));
+        }
 
         builder.ApplicationBuilder.AddResource(agent)
             .WithReferenceRelationship(target)

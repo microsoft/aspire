@@ -45,6 +45,11 @@ func main() {
 	search := builder.AddAzureSearch("search")
 
 	project := foundry.AddProject("project")
+	project.WithRoleAssignments(foundry, []aspire.FoundryRole{
+		aspire.FoundryRoleCognitiveServicesOpenAIContributor,
+		aspire.FoundryRoleCognitiveServicesOpenAIUser,
+		aspire.FoundryRoleCognitiveServicesUser,
+	})
 	project.WithContainerRegistry(registry)
 	project.WithKeyVault(keyVault)
 	project.WithAppInsights(appInsights)
@@ -130,12 +135,8 @@ server.listen(port, '127.0.0.1');
 		},
 	})
 
-	_ = builder.AddContainer("api", "nginx")
-	_ = []aspire.FoundryRole{
-		aspire.FoundryRoleCognitiveServicesOpenAIUser,
-		aspire.FoundryRoleCognitiveServicesUser,
-	}
-
+	api := builder.AddContainer("api", "nginx")
+	api.WithReference(project)
 	_, _ = chat.DeploymentName()
 	_, _ = chat.ModelName()
 	_, _ = chat.Format()

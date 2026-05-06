@@ -30,6 +30,11 @@ void main() throws Exception {
         var search = builder.addAzureSearch("search");
 
         var project = foundry.addProject("project");
+        project.withRoleAssignments(foundry, new FoundryRole[] {
+            FoundryRole.COGNITIVE_SERVICES_OPEN_AICONTRIBUTOR,
+            FoundryRole.COGNITIVE_SERVICES_OPEN_AIUSER,
+            FoundryRole.COGNITIVE_SERVICES_USER
+        });
         project.withContainerRegistry(registry);
         project.withKeyVault(keyVault);
         project.withAppInsights(appInsights);
@@ -117,6 +122,7 @@ server.listen(port, '127.0.0.1');
             }));
 
         var api = builder.addContainer("api", "nginx");
+        api.withReference(project, null);
         foundry.withRoleAssignments(registry, new AzureContainerRegistryRole[] {
             AzureContainerRegistryRole.ACR_PULL
         });
