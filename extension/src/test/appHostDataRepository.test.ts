@@ -125,6 +125,46 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('describe watch reports minimum AppHost version when workspace AppHost exits without unsupported command output', async () => {
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = options?.lineCallback;
+            return new TestChildProcess();
+        });
+        spawnStub.onSecondCall().returns(new TestChildProcess());
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                ],
+            }));
+            await waitForMicrotasks();
+
+            const exitCallback = spawnStub.secondCall.args[3].exitCallback;
+            exitCallback(1);
+
+            assert.strictEqual(repository.hasError, true);
+            assert.ok(repository.errorMessage?.includes('Aspire.Hosting 13.2.0'), repository.errorMessage);
+            assert.ok(!repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('describe watch clears compatibility error after receiving resource data', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 

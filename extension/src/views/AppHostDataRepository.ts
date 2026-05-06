@@ -377,7 +377,7 @@ export class AppHostDataRepository {
                     if (!this._describeReceivedData) {
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
-                        this._setError(this._getDescribeNoDataError(code, describeNonJsonLines, describeStderr));
+                        this._setError(this._getDescribeNoDataError(describeNonJsonLines, describeStderr));
                         this._updateWorkspaceContext();
                         return;
                     }
@@ -479,8 +479,8 @@ export class AppHostDataRepository {
         return false;
     }
 
-    private _getDescribeNoDataError(code: number | null, nonJsonLines: readonly string[], stderr: string): string | undefined {
-        if (isDescribeUnsupportedOutput(nonJsonLines, stderr) || (code !== null && code !== 0)) {
+    private _getDescribeNoDataError(nonJsonLines: readonly string[], stderr: string): string | undefined {
+        if (isDescribeUnsupportedOutput(nonJsonLines, stderr)) {
             return aspireCliDescribeNotSupported(aspireDescribeMinimumVersion);
         }
 
