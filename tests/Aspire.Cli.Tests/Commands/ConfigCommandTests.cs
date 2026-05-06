@@ -934,6 +934,11 @@ public class TestConfigurationService : IConfigurationService
         return Task.FromResult<string?>(key);
     }
 
+    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+    {
+        return GetConfigurationAsync(key, cancellationToken);
+    }
+
     public string GetSettingsFilePath(bool isGlobal)
     {
         return string.Empty;
