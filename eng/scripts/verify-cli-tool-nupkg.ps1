@@ -192,7 +192,7 @@ try {
     # The route sidecar (.aspire-install.json) MUST live next to the binary in the
     # RID-specific nupkg at tools/net10.0/<rid>/. The CLI's IInstallPathResolver
     # reads it to identify the install route; missing sidecar leaves
-    # 'aspire update --self' unable to delegate. See acquisition design v3 §2.3.
+    # 'aspire update --self' unable to delegate.
     $expectedSidecarPath = "tools/net10.0/$Rid/.aspire-install.json"
     $sidecarFullPath = Join-Path $ridExtract $expectedSidecarPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
     if (-not (Test-Path -LiteralPath $sidecarFullPath)) {

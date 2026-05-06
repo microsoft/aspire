@@ -192,8 +192,8 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     }
 
     // The script-route sidecar carries route metadata only — no "channel" key.
-    // Channel storage was removed from the global aspire.config.json; the sidecar
-    // must not reintroduce it. This guards against accidental field bleed-through.
+    // Verify the sidecar does not include a channel field, guarding against field
+    // bleed-through from other configuration sources.
     [Fact]
     public async Task DryRun_ScriptRouteSidecar_DoesNotContainChannelKey()
     {

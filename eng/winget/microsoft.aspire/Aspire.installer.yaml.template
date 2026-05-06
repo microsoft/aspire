@@ -15,7 +15,7 @@ Commands:
 InstallModes:
 - silent
 # Scope: user keeps the install under %LOCALAPPDATA% so admin-machine installs
-# do not land in read-only %PROGRAMFILES% (acquisition design v3 §3.4).
+# do not land in read-only system directories like %PROGRAMFILES%.
 Scope: user
 UpgradeBehavior: uninstallPrevious
 ReleaseDate: ${RELEASE_DATE}

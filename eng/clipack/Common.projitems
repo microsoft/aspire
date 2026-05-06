@@ -52,7 +52,7 @@
     winget zip and brew tarball templates declare in their comments.
 
     Sidecar route is gated on $(CliRuntime) so each per-RID archive ships the correct
-    content for its consumer (acquisition design v3 §2.2 / §3.4):
+    content for its consumer:
 
       - win-*  → winget consumer  → { "route": "winget", "updateCommand": "winget upgrade Microsoft.Aspire" }
       - osx-*  → brew cask        → { "route": "brew",   "updateCommand": "brew upgrade aspire" }

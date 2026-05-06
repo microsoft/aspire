@@ -1326,7 +1326,6 @@ function Start-InstallFromLocalDir {
     # source artifacts are gone after extraction, so there is no managed self-update
     # path. Without a sidecar, InstallPathResolver returns Unknown and downstream
     # consumers (e.g. 'aspire update') will not assume any managed route.
-    # See acquisition design v3 §2.2.
     #
     # .NET I/O is used directly so the sidecar is written even under -WhatIf, where
     # PowerShell cmdlets that support ShouldProcess silently no-op.

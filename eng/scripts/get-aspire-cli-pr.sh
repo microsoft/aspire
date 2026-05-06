@@ -1107,7 +1107,6 @@ install_from_local_dir() {
     # source artifacts are gone after extraction, so there is no managed self-update
     # path. Without a sidecar, InstallPathResolver returns Unknown and downstream
     # consumers (e.g. 'aspire update') will not assume any managed route.
-    # See acquisition design v3 §2.2.
     if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
         local sidecar_dir sidecar_content
         sidecar_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
