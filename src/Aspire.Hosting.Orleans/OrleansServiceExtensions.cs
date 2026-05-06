@@ -360,6 +360,34 @@ public static class OrleansServiceExtensions
     }
 
     /// <summary>
+    /// Adds a custom provider type to the resource that will be used for Orleans.
+    /// </summary>
+    /// <example>
+    /// Garnet can be used as a drop-in replacement for Redis.
+    /// Since Orleans only knows how to use the "Redis" client in its <c>RedisClusteringProviderBuilder</c> and other provider builders,
+    /// we need to override the provider type of "Garnet" (derived from the type <c>GarnetResource</c>) to be "Redis".
+    /// This does not only apply to clustering, but also to other Orleans providers that can use drop-in replacements,
+    /// such as stream providers, grain directory providers and grain storage.
+    /// <code>
+    /// var garnet = builder.AddGarnet("garnet")
+    ///   .WithOrleansProviderType("Redis");
+    ///
+    /// var orleans = builder.AddOrleans("orleans")
+    ///   .WithClustering(garnet);
+    /// </code>
+    /// </example>
+    /// <param name="builder">The builder of the resource that should be annotated.</param>
+    /// <param name="providerType">The provider type to use.</param>
+    /// <returns>The resource builder.</returns>
+    public static IResourceBuilder<T> WithOrleansProviderType<T>(this IResourceBuilder<T> builder, string providerType)
+        where T : IResource
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerType);
+
+        return builder.WithAnnotation(new OrleansProviderTypeAnnotation { ProviderType = providerType });
+    }
+
+    /// <summary>
     /// Returns a model of the clients of an Orleans service.
     /// </summary>
     /// <param name="orleansService">The Orleans service</param>
