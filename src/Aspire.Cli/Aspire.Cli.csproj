@@ -47,6 +47,13 @@
     <PublishRuntimeConfigFilePath></PublishRuntimeConfigFilePath>
   </PropertyGroup>
 
+  <!-- IsRidSpecificToolPackage marks RID-specific dotnet-tool packs (clipack passes a
+       RuntimeIdentifier; the pointer pack does not). Only the RID-specific tool nupkgs ship
+       the .aspire-install.json sidecar — the pointer nupkg is a routing stub. -->
+  <PropertyGroup Condition="'$(IsCliToolProject)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <IsRidSpecificToolPackage>true</IsRidSpecificToolPackage>
+  </PropertyGroup>
+
   <Target Name="_PreparePreBuiltCliBinaryForPackTool"
           BeforeTargets="PackTool"
           Condition="'$(IsCliToolProject)' == 'true'">
@@ -57,6 +64,11 @@
     <RemoveDir Directories="$(PublishDir)" />
     <MakeDir Directories="$(PublishDir)" />
     <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+
+    <!-- Ship the route sidecar only in RID-specific tool nupkgs, not in the pointer nupkg. -->
+    <Copy Condition="'$(IsRidSpecificToolPackage)' == 'true'"
+          SourceFiles="$(MSBuildThisFileDirectory).aspire-install.json"
+          DestinationFolder="$(PublishDir)" />
   </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
