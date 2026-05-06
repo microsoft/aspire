@@ -58,20 +58,28 @@ internal sealed class ResourceLogSource<TResource>(
             {
                 await foreach (var rawLine in ReadLogLinesAsync(stream, cancellationToken).ConfigureAwait(false))
                 {
-                    var line = NormalizeCarriageReturns(rawLine);
                     var lineIsError = isError;
                     DateTime? timestamp = null;
                     string? rawContent = null;
+                    string line;
 
-                    // Parse DCP logs if requested
-                    if (parseDcpLogs && DcpLogParser.TryParseDcpLog(line, out var parsedMessage, out _, out var isErrorLevel, out var dcpTimestamp))
+                    // Attempt DCP parsing before CR normalization to avoid corrupting the
+                    // tab-delimited structure (timestamp\tlevel\tcategory\tmessage) that
+                    // NormalizeCarriageReturns would otherwise alter if \r appears in the payload.
+                    if (parseDcpLogs && DcpLogParser.TryParseDcpLog(rawLine, out var parsedMessage, out _, out var isErrorLevel, out var dcpTimestamp))
                     {
+                        // Normalize carriage returns in the message content only.
+                        var normalizedMessage = NormalizeCarriageReturns(parsedMessage);
                         // Format system logs with [sys] prefix and improved readability
-                        line = DcpLogParser.FormatSystemLog(parsedMessage);
+                        line = DcpLogParser.FormatSystemLog(normalizedMessage);
                         lineIsError = isErrorLevel;
                         timestamp = dcpTimestamp?.UtcDateTime;
                         // Build raw content with the timestamp prefix so LogEntry.RawContent retains the timestamp for export.
                         rawContent = timestamp is not null ? $"{timestamp.Value:o} {line}" : line;
+                    }
+                    else
+                    {
+                        line = NormalizeCarriageReturns(rawLine);
                     }
                     var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, lineIsError, timestamp, rawContent));
                     if (!succeeded)

@@ -986,6 +986,69 @@ public class DcpExecutorTests
         Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("50%"));
     }
 
+    [Fact]
+    public async Task ResourceLogging_SystemStreamWithCarriageReturnInMessage_ParsesCorrectly()
+    {
+        // Regression test: NormalizeCarriageReturns must not be applied to the full DCP raw line
+        // before parsing; doing so would corrupt the tab-delimited structure and cause the parser
+        // to fail, dropping the [sys] prefix and timestamp.
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService(startStream: (obj, logStreamType) =>
+        {
+            switch (logStreamType)
+            {
+                case Logs.StreamTypeStdOut:
+                case Logs.StreamTypeStdErr:
+                case Logs.StreamTypeStartupStdOut:
+                case Logs.StreamTypeStartupStdErr:
+                    return new MemoryStream();
+                case Logs.StreamTypeSystem:
+                    // A DCP log line whose message content contains \r (e.g. a progress-style
+                    // overwrite inside a system log message).  The tab-delimited header must
+                    // be parsed first so the \r normalization only applies to the message part.
+                    var systemLogs =
+                        "2024-08-19T06:10:01.000Z\tinfo\tdcp.ExecutableReconciler\tfirst\rsecond\rthird" + Environment.NewLine;
+                    return new MemoryStream(Encoding.UTF8.GetBytes(systemLogs));
+                default:
+                    throw new InvalidOperationException("Unexpected type: " + logStreamType);
+            }
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
+        var resourceLoggerService = new ResourceLoggerService();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, resourceLoggerService: resourceLoggerService);
+        await appExecutor.RunApplicationAsync();
+
+        var exeResource = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        var watchSubscribers = resourceLoggerService.WatchAnySubscribersAsync();
+        var watchSubscribersEnumerator = watchSubscribers.GetAsyncEnumerator();
+        var watchLogs = resourceLoggerService.WatchAsync(exeResource.Metadata.Name);
+        var watchLogsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(watchLogs, targetLogCount: 2);
+
+        await watchSubscribersEnumerator.MoveNextAsync();
+        Assert.Equal(exeResource.Metadata.Name, watchSubscribersEnumerator.Current.Name);
+        Assert.True(watchSubscribersEnumerator.Current.AnySubscribers);
+
+        exeResource.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(exeResource);
+
+        var watchLogsResults = await watchLogsTask;
+
+        // The entry should be parsed as a DCP [sys] log (not plain stdout) with the
+        // last \r-overwritten segment ("third") preserved as the message content.
+        Assert.Contains(watchLogsResults, l => l.Content.Contains("[sys] third"));
+        Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("first"));
+    }
+
     private sealed class LogStreamPipes
     {
         public Pipe StandardOut { get; set; } = default!;
