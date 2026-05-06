@@ -60,6 +60,7 @@ internal sealed class DevTunnelCli
         return RunAsync(new ArgsBuilder(["create"])
             .AddIfNotNull(tunnelId)
             .AddIfNotNull("--description", options.Description)
+            .AddIfNotNull("--service-uri", GetServiceUri(options))
             .AddIfTrue("--allow-anonymous", options.AllowAnonymous)
             .AddValues("--labels", options.Labels)
             .Add("--json")
@@ -390,6 +391,16 @@ internal sealed class DevTunnelCli
                 onLine(line);
             }
         }
+    }
+
+    private static string? GetServiceUri(DevTunnelOptions options)
+    {
+        if (options.Region is null)
+        {
+            return null;
+        }
+
+        return $"https://{options.RegionCode}.rel.tunnels.api.visualstudio.com";
     }
 }
 
