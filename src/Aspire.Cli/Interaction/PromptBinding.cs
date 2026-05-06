@@ -109,13 +109,6 @@ internal static class PromptBinding
         new(parseResult, FormatOptionName(option), BuildOptionResolver(option), defaultValue, hasExplicitDefault: true);
 
     /// <summary>
-    /// Creates a <see cref="PromptBinding{T}"/> that uses <paramref name="interactiveDefault"/> as the
-    /// default for interactive prompts but still requires the CLI option in non-interactive mode.
-    /// </summary>
-    public static PromptBinding<T> CreateWithInteractiveDefault<T>(ParseResult parseResult, Option<T> option, T interactiveDefault) =>
-        new(parseResult, FormatOptionName(option), BuildOptionResolver(option), interactiveDefault, hasExplicitDefault: false);
-
-    /// <summary>
     /// Creates a <see cref="PromptBinding{T}"/> with only a default value and no CLI symbol binding.
     /// Use when there is no corresponding CLI option or argument for the prompt.
     /// </summary>
