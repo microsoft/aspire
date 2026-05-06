@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -11,6 +12,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
 
@@ -30,6 +32,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly TimeProvider _timeProvider;
     private readonly IProjectUpdater _projectUpdater;
     private readonly IDotNetSdkInstaller _sdkInstaller;
+    private readonly IBundleService _bundleService;
     private readonly RunningInstanceManager _runningInstanceManager;
     private readonly Diagnostics.FileLoggerProvider _fileLoggerProvider;
     private readonly Program.CliLoggingOptions _loggingOptions;
@@ -46,6 +49,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IFeatures features,
         IProjectUpdater projectUpdater,
         IDotNetSdkInstaller sdkInstaller,
+        IBundleService bundleService,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
@@ -58,6 +62,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _features = features;
         _projectUpdater = projectUpdater;
         _sdkInstaller = sdkInstaller;
+        _bundleService = bundleService;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
@@ -310,6 +315,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
 
+        var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
+        if (canQueryCliBundleProperty && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+        {
+            await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
+        }
+
         // Create collector and store in context for exception handling
         // This must be set BEFORE signaling build completion to avoid a race condition
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
@@ -486,6 +497,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 throw exception;
             }
 
+            if (await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+            {
+                await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
+            }
+
             // Build the apphost (unless --no-build is specified)
             if (!context.NoBuild)
             {
@@ -655,6 +671,50 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         {
             _logger.LogDebug(ex, "Failed to get UserSecretsId from project file");
             return null;
+        }
+    }
+
+    private async Task<bool> IsUsingCliBundleAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    {
+        var (exitCode, jsonDocument) = await _runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["AspireUseCliBundle"],
+            new ProcessInvocationOptions(),
+            cancellationToken);
+
+        if (exitCode != 0 || jsonDocument is null)
+        {
+            return false;
+        }
+
+        var rootElement = jsonDocument.RootElement;
+        if (!rootElement.TryGetProperty("Properties", out var properties) ||
+            !properties.TryGetProperty("AspireUseCliBundle", out var useCliBundleElement))
+        {
+            return false;
+        }
+
+        return string.Equals(useCliBundleElement.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ConfigureCliBundleEnvironmentAsync(Dictionary<string, string> env, CancellationToken cancellationToken)
+    {
+        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken);
+        if (layout is null)
+        {
+            _logger.LogDebug("AspireUseCliBundle is enabled, but the Aspire CLI bundle layout was not available from this CLI process.");
+            return;
+        }
+
+        if (!env.ContainsKey(BundleDiscovery.DcpPathEnvVar) && layout.GetDcpPath() is { } dcpPath)
+        {
+            env[BundleDiscovery.DcpPathEnvVar] = dcpPath;
+        }
+
+        if (!env.ContainsKey(BundleDiscovery.DashboardPathEnvVar) && layout.GetManagedPath() is { } managedPath)
+        {
+            env[BundleDiscovery.DashboardPathEnvVar] = managedPath;
         }
     }
 

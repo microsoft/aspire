@@ -373,7 +373,7 @@ if [[ $SKIP_CLI -eq 0 ]]; then
   else
     # Framework-dependent CLI with embedded bundle payload
     CLI_PROJ="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.Tool.csproj"
-    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"
+    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
       log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
       dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
@@ -382,7 +382,10 @@ if [[ $SKIP_CLI -eq 0 ]]; then
         exit 1
       fi
     elif [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
-      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"
+      if [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
+        CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+      fi
     fi
   fi
 
