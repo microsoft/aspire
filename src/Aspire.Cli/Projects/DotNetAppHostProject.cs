@@ -315,7 +315,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
 
-        if (!isSingleFileAppHost && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+        var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
+        if (canQueryCliBundleProperty && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
         {
             await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
         }
