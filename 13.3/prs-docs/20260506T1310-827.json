@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents agent init interactive flow update (aspire#15022)",
+  "mergedAt": "2026-05-06T13:10:30Z",
+  "number": 827,
+  "runDate": "2026-05-06T14:56:00Z",
+  "status": "included",
+  "title": "[docs] Update agent init docs for new interactive flow, skill locations, and dotnet-inspect skill"
+}

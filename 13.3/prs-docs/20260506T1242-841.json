@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Yarn Classic rejection for TypeScript AppHosts (aspire#16792)",
+  "mergedAt": "2026-05-06T12:42:21Z",
+  "number": 841,
+  "runDate": "2026-05-06T14:56:00Z",
+  "status": "included",
+  "title": "[docs] Add package manager requirements for TypeScript AppHosts (Yarn Classic not supported)"
+}

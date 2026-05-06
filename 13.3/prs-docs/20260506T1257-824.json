@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "npm dependency bump, not related to milestone changelog",
+  "mergedAt": "2026-05-06T12:57:01Z",
+  "number": 824,
+  "runDate": "2026-05-06T14:56:00Z",
+  "status": "excluded",
+  "title": "build(deps): bump the npm-all group across 1 directory with 8 updates"
+}

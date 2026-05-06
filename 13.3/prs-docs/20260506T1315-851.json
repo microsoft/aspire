@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "simple-git dependency bump, not related to milestone changelog",
+  "mergedAt": "2026-05-06T13:15:04Z",
+  "number": 851,
+  "runDate": "2026-05-06T14:56:00Z",
+  "status": "excluded",
+  "title": "build(deps): bump simple-git from 3.33.0 to 3.36.0 in /src/frontend"
+}

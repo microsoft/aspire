@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents AppHost eventing builder extension methods (aspire#14119)",
+  "mergedAt": "2026-05-06T13:16:16Z",
+  "number": 821,
+  "runDate": "2026-05-06T14:56:00Z",
+  "status": "included",
+  "title": "[docs] AppHost eventing: document OnBeforeStart, OnBeforePublish, OnAfterPublish builder extension methods"
+}
