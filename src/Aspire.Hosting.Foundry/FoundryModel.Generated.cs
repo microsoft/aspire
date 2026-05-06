@@ -221,6 +221,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV32Speciale = new() { Name = "DeepSeek-V3.2-Speciale", Version = "1", Format = "DeepSeek" };
+
+        /// <summary>
+        /// DeepSeek V4 is an efficient MoE model family with 1M context and near state-of-the-art open-source reasoning performance.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel DeepSeekV4Flash = new() { Name = "DeepSeek-V4-Flash", Version = "2026-04-23", Format = "DeepSeek" };
     }
 
     /// <summary>
@@ -1331,6 +1337,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureLanguageConversationalPiiRedaction = new() { Name = "Azure-Language-Conversational-PII-redaction", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// PII Redaction for Documents automatically detects and masks sensitive information such as names, addresses, phone numbers, credit card details, and other personally identifiable information (PII) in native documents including PDF, Word, and text files.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel AzureLanguageDocumentPiiRedaction = new() { Name = "Azure-Language-Document-PII-redaction", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Language detection quickly and accurately identifies the language of any text, supporting over 100 languages and dialects, including the ISO 15924 standard for a select number of languages.
