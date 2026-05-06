@@ -489,6 +489,7 @@
     <Project Path="tests/Aspire.Hosting.Kafka.Tests/Aspire.Hosting.Kafka.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Keycloak.Tests/Aspire.Hosting.Keycloak.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Kubernetes.Tests/Aspire.Hosting.Kubernetes.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Maui.Tests/Aspire.Hosting.Maui.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Milvus.Tests/Aspire.Hosting.Milvus.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.MongoDB.Tests/Aspire.Hosting.MongoDB.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.MySql.Tests/Aspire.Hosting.MySql.Tests.csproj" />
