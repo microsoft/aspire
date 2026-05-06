@@ -1,1 +1,19 @@
-{"area":"CLI","areaEmoji":"💻","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"The `aspire publish` step summary now renders steps hierarchically with parent-child relationships and includes a compact Unicode timeline ruler showing when each step starts and finishes. This makes it easier to understand the structure and timing of publish operations at a glance.","docsRequired":false,"emoji":"📊","firstMergedAt":"2026-04-02T18:41:29Z","lastMergedAt":"2026-04-02T18:41:29Z","name":"Publish summary with hierarchy and timeline view","prs":[15530]}
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire publish` step summary now renders steps hierarchically with parent-child relationships and includes a compact Unicode timeline ruler showing when each step starts and finishes. This makes it easier to understand the structure and timing of publish operations at a glance.",
+  "docsPrs": [
+    844
+  ],
+  "docsRequired": true,
+  "emoji": "📊",
+  "firstMergedAt": "2026-04-02T18:41:29Z",
+  "lastMergedAt": "2026-04-02T18:41:29Z",
+  "name": "Publish summary with hierarchy and timeline view",
+  "prs": [
+    15530
+  ]
+}
