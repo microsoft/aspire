@@ -30,6 +30,19 @@ internal static class DashboardUrlsHelper
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
+        // Check whether the dashboard resource is registered at all. If it isn't (e.g. the user
+        // called DisableDashboard()), return immediately rather than waiting forever for a resource
+        // event that will never arrive.
+        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
+        var dashboardResource = appModel?.Resources.SingleOrDefault(
+            r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;
+
+        if (dashboardResource is null)
+        {
+            logger.LogDebug("Dashboard resource is not present in the app model. Returning unavailable state.");
+            return DashboardConnectionInfo.Unhealthy;
+        }
+
         var resourceNotificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
         // Wait for the dashboard to be healthy
@@ -53,23 +66,15 @@ internal static class DashboardUrlsHelper
             return DashboardConnectionInfo.Unhealthy;
         }
 
-        // Find the dashboard resource and get all endpoints
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
-        var dashboardResource = appModel?.Resources.SingleOrDefault(
-            r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;
-
         string? apiBaseUrl = null;
 
-        if (dashboardResource is not null)
+        // API endpoint (https or http) - used for Dashboard UI and Telemetry API
+        var httpsEndpoint = dashboardResource.GetEndpoint("https");
+        var httpEndpoint = dashboardResource.GetEndpoint("http");
+        var apiEndpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
+        if (apiEndpoint.Exists)
         {
-            // API endpoint (https or http) - used for Dashboard UI and Telemetry API
-            var httpsEndpoint = dashboardResource.GetEndpoint("https");
-            var httpEndpoint = dashboardResource.GetEndpoint("http");
-            var apiEndpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
-            if (apiEndpoint.Exists)
-            {
-                apiBaseUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(apiEndpoint, cancellationToken).ConfigureAwait(false);
-            }
+            apiBaseUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(apiEndpoint, cancellationToken).ConfigureAwait(false);
         }
 
         // Fall back to configured URL if we couldn't get it from the resource
