@@ -15,7 +15,14 @@ cask "aspire" do
     skip "ci.dot.net artifact storage has no version index; Aspire release automation manages cask updates"
   end
 
+  # The tarball ships 'aspire' plus the route sidecar '.aspire-install.json'
+  # at the cask version dir root. Homebrew expands them into the Caskroom
+  # version dir, which IS the Mode B prefix
+  # (<caskroom>/aspire/<version>/{aspire, .aspire-install.json}).
+  # The 'binary' stanza below symlinks the binary into the Homebrew bin/ dir.
   binary "aspire"
 
-  zap trash: "~/.aspire"
+  # No 'zap' stanza: the Caskroom version dir is the install prefix, and
+  # 'brew uninstall aspire' removes it end-to-end (binary + sidecar +
+  # bundle + versions/). See acquisition design v3 §3.4.
 end
