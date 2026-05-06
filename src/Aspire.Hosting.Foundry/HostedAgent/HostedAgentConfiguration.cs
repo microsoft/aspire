@@ -48,7 +48,7 @@ public class HostedAgentConfiguration(string image)
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "v1")
+        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0")
     ];
 
     private decimal _cpu = 2.0m;

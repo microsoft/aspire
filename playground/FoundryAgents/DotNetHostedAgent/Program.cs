@@ -29,6 +29,8 @@ if (!Uri.TryCreate(projectEndpoint, UriKind.Absolute, out Uri? projectUri) || pr
 Console.WriteLine($"Project Endpoint: {projectUri}");
 Console.WriteLine($"Model Deployment: {deploymentName}");
 
+Environment.SetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT", projectUri.ToString());
+
 [Description("Get a weather forecast")]
 WeatherForecast[] GetWeatherForecast()
 {

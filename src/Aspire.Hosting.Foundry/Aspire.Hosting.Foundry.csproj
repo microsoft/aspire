@@ -35,6 +35,7 @@
     <ProjectReference Include="..\Aspire.Hosting.Azure.Search\Aspire.Hosting.Azure.Search.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.Storage\Aspire.Hosting.Azure.Storage.csproj" />
     <PackageReference Include="Azure.AI.Projects" />
+    <PackageReference Include="Azure.AI.Projects.Agents" />
     <PackageReference Include="Azure.Provisioning" />
     <PackageReference Include="Azure.Provisioning.CognitiveServices" />
     <PackageReference Include="Azure.Provisioning.ContainerRegistry" />

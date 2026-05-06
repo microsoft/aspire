@@ -55,6 +55,8 @@ def main():
     if project_endpoint.startswith("Endpoint="):
         project_endpoint = project_endpoint.split("Endpoint=", 1)[1].split(";")[0]
 
+    os.environ["FOUNDRY_PROJECT_ENDPOINT"] = project_endpoint
+
     client = FoundryChatClient(
         project_endpoint=project_endpoint,
         model=deployment_name,

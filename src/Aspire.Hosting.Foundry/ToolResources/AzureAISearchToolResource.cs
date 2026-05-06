@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Foundry;
 /// <remarks>
 /// After creating this tool with <see cref="PromptAgentBuilderExtensions.AddAISearchTool"/>,
 /// link it to an <see cref="AzureSearchResource"/> using
-/// <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
+/// <c>WithReference</c>.
 /// The connection identifier is resolved at deploy time when the agent definition is created.
 /// </remarks>
 [AspireExport]
@@ -34,7 +34,7 @@ public class AzureAISearchToolResource : FoundryToolResource
 
     /// <summary>
     /// Gets or sets the Azure AI Search resource backing this tool.
-    /// Set by <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
+    /// Set by <c>WithReference</c>.
     /// </summary>
     public AzureSearchResource? SearchResource { get; internal set; }
 
@@ -46,7 +46,7 @@ public class AzureAISearchToolResource : FoundryToolResource
 
     /// <summary>
     /// Gets or sets the Foundry project connection resource for this search tool.
-    /// Set by <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
+    /// Set by <c>WithReference</c>.
     /// </summary>
     internal AzureCognitiveServicesProjectConnectionResource? Connection { get; set; }
 
