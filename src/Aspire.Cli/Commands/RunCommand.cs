@@ -383,7 +383,11 @@ internal sealed class RunCommand : BaseCommand
 
             if (ExtensionHelper.IsExtensionHost(InteractionService, out var extInteractionService, out _))
             {
-                extInteractionService.DisplayDashboardUrls(dashboardUrls);
+                if (dashboardUrls.DashboardHealthy is true)
+                {
+                    extInteractionService.DisplayDashboardUrls(dashboardUrls);
+                }
+
                 extInteractionService.NotifyAppHostStartupCompleted();
             }
 

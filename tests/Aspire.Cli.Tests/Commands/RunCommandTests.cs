@@ -7,6 +7,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -470,6 +471,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         };
 
         var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+        var testInteractionService = new TestInteractionService();
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -477,7 +479,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = projectLocatorFactory;
             options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
-            options.InteractionServiceFactory = (sp) => new TestInteractionService();
+            options.InteractionServiceFactory = (sp) => testInteractionService;
         });
 
         using var provider = services.BuildServiceProvider();
@@ -494,6 +496,12 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         // The command should succeed even when the dashboard is unhealthy
         Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // Verify a warning was displayed (not an error)
+        var m = Assert.Single(testInteractionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.Warning, m.Emoji);
+        Assert.Equal(RunCommandStrings.DashboardFailedToStart, m.Message);
+        Assert.Empty(testInteractionService.DisplayedErrors);
     }
 
     [Fact]
