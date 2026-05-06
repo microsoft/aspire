@@ -319,15 +319,17 @@ internal sealed class InitCommand : BaseCommand
             return ExitCodeConstants.Success;
         }
 
-        // Resolve the channel-aware template package version + feed mapping. This makes init
-        // honor the global `channel` configuration (matching `aspire new`) and ensures the
-        // staging/daily/PR feed is queried for non-stable CLI builds. PR hives are intentionally
-        // excluded — init should produce the same template on every machine for a given CLI build.
+        // Resolve the channel-aware template package version + feed mapping. The running
+        // CLI binary's identity channel (CliExecutionContext.Channel — stable, staging,
+        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
+        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
+        // intentionally excluded — init should produce the same template on every machine
+        // for a given CLI build.
         TemplatePackageSelection selection;
         try
         {
             var query = new TemplatePackageQuery(
-                ChannelOverride: null,
+                ChannelOverride: _executionContext.Channel,
                 VersionOverride: null,
                 SourceOverride: null,
                 IncludePrHives: false);

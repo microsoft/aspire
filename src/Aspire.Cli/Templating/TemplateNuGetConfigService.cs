@@ -141,9 +141,6 @@ internal sealed class TemplateNuGetConfigService(
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
 
-        // Channel override (e.g. --channel) is the only channel input considered here;
-        // the global ~/.aspire/aspire.config.json#channel value is no longer a source
-        // (PR1: cross-route contamination G1).
         var channelName = query.ChannelOverride;
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
