@@ -417,4 +417,111 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    // PR2-S11(c)(i): PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
+    // do not collide with the script-route prefix (<prefix>/bin) or with other PR installs.
+    [Fact]
+    public async Task DryRun_PRRoute_CliInstallPath_IsUnderDogfoodPrN()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("99999", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+        var expectedPathSegment = Path.Combine("dogfood", "pr-99999", "bin");
+        Assert.Contains(expectedPathSegment, result.Output);
+        var scriptRouteBin = Path.Combine(env.MockHome, ".aspire", "bin") + Path.DirectorySeparatorChar;
+        Assert.DoesNotContain($"Would install CLI archive to: {scriptRouteBin}\n", result.Output);
+    }
+
+    // PR2-S11(c)(ii): PR-route sidecar at <prefix>/dogfood/pr-<N>/.aspire-install.json with
+    // route="pr" and updateCommand naming the script + PR number. Written under --dry-run via
+    // raw printf so callers (including this test) can observe the file.
+    [Fact]
+    public async Task DryRun_PRRoute_WritesSidecarWithCorrectContent()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("99999", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected PR-route sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.Equal("pr", doc.RootElement.GetProperty("route").GetString());
+        var updateCommand = doc.RootElement.GetProperty("updateCommand").GetString();
+        Assert.NotNull(updateCommand);
+        Assert.Contains("get-aspire-cli-pr.sh", updateCommand);
+        Assert.Contains("-r 99999", updateCommand);
+    }
+
+    // PR2-S11(c)(iii): PR-route install prints the PATH-activation hint to stdout so users
+    // know how to add <prefix>/dogfood/pr-<N>/bin to their shell profile.
+    [Fact]
+    public async Task DryRun_PRRoute_PrintsPathHintToStdout()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("99999", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Add to your shell profile:", result.Output);
+        Assert.Contains("export PATH=", result.Output);
+        Assert.Contains(Path.Combine("dogfood", "pr-99999", "bin"), result.Output);
+    }
+
+    // PR2-S11(c)(iv): PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
+    // The path relocation in PR2-S5 only touched the CLI binary install path.
+    [Fact]
+    public async Task DryRun_PRRoute_HiveLocation_IsUnchanged()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("99999", "--dry-run", "--skip-path", "--verbose");
+
+        result.EnsureSuccessful();
+        var expectedHive = Path.Combine("hives", "pr-99999", "packages");
+        Assert.Contains(expectedHive, result.Output);
+    }
+
+    // PR2-S11(d): PR-route sidecar carries route metadata only — never a "channel" key.
+    [Fact]
+    public async Task DryRun_PRRouteSidecar_DoesNotContainChannelKey()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("99999", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.False(
+            doc.RootElement.TryGetProperty("channel", out _),
+            $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
+    }
+
+    // PR2-S11(d) companion: under --dry-run no global aspire.config.json is materialized.
+    [Fact]
+    public async Task DryRun_PRRoute_DoesNotCreateGlobalAspireConfigJson()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("99999", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+        var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
+    }
 }

@@ -318,4 +318,109 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    // PR2-S11(c)(i): PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
+    // do not collide with the script-route prefix or with other PR installs.
+    [Fact]
+    public async Task WhatIf_PRRoute_CliInstallPath_IsUnderDogfoodPrN()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "99999", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+        var expectedPathSegment = Path.Combine("dogfood", "pr-99999", "bin");
+        Assert.Contains(expectedPathSegment, result.Output);
+    }
+
+    // PR2-S11(c)(ii): PR-route sidecar at <prefix>/dogfood/pr-<N>/.aspire-install.json with
+    // route="pr" and updateCommand naming the script + PR number. Written under -WhatIf via
+    // raw .NET I/O so callers (including this test) can observe the file even though
+    // PowerShell ShouldProcess-aware cmdlets silently no-op.
+    [Fact]
+    public async Task WhatIf_PRRoute_WritesSidecarWithCorrectContent()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "99999", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected PR-route sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.Equal("pr", doc.RootElement.GetProperty("route").GetString());
+        var updateCommand = doc.RootElement.GetProperty("updateCommand").GetString();
+        Assert.NotNull(updateCommand);
+        Assert.Contains("get-aspire-cli-pr.sh", updateCommand);
+        Assert.Contains("-r 99999", updateCommand);
+    }
+
+    // PR2-S11(c)(iii): PR-route install prints the PATH-activation hint via Write-Host. The
+    // OS path separator keeps the line valid on both Windows (;) and Unix (:).
+    [Fact]
+    public async Task WhatIf_PRRoute_PrintsPathHintToStdout()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "99999", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Add to your shell profile:", result.Output);
+        Assert.Contains("$env:PATH", result.Output);
+        Assert.Contains(Path.Combine("dogfood", "pr-99999", "bin"), result.Output);
+    }
+
+    // PR2-S11(c)(iv): PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
+    [Fact]
+    public async Task WhatIf_PRRoute_HiveLocation_IsUnchanged()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "99999", "-SkipPath", "-Verbose", "-WhatIf");
+
+        result.EnsureSuccessful();
+        var expectedHive = Path.Combine("hives", "pr-99999", "packages");
+        Assert.Contains(expectedHive, result.Output);
+    }
+
+    // PR2-S11(d): PR-route sidecar carries route metadata only — never a "channel" key.
+    [Fact]
+    public async Task WhatIf_PRRouteSidecar_DoesNotContainChannelKey()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "99999", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.False(
+            doc.RootElement.TryGetProperty("channel", out _),
+            $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
+    }
+
+    // PR2-S11(d) companion: under -WhatIf no global aspire.config.json is created.
+    [Fact]
+    public async Task WhatIf_PRRoute_DoesNotCreateGlobalAspireConfigJson()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "99999", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+        var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
+    }
 }
