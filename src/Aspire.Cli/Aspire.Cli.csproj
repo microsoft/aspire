@@ -25,7 +25,17 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for
+         (stable | staging | daily | pr). Local devs and ./build.sh default to 'daily';
+         CI overrides via /p:AspireCliChannel=$(aspireCliChannel). The value is baked into
+         the assembly via AssemblyMetadata below so the runtime IdentityChannelReader can
+         read it without reflection-unsafe lookups. -->
+    <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">daily</AspireCliChannel>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
+  </ItemGroup>
 
   <!-- Set the nuget properties when building as a global tool. -->
   <PropertyGroup Condition="'$(IsCliToolProject)' == 'true'">
