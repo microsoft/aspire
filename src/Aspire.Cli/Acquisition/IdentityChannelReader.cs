@@ -96,7 +96,10 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
 
     /// <summary>
     /// Parses the PR number out of an <see cref="AssemblyInformationalVersionAttribute"/>
-    /// value of the form <c>0.0.0-pr&lt;N&gt;.&lt;sha&gt;</c>.
+    /// value of the form <c>0.0.0-pr.&lt;N&gt;.g&lt;sha&gt;</c> (the shape produced by
+    /// <c>.github/workflows/ci.yml</c> via
+    /// <c>/p:VersionSuffix=pr.$PR_NUMBER.g$SHORT_SHA</c>) or the legacy
+    /// <c>0.0.0-pr&lt;N&gt;.&lt;sha&gt;</c> shape with no separator.
     /// </summary>
     /// <param name="informationalVersion">
     /// The informational version string. Typically obtained from
@@ -104,7 +107,8 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     /// </param>
     /// <returns>
     /// The PR number when <paramref name="informationalVersion"/> contains the
-    /// <c>-pr&lt;digits&gt;</c> marker; otherwise <see langword="null"/>.
+    /// <c>-pr</c> marker followed (optionally separated by a single <c>.</c>)
+    /// by one or more ASCII digits; otherwise <see langword="null"/>.
     /// </returns>
     internal static int? ParsePrNumber(string? informationalVersion)
     {
@@ -120,6 +124,16 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
         }
 
         var start = idx + PrChannelMarker.Length;
+
+        // Accept an optional '.' separator between the "-pr" marker and the digits to
+        // match the real CI shape "-pr.<N>.g<sha>" produced by ci.yml. Reject if the
+        // character after "-pr" is anything else non-digit (e.g. "-preview" must NOT
+        // match).
+        if (start < informationalVersion.Length && informationalVersion[start] == '.')
+        {
+            start++;
+        }
+
         var end = start;
         while (end < informationalVersion.Length && char.IsAsciiDigit(informationalVersion[end]))
         {
