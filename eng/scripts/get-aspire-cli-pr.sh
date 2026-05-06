@@ -1075,10 +1075,6 @@ install_from_local_dir() {
     else
         say_warn "Could not extract version suffix from local packages"
     fi
-
-    # Acquisition v3: the PR install no longer writes the hive label as the
-    # global channel. The CLI resolves channel="pr" and the PR number from the
-    # installed bundle's identity at runtime.
 }
 
 # Main function to download and install from PR or workflow run ID
@@ -1191,10 +1187,6 @@ download_and_install_from_pr() {
             install_aspire_extension "$extension_download_dir"
         fi
     fi
-
-    # Acquisition v3: the PR install no longer writes the hive label as the
-    # global channel. The CLI resolves channel="pr" and the PR number from the
-    # installed bundle's identity at runtime.
 }
 
 # Main entry point — wraps everything after function definitions.

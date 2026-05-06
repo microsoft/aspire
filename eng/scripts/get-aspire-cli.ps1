@@ -1239,11 +1239,6 @@ function Install-AspireCli {
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
         }
 
-        # Acquisition v3: the global channel field is no longer written by install
-        # scripts. Channel is resolved at runtime by the CLI itself based on the
-        # installed bundle's identity. Other global settings (e.g. updateMode)
-        # are still managed via Save-GlobalSettings / Remove-GlobalSettings.
-
         # Download and install VS Code extension if requested
         if ($InstallExtension) {
             Write-Message "" -Level Info

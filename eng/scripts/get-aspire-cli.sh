@@ -1021,11 +1021,6 @@ download_and_install_archive() {
 
     say_info "Aspire CLI successfully installed to: ${GREEN}$cli_path${RESET}"
 
-    # Acquisition v3: the global channel field is no longer written by install
-    # scripts. Channel is resolved at runtime by the CLI itself based on the
-    # installed bundle's identity. Other global settings (e.g. updateMode) are
-    # still managed via save_global_settings / remove_global_settings.
-
     # Download and install VS Code extension if requested
     if [[ "$INSTALL_EXTENSION" == true ]]; then
         printf "\n"

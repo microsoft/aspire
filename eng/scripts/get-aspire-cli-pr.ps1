@@ -1298,10 +1298,6 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
-    # Acquisition v3: the PR install no longer writes the hive label as the
-    # global channel. The CLI resolves channel="pr" and the PR number from the
-    # installed bundle's identity at runtime.
-
     # Update PATH environment variables
     if (-not $HiveOnly) {
         if ($SkipPath) {
@@ -1395,10 +1391,6 @@ function Start-DownloadAndInstall {
             Install-AspireExtensionFromDownload -DownloadDir $extensionDownloadDir -UseInsiders:$UseInsiders
         }
     }
-
-    # Acquisition v3: the PR install no longer writes the hive label as the
-    # global channel. The CLI resolves channel="pr" and the PR number from the
-    # installed bundle's identity at runtime.
 
     # Update PATH environment variables
     if (-not $HiveOnly) {
