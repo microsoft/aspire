@@ -179,7 +179,7 @@ jobs:
 
       - name: Verify Docker is running (Linux)
         if: runner.os == 'Linux'
-        run: docker info
+        uses: ./.github/actions/verify-docker
 
       - name: Download prebuilt CLI E2E Docker image
         if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}

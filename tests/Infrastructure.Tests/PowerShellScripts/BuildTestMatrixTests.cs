@@ -371,6 +371,40 @@ public class BuildTestMatrixTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task ClassEntriesPreservePolyglotJavaImageRequirement()
+    {
+        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        Directory.CreateDirectory(artifactsDir);
+
+        TestDataBuilder.CreateSplitTestsMetadataJson(
+            Path.Combine(artifactsDir, "CliE2E.tests-metadata.json"),
+            projectName: "CliE2E",
+            testProjectPath: "tests/CliE2E/CliE2E.csproj",
+            shortName: "CliE2E",
+            requiresCliArchive: true,
+            requiresPolyglotJavaImage: true,
+            supportedOSes: ["linux"]);
+
+        TestDataBuilder.CreateClassBasedPartitionsJson(
+            Path.Combine(artifactsDir, "CliE2E.tests-partitions.json"),
+            "Aspire.Cli.EndToEnd.Tests.KotlinPolyglotTests");
+
+        var outputFile = Path.Combine(_tempDir.Path, "matrix.json");
+
+        var result = await RunScript(artifactsDir, outputFile);
+
+        result.EnsureSuccessful();
+
+        var matrix = ParseCanonicalMatrix(outputFile);
+        var entry = Assert.Single(matrix.Tests);
+        Assert.Equal("CliE2E-KotlinPolyglotTests", entry.Name);
+        Assert.DoesNotContain("Java", entry.Name, StringComparison.Ordinal);
+        Assert.True(entry.Properties.GetValueOrDefault("requiresCliArchive"));
+        Assert.True(entry.Properties.GetValueOrDefault("requiresPolyglotJavaImage"));
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task PreservesSupportedOSes()
     {
         // Arrange
