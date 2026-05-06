@@ -27,4 +27,18 @@ public class VersionHelperTests
         Assert.True(result);
         Assert.Equal(cliVersion, match);
     }
+
+    [Theory]
+    [InlineData("pr-16820", true)]
+    [InlineData("run-25422767716", true)]
+    [InlineData("local", true)]
+    [InlineData("LOCAL", true)]
+    [InlineData("stable", false)]
+    [InlineData("daily", false)]
+    [InlineData("staging", false)]
+    [InlineData(null, false)]
+    public void IsLocalBuildChannel_RecognizesAllLocalChannelForms(string? channelName, bool expected)
+    {
+        Assert.Equal(expected, VersionHelper.IsLocalBuildChannel(channelName));
+    }
 }

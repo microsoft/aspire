@@ -50,7 +50,15 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
                 // Use forward slashes for cross-platform NuGet config compatibility
                 var packagesPath = packagesDirectory.FullName.Replace('\\', '/');
-                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
+
+                // When the CLI binary is a local build (AspireCliChannel=local), alias the hive
+                // channel to "local" so that channel lookups by name (e.g. in TemplateNuGetConfigService)
+                // find the right channel regardless of the hive directory's run-specific name.
+                var channelName = executionContext.IdentityChannel == PackageChannelNames.Local
+                    ? PackageChannelNames.Local
+                    : prHive.Name;
+
+                var prChannel = PackageChannel.CreateExplicitChannel(channelName, PackageChannelQuality.Both, new[]
                 {
                     new PackageMapping("Aspire*", packagesPath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
