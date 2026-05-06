@@ -486,6 +486,9 @@ internal sealed class InitCommand : BaseCommand
             // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
             effectivePorts = ports ?? AppHostProfilePortGenerator.Generate(Random.Shared);
 
+            // Two profiles (https + http) so `aspire run` can pick either based on user choice.
+            // Each carries the dashboard URL (applicationUrl) plus the OTLP and resource-service
+            // endpoint env vars consumed by DashboardOptionsValidator at AppHost startup.
             settings["profiles"] = new JsonObject
             {
                 ["https"] = new JsonObject
@@ -596,6 +599,11 @@ internal sealed class InitCommand : BaseCommand
             return;
         }
 
+        // Shape mirrors a Properties/launchSettings.json (the schema the .NET file-based
+        // runner inherits for `[file].run.json`): a `profiles` map with `commandName: Project`
+        // entries. The https / http pair gives `dotnet run apphost.cs` a working dashboard
+        // URL plus the OTLP and resource-service endpoint env vars that DashboardOptionsValidator
+        // requires — without these the AppHost crashes at startup (see #15986).
         var settings = new JsonObject
         {
             ["$schema"] = "https://json.schemastore.org/launchsettings.json",
