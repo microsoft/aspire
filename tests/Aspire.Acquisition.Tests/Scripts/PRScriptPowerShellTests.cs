@@ -429,11 +429,13 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
     }
 
-    // install_from_local_dir codepath — gap fix coverage. Local-dir installs land at
-    // <prefix>/bin and must write a script-route sidecar so InstallPathResolver can identify
-    // them. Before the gap fix, this test FAILED (sidecar was never written for local-dir).
+    // Spec: --local-dir / -LocalDir installs are unmanaged. The CLI artifacts come from
+    // a directory the user already has — there is no self-update path. The script MUST
+    // therefore NOT write a sidecar for the install: a sidecar would falsely advertise a
+    // managed route and InstallPathResolver should return Unknown for these installs so
+    // downstream commands (e.g. `aspire update --self`) refuse to assume any update channel.
     [Fact]
-    public async Task WhatIf_LocalDir_WritesScriptRouteSidecar_AtPrefixRoot()
+    public async Task WhatIf_LocalDir_DoesNotWriteSidecar()
     {
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
@@ -453,12 +455,19 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
 
-        var sidecarPath = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
-        Assert.True(File.Exists(sidecarPath), $"Expected script-route sidecar at {sidecarPath}");
+        // The mode-A sidecar at <prefix>/.aspire-install.json must NOT be written.
+        var prefixSidecar = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
+        Assert.False(File.Exists(prefixSidecar), $"--local-dir install must not write sidecar at {prefixSidecar} (unmanaged route).");
 
-        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
-        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
-        Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
+        // Defensive: assert no .aspire-install.json anywhere under the install root —
+        // the mode-B sidecar (at <prefix>/bin/.aspire-install.json) and any other
+        // location must equally be absent.
+        var aspireRoot = Path.Combine(env.MockHome, ".aspire");
+        if (Directory.Exists(aspireRoot))
+        {
+            var anySidecar = Directory.GetFiles(aspireRoot, ".aspire-install.json", SearchOption.AllDirectories);
+            Assert.Empty(anySidecar);
+        }
     }
 
     // PR_NUMBER input validation — empty string. PowerShell parameter binding
