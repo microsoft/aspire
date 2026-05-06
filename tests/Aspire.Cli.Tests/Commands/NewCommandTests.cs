@@ -1165,6 +1165,85 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndPlainLocalhostEmitsAppHostRunJsonMatchingAspireConfigJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --localhost-tld false --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var aspireConfigPath = Path.Combine(outputDir, "aspire.config.json");
+        var appHostRunJsonPath = Path.Combine(outputDir, "apphost.run.json");
+
+        Assert.True(File.Exists(aspireConfigPath));
+        Assert.True(File.Exists(appHostRunJsonPath), "apphost.run.json must be emitted alongside aspire.config.json so dotnet run picks up matching URLs.");
+
+        var aspireConfig = await File.ReadAllTextAsync(aspireConfigPath);
+        var appHostRunJson = await File.ReadAllTextAsync(appHostRunJsonPath);
+
+        Assert.Contains("://localhost:", appHostRunJson);
+        Assert.Contains("\"commandName\": \"Project\"", appHostRunJson);
+
+        AssertHttpsApplicationUrlMatches(aspireConfig, appHostRunJson);
+    }
+
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndLocalhostTldEmitsAppHostRunJsonWithDevLocalhostUrls()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CreateServiceCollection(workspace);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --localhost-tld --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var aspireConfigPath = Path.Combine(outputDir, "aspire.config.json");
+        var appHostRunJsonPath = Path.Combine(outputDir, "apphost.run.json");
+
+        Assert.True(File.Exists(aspireConfigPath));
+        Assert.True(File.Exists(appHostRunJsonPath), "apphost.run.json must be emitted alongside aspire.config.json so dotnet run picks up matching URLs.");
+
+        var aspireConfig = await File.ReadAllTextAsync(aspireConfigPath);
+        var appHostRunJson = await File.ReadAllTextAsync(appHostRunJsonPath);
+
+        Assert.Contains("testapp.dev.localhost", appHostRunJson);
+        Assert.DoesNotContain("://localhost", appHostRunJson);
+
+        AssertHttpsApplicationUrlMatches(aspireConfig, appHostRunJson);
+    }
+
+    private static void AssertHttpsApplicationUrlMatches(string aspireConfigJson, string appHostRunJson)
+    {
+        using var aspireDoc = System.Text.Json.JsonDocument.Parse(aspireConfigJson);
+        using var runDoc = System.Text.Json.JsonDocument.Parse(appHostRunJson);
+
+        var aspireHttpsUrl = aspireDoc.RootElement
+            .GetProperty("profiles")
+            .GetProperty("https")
+            .GetProperty("applicationUrl")
+            .GetString();
+        var runHttpsUrl = runDoc.RootElement
+            .GetProperty("profiles")
+            .GetProperty("https")
+            .GetProperty("applicationUrl")
+            .GetString();
+
+        Assert.Equal(aspireHttpsUrl, runHttpsUrl);
+    }
+
+    [Fact]
     public async Task NewCommandWithEmptyTemplateAndCSharpPromptsForLocalhostTldAndUsesConfirmation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

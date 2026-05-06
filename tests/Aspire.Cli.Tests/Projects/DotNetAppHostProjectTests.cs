@@ -273,6 +273,232 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(0, exitCode);
     }
 
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_AppliesProfileFromAspireConfigJson()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050",
+                  "environmentVariables": {
+                    "ASPNETCORE_ENVIRONMENT": "Development",
+                    "DOTNET_ENVIRONMENT": "Development",
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://myapp.dev.localhost:21050",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://myapp.dev.localhost:22050"
+                  }
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://myapp.dev.localhost:21050", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://myapp.dev.localhost:22050", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        // Run path copies profile env vars verbatim (matches what dotnet does when reading apphost.run.json natively).
+        Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("Development", env["ASPNETCORE_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFilePublishEnvironment_AppliesProfileFromAspireConfigJson()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050",
+                  "environmentVariables": {
+                    "ASPNETCORE_ENVIRONMENT": "Development",
+                    "DOTNET_ENVIRONMENT": "Development",
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://myapp.dev.localhost:21050",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://myapp.dev.localhost:22050"
+                  }
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFilePublishEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://myapp.dev.localhost:21050", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://myapp.dev.localhost:22050", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        // Publish path filters env-name vars from profile, then ApplyEffectiveEnvironment sets DOTNET_ENVIRONMENT=Production.
+        Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+    }
+
+    [Fact]
+    public void ConfigureSingleFilePublishEnvironment_AppHostRunJsonWinsOverAspireConfigJson()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "apphost.run.json"), """
+            {
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://from-run-json:19000",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://from-run-json:21000"
+                  }
+                }
+              }
+            }
+            """);
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://from-config-json:17050",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://from-config-json:21050"
+                  }
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFilePublishEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://from-run-json:19000", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://from-run-json:21000", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_FallsBackToDefaultsWhenAspireConfigJsonHasNoProfiles()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost.cs" }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_FallsBackToDefaultsWhenProfileLacksApplicationUrl()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost.cs" },
+              "profiles": {
+                "https": {
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://shouldnotapply:21050"
+                  }
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://localhost:21293", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_SkipsAspireConfigWhenAppHostPathMismatches()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "other-apphost.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://shouldnotapply:17050"
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_FallsBackToDefaultsWhenAspireConfigJsonIsMalformed()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        WriteAspireConfigJson(appHostFile.DirectoryName!, "{ this is not valid json");
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void ConfigureSingleFileRunEnvironment_EnvironmentArgumentOverridesProfileDotNetEnvironment()
+    {
+        var appHostFile = CreateSingleFileAppHost();
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "appHost": { "path": "apphost.cs" },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://myapp.dev.localhost:17050",
+                  "environmentVariables": {
+                    "DOTNET_ENVIRONMENT": "Development"
+                  }
+                }
+              }
+            }
+            """);
+        var env = new Dictionary<string, string>();
+
+        DotNetAppHostProject.ConfigureSingleFileRunEnvironment(
+            appHostFile,
+            env,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>(),
+            args: ["--environment", "Staging"]);
+
+        Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("https://myapp.dev.localhost:17050", env["ASPNETCORE_URLS"]);
+    }
+
     private FileInfo CreateSingleFileAppHost()
     {
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.cs");
@@ -297,4 +523,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         _serviceProviders.Add(provider);
         return provider.GetRequiredService<DotNetAppHostProject>();
     }
+
+    private static void WriteAspireConfigJson(string directory, string content)
+        => File.WriteAllText(Path.Combine(directory, "aspire.config.json"), content);
 }
