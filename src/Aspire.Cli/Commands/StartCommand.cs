@@ -7,6 +7,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Commands;
 
@@ -15,6 +16,7 @@ internal sealed class StartCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     private readonly AppHostLauncher _appHostLauncher;
+    private readonly IConfiguration _configuration;
 
     private static readonly Option<bool> s_noBuildOption = new("--no-build")
     {
@@ -27,11 +29,13 @@ internal sealed class StartCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry,
-        AppHostLauncher appHostLauncher)
+        AppHostLauncher appHostLauncher,
+        IConfiguration configuration)
         : base("start", StartCommandStrings.Description,
                features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _appHostLauncher = appHostLauncher;
+        _configuration = configuration;
 
         Options.Add(s_noBuildOption);
         AppHostLauncher.AddLaunchOptions(this);
@@ -59,12 +63,18 @@ internal sealed class StartCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
+        if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
+        {
+            return ExitCodeConstants.InvalidCommand;
+        }
+
         return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
             isolated,
             isExtensionHost,
             waitForDebugger,
+            timeoutSeconds,
             globalArgs,
             additionalArgs,
             cancellationToken);
