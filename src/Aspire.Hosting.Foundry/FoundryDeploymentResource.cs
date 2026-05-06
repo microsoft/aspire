@@ -64,9 +64,18 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     /// Gets or sets the format of deployment model.
     /// </summary>
     /// <remarks>
-    /// Typical values are "OpenAI", "Microsoft", "xAi", "Deepseek".
+    /// Typical values are "OpenAI", "Microsoft", "Anthropic", "xAi", "Deepseek".
     /// </remarks> 
     public string Format { get; set; }
+
+    /// <summary>
+    /// Gets or sets the provider-specific model metadata for this deployment.
+    /// </summary>
+    /// <remarks>
+    /// Some model providers, such as Anthropic, require extra metadata when deploying a model.
+    /// Configure these values by using <see cref="FoundryExtensions.WithProperties(IResourceBuilder{FoundryDeploymentResource}, Action{FoundryDeploymentResource})"/>.
+    /// </remarks>
+    public FoundryModelProviderData ModelProviderData { get; set; } = new();
 
     /// <summary>
     /// Gets or sets the name of the SKU.
@@ -95,6 +104,31 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     /// </summary>
     public FoundryResource Parent { get; set; }
 
+    internal bool RequiresModelProviderData =>
+        string.Equals(Format, "Anthropic", StringComparison.OrdinalIgnoreCase);
+
+    internal string[] GetMissingModelProviderDataFields()
+    {
+        List<string> missingFields = [];
+
+        if (string.IsNullOrWhiteSpace(ModelProviderData.Industry))
+        {
+            missingFields.Add("industry");
+        }
+
+        if (string.IsNullOrWhiteSpace(ModelProviderData.OrganizationName))
+        {
+            missingFields.Add("organizationName");
+        }
+
+        if (string.IsNullOrWhiteSpace(ModelProviderData.CountryCode))
+        {
+            missingFields.Add("countryCode");
+        }
+
+        return [.. missingFields];
+    }
+
     /// <summary>
     /// Gets the connection string expression for the Microsoft Foundry resource with model/deployment information.
     /// </summary>
@@ -111,4 +145,28 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
             new("Version", ReferenceExpression.Create($"{ModelVersion}")),
         ]);
     }
+}
+
+/// <summary>
+/// Represents provider-specific metadata for a Microsoft Foundry model deployment.
+/// </summary>
+/// <remarks>
+/// Anthropic deployments currently require these values when they are provisioned in Azure.
+/// </remarks>
+public class FoundryModelProviderData
+{
+    /// <summary>
+    /// Gets or sets the industry associated with the deployment.
+    /// </summary>
+    public string? Industry { get; set; }
+
+    /// <summary>
+    /// Gets or sets the organization name associated with the deployment.
+    /// </summary>
+    public string? OrganizationName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the ISO country or region code associated with the deployment.
+    /// </summary>
+    public string? CountryCode { get; set; }
 }

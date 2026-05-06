@@ -430,6 +430,41 @@ public static class FoundryExtensions
         return builder;
     }
 
+    private static CognitiveServicesAccountDeploymentModel CreateDeploymentModel(FoundryDeploymentResource deployment)
+    {
+        if (!deployment.RequiresModelProviderData)
+        {
+            return new CognitiveServicesAccountDeploymentModel()
+            {
+                Name = deployment.ModelName,
+                Version = deployment.ModelVersion,
+                Format = deployment.Format
+            };
+        }
+
+        var missingFields = deployment.GetMissingModelProviderDataFields();
+        if (missingFields.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Foundry deployment '{deployment.Name}' targets an Anthropic model and requires ModelProviderData to be configured before provisioning. " +
+                $"Set ModelProviderData.{nameof(FoundryModelProviderData.Industry)}, " +
+                $"ModelProviderData.{nameof(FoundryModelProviderData.OrganizationName)}, and " +
+                $"ModelProviderData.{nameof(FoundryModelProviderData.CountryCode)} by using WithProperties(...). " +
+                $"Missing fields: {string.Join(", ", missingFields)}.");
+        }
+
+        return new FoundryAnthropicDeploymentModel()
+        {
+            Name = deployment.ModelName,
+            Version = deployment.ModelVersion,
+            Format = deployment.Format,
+            Publisher = deployment.Format,
+            Industry = deployment.ModelProviderData.Industry!,
+            OrganizationName = deployment.ModelProviderData.OrganizationName!,
+            CountryCode = deployment.ModelProviderData.CountryCode!
+        };
+    }
+
     private static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
     {
         var azureResource = (FoundryResource)infrastructure.AspireResource;
@@ -520,12 +555,7 @@ public static class FoundryExtensions
                 Parent = cogServicesAccount,
                 Properties = new CognitiveServicesAccountDeploymentProperties()
                 {
-                    Model = new CognitiveServicesAccountDeploymentModel()
-                    {
-                        Name = deployment.ModelName,
-                        Version = deployment.ModelVersion,
-                        Format = deployment.Format
-                    }
+                    Model = CreateDeploymentModel(deployment)
                 },
                 Sku = new CognitiveServicesSku()
                 {

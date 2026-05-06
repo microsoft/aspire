@@ -58,6 +58,29 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
+    public void WithProperties_ShouldApplyModelProviderDataConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var deploymentBuilder = builder.AddFoundry("myAIFoundry")
+            .AddDeployment("deployment1", FoundryModel.Anthropic.ClaudeSonnet46);
+
+        deploymentBuilder.WithProperties(d =>
+        {
+            d.ModelProviderData = new FoundryModelProviderData
+            {
+                Industry = "Technology",
+                OrganizationName = "Contoso",
+                CountryCode = "US"
+            };
+        });
+
+        var deployment = Assert.Single(builder.Resources.OfType<FoundryResource>().Single().Deployments);
+        Assert.Equal("Technology", deployment.ModelProviderData.Industry);
+        Assert.Equal("Contoso", deployment.ModelProviderData.OrganizationName);
+        Assert.Equal("US", deployment.ModelProviderData.CountryCode);
+    }
+
+    [Fact]
     public void AddFoundry_ConnectionString_IsCorrect()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -182,6 +205,55 @@ public class FoundryExtensionsTests
 
         await Verify(manifest.BicepText, extension: "bicep")
             .AppendContentAsFile(rolesManifest.BicepText, "bicep");
+    }
+
+    [Fact]
+    public async Task AddFoundry_AnthropicDeploymentWithoutModelProviderData_ThrowsHelpfulError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var foundry = builder.AddFoundry("foundry");
+        foundry.AddDeployment("chat", FoundryModel.Anthropic.ClaudeSonnet46);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.GetManifestWithBicep(model, foundry.Resource));
+
+        Assert.Contains("Anthropic model", exception.Message);
+        Assert.Contains("ModelProviderData.Industry", exception.Message);
+        Assert.Contains("ModelProviderData.OrganizationName", exception.Message);
+        Assert.Contains("ModelProviderData.CountryCode", exception.Message);
+    }
+
+    [Fact]
+    public async Task AddFoundry_AnthropicDeploymentWithModelProviderData_GeneratesModelProviderDataInBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var foundry = builder.AddFoundry("foundry");
+        foundry.AddDeployment("chat", FoundryModel.Anthropic.ClaudeSonnet46)
+            .WithProperties(d =>
+            {
+                d.ModelProviderData = new FoundryModelProviderData
+                {
+                    Industry = "Technology",
+                    OrganizationName = "Contoso",
+                    CountryCode = "US"
+                };
+            });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(model, foundry.Resource);
+
+        Assert.Contains("modelProviderData:", manifest.BicepText);
+        Assert.Contains("industry: 'Technology'", manifest.BicepText);
+        Assert.Contains("organizationName: 'Contoso'", manifest.BicepText);
+        Assert.Contains("countryCode: 'US'", manifest.BicepText);
+        Assert.Contains("publisher: 'Anthropic'", manifest.BicepText);
     }
 
     [Fact]
