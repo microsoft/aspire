@@ -369,11 +369,10 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    // If this attempt never produced any data, there is no running apphost
-                    // to follow (or the CLI doesn't support --follow). Stop quietly: do not
-                    // set the error state (which would show the "CLI not supported" banner)
-                    // and do not auto-restart on a 5s loop forever — the panel will refresh
-                    // when the user explicitly retries or when activity resumes.
+                    // If this attempt never produced any data, surface a compatibility
+                    // hint when we have enough context, but do not auto-restart on a 5s
+                    // loop forever. The panel will refresh when the user explicitly
+                    // retries or when activity resumes.
                     if (!this._describeReceivedData) {
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
