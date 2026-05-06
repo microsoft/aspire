@@ -1021,18 +1021,10 @@ download_and_install_archive() {
 
     say_info "Aspire CLI successfully installed to: ${GREEN}$cli_path${RESET}"
 
-    # Save the global channel setting if using quality-based download (not version-specific)
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    # For release/stable channel, remove the setting to avoid forcing nuget.config creation
-    if [[ -z "$VERSION" ]]; then
-        local channel
-        channel=$(map_quality_to_channel "$QUALITY")
-        if [[ "$channel" == "stable" ]]; then
-            remove_global_settings "$cli_path" "channel"
-        else
-            save_global_settings "$cli_path" "channel" "$channel"
-        fi
-    fi
+    # Acquisition v3: the global channel field is no longer written by install
+    # scripts. Channel is resolved at runtime by the CLI itself based on the
+    # installed bundle's identity. Other global settings (e.g. updateMode) are
+    # still managed via save_global_settings / remove_global_settings.
 
     # Download and install VS Code extension if requested
     if [[ "$INSTALL_EXTENSION" == true ]]; then

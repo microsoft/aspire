@@ -1076,16 +1076,9 @@ install_from_local_dir() {
         say_warn "Could not extract version suffix from local packages"
     fi
 
-    # Save the global channel setting
-    if [[ "$HIVE_ONLY" != true ]]; then
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
-        else
-            cli_path="$cli_install_dir/aspire"
-        fi
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
-    fi
+    # Acquisition v3: the PR install no longer writes the hive label as the
+    # global channel. The CLI resolves channel="pr" and the PR number from the
+    # installed bundle's identity at runtime.
 }
 
 # Main function to download and install from PR or workflow run ID
@@ -1199,19 +1192,9 @@ download_and_install_from_pr() {
         fi
     fi
 
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if [[ "$HIVE_ONLY" != true ]]; then
-        # Determine CLI path
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
-        else
-            cli_path="$cli_install_dir/aspire"
-        fi
-        # Non-fatal: channel can be set manually if this fails
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
-    fi
+    # Acquisition v3: the PR install no longer writes the hive label as the
+    # global channel. The CLI resolves channel="pr" and the PR number from the
+    # installed bundle's identity at runtime.
 }
 
 # Main entry point — wraps everything after function definitions.

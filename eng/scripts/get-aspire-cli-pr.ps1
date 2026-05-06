@@ -1298,12 +1298,9 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
-    # Save the global channel setting
-    if (-not $HiveOnly) {
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
-    }
+    # Acquisition v3: the PR install no longer writes the hive label as the
+    # global channel. The CLI resolves channel="pr" and the PR number from the
+    # installed bundle's identity at runtime.
 
     # Update PATH environment variables
     if (-not $HiveOnly) {
@@ -1399,14 +1396,9 @@ function Start-DownloadAndInstall {
         }
     }
 
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if (-not $HiveOnly) {
-        # Determine CLI path
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
-    }
+    # Acquisition v3: the PR install no longer writes the hive label as the
+    # global channel. The CLI resolves channel="pr" and the PR number from the
+    # installed bundle's identity at runtime.
 
     # Update PATH environment variables
     if (-not $HiveOnly) {
