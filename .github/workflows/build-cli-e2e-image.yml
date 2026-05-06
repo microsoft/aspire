@@ -36,13 +36,25 @@ jobs:
       - name: Verify Docker is running
         run: docker info
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Export GitHub Actions cache runtime
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            for (const name of ['ACTIONS_RUNTIME_TOKEN', 'ACTIONS_RUNTIME_URL', 'ACTIONS_CACHE_URL', 'ACTIONS_RESULTS_URL']) {
+              const value = process.env[name];
+              if (value) {
+                core.setSecret(value);
+                core.exportVariable(name, value);
+              }
+            }
 
       - name: Build CLI E2E Docker image
         shell: bash
         run: |
           set -euo pipefail
+
+          docker buildx create --name cli-e2e-builder --use
+          docker buildx inspect --bootstrap
 
           build_image() {
             local display_name="$1"
