@@ -5,12 +5,27 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string channel = "daily", int? prNumber = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
     public DirectoryInfo CacheDirectory { get; } = cacheDirectory;
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
+
+    /// <summary>
+    /// Gets the identity channel bound to this CLI invocation. One of
+    /// <c>stable</c>, <c>staging</c>, <c>daily</c>, or <c>pr</c>. The value is
+    /// resolved at process start (sidecar, environment, or assembly metadata)
+    /// and is immutable for the lifetime of the context.
+    /// </summary>
+    public string Channel { get; } = channel;
+
+    /// <summary>
+    /// Gets the pull-request number associated with this invocation, when
+    /// <see cref="Channel"/> is <c>pr</c>. <see langword="null"/> for any
+    /// non-PR channel.
+    /// </summary>
+    public int? PrNumber { get; } = prNumber;
 
     /// <summary>
     /// Gets the directory where restored NuGet packages are cached for apphost server sessions.
