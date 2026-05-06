@@ -72,14 +72,13 @@ jobs:
             displayName: 🟣Restore
 
         steps:
-          # Compute the Aspire CLI channel locally so this template is self-contained
-          # and does not depend on the build stage's computeCliChannel output.
-          # build_sign_native runs BEFORE the build stage (per the dependsOn graph),
-          # so $(aspireCliChannel) from build.Windows.computeCliChannel is not yet
-          # defined when this job runs. The algorithm here MUST stay in sync with
-          # the computeCliChannel step in azure-pipelines.yml /
-          # azure-pipelines-unofficial.yml. The variable is job-scoped (no
-          # isOutput=true) since it is consumed by a later step in the same job.
+          # Compute the Aspire CLI channel for the AspireCliChannel MSBuild
+          # property consumed by the native CLI build below. This is the canonical
+          # AzDO compute: build_sign_native runs BEFORE the `build` stage (per the
+          # dependsOn graph), so an output variable from a later stage would not
+          # be visible here, and there is no other AzDO consumer of this value.
+          # The variable is job-scoped (no isOutput=true) since it is consumed by
+          # a later step in the same job.
           - pwsh: |
               $ErrorActionPreference = 'Stop'
               $reason = '$(Build.Reason)'
