@@ -52,6 +52,11 @@ internal sealed class TerminalCommand : BaseCommand
         Description = "The 0-based replica index to attach to. Required when the resource has more than one replica and the CLI is not running interactively."
     };
 
+    private static readonly Option<bool> s_viewerOption = new("--viewer")
+    {
+        Description = "Connect as a viewer (secondary) instead of taking primary control. Viewers see the terminal output but do not drive its dimensions. Useful when another peer (e.g., the dashboard) is currently driving the session."
+    };
+
     public TerminalCommand(
         IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
@@ -69,6 +74,7 @@ internal sealed class TerminalCommand : BaseCommand
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
         Options.Add(s_replicaOption);
+        Options.Add(s_viewerOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -78,6 +84,7 @@ internal sealed class TerminalCommand : BaseCommand
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var requestedReplica = parseResult.GetValue(s_replicaOption);
+        var viewerOnly = parseResult.GetValue(s_viewerOption);
 
         if (string.IsNullOrWhiteSpace(resourceName))
         {
@@ -163,9 +170,81 @@ internal sealed class TerminalCommand : BaseCommand
 
         try
         {
+            // Phase 11: Multi-head HMP1 wire-up.
+            //
+            // We always announce ourselves as "aspire-cli" and pass a defaultRole
+            // hint reflecting the user's intent ("viewer" with --viewer, otherwise
+            // "interactive"). The server uses the hint as roster metadata only — it
+            // does not auto-grant primary status. To actually drive the PTY's
+            // dimensions, an interactive client must call RequestPrimaryAsync.
+            //
+            // For backward compatibility with single-head deployments (no other
+            // peer connected), the default behavior is to take primary on connect.
+            // Pass --viewer to attach without disturbing the current primary.
+            var defaultRole = viewerOnly ? "viewer" : "interactive";
+
             await using var terminal = Hex1bTerminal.CreateBuilder()
-                .WithHmp1UdsClient(replica.ConsumerUdsPath)
+                .WithHmp1Client(
+                    ct => Hmp1Transports.ConnectUnixSocket(replica.ConsumerUdsPath, ct),
+                    displayName: "aspire-cli",
+                    defaultRole: defaultRole)
                 .Build();
+
+            var hmp1 = terminal.Hmp1!;
+
+            hmp1.RoleChanged += (_, e) =>
+            {
+                _logger.LogDebug(
+                    "Multi-head RoleChanged: primary={PrimaryPeerId} dims={Width}x{Height} reason={Reason} previously={Previously} now={Now}",
+                    e.PrimaryPeerId,
+                    e.Width,
+                    e.Height,
+                    e.Reason,
+                    e.PreviouslyPrimary,
+                    e.NowPrimary);
+            };
+
+            hmp1.PeerJoined += (_, e) =>
+            {
+                _logger.LogDebug("Multi-head PeerJoined: peerId={PeerId} displayName={DisplayName}", e.PeerId, e.DisplayName);
+            };
+
+            hmp1.PeerLeft += (_, e) =>
+            {
+                _logger.LogDebug("Multi-head PeerLeft: peerId={PeerId}", e.PeerId);
+            };
+
+            // When not in viewer mode, kick off a background task that requests
+            // primary as soon as the handshake completes. We poll for PeerId
+            // because Hmp1WorkloadAdapter does not expose a "Connected" event.
+            // The window is small (typically <50ms) and the request is cheap.
+            if (!viewerOnly)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        while (string.IsNullOrEmpty(hmp1.PeerId) && !cancellationToken.IsCancellationRequested)
+                        {
+                            await Task.Delay(20, cancellationToken).ConfigureAwait(false);
+                        }
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
+
+                        var (cols, rows) = TryGetLocalDimensions();
+                        await hmp1.RequestPrimaryAsync(cols, rows, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Multi-head RequestPrimary failed; remaining as secondary.");
+                    }
+                }, cancellationToken);
+            }
 
             return await terminal.RunAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -236,5 +315,26 @@ internal sealed class TerminalCommand : BaseCommand
             cancellationToken).ConfigureAwait(false);
 
         return (picked, ExitCodeConstants.Success);
+    }
+
+    private static (int Cols, int Rows) TryGetLocalDimensions()
+    {
+        // Prefer the live console size when available. Fall back to the producer's
+        // default 80x24 if the CLI is being invoked in a non-console context — in
+        // that case the request still succeeds and the producer keeps its current
+        // size if both dimensions match.
+        try
+        {
+            var cols = Console.WindowWidth;
+            var rows = Console.WindowHeight;
+            if (cols > 0 && rows > 0)
+            {
+                return (cols, rows);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        return (80, 24);
     }
 }
