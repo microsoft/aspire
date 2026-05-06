@@ -10,25 +10,25 @@ namespace Aspire.Hosting
 {
     public static partial class SqlServerBuilderExtensions
     {
-        [AspireExport("addDatabase", Description = "Adds a SQL Server database resource")]
+        [AspireExport(Description = "Adds a SQL Server database resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string name, string? databaseName = null) { throw null; }
 
-        [AspireExport("addSqlServer", Description = "Adds a SQL Server container resource")]
+        [AspireExport(Description = "Adds a SQL Server container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> AddSqlServer(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
-        [AspireExport("withCreationScript", Description = "Defines the SQL script used to create the database")]
+        [AspireExport(Description = "Defines the SQL script used to create the database")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> WithCreationScript(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerDatabaseResource> builder, string script) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a bind mount for the SQL Server data folder")]
+        [AspireExport(Description = "Adds a bind mount for the SQL Server data folder")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a named volume for the SQL Server data folder")]
+        [AspireExport(Description = "Adds a named volume for the SQL Server data folder")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withHostPort", Description = "Sets the host port for the SQL Server resource")]
+        [AspireExport(Description = "Sets the host port for the SQL Server resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithHostPort(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, int? port) { throw null; }
 
-        [AspireExport("withPassword", Description = "Configures the password for the SQL Server resource")]
+        [AspireExport(Description = "Configures the password for the SQL Server resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> WithPassword(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> password) { throw null; }
     }
 }
@@ -37,7 +37,7 @@ namespace Aspire.Hosting.ApplicationModel
 {
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
     [AspireExport(ExposeProperties = true)]
-    public partial class SqlServerDatabaseResource : Resource, IResourceWithParent<SqlServerServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class SqlServerDatabaseResource : Resource, IResourceWithParent<SqlServerServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public SqlServerDatabaseResource(string name, string databaseName, SqlServerServerResource parent) : base(default!) { }
 
@@ -55,7 +55,7 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [AspireExport(ExposeProperties = true)]
-    public partial class SqlServerServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class SqlServerServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public SqlServerServerResource(string name, ParameterResource password) : base(default!, default) { }
 

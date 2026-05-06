@@ -10,19 +10,19 @@ namespace Aspire.Hosting
 {
     public static partial class AzureAppConfigurationExtensions
     {
-        [AspireExport("addAzureAppConfiguration", Description = "Adds an Azure App Configuration resource")]
+        [AspireExport(Description = "Adds an Azure App Configuration resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationResource> AddAzureAppConfiguration(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport("runAsEmulator", Description = "Configures Azure App Configuration to run with the local emulator", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Configures Azure App Configuration to run with the local emulator", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource>>? configureEmulator = null) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a data bind mount for the App Configuration emulator")]
+        [AspireExport(Description = "Adds a data bind mount for the App Configuration emulator")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> builder, string? path = null) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a data volume for the App Configuration emulator")]
+        [AspireExport(Description = "Adds a data volume for the App Configuration emulator")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> WithDataVolume(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> builder, string? name = null) { throw null; }
 
-        [AspireExport("withHostPort", Description = "Sets the host port for the App Configuration emulator")]
+        [AspireExport(Description = "Sets the host port for the App Configuration emulator")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> WithHostPort(this ApplicationModel.IResourceBuilder<Azure.AzureAppConfigurationEmulatorResource> builder, int? port) { throw null; }
 
         [AspireExportIgnore(Reason = "AppConfigurationBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureAppConfigurationRole-based overload instead.")]
@@ -40,7 +40,7 @@ namespace Aspire.Hosting.Azure
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
     }
 
-    public partial class AzureAppConfigurationResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEndpoints, IAzurePrivateEndpointTarget
+    public partial class AzureAppConfigurationResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEndpoints, IAzurePrivateEndpointTarget
     {
         public AzureAppConfigurationResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -56,7 +56,7 @@ namespace Aspire.Hosting.Azure
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
 
-        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
     }
