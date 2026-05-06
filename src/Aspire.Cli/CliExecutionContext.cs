@@ -13,16 +13,36 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
 
     /// <summary>
-    /// Gets the identity channel bound to this CLI invocation. One of
-    /// <c>stable</c>, <c>staging</c>, <c>daily</c>, or <c>pr</c>. The value is
-    /// resolved at process start (sidecar, environment, or assembly metadata)
-    /// and is immutable for the lifetime of the context.
+    /// Gets the resolved hive label for the running CLI. For non-PR builds this is the
+    /// identity channel verbatim — one of <c>stable</c>, <c>staging</c>, or <c>daily</c>.
+    /// For PR builds (identity channel <c>pr</c> with a non-null <see cref="PrNumber"/>)
+    /// this is the per-PR hive label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>),
+    /// matching the directory layout the packaging service creates under the hives root.
     /// </summary>
-    public string Channel { get; } = channel;
+    /// <remarks>
+    /// This is the value reseed call sites (template factories, scaffolding, guest apphost
+    /// project) write into a project's <c>aspire.config.json#channel</c>: it is the consumer-
+    /// facing label that subsequent CLI runs use to select the right hive. The raw build-time
+    /// identity value (the literal <c>pr</c> for PR builds) is exposed separately via
+    /// <see cref="IdentityChannel"/> for callers that need the build-time taxonomy.
+    /// </remarks>
+    public string Channel => _channel == "pr" && PrNumber.HasValue
+        ? $"pr-{PrNumber.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+        : _channel;
+
+    /// <summary>
+    /// Gets the raw build-time identity channel value for the running CLI — one of
+    /// <c>stable</c>, <c>staging</c>, <c>daily</c>, or <c>pr</c>. Unlike <see cref="Channel"/>,
+    /// this never resolves to a per-PR hive label; the literal <c>pr</c> is returned for
+    /// every PR build regardless of <see cref="PrNumber"/>.
+    /// </summary>
+    public string IdentityChannel => _channel;
+
+    private readonly string _channel = channel;
 
     /// <summary>
     /// Gets the pull-request number associated with this invocation, when
-    /// <see cref="Channel"/> is <c>pr</c>. <see langword="null"/> for any
+    /// <see cref="IdentityChannel"/> is <c>pr</c>. <see langword="null"/> for any
     /// non-PR channel.
     /// </summary>
     public int? PrNumber { get; } = prNumber;
