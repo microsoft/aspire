@@ -10,7 +10,15 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
-internal readonly record struct ResourceLogEntry(string Content, bool IsErrorMessage, DateTime? Timestamp = null);
+/// <param name="Content">The normalized (display-ready) content of the log entry.</param>
+/// <param name="IsErrorMessage">Whether the entry represents an error.</param>
+/// <param name="Timestamp">The timestamp extracted from the log entry, if available.</param>
+/// <param name="RawContent">
+/// The content to use as the raw log line for export scenarios (e.g. log serialization). Populated only for DCP
+/// system log entries, where it includes the timestamp prefix so that exported lines retain their timestamps.
+/// For non-system entries, <see langword="null"/> indicates the caller should fall back to <see cref="Content"/>.
+/// </param>
+internal readonly record struct ResourceLogEntry(string Content, bool IsErrorMessage, DateTime? Timestamp = null, string? RawContent = null);
 
 internal sealed class ResourceLogSource<TResource>(
     ILogger logger,
@@ -51,17 +59,21 @@ internal sealed class ResourceLogSource<TResource>(
                 await foreach (var rawLine in ReadLogLinesAsync(stream, cancellationToken).ConfigureAwait(false))
                 {
                     var line = NormalizeCarriageReturns(rawLine);
+                    var lineIsError = isError;
                     DateTime? timestamp = null;
+                    string? rawContent = null;
 
                     // Parse DCP logs if requested
                     if (parseDcpLogs && DcpLogParser.TryParseDcpLog(line, out var parsedMessage, out _, out var isErrorLevel, out var dcpTimestamp))
                     {
                         // Format system logs with [sys] prefix and improved readability
                         line = DcpLogParser.FormatSystemLog(parsedMessage);
-                        isError = isErrorLevel;
+                        lineIsError = isErrorLevel;
                         timestamp = dcpTimestamp?.UtcDateTime;
+                        // Build raw content with the timestamp prefix so LogEntry.RawContent retains the timestamp for export.
+                        rawContent = timestamp is not null ? $"{timestamp.Value:o} {line}" : line;
                     }
-                    var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, isError, timestamp));
+                    var succeeded = channel.Writer.TryWrite(new ResourceLogEntry(line, lineIsError, timestamp, rawContent));
                     if (!succeeded)
                     {
                         logger.LogWarning("Failed to write log entry to channel. Logs for {Kind} {Name} may be incomplete", resource.Kind, resource.Metadata.Name);

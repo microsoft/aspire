@@ -370,7 +370,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 timestamp = result.Value.Timestamp.UtcDateTime;
             }
 
-            yield return LogEntry.Create(timestamp, resolvedContent, entry.Content, entry.IsErrorMessage, resourcePrefix: null);
+            yield return LogEntry.Create(timestamp, resolvedContent, entry.RawContent ?? entry.Content, entry.IsErrorMessage, resourcePrefix: null);
         }
     }
 
