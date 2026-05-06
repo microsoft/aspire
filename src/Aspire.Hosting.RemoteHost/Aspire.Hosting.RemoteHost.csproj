@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="IntegrationPackageProbeManifest.cs" />
   </ItemGroup>
 
   <ItemGroup>

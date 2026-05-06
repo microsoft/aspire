@@ -3,21 +3,21 @@
 
 using System.CommandLine;
 using System.Globalization;
+using Aspire.Hosting;
 
 namespace Aspire.Managed.NuGet.Commands;
 
 /// <summary>
-/// Layout command - creates a flat DLL layout from a project.assets.json file.
-/// This enables the AppHost Server to load integration assemblies via probing paths.
+/// Manifest command - creates a package asset probe manifest from a project.assets.json file.
 /// </summary>
-public static class LayoutCommand
+public static class ManifestCommand
 {
     /// <summary>
-    /// Creates the layout command.
+    /// Creates the manifest command.
     /// </summary>
     public static Command Create()
     {
-        var command = new Command("layout", "Create flat DLL layout from project.assets.json");
+        var command = new Command("manifest", "Create package asset probe manifest from project.assets.json");
 
         var assetsOption = new Option<string>("--assets", "-a")
         {
@@ -28,7 +28,7 @@ public static class LayoutCommand
 
         var outputOption = new Option<string>("--output", "-o")
         {
-            Description = "Output directory for flat DLL layout",
+            Description = "Output path for the package probe manifest",
             Required = true
         };
         command.Options.Add(outputOption);
@@ -60,25 +60,20 @@ public static class LayoutCommand
             var runtimeIdentifier = parseResult.GetValue(runtimeIdentifierOption);
             var verbose = parseResult.GetValue(verboseOption);
 
-            return Task.FromResult(ExecuteLayout(assetsPath, outputPath, framework, runtimeIdentifier, verbose));
+            return ExecuteManifestAsync(assetsPath, outputPath, framework, runtimeIdentifier, verbose, ct);
         });
 
         return command;
     }
 
-    private static int ExecuteLayout(
+    private static async Task<int> ExecuteManifestAsync(
         string assetsPath,
         string outputPath,
         string framework,
         string? runtimeIdentifier,
-        bool verbose)
+        bool verbose,
+        CancellationToken cancellationToken)
     {
-        if (!File.Exists(assetsPath))
-        {
-            Console.Error.WriteLine($"Error: Assets file not found: {assetsPath}");
-            return 1;
-        }
-
         try
         {
             var resolution = NuGetPackageAssetResolver.Resolve(
@@ -86,11 +81,6 @@ public static class LayoutCommand
                 framework,
                 runtimeIdentifier,
                 verbose ? Console.WriteLine : null);
-
-            // Create output directory
-            Directory.CreateDirectory(outputPath);
-
-            var copiedCount = 0;
 
             if (verbose)
             {
@@ -100,21 +90,22 @@ public static class LayoutCommand
                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Libraries: {0}", resolution.LibraryCount));
             }
 
-            foreach (var asset in resolution.Assets)
+            var manifest = CreateManifest(resolution.Assets);
+            var outputDirectory = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(outputDirectory))
             {
-                var destPath = Path.Combine(outputPath, asset.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-                if (CopyIfNewer(asset.SourcePath, destPath, createDirectory: asset.RelativePath.Contains('/')))
-                {
-                    copiedCount++;
-
-                    if (verbose)
-                    {
-                        Console.WriteLine($"  Copy: {asset.SourcePath} -> {destPath}");
-                    }
-                }
+                Directory.CreateDirectory(outputDirectory);
             }
 
-            Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Layout created: {0} files copied to {1}", copiedCount, outputPath));
+            await IntegrationPackageProbeManifest.WriteAsync(outputPath, manifest, cancellationToken).ConfigureAwait(false);
+
+            Console.WriteLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "Manifest created: {0} managed assemblies and {1} native libraries written to {2}",
+                manifest.ManagedAssemblies.Count,
+                manifest.NativeLibraries.Count,
+                outputPath));
+
             if (resolution.SkippedPackageCount > 0 && verbose)
             {
                 Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "  ({0} packages skipped - not found in cache)", resolution.SkippedPackageCount));
@@ -134,21 +125,33 @@ public static class LayoutCommand
         }
     }
 
-    private static bool CopyIfNewer(string sourcePath, string destPath, bool createDirectory)
+    internal static IntegrationPackageProbeManifest CreateManifest(IEnumerable<NuGetPackageAsset> assets)
     {
-        if (File.Exists(destPath) &&
-            File.GetLastWriteTimeUtc(sourcePath) <= File.GetLastWriteTimeUtc(destPath))
+        var managedAssemblies = new List<IntegrationPackageManagedAssembly>();
+        var nativeLibraries = new List<IntegrationPackageNativeLibrary>();
+
+        foreach (var asset in assets)
         {
-            return false;
+            if (asset.IsManagedAssembly)
+            {
+                managedAssemblies.Add(new IntegrationPackageManagedAssembly
+                {
+                    Name = Path.GetFileNameWithoutExtension(asset.RelativePath),
+                    Culture = asset.Culture,
+                    Path = asset.SourcePath
+                });
+            }
+
+            if (asset.IsNativeLibrary)
+            {
+                nativeLibraries.Add(new IntegrationPackageNativeLibrary
+                {
+                    FileName = Path.GetFileName(asset.RelativePath),
+                    Path = asset.SourcePath
+                });
+            }
         }
 
-        if (createDirectory)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-        }
-
-        File.Copy(sourcePath, destPath, overwrite: true);
-        return true;
+        return IntegrationPackageProbeManifest.Create(managedAssemblies, nativeLibraries);
     }
-
 }
