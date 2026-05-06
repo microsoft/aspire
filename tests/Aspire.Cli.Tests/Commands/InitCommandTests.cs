@@ -577,78 +577,16 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
     }
 
-    [Fact]
-    public async Task InitCommand_WhenSolutionExistsAndChannelIsExplicit_PassesTemporaryNuGetConfigToTemplateInstall()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+    // Pre-existing test InitCommand_WhenSolutionExistsAndChannelIsExplicit_PassesTemporaryNuGetConfigToTemplateInstall
+    // was deleted in PR1: it exercised the now-removed global-channel fallback (FakeConfigurationServiceWithChannel
+    // → TemplateNuGetConfigService) that PR1 G1 forbids. With ResolveTemplatePackageAsync no longer reading the
+    // global config, the only way init can pick up a non-implicit channel is via an explicit query parameter,
+    // and InitCommand currently forces ChannelOverride: null. Coverage shifts to TemplateNuGetConfigServiceTests.
 
-        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
-        File.WriteAllText(solutionFile.FullName, "Fake solution file");
-
-        FileInfo? capturedNuGetConfigFile = null;
-        string? capturedNuGetSource = null;
-        string? capturedTemplateNuGetConfigContents = null;
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            // Match the bug repro: user has a global `channel` setting pointing at an explicit channel.
-            options.ConfigurationServiceFactory = _ => new FakeConfigurationServiceWithChannel("staging");
-
-            options.PackagingServiceFactory = _ =>
-            {
-                var fakeCache = new FakeNuGetPackageCache
-                {
-                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
-                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
-                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "https://example.test/staging/v3/index.json", Version = "13.3.0" }])
-                };
-
-                var explicitChannel = PackageChannel.CreateExplicitChannel(
-                    "staging",
-                    PackageChannelQuality.Both,
-                    [new PackageMapping("Aspire*", "https://example.test/staging/v3/index.json")],
-                    fakeCache);
-
-                return new TestPackagingService
-                {
-                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([explicitChannel])
-                };
-            };
-
-            options.DotNetCliRunnerFactory = _ =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (_, version, nugetConfigFile, nugetSource, _, _, _) =>
-                {
-                    capturedNuGetConfigFile = nugetConfigFile;
-                    capturedNuGetSource = nugetSource;
-                    if (nugetConfigFile is not null && File.Exists(nugetConfigFile.FullName))
-                    {
-                        capturedTemplateNuGetConfigContents = File.ReadAllText(nugetConfigFile.FullName);
-                    }
-                    return (0, version);
-                };
-                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
-                {
-                    Directory.CreateDirectory(outputPath);
-                    return 0;
-                };
-                return runner;
-            };
-        });
-
-        var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.NotNull(capturedNuGetConfigFile);
-        Assert.Equal("https://example.test/staging/v3/index.json", capturedNuGetSource);
-        Assert.NotNull(capturedTemplateNuGetConfigContents);
-        Assert.Contains("https://example.test/staging/v3/index.json", capturedTemplateNuGetConfigContents);
-    }
+    // Pre-existing test InitCommand_WhenChannelResolutionThrowsChannelNotFound_DisplaysFriendlyError was also
+    // deleted: it triggered ChannelNotFoundException via the same global-channel fallback path. Friendly-error
+    // behavior is still covered by InitCommand_WhenChannelTemplateSearchFails_DisplaysFriendlyError below
+    // (NuGetPackageCacheException) and InitCommand_WhenInstallTemplateFails_DisplaysFriendlyError above.
 
     [Fact]
     public async Task InitCommand_WhenSolutionExistsAndChannelIsImplicit_LeavesNuGetConfigNull()
@@ -769,60 +707,6 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenChannelResolutionThrowsChannelNotFound_DisplaysFriendlyError()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
-        File.WriteAllText(solutionFile.FullName, "Fake solution file");
-
-        var interactionService = new TestInteractionService();
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-
-            // Configure global channel = "missing-channel" so the resolver looks for a channel that doesn't exist.
-            options.ConfigurationServiceFactory = _ => new FakeConfigurationServiceWithChannel("missing-channel");
-
-            // Return only an implicit/default channel so the lookup fails to match "missing-channel".
-            options.PackagingServiceFactory = _ =>
-            {
-                var fakeCache = new FakeNuGetPackageCache
-                {
-                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
-                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
-                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
-                };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
-                return new TestPackagingService
-                {
-                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
-                };
-            };
-
-            options.DotNetCliRunnerFactory = _ =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) =>
-                {
-                    throw new InvalidOperationException("InstallTemplateAsync should not run when channel resolution fails.");
-                };
-                return runner;
-            };
-        });
-
-        var serviceProvider = services.BuildServiceProvider();
-        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
-
-        var parseResult = initCommand.Parse("init");
-        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
-        Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("missing-channel", StringComparison.Ordinal));
-    }
-
-    [Fact]
     public async Task InitCommand_WhenChannelTemplateSearchFails_DisplaysFriendlyError()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -870,32 +754,6 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
         Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
-    }
-
-    private sealed class FakeConfigurationServiceWithChannel(string channelValue) : IConfigurationService
-    {
-        public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
-            => Task.FromResult<string?>(string.Equals(key, "channel", StringComparison.Ordinal) ? channelValue : null);
-
-        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
-            => GetConfigurationAsync(key, cancellationToken);
-
-        public Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
-            => Task.FromResult(false);
-
-        public Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new Dictionary<string, string>());
-
-        public Task<Dictionary<string, string>> GetLocalConfigurationAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new Dictionary<string, string>());
-
-        public Task<Dictionary<string, string>> GetGlobalConfigurationAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new Dictionary<string, string>());
-
-        public string GetSettingsFilePath(bool isGlobal) => string.Empty;
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService
