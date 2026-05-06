@@ -109,8 +109,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         try
         {
-            // Resolve the configured channel (local settings.json → global config fallback)
-            var channelName = await ResolveChannelNameAsync(cancellationToken);
+            // Resolve the configured channel from the local project config
+            var channelName = ResolveChannelName();
 
             if (projectRefs.Count > 0)
             {
@@ -335,19 +335,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     }
 
     /// <summary>
-    /// Resolves the configured channel name from local project config or global config.
+    /// Resolves the configured channel name from the local project config.
     /// </summary>
-    private async Task<string?> ResolveChannelNameAsync(CancellationToken cancellationToken)
+    private string? ResolveChannelName()
     {
         // Check aspire.config.json first, then fall back to legacy .aspire/settings.json.
         var channelName = AspireConfigFile.Load(_appDirectoryPath)?.Channel
             ?? AspireJsonConfiguration.Load(_appDirectoryPath)?.Channel;
-
-        // Fall back to global config
-        if (string.IsNullOrEmpty(channelName))
-        {
-            channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
 
         if (!string.IsNullOrEmpty(channelName))
         {
