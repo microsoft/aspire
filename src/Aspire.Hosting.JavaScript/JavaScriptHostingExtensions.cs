@@ -1630,7 +1630,7 @@ public static class JavaScriptHostingExtensions
 
         try
         {
-            if (configuration["DEBUG_SESSION_INFO"] is { } debugSessionInfoJson
+            if (configuration[KnownConfigNames.DebugSessionInfo] is { } debugSessionInfoJson
                 && JsonSerializer.Deserialize<DebugSessionCapabilities>(debugSessionInfoJson) is { } info
                 && info.SupportedLaunchConfigurations is not null
                 && !info.SupportedLaunchConfigurations.Contains(BrowserCapability))

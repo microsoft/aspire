@@ -127,6 +127,6 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithEnvironment("ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED", enabled ? "true" : "false");
+        return builder.WithEnvironment(KnownConfigNames.DashboardForwardedHeadersEnabled, enabled ? "true" : "false");
     }
 }

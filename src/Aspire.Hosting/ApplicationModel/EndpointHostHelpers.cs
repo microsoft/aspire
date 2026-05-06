@@ -19,7 +19,7 @@ public static class EndpointHostHelpers
     /// </returns>
     public static bool IsLocalhost([NotNullWhen(true)] string? host)
     {
-        return host is not null && string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase);
+        return host is not null && string.Equals(host, KnownHostNames.Localhost, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

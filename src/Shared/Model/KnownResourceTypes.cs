@@ -3,6 +3,10 @@
 
 namespace Aspire.Dashboard.Model;
 
+// Resource type strings like "Project", "Tool", "Container" collide with XML
+// element names, table column headers, and other unrelated literals. Scope to
+// hosting code where these strings actually represent Aspire resource types.
+[InternalKnownConstants(Namespaces = new[] { "Aspire.Hosting" })]
 internal static class KnownResourceTypes
 {
     public const string Executable = "Executable";

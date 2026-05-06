@@ -22,6 +22,21 @@
 
   <Import Project="$(RepositoryEngineeringDir)/NullablePolyfill.targets" />
 
+  <!--
+    Compile-include the InternalKnownConstantsAttribute marker into every Aspire.* project.
+    The attribute is referenced by shared Known*.cs files (e.g. KnownResourceTypes.cs) that
+    are <Compile Include>'d across many projects (src, tests, tools), so we make the marker
+    available globally. The attribute is internal sealed and never escapes the assembly
+    boundary. Set SkipAspireInternalKnownConstantsAttribute=true to opt a project out.
+  -->
+  <ItemGroup Condition="('$(MSBuildProjectName)' == 'Aspire'
+                         or $([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.')))
+                        and '$(IsRoslynComponent)' != 'true'
+                        and '$(SkipAspireInternalKnownConstantsAttribute)' != 'true'">
+    <Compile Include="$(RepoRoot)src\Shared\Analyzers\InternalKnownConstantsAttribute.cs"
+             Link="Shared\InternalKnownConstantsAttribute.cs" />
+  </ItemGroup>
+
   <!-- HACK: This resolves issues in CI builds where the extensions.json file is mapped to the incorrect directory. We only want
    to copy the updated extensions.json file once the `_FunctionsExtensionUpdateMetadata` target has completed. -->
   <Target Name="_FunctionsAssignTargetPathsFix" AfterTargets="_FunctionsAssignTargetPaths" BeforeTargets="_FunctionsExtensionUpdateMetadata">

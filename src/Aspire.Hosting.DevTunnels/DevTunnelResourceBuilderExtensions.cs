@@ -612,7 +612,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                 // Remove the port and trailing slash from the tunnel URL since the dev tunnels service always uses 443 for HTTPS
                 if (urls.FirstOrDefault(u => string.Equals(u.Endpoint?.EndpointName, DevTunnelPortResource.TunnelEndpointName, StringComparisons.EndpointAnnotationName)
-                                             && !string.Equals(new UriBuilder(u.Url).Host, "localhost")) is { } tunnelUrl)
+                                             && !string.Equals(new UriBuilder(u.Url).Host, KnownHostNames.Localhost)) is { } tunnelUrl)
                 {
                     tunnelUrl.Url = new UriBuilder(tunnelUrl.Url).Uri.ToString().TrimEnd('/');
                 }
@@ -620,7 +620,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 // Remove the localhost version of the tunnel URL that's added by the central endpoint URL logic
                 // HACK: See the NOTE above about potentially handling this more generically in the central endpoint URL logic
                 if (urls.FirstOrDefault(u => string.Equals(u.Endpoint?.EndpointName, DevTunnelPortResource.TunnelEndpointName, StringComparisons.EndpointAnnotationName)
-                                             && string.Equals(new UriBuilder(u.Url).Host, "localhost", StringComparison.OrdinalIgnoreCase)) is { } localhostTunnelUrl)
+                                             && string.Equals(new UriBuilder(u.Url).Host, KnownHostNames.Localhost, StringComparison.OrdinalIgnoreCase)) is { } localhostTunnelUrl)
                 {
                     urls.Remove(localhostTunnelUrl);
                 }

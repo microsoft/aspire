@@ -26,7 +26,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             CodeGenerator: "", // C# doesn't use code generation
             AppHostFileName: null), // C# uses .csproj
         new LanguageInfo(
-            LanguageId: new LanguageId("typescript/nodejs"),
+            LanguageId: new LanguageId(KnownLanguageId.TypeScript),
             DisplayName: "TypeScript (Node.js)",
             PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
             DetectionPatterns: ["apphost.ts"],
@@ -37,7 +37,9 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             DisplayName: KnownLanguageId.PythonDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Python",
             DetectionPatterns: ["apphost.py"],
+#pragma warning disable ASPIREINT001 // CodeGenerator matches ICodeGenerator.Language, not KnownLanguageId.PythonDisplayName
             CodeGenerator: "Python",
+#pragma warning restore ASPIREINT001
             AppHostFileName: "apphost.py",
             IsExperimental: true),
         new LanguageInfo(
@@ -53,7 +55,9 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             DisplayName: KnownLanguageId.JavaDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Java",
             DetectionPatterns: ["AppHost.java"],
+#pragma warning disable ASPIREINT001 // CodeGenerator matches ICodeGenerator.Language, not KnownLanguageId.JavaDisplayName
             CodeGenerator: "Java",
+#pragma warning restore ASPIREINT001
             AppHostFileName: "AppHost.java",
             IsExperimental: true),
         new LanguageInfo(
@@ -61,7 +65,9 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             DisplayName: KnownLanguageId.RustDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Rust",
             DetectionPatterns: ["apphost.rs"],
+#pragma warning disable ASPIREINT001 // CodeGenerator matches ICodeGenerator.Language, not KnownLanguageId.RustDisplayName
             CodeGenerator: "Rust",
+#pragma warning restore ASPIREINT001
             AppHostFileName: "apphost.rs",
             IsExperimental: true),
     ];

@@ -6,6 +6,10 @@ namespace Aspire.Cli.Templating;
 /// <summary>
 /// Known template identifiers.
 /// </summary>
+// "aspire" / "aspire-empty" etc. are short generic strings that show up in many
+// unrelated contexts (CLI tool name, agent config keys, JSON property keys).
+// Scope this catalog to template-handling code so the analyzer doesn't flag those.
+[InternalKnownConstants(Namespaces = new[] { "Aspire.Cli.Templating" })]
 internal static class KnownTemplateId
 {
     /// <summary>

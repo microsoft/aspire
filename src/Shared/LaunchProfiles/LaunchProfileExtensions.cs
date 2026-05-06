@@ -3,6 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Resources;
 
@@ -11,7 +12,7 @@ namespace Aspire.Hosting;
 internal static class LaunchProfileExtensions
 {
     // Allow list of command names that are supported by Aspire
-    private static readonly string[] s_allowedCommandNames = ["Project", "Executable"];
+    private static readonly string[] s_allowedCommandNames = [KnownResourceTypes.Project, KnownResourceTypes.Executable];
 
     internal static LaunchSettings? GetLaunchSettings(this ProjectResource projectResource)
     {

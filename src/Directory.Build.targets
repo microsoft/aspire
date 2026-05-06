@@ -25,6 +25,27 @@
                     OutputItemType="Analyzer" />
   </ItemGroup>
 
+  <!--
+    Wire the repo-internal analyzer into Aspire.Hosting* and Aspire.Cli source projects.
+    OutputItemType="Analyzer" + ReferenceOutputAssembly="false" + PrivateAssets="all"
+    ensures the analyzer is loaded by the C# compiler at build time only and is
+    NOT added to the consuming project's runtime closure or NuGet package.
+    Set SkipAspireInternalAnalyzersReference=true in a project to opt out.
+    Roslyn components (analyzers themselves) are excluded to avoid self-reference cycles.
+    The InternalKnownConstantsAttribute marker file is included globally by the root
+    Directory.Build.targets so any project can consume shared Known*.cs files that
+    reference it.
+  -->
+  <ItemGroup Condition="($([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting'))
+                         or '$(MSBuildProjectName)' == 'Aspire.Cli')
+                        and '$(IsRoslynComponent)' != 'true'
+                        and '$(SkipAspireInternalAnalyzersReference)' != 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)\Aspire.Internal.Analyzers\Aspire.Internal.Analyzers.csproj"
+                    PrivateAssets="all"
+                    ReferenceOutputAssembly="false"
+                    OutputItemType="Analyzer" />
+  </ItemGroup>
+
   <!-- Used by Aspire.Workload.Testing.targets -->
   <Target Name="GetPackageName" Returns="@(PackageName)">
     <ItemGroup>

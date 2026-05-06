@@ -17,3 +17,13 @@
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIRE006` | Error | Application model items must have valid names | [src/Aspire.Hosting.Analyzers/AppHostAnalyzer.Diagnostics.cs](../src/Aspire.Hosting.Analyzers/AppHostAnalyzer.Diagnostics.cs) |
+
+## Repo-Internal Analyzer Diagnostics
+
+These diagnostics come from `Aspire.Internal.Analyzers`, which is not shipped in any
+NuGet package. They are applied to `Aspire.Hosting*` and `Aspire.Cli` source projects
+inside this repository at build time only and never affect end users.
+
+| Diagnostic ID | Severity | Description | Location |
+| ------------- | -------- | ----------- | -------- |
+| `ASPIREINT001` | Error | String literal duplicates a value already defined as a `public const string` member of an `internal static class Known*`; use the named constant instead. | [src/Aspire.Internal.Analyzers/UseKnownConstantStringLiteralAnalyzer.cs](../src/Aspire.Internal.Analyzers/UseKnownConstantStringLiteralAnalyzer.cs) |

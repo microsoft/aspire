@@ -98,7 +98,9 @@ internal static class X509Certificate2Extensions
             store.Open(OpenFlags.ReadOnly);
             // Add all root certificates, excluding any localhost certificates without a Subject Key Identifier.
             // This avoids conflicts between legacy self-signed localhost certificates and the ASP.NET Core development certificate in OpenSSL.
+#pragma warning disable ASPIREINT001 // KnownHostNames isn't compiled into Aspire.Cli where this file is also included.
             foreach (var certificate in store.Certificates.Where(c => !c.MatchesHostname("localhost") || c.HasSubjectKeyIdentifier()))
+#pragma warning restore ASPIREINT001
             {
                 collection.Add(certificate);
             }

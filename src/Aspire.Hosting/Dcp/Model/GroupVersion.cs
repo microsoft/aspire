@@ -11,6 +11,10 @@ internal struct GroupVersion
     public override string ToString() => $"{Group}/{Version}";
 }
 
+// Opt this class into the repo-internal ASPIREINT001 analyzer's catalog and
+// scope its constants to DCP code. Inside Aspire.Hosting.Dcp.* the analyzer
+// will prefer these constants over collisions with KnownResourceTypes.* etc.
+[InternalKnownConstants(Namespaces = new[] { "Aspire.Hosting.Dcp" })]
 internal static class Dcp
 {
     public static GroupVersion GroupVersion { get; } = new GroupVersion
@@ -21,15 +25,15 @@ internal static class Dcp
 
     public static readonly Schema Schema = new();
 
-    public static string ExecutableKind { get; } = "Executable";
-    public static string ContainerKind { get; } = "Container";
-    public static string ContainerExecKind { get; } = "ContainerExec";
-    public static string ContainerNetworkKind { get; } = "ContainerNetwork";
-    public static string ServiceKind { get; } = "Service";
-    public static string EndpointKind { get; } = "Endpoint";
-    public static string ExecutableReplicaSetKind { get; } = "ExecutableReplicaSet";
-    public static string ContainerVolumeKind { get; } = "ContainerVolume";
-    public static string ContainerNetworkTunnelProxyKind { get; } = "ContainerNetworkTunnelProxy";
+    public const string ExecutableKind = "Executable";
+    public const string ContainerKind = "Container";
+    public const string ContainerExecKind = "ContainerExec";
+    public const string ContainerNetworkKind = "ContainerNetwork";
+    public const string ServiceKind = "Service";
+    public const string EndpointKind = "Endpoint";
+    public const string ExecutableReplicaSetKind = "ExecutableReplicaSet";
+    public const string ContainerVolumeKind = "ContainerVolume";
+    public const string ContainerNetworkTunnelProxyKind = "ContainerNetworkTunnelProxy";
 
     static Dcp()
     {

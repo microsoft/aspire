@@ -157,7 +157,7 @@ public sealed class ContainerImagePushOptions
         // - Contains a dot (e.g., docker.io, ghcr.io, myregistry.azurecr.io)
         // - Contains a colon (e.g., localhost:5000)
         // - Is "localhost"
-        if (firstSegment.Contains('.') || firstSegment.Contains(':') || firstSegment.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        if (firstSegment.Contains('.') || firstSegment.Contains(':') || firstSegment.Equals(KnownHostNames.Localhost, StringComparison.OrdinalIgnoreCase))
         {
             return (firstSegment, remainder);
         }

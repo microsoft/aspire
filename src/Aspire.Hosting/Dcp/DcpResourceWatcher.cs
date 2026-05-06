@@ -472,9 +472,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     {
         CustomResource? cr = resourceKind switch
         {
-            "Container" => _resourceState.ContainersMap.TryGetValue(resourceName, out var container) ? container : null,
-            "ContainerExec" => _resourceState.ContainerExecsMap.TryGetValue(resourceName, out var containerExec) ? containerExec : null,
-            "Executable" => _resourceState.ExecutablesMap.TryGetValue(resourceName, out var executable) ? executable : null,
+            Model.Dcp.ContainerKind => _resourceState.ContainersMap.TryGetValue(resourceName, out var container) ? container : null,
+            Model.Dcp.ContainerExecKind => _resourceState.ContainerExecsMap.TryGetValue(resourceName, out var containerExec) ? containerExec : null,
+            Model.Dcp.ExecutableKind => _resourceState.ExecutablesMap.TryGetValue(resourceName, out var executable) ? executable : null,
             _ => null
         };
 

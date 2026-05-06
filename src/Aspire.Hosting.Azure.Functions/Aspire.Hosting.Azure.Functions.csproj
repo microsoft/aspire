@@ -20,6 +20,8 @@
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)\LaunchProfiles\*.cs" />
+    <!-- Required by LaunchProfileExtensions.cs which references KnownResourceTypes. -->
+    <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Model\KnownResourceTypes.cs" />
   </ItemGroup>
 
   <ItemGroup>

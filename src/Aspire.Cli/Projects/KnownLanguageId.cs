@@ -6,6 +6,10 @@ namespace Aspire.Cli.Projects;
 /// <summary>
 /// Known language identifiers for AppHost projects.
 /// </summary>
+// Language IDs like "python", "java", "csharp" are common strings reused for code
+// fence markers, docs metadata, etc. Scope this catalog to project-handling code
+// so the analyzer doesn't suggest replacing those unrelated literals.
+[InternalKnownConstants(Namespaces = new[] { "Aspire.Cli.Projects" })]
 internal static class KnownLanguageId
 {
     /// <summary>

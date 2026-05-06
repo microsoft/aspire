@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using HealthChecks.Uris;
@@ -103,7 +104,7 @@ public static class ExternalServiceBuilderExtensions
         var resourceBuilder = builder.AddResource(resource)
             .WithInitialState(new CustomResourceSnapshot
             {
-                ResourceType = "ExternalService",
+                ResourceType = KnownResourceTypes.ExternalService,
                 State = KnownResourceStates.Waiting,
                 Properties = []
             })

@@ -162,7 +162,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// <summary>
     /// This is the address the resource is listening on. By default it is localhost.
     /// </summary>
-    public string TargetHost { get; set; } = "localhost";
+    public string TargetHost { get; set; } = KnownHostNames.Localhost;
 
     /// <summary>
     /// Transport that is being used (e.g. http, http2, http3 etc).
