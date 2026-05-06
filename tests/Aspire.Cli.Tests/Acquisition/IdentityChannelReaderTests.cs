@@ -106,103 +106,24 @@ public class IdentityChannelReaderTests
         Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
-    // PR1-S11: ParsePrNumber unit tests.
-
-    [Fact]
-    public void ParsePrNumber_PrChannelInformationalVersion_ReturnsPrNumber()
+    [Theory]
+    [InlineData("0.0.0-pr12345.deadbeef", 12345)]
+    [InlineData("1.2.3-preview.5", null)]
+    [InlineData("0.0.0-pr.5", null)]
+    [InlineData(null, null)]
+    [InlineData("0.0.0-pr0", 0)]
+    [InlineData("", null)]
+    [InlineData("0.0.0", null)]
+    [InlineData("0.0.0-pr", null)]
+    [InlineData("0.0.0-pr-12345", null)]
+    [InlineData("0.0.0-pr12345abc", 12345)]
+    [InlineData("0.0.0-pr2147483647", int.MaxValue)]
+    [InlineData("0.0.0-pr2147483648", null)]
+    [InlineData("0.0.0-prabc.def", null)]
+    [InlineData("1.0.0-rc.1.pr12345", null)]
+    public void ParsePrNumber_ReturnsExpected(string? input, int? expected)
     {
-        Assert.Equal(12345, IdentityChannelReader.ParsePrNumber("0.0.0-pr12345.deadbeef"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_PreviewSuffixWithoutPrMarker_ReturnsNull()
-    {
-        Assert.Null(IdentityChannelReader.ParsePrNumber("1.2.3-preview.5"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_PrMarkerWithDotImmediatelyAfter_ReturnsNull()
-    {
-        // "0.0.0-pr.5" -> after "-pr" we see '.', no digits, so null.
-        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-pr.5"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_NullInput_ReturnsNull()
-    {
-        Assert.Null(IdentityChannelReader.ParsePrNumber(null));
-    }
-
-    [Fact]
-    public void ParsePrNumber_PrMarkerWithoutDotSuffix_ReturnsNumber()
-    {
-        // "0.0.0-pr0" — digits run to end-of-string with no dot delimiter; "0" parses to 0.
-        Assert.Equal(0, IdentityChannelReader.ParsePrNumber("0.0.0-pr0"));
-    }
-
-    // PR1-TG2: InformationalVersion parsing edge cases.
-
-    [Fact]
-    public void ParsePrNumber_EmptyString_ReturnsNull()
-    {
-        Assert.Null(IdentityChannelReader.ParsePrNumber(string.Empty));
-    }
-
-    [Fact]
-    public void ParsePrNumber_ReleaseVersionWithoutSuffix_ReturnsNull()
-    {
-        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_PrMarkerWithoutTrailingDigits_ReturnsNull()
-    {
-        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-pr"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_PrMarkerFollowedByHyphenThenDigits_ReturnsNull()
-    {
-        // "-pr-12345": after "-pr" we hit '-', no ASCII digits, so null. Documents that the
-        // reader requires digits adjacent to "-pr" with no separator in between.
-        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-pr-12345"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_DigitsFollowedByLetters_StopsAtFirstNonDigit()
-    {
-        // "0.0.0-pr12345abc": reader walks digits only, so it parses "12345" and stops.
-        // This documents the lenient behavior — any non-digit acts as a delimiter.
-        Assert.Equal(12345, IdentityChannelReader.ParsePrNumber("0.0.0-pr12345abc"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_MaxIntPrNumber_Parses()
-    {
-        Assert.Equal(int.MaxValue, IdentityChannelReader.ParsePrNumber($"0.0.0-pr{int.MaxValue}"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_OverflowsInt_ReturnsNull()
-    {
-        // int.MaxValue + 1 = 2147483648. int.TryParse with NumberStyles.None must fail
-        // gracefully (return false -> null). Verifying we never throw OverflowException.
-        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-pr2147483648"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_PrMarkerFollowedByLettersOnly_ReturnsNull()
-    {
-        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-prabc.def"));
-    }
-
-    [Fact]
-    public void ParsePrNumber_MarkerEmbeddedInRcSuffix_ParsesEmbeddedDigits()
-    {
-        // "1.0.0-rc.1.pr12345": IndexOf finds the "-pr" inside ".pr"... no, IndexOf("-pr")
-        // requires the literal "-pr" substring. ".pr12345" does NOT contain "-pr", so this
-        // returns null. Documents that the reader is anchored on the "-pr" literal, not "pr".
-        Assert.Null(IdentityChannelReader.ParsePrNumber("1.0.0-rc.1.pr12345"));
+        Assert.Equal(expected, IdentityChannelReader.ParsePrNumber(input));
     }
 
     [Fact]
