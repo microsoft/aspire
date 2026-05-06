@@ -1,0 +1,35 @@
+# Warms the BuildKit cache used by pull request CLI E2E image builds.
+name: Warm CLI E2E Image Cache
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '30 5 * * *'
+
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-cli-e2e-image.yml'
+      - '.github/workflows/warm-cli-e2e-image-cache.yml'
+      - 'eng/scripts/get-aspire-cli.sh'
+      - 'eng/scripts/get-aspire-cli-pr.sh'
+      - 'tests/Shared/Docker/Dockerfile.e2e'
+      - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-base'
+      - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-java'
+      - 'tests/Shared/Docker/NuGet.DotnetTool.config'
+      - 'tests/Shared/Docker/configure-ubuntu-apt-mirror.sh'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  warm_cli_e2e_image_cache:
+    name: Warm CLI E2E image cache
+    if: ${{ github.repository_owner == 'microsoft' }}
+    uses: ./.github/workflows/build-cli-e2e-image.yml
+    with:
+      includePolyglotImages: true
+      uploadArtifacts: false
