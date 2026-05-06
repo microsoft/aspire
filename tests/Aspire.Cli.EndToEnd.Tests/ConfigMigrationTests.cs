@@ -101,8 +101,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
     /// <summary>
     /// Verifies that a legacy ~/.aspire/globalsettings.json is automatically migrated to
-    /// ~/.aspire/aspire.config.json when a CLI command is run, and that the legacy file
-    /// is preserved for backward compatibility with older CLI versions.
+    /// ~/.aspire/aspire.config.json when a CLI command is run, that the legacy file is
+    /// preserved for backward compatibility with older CLI versions, and that the
+    /// channel field is dropped during migration (channel is baked into the binary as
+    /// AspireCliChannel assembly metadata; it is not stored in global config).
     /// </summary>
     [Fact]
     public async Task GlobalSettings_MigratedFromLegacyFormat()
@@ -139,23 +141,25 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify aspire.config.json was created with migrated values (host-side).
-        AssertFileContains(newConfigPath, "staging", "polyglotSupportEnabled");
+        // Migrated aspire.config.json retains non-channel content (features, sdkVersion).
+        AssertFileContains(newConfigPath, "polyglotSupportEnabled");
 
-        // Verify the legacy file was preserved (intentional for backward compat).
-        AssertFileContains(legacyPath, "channel");
+        // Channel is intentionally dropped from the migrated global config.
+        AssertFileDoesNotContain(newConfigPath, "\"channel\"", "staging");
 
-        // Verify migrated values are accessible via aspire config get.
+        // Legacy file is preserved unchanged for backward compatibility, so it still
+        // contains the original channel value.
+        AssertFileContains(legacyPath, "channel", "staging");
+
+        // aspire config get channel returns the not-found error and a non-zero exit
+        // because the migrated global config has no channel key.
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("staging", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitUntilTextAsync("not found", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForAnyPromptAsync(counter);
 
         // Cleanup.
-        await auto.TypeAsync("aspire config delete channel -g");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
