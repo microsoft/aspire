@@ -51,8 +51,21 @@ public class CliBootstrapTests
         var parameters = ctor.GetParameters();
         Assert.Single(parameters);
         Assert.Equal(typeof(Assembly), parameters[0].ParameterType);
-        Assert.True(parameters[0].HasDefaultValue);
-        Assert.Null(parameters[0].DefaultValue);
+
+        // Spec (PR1 follow-through): the ctor MUST require an explicit assembly. The default
+        // null parameter was a footgun under RemoteExecutor / plugin-loader scenarios where
+        // Assembly.GetEntryAssembly() returns the wrong assembly. Callers must decide.
+        Assert.False(parameters[0].HasDefaultValue,
+            "IdentityChannelReader ctor must NOT have a default parameter — see PR1 follow-through removing the Assembly? = null footgun.");
+    }
+
+    [Fact]
+    public void IdentityChannelReader_NullAssembly_ThrowsArgumentNullException()
+    {
+        // Spec (PR1 follow-through): explicit null produces an immediate, descriptive
+        // ArgumentNullException so misuse is caught at construction time rather than
+        // surfacing later as the cryptic "metadata missing on '?'" exception.
+        Assert.Throws<ArgumentNullException>(() => new IdentityChannelReader(null!));
     }
 
     [Fact]
@@ -95,17 +108,39 @@ public class CliBootstrapTests
     }
 
     [Fact]
-    public async Task BuildApplication_LocallyBuiltCli_HasDailyChannelAndNullPrNumber()
+    public async Task BuildApplication_LocallyBuiltCli_ChannelMatchesTestHostAssemblyMetadata()
     {
-        // The Aspire.Cli.csproj defaults AspireCliChannel to "daily" when not overridden
-        // by CI (no /p:AspireCliChannel=...), so a locally-built CLI assembly must expose
-        // Channel == "daily" and PrNumber == null through the bootstrapped context.
+        // The Aspire.Cli.csproj defaults AspireCliChannel to "daily" when not overridden by
+        // CI; the test csproj forwards $(AspireCliChannel) the same way (see csproj comment).
+        // The test host and production assembly therefore stay in lockstep regardless of
+        // whether the build runs under /p:AspireCliChannel=stable or unspecified — both pick
+        // up the same value. We assert the bootstrapped context's channel matches the
+        // *test host's* baked metadata, NOT a hard-coded literal, so the test stops being
+        // an accidental regression for any non-default build.
         using var host = await BuildHostAsync();
+
+        var entryAssembly = Assembly.GetEntryAssembly();
+        Assert.NotNull(entryAssembly);
+        var bakedChannel = entryAssembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => string.Equals(a.Key, "AspireCliChannel", StringComparison.Ordinal))
+            .Value;
+        Assert.False(string.IsNullOrEmpty(bakedChannel));
 
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
-        Assert.Equal("daily", context.Channel);
-        Assert.Null(context.PrNumber);
+        Assert.Equal(bakedChannel, context.Channel);
+        // PrNumber is non-null only when the test host is itself a PR build. In a local
+        // dev build (and the default CI path) it should be null. We assert the contract:
+        // PrNumber.HasValue iff the channel resolved to "pr-<N>".
+        if (context.IdentityChannel == "pr")
+        {
+            Assert.NotNull(context.PrNumber);
+        }
+        else
+        {
+            Assert.Null(context.PrNumber);
+        }
     }
 
     [Fact]
