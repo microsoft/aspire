@@ -18,6 +18,7 @@ using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Commands;
@@ -471,14 +472,28 @@ internal sealed class InitCommand : BaseCommand
             appHost["language"] = language;
         }
 
-        // Resolve the effective ports. If aspire.config.json already had a `profiles`
-        // section we adopt those ports so apphost.run.json (written next by the caller
-        // of this method) stays in sync. Otherwise write fresh profiles using either
-        // the caller-supplied ports or freshly generated ones.
+        // Resolve the effective ports. Three cases:
+        //   1. profiles is null → write fresh profiles, return those ports
+        //   2. profiles exists and parses cleanly → adopt those ports, return them (so
+        //      apphost.run.json stays in sync with what `aspire run` will use)
+        //   3. profiles exists but doesn't match the expected 6-port shape (user-customized
+        //      or older format) → PRESERVE the existing profiles untouched and just generate
+        //      fresh ports for apphost.run.json. This is strictly safer than overwriting,
+        //      even if the two files end up disagreeing on dashboard ports — the user has
+        //      already opted into a custom config and we shouldn't trash their data.
         AppHostProfilePorts effectivePorts;
-        if (settings["profiles"] is JsonObject existingProfiles && TryReadAppHostProfilePorts(existingProfiles, out var readPorts))
+        var existingProfilesObject = settings["profiles"] as JsonObject;
+        if (existingProfilesObject is not null && TryReadAppHostProfilePorts(existingProfilesObject, out var readPorts))
         {
             effectivePorts = readPorts;
+        }
+        else if (existingProfilesObject is not null)
+        {
+            // Existing profiles can't be parsed into our expected shape — leave them alone
+            // and just generate fresh ports for apphost.run.json. We deliberately don't
+            // overwrite the user's customizations, even though it means the two files may
+            // bind to different dashboard URLs in this edge case.
+            effectivePorts = ports ?? AppHostProfilePortGenerator.Generate(Random.Shared);
         }
         else
         {
@@ -496,8 +511,8 @@ internal sealed class InitCommand : BaseCommand
                     ["applicationUrl"] = $"https://localhost:{effectivePorts.DashboardHttpsPort};http://localhost:{effectivePorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{effectivePorts.OtlpHttpsPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{effectivePorts.ResourceServiceHttpsPort}"
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"https://localhost:{effectivePorts.OtlpHttpsPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"https://localhost:{effectivePorts.ResourceServiceHttpsPort}"
                     }
                 },
                 ["http"] = new JsonObject
@@ -505,9 +520,9 @@ internal sealed class InitCommand : BaseCommand
                     ["applicationUrl"] = $"http://localhost:{effectivePorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{effectivePorts.OtlpHttpPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{effectivePorts.ResourceServiceHttpPort}",
-                        ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"http://localhost:{effectivePorts.OtlpHttpPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"http://localhost:{effectivePorts.ResourceServiceHttpPort}",
+                        [KnownConfigNames.AllowUnsecuredTransport] = "true"
                     }
                 }
             };
@@ -540,10 +555,10 @@ internal sealed class InitCommand : BaseCommand
 
         if (!TryParseHostPort(https["applicationUrl"]?.GetValue<string>(), "https", out var dashboardHttps)
             || !TryParseHostPort(http["applicationUrl"]?.GetValue<string>(), "http", out var dashboardHttp)
-            || !TryParseHostPort(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>(), "https", out var otlpHttps)
-            || !TryParseHostPort(httpEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>(), "http", out var otlpHttp)
-            || !TryParseHostPort(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>(), "https", out var resourceServiceHttps)
-            || !TryParseHostPort(httpEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>(), "http", out var resourceServiceHttp))
+            || !TryParseHostPort(httpsEnv[KnownConfigNames.DashboardOtlpGrpcEndpointUrl]?.GetValue<string>(), "https", out var otlpHttps)
+            || !TryParseHostPort(httpEnv[KnownConfigNames.DashboardOtlpGrpcEndpointUrl]?.GetValue<string>(), "http", out var otlpHttp)
+            || !TryParseHostPort(httpsEnv[KnownConfigNames.ResourceServiceEndpointUrl]?.GetValue<string>(), "https", out var resourceServiceHttps)
+            || !TryParseHostPort(httpEnv[KnownConfigNames.ResourceServiceEndpointUrl]?.GetValue<string>(), "http", out var resourceServiceHttp))
         {
             return false;
         }
@@ -619,8 +634,8 @@ internal sealed class InitCommand : BaseCommand
                     {
                         ["ASPNETCORE_ENVIRONMENT"] = "Development",
                         ["DOTNET_ENVIRONMENT"] = "Development",
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{ports.OtlpHttpsPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"https://localhost:{ports.OtlpHttpsPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
                     }
                 },
                 ["http"] = new JsonObject
@@ -633,9 +648,9 @@ internal sealed class InitCommand : BaseCommand
                     {
                         ["ASPNETCORE_ENVIRONMENT"] = "Development",
                         ["DOTNET_ENVIRONMENT"] = "Development",
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{ports.OtlpHttpPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{ports.ResourceServiceHttpPort}",
-                        ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"http://localhost:{ports.OtlpHttpPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"http://localhost:{ports.ResourceServiceHttpPort}",
+                        [KnownConfigNames.AllowUnsecuredTransport] = "true"
                     }
                 }
             }

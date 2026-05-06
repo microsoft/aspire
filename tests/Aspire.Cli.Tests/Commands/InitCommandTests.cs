@@ -276,6 +276,60 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_SingleFileSkeleton_PreservesUnparseableExistingProfiles()
+    {
+        // Regression guard for behavioral safety: if aspire.config.json already has a
+        // `profiles` section that doesn't match the expected 6-port shape (e.g. user-customized,
+        // missing one of the env vars, or an https-only setup), `aspire init` must NOT
+        // overwrite those profiles. The user has clearly customized their config and we
+        // shouldn't trash their data — even at the cost of apphost.run.json potentially
+        // binding to different dashboard ports.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        const string customAspireConfig = """
+            {
+              "appHost": {
+                "path": "apphost.cs"
+              },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:18000",
+                  "environmentVariables": {
+                    "MY_CUSTOM_VAR": "custom-value"
+                  }
+                }
+              }
+            }
+            """;
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        File.WriteAllText(aspireConfigPath, customAspireConfig);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // The user's customizations must be preserved verbatim — only the appHost.path
+        // is allowed to be touched (since that's the primary purpose of DropAspireConfig).
+        var aspireConfig = JsonNode.Parse(File.ReadAllText(aspireConfigPath))!.AsObject();
+        var preservedProfiles = aspireConfig["profiles"]!.AsObject();
+        Assert.False(preservedProfiles.ContainsKey("http"), "http profile should NOT have been added.");
+        var preservedHttps = preservedProfiles["https"]!.AsObject();
+        Assert.Equal("https://localhost:18000", preservedHttps["applicationUrl"]!.GetValue<string>());
+        var preservedEnv = preservedHttps["environmentVariables"]!.AsObject();
+        Assert.Equal("custom-value", preservedEnv["MY_CUSTOM_VAR"]!.GetValue<string>());
+        Assert.False(preservedEnv.ContainsKey("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"), "OTLP env var should NOT have been added to user's custom profile.");
+
+        // apphost.run.json still gets written so `dotnet run apphost.cs` works (with fresh
+        // ports — accepted divergence in this edge case).
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json")));
+    }
+
+    [Fact]
     public async Task InitCommand_WhenDeprecatedCompatibilityOptionsProvided_SucceedsAndWarns()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
