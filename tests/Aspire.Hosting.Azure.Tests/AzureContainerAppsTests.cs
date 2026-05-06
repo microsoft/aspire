@@ -2222,6 +2222,34 @@ public class AzureContainerAppsTests
         Assert.Equal("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", output.Name);
     }
 
+    [Theory]
+    [InlineData(EndpointProperty.Url, "https://project1.example.azurecontainerapps.io")]
+    [InlineData(EndpointProperty.Host, "project1.example.azurecontainerapps.io")]
+    [InlineData(EndpointProperty.IPV4Host, "project1.example.azurecontainerapps.io")]
+    [InlineData(EndpointProperty.Port, "443")]
+    [InlineData(EndpointProperty.TargetPort, "5000")]
+    [InlineData(EndpointProperty.Scheme, "https")]
+    [InlineData(EndpointProperty.HostAndPort, "project1.example.azurecontainerapps.io:443")]
+    [InlineData(EndpointProperty.TlsEnabled, "True")]
+    public async Task GetEndpointPropertyExpression_ReturnsContainerAppEndpointPropertyExpression(EndpointProperty property, string expected)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        env.Resource.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        env.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        var project = builder
+            .AddProject<Project>("project1", launchProfileName: null)
+            .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(expected, await expression.GetValueAsync(default));
+    }
+
     [Fact]
     public async Task ContainerAppProvisionDependsOnTargetPushStep()
     {
