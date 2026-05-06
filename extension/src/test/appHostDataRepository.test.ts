@@ -65,6 +65,203 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
+    test('describe watch reports minimum CLI version when command help is returned', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        const lineCallback = spawnStub.firstCall.args[3].lineCallback;
+        const exitCallback = spawnStub.firstCall.args[3].exitCallback;
+        lineCallback('Description:');
+        lineCallback('Usage:');
+        lineCallback('aspire [command] [options]');
+        lineCallback('Commands:');
+        exitCallback(1);
+
+        assert.strictEqual(repository.hasError, true);
+        assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+
+        repository.dispose();
+    });
+
+    test('describe watch reports minimum AppHost version when workspace AppHost returns no data', async () => {
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = options?.lineCallback;
+            return new TestChildProcess();
+        });
+        spawnStub.onSecondCall().returns(new TestChildProcess());
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                ],
+            }));
+            await waitForMicrotasks();
+
+            const exitCallback = spawnStub.secondCall.args[3].exitCallback;
+            exitCallback(0);
+
+            assert.strictEqual(repository.hasError, true);
+            assert.ok(repository.errorMessage?.includes('Aspire.Hosting 13.2.0'), repository.errorMessage);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('describe watch clears compatibility error after receiving resource data', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        const lineCallback = spawnStub.firstCall.args[3].lineCallback;
+        lineCallback(JSON.stringify({ name: 'api' }));
+
+        assert.strictEqual(repository.hasError, false);
+        assert.strictEqual(repository.workspaceResources.length, 1);
+
+        repository.dispose();
+    });
+
+    test('visible panel switches to global polling when workspace has multiple AppHosts and none is selected', async () => {
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        const getAppHostsProcess = new TestChildProcess();
+        const describeProcess = new TestChildProcess();
+        const psProcess = new TestChildProcess();
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = options?.lineCallback;
+            return getAppHostsProcess;
+        });
+        spawnStub.onSecondCall().returns(describeProcess);
+        spawnStub.onThirdCall().returns(psProcess);
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: null,
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                    '/workspace/samples/Store/AppHost.csproj',
+                ],
+            }));
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.viewMode, 'global');
+            assert.strictEqual(describeProcess.killed, true);
+            assert.strictEqual(spawnStub.callCount, 3);
+            assert.deepStrictEqual(spawnStub.thirdCall.args[2], ['ps', '--format', 'json', '--resources']);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('visible panel switches to global polling when workspace has multiple AppHosts and one is selected', async () => {
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        const getAppHostsProcess = new TestChildProcess();
+        const describeProcess = new TestChildProcess();
+        const psProcess = new TestChildProcess();
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = options?.lineCallback;
+            return getAppHostsProcess;
+        });
+        spawnStub.onSecondCall().returns(describeProcess);
+        spawnStub.onThirdCall().returns(psProcess);
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                    '/workspace/samples/Store/AppHost.csproj',
+                ],
+            }));
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.viewMode, 'global');
+            assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHostName, 'apps/Store/AppHost.csproj');
+            assert.strictEqual(describeProcess.killed, true);
+            assert.strictEqual(spawnStub.callCount, 3);
+            assert.deepStrictEqual(spawnStub.thirdCall.args[2], ['ps', '--format', 'json', '--resources']);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('single workspace AppHost candidate keeps workspace mode', async () => {
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = options?.lineCallback;
+            return new TestChildProcess();
+        });
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            await waitForMicrotasks();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: null,
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                ],
+            }));
+
+            assert.strictEqual(repository.viewMode, 'workspace');
+            assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('visible workspace panel before activation starts describe watch once', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 

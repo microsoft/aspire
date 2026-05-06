@@ -5,7 +5,7 @@ import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { EnvironmentVariables } from '../utils/environment';
-import { errorFetchingAppHosts } from '../loc/strings';
+import { appHostDescribeMayNotBeSupported, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts } from '../loc/strings';
 
 export interface ResourceUrlJson {
     name: string | null;
@@ -265,6 +265,24 @@ export class AppHostDataRepository {
                         const parsed = JSON.parse(line);
                         if (parsed && (typeof parsed.selected_project_file === 'string' || parsed.selected_project_file === null) && Array.isArray(parsed.all_project_file_candidates)) {
                             const appHostCandidates = parsed.all_project_file_candidates.filter((candidate: unknown): candidate is string => typeof candidate === 'string');
+                            if (appHostCandidates.length > 1) {
+                                const selectedAppHostPath = typeof parsed.selected_project_file === 'string'
+                                    ? parsed.selected_project_file
+                                    : undefined;
+                                if (selectedAppHostPath) {
+                                    this._workspaceAppHostPath = selectedAppHostPath;
+                                    const appHostLabels = shortenPaths(appHostCandidates);
+                                    const candidateIndex = appHostCandidates.indexOf(selectedAppHostPath);
+                                    this._workspaceAppHostName = candidateIndex >= 0 ? appHostLabels[candidateIndex] : shortenPath(selectedAppHostPath);
+                                } else {
+                                    this._workspaceAppHostPath = undefined;
+                                    this._workspaceAppHostName = undefined;
+                                }
+                                extensionLogOutputChannel.info(`Workspace contains ${appHostCandidates.length} AppHosts; switching to global view`);
+                                this.setViewMode('global');
+                                return;
+                            }
+
                             const appHostPath = parsed.selected_project_file
                                 ?? (appHostCandidates.length === 1 ? appHostCandidates[0] : null);
                             if (appHostPath) {
@@ -318,13 +336,26 @@ export class AppHostDataRepository {
             extensionLogOutputChannel.info('Starting aspire describe --follow for workspace resources');
 
             this._describeReceivedData = false;
+            const describeNonJsonLines: string[] = [];
+            let describeStderr = '';
             const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
                 lineCallback: (line) => {
                     if (this._describeProcess !== describeProcess) {
                         return;
                     }
-                    this._handleDescribeLine(line);
+                    const handled = this._handleDescribeLine(line);
+                    if (!handled && describeNonJsonLines.length < 20) {
+                        describeNonJsonLines.push(line);
+                    }
+                },
+                stderrCallback: (data) => {
+                    if (this._describeProcess !== describeProcess) {
+                        return;
+                    }
+                    if (describeStderr.length < 4000) {
+                        describeStderr += data;
+                    }
                 },
                 exitCallback: (code) => {
                     if (this._describeProcess !== describeProcess) {
@@ -346,6 +377,7 @@ export class AppHostDataRepository {
                     if (!this._describeReceivedData) {
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
+                        this._setError(this._getDescribeNoDataError(code, describeNonJsonLines, describeStderr));
                         this._updateWorkspaceContext();
                         return;
                     }
@@ -424,10 +456,10 @@ export class AppHostDataRepository {
         this._updateWorkspaceContext();
     }
 
-    private _handleDescribeLine(line: string): void {
+    private _handleDescribeLine(line: string): boolean {
         const trimmed = line.trim();
         if (!trimmed) {
-            return;
+            return true;
         }
 
         try {
@@ -438,10 +470,25 @@ export class AppHostDataRepository {
                 this._setError(undefined);
                 this._describeRestartDelay = 5000; // Reset backoff on successful data
                 this._updateWorkspaceContext();
+                return true;
             }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse describe NDJSON line: ${e}`);
         }
+
+        return false;
+    }
+
+    private _getDescribeNoDataError(code: number | null, nonJsonLines: readonly string[], stderr: string): string | undefined {
+        if (isDescribeUnsupportedOutput(nonJsonLines, stderr) || (code !== null && code !== 0)) {
+            return aspireCliDescribeNotSupported(aspireDescribeMinimumVersion);
+        }
+
+        if (this._workspaceAppHostPath) {
+            return appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion);
+        }
+
+        return undefined;
     }
 
     private _updateWorkspaceContext(): void {
@@ -682,4 +729,17 @@ function isWindowsDriveSegment(segment: string): boolean {
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
+function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
+    const output = [...nonJsonLines, stderr].join('\n').toLowerCase();
+    if (!output) {
+        return false;
+    }
+
+    return (output.includes('usage:') && output.includes('commands:'))
+        || output.includes('unknown command')
+        || output.includes('unrecognized command')
+        || output.includes('unrecognized option')
+        || output.includes('is not a recognized command');
 }
