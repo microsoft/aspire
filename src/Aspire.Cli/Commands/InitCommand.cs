@@ -258,8 +258,9 @@ internal sealed class InitCommand : BaseCommand
         File.WriteAllText(appHostPath, appHostContent);
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
 
-        // Ensure the workspace has a NuGet.config that exposes the configured channel's
-        // package sources. This is required so MSBuild can resolve
+        // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
+        // identity-channel package sources (CliExecutionContext.Channel — stable,
+        // staging, daily, pr-<N>, or local). This is required so MSBuild can resolve
         // `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK directive — both
         // for `aspire add` (`dotnet package add --file apphost.cs`) and for
         // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
@@ -269,7 +270,7 @@ internal sealed class InitCommand : BaseCommand
         // creates a new file or merges missing sources into an existing one, so adding
         // hives later is handled the same way as for templates.
         var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
-            channelName: null,
+            channelName: _executionContext.Channel,
             outputPath: workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
         if (createdNuGetConfig)
@@ -319,15 +320,17 @@ internal sealed class InitCommand : BaseCommand
             return ExitCodeConstants.Success;
         }
 
-        // Resolve the channel-aware template package version + feed mapping. This makes init
-        // honor the global `channel` configuration (matching `aspire new`) and ensures the
-        // staging/daily/PR feed is queried for non-stable CLI builds. PR hives are intentionally
-        // excluded — init should produce the same template on every machine for a given CLI build.
+        // Resolve the channel-aware template package version + feed mapping. The running
+        // CLI binary's identity channel (CliExecutionContext.Channel — stable, staging,
+        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
+        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
+        // intentionally excluded — init should produce the same template on every machine
+        // for a given CLI build.
         TemplatePackageSelection selection;
         try
         {
             var query = new TemplatePackageQuery(
-                ChannelOverride: null,
+                ChannelOverride: _executionContext.Channel,
                 VersionOverride: null,
                 SourceOverride: null,
                 IncludePrHives: false);

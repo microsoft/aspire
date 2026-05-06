@@ -71,7 +71,7 @@ USAGE:
                                 The directory must contain CLI archive files (aspire-cli-*.tar.gz or .zip)
                                 and optionally NuGet packages (*.nupkg).
     --hive-label LABEL          Override the NuGet hive label (default: pr-<PR_NUMBER>, run-<RUN_ID>,
-                                or run-<GITHUB_RUN_ID> (or run-local if GITHUB_RUN_ID is unset) for --local-dir)
+                                or local if GITHUB_RUN_ID is unset) for --local-dir)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
                                 CLI installs to: <install-path>/bin
                                 NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages (or run-<RUN_ID>)
@@ -1020,7 +1020,7 @@ install_from_local_dir() {
     elif [[ -n "${GITHUB_RUN_ID:-}" ]]; then
         hive_label="run-$GITHUB_RUN_ID"
     else
-        hive_label="run-local"
+        hive_label="local"
     fi
     local nuget_hive_dir="$INSTALL_PREFIX/hives/$hive_label/packages"
 
@@ -1074,17 +1074,6 @@ install_from_local_dir() {
         say_info "Package version suffix: $version_suffix"
     else
         say_warn "Could not extract version suffix from local packages"
-    fi
-
-    # Save the global channel setting
-    if [[ "$HIVE_ONLY" != true ]]; then
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
-        else
-            cli_path="$cli_install_dir/aspire"
-        fi
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 
@@ -1197,20 +1186,6 @@ download_and_install_from_pr() {
         if check_vscode_cli_dependency; then
             install_aspire_extension "$extension_download_dir"
         fi
-    fi
-
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if [[ "$HIVE_ONLY" != true ]]; then
-        # Determine CLI path
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
-        else
-            cli_path="$cli_install_dir/aspire"
-        fi
-        # Non-fatal: channel can be set manually if this fails
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 

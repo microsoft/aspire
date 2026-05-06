@@ -109,7 +109,7 @@ param(
     [Parameter(HelpMessage = "Use pre-downloaded artifacts from a local directory instead of downloading from GitHub")]
     [string]$LocalDir = "",
 
-    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or run-<GITHUB_RUN_ID> (run-local when GITHUB_RUN_ID is unset))")]
+    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or local when GITHUB_RUN_ID is unset)")]
     [string]$HiveLabel = "",
 
     [Parameter(HelpMessage = "Directory prefix to install")]
@@ -1271,7 +1271,7 @@ function Start-InstallFromLocalDir {
     } elseif ($env:GITHUB_RUN_ID) {
         "run-$($env:GITHUB_RUN_ID)"
     } else {
-        "run-local"
+        "local"
     }
     $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
 
@@ -1296,13 +1296,6 @@ function Start-InstallFromLocalDir {
     }
     catch {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
-    }
-
-    # Save the global channel setting
-    if (-not $HiveOnly) {
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
     # Update PATH environment variables
@@ -1397,15 +1390,6 @@ function Start-DownloadAndInstall {
         if (Test-VSCodeCLIDependency -UseInsiders:$UseInsiders) {
             Install-AspireExtensionFromDownload -DownloadDir $extensionDownloadDir -UseInsiders:$UseInsiders
         }
-    }
-
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if (-not $HiveOnly) {
-        # Determine CLI path
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
     # Update PATH environment variables

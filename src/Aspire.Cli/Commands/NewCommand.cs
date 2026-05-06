@@ -325,10 +325,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 var channels = await _packagingService.GetChannelsAsync(cancellationToken);
 
                 var configuredChannelName = parseResult.GetValue(_channelOption);
-                if (string.IsNullOrWhiteSpace(configuredChannelName))
-                {
-                    configuredChannelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
-                }
 
                 var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
                     ? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit) ?? channels.FirstOrDefault()

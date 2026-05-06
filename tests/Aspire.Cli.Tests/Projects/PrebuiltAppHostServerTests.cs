@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
@@ -166,6 +167,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var workingDirectory = Assert.IsType<string>(
@@ -216,6 +218,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var firstServer = CreateServer(firstAppHost.FullName);
@@ -246,8 +249,139 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
     }
 
+    // PSM-guard cross-product tests (Ocean Wave 9 Part 2 follow-up / commit ed36ba4c30)
+    // Guard predicate: channelName == IdentityChannel && !channelName.StartsWith("pr-")
+    // When guard fires → TryCreateTemporaryNuGetConfigAsync returns null (no PSM for local-identity hive).
+    // PR hives (pr-*) and non-matching channels always get PSM.
+
     [Fact]
-    public async Task ResolveChannelNameAsync_UsesProjectLocalAspireConfig_NotGlobalChannel()
+    public async Task TryCreateTemporaryNuGetConfig_LocalIdentityChannel_NonPrName_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithChannel("local");
+        var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
+
+        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_LocalIdentityChannel_PrChannelName_ReturnsConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithChannel("local");
+        var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_StableIdentityChannel_AnyChannel_ReturnsConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithChannel("stable");
+        var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_DailyIdentityChannel_DailyChannel_ReturnsNull()
+    {
+        // channelName == IdentityChannel ("daily" == "daily") and not pr-* → guard fires → null.
+        // This is the same predicate as local-on-local; the guard is not literal-"local"-only.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithChannel("daily");
+        var server = CreateServerWithExplicitChannel(workspace, "daily", executionContext);
+
+        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "daily");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_PrIdentityChannel_PrChannelName_ReturnsConfig()
+    {
+        // A developer running a pr-16820 CLI (IdentityChannel = "pr") installs a pr-12345 hive.
+        // "pr-12345" != "pr" → channelName != IdentityChannel → guard does not fire → PSM emits.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithChannel("pr");
+        var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
+
+        Assert.NotNull(result);
+    }
+
+    private static CliExecutionContext CreateContextWithChannel(string channel) =>
+        new(new DirectoryInfo(Path.GetTempPath()),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
+            "test.log",
+            channel: channel);
+
+    private static PrebuiltAppHostServer CreateServerWithExplicitChannel(
+        TemporaryWorkspace workspace,
+        string channelName,
+        CliExecutionContext executionContext)
+    {
+        var mappings = new[]
+        {
+            new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+
+        return new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            packagingService,
+            new TestConfigurationService(),
+            executionContext,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+    }
+
+    private static async Task<TemporaryNuGetConfig?> InvokeTryCreateTemporaryNuGetConfigAsync(
+        PrebuiltAppHostServer server, string channelName)
+    {
+        var method = typeof(PrebuiltAppHostServer).GetMethod(
+            "TryCreateTemporaryNuGetConfigAsync",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [channelName, CancellationToken.None])!;
+        return await task;
+    }
+
+    [Fact]
+    public async Task ResolveChannelName_UsesProjectLocalAspireConfig_NotGlobalChannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -273,13 +407,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             configurationService,
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
-        var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelNameAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelName", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var channelTask = Assert.IsType<Task<string?>>(method.Invoke(server, [CancellationToken.None]));
-        var channel = await channelTask;
+        var channel = (string?)method.Invoke(server, []);
 
         Assert.Equal("pr-new", channel);
     }

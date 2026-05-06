@@ -37,6 +37,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IConfiguration _configuration;
     private readonly IFeatures _features;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly CliExecutionContext _executionContext;
     private readonly ILogger<GuestAppHostProject> _logger;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly TimeProvider _timeProvider;
@@ -57,6 +58,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IConfiguration configuration,
         IFeatures features,
         ILanguageDiscovery languageDiscovery,
+        CliExecutionContext executionContext,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
         TimeProvider? timeProvider = null)
@@ -71,6 +73,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _configuration = configuration;
         _features = features;
         _languageDiscovery = languageDiscovery;
+        _executionContext = executionContext;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _timeProvider = timeProvider ?? TimeProvider.System;
@@ -341,12 +344,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     return (Success: true, Output: prepareOutput, Error: (string?)null, ChannelName: channelName, NeedsCodeGen: needsCodeGen);
                 }, emoji: KnownEmojis.Gear);
 
-            // Save the channel to settings if available (config already has SdkVersion)
-            if (buildResult.ChannelName is not null)
-            {
-                config.Channel = buildResult.ChannelName;
-                SaveConfiguration(config, directory);
-            }
+            // Persist the channel: prepare-resolved value wins; otherwise fall back to the
+            // channel baked into the running CLI (CliExecutionContext.Channel).
+            config.Channel = buildResult.ChannelName ?? _executionContext.Channel;
+            SaveConfiguration(config, directory);
 
             if (!buildResult.Success)
             {
@@ -1205,11 +1206,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Update channel if it's an explicit channel (not the implicit/default one)
-        if (context.Channel.Type == Packaging.PackageChannelType.Explicit)
-        {
-            config.Channel = context.Channel.Name;
-        }
+        // Explicit channel wins; otherwise fall back to the channel baked into the
+        // running CLI (CliExecutionContext.Channel).
+        config.Channel = context.Channel.Type == Packaging.PackageChannelType.Explicit
+            ? context.Channel.Name
+            : _executionContext.Channel;
         foreach (var (packageId, _, newVersion) in updates)
         {
             config.AddOrUpdatePackage(packageId, newVersion);

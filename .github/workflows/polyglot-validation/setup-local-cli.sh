@@ -56,11 +56,5 @@ fi
 
 echo "  Total packages in hive: $(find "$HIVE_DIR" -name "*.nupkg" | wc -l)"
 
-# Set the channel to 'local' so CLI uses our hive
-echo "=== Configuring CLI channel ==="
-"$ASPIRE_HOME/bin/aspire" config set channel local --global || {
-    echo "  Warning: Failed to set channel"
-}
-
 echo ""
 echo "=== Aspire CLI setup complete ==="

@@ -5,12 +5,47 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string channel = "daily", int? prNumber = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
     public DirectoryInfo CacheDirectory { get; } = cacheDirectory;
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
+
+    /// <summary>
+    /// Gets the resolved hive label for the running CLI. For non-PR builds this is the
+    /// identity channel verbatim — one of <c>stable</c>, <c>staging</c>, or <c>daily</c>.
+    /// For PR builds (identity channel <c>pr</c> with a non-null <see cref="PrNumber"/>)
+    /// this is the per-PR hive label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>),
+    /// matching the directory layout the packaging service creates under the hives root.
+    /// </summary>
+    /// <remarks>
+    /// This is the value reseed call sites (template factories, scaffolding, guest apphost
+    /// project) write into a project's <c>aspire.config.json#channel</c>: it is the consumer-
+    /// facing label that subsequent CLI runs use to select the right hive. The raw build-time
+    /// identity value (the literal <c>pr</c> for PR builds) is exposed separately via
+    /// <see cref="IdentityChannel"/> for callers that need the build-time taxonomy.
+    /// </remarks>
+    public string Channel => _channel == "pr" && PrNumber.HasValue
+        ? $"pr-{PrNumber.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+        : _channel;
+
+    /// <summary>
+    /// Gets the raw build-time identity channel value for the running CLI — one of
+    /// <c>stable</c>, <c>staging</c>, <c>daily</c>, or <c>pr</c>. Unlike <see cref="Channel"/>,
+    /// this never resolves to a per-PR hive label; the literal <c>pr</c> is returned for
+    /// every PR build regardless of <see cref="PrNumber"/>.
+    /// </summary>
+    public string IdentityChannel => _channel;
+
+    private readonly string _channel = channel;
+
+    /// <summary>
+    /// Gets the pull-request number associated with this invocation, when
+    /// <see cref="IdentityChannel"/> is <c>pr</c>. <see langword="null"/> for any
+    /// non-PR channel.
+    /// </summary>
+    public int? PrNumber { get; } = prNumber;
 
     /// <summary>
     /// Gets the directory where restored NuGet packages are cached for apphost server sessions.

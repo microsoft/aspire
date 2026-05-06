@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -20,7 +19,6 @@ internal sealed class TemplateNuGetConfigService(
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IPackagingService packagingService,
-    IConfigurationService configurationService,
     ITemplateVersionPrompter templateVersionPrompter,
     ICliHostEnvironment hostEnvironment)
 {
@@ -76,11 +74,6 @@ internal sealed class TemplateNuGetConfigService(
     {
         if (string.IsNullOrWhiteSpace(channelName))
         {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
-
-        if (string.IsNullOrWhiteSpace(channelName))
-        {
             return;
         }
 
@@ -109,11 +102,6 @@ internal sealed class TemplateNuGetConfigService(
     /// <returns><see langword="true"/> if a NuGet.config was created or updated; otherwise <see langword="false"/>.</returns>
     public async Task<bool> CreateOrUpdateNuGetConfigWithoutPromptAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(channelName))
-        {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
-
         if (string.IsNullOrWhiteSpace(channelName))
         {
             return false;
@@ -153,12 +141,7 @@ internal sealed class TemplateNuGetConfigService(
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
 
-        // Channel override (e.g. --channel) takes priority over the global setting.
         var channelName = query.ChannelOverride;
-        if (string.IsNullOrEmpty(channelName))
-        {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.

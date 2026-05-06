@@ -11,12 +11,14 @@ internal static class VersionHelper
 {
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="channelName"/> identifies a
-    /// locally-built channel — either a PR hive (<c>pr-*</c>) or a workflow-run hive (<c>run-*</c>).
+    /// locally-built channel — a PR hive (<c>pr-*</c>), a workflow-run hive (<c>run-*</c>),
+    /// or a local development build (<c>local</c>).
     /// </summary>
     public static bool IsLocalBuildChannel(string? channelName)
     {
         return channelName is not null &&
-            (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) ||
+            (channelName.Equals("local", StringComparison.OrdinalIgnoreCase) ||
+             channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) ||
              channelName.StartsWith("run-", StringComparison.OrdinalIgnoreCase));
     }
 

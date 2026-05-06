@@ -1239,19 +1239,6 @@ function Install-AspireCli {
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
         }
 
-        # Save the global channel setting if using quality-based download (not version-specific)
-        # This allows 'aspire new' and 'aspire init' to use the same channel by default
-        # For release/stable channel, remove the setting to avoid forcing nuget.config creation
-        if ([string]::IsNullOrWhiteSpace($Version)) {
-            $channel = ConvertTo-ChannelName -Quality $Quality
-            if ($channel -eq "stable") {
-                Remove-GlobalSettings -CliPath $cliPath -Key "channel"
-            }
-            else {
-                Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $channel
-            }
-        }
-
         # Download and install VS Code extension if requested
         if ($InstallExtension) {
             Write-Message "" -Level Info

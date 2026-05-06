@@ -50,6 +50,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
                 // Use forward slashes for cross-platform NuGet config compatibility
                 var packagesPath = packagesDirectory.FullName.Replace('\\', '/');
+
                 var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
                 {
                     new PackageMapping("Aspire*", packagesPath),

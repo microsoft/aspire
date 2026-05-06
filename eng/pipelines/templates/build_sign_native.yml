@@ -72,6 +72,41 @@ jobs:
             displayName: 🟣Restore
 
         steps:
+          # Compute the Aspire CLI channel for the AspireCliChannel MSBuild
+          # property consumed by the native CLI build below. This is the canonical
+          # AzDO compute: build_sign_native runs BEFORE the `build` stage (per the
+          # dependsOn graph), so an output variable from a later stage would not
+          # be visible here, and there is no other AzDO consumer of this value.
+          # The variable is job-scoped (no isOutput=true) since it is consumed by
+          # a later step in the same job.
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $reason = '$(Build.Reason)'
+              $sourceBranch = '$(Build.SourceBranch)'
+              Write-Host "Build.Reason: '$reason'"
+              Write-Host "Build.SourceBranch: '$sourceBranch'"
+
+              $versionKind = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
+              $versionKind = $versionKind.Trim()
+              Write-Host "DotNetFinalVersionKind: '$versionKind'"
+
+              if ($reason -eq 'PullRequest') {
+                $channel = 'pr'
+              } elseif ($versionKind -eq 'release') {
+                $channel = 'stable'
+              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
+                $channel = 'staging'
+              } elseif ($sourceBranch -eq 'refs/heads/main') {
+                $channel = 'daily'
+              } else {
+                $channel = 'daily'
+              }
+
+              Write-Host "Aspire CLI channel: $channel"
+              Write-Host "##vso[task.setvariable variable=aspireCliChannel]$channel"
+            name: computeCliChannel
+            displayName: 🟣Determine Aspire CLI channel
+
           # Build, publish, and sign aspire-managed before creating the bundle layout.
           # This ensures aspire-managed is signed before CreateLayout packs it into the bundle archive.
           # Step 1: dotnet publish produces the self-contained single-file binary.
@@ -143,6 +178,7 @@ jobs:
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
+              /p:AspireCliChannel=$(aspireCliChannel)
               $(_buildArgs)
               ${{ parameters.extraBuildArgs }}
               /bl:$(Build.Arcade.LogsPath)Build.binlog
