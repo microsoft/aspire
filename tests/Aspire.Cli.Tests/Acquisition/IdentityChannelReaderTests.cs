@@ -104,21 +104,28 @@ public class IdentityChannelReaderTests
         Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
+    // Spec-derived: GitHub Actions PR builds emit `InformationalVersion` of the form
+    // `<base>-pr.<N>.g<SHA>(+<sha>)?` (see `.github/workflows/ci.yml` /
+    // `/p:VersionSuffix=pr.$PR_NUMBER.g$SHORT_SHA`). The parser MUST accept that real
+    // shape and extract <N>. The legacy no-separator `-pr<N>.<sha>` form is also
+    // accepted for back-compat with assemblies built from local dev shells.
     [Theory]
-    [InlineData("0.0.0-pr12345.deadbeef", 12345)]
-    [InlineData("1.2.3-preview.5", null)]
-    [InlineData("0.0.0-pr.5", null)]
+    [InlineData("0.0.0-pr12345.deadbeef", 12345)]               // legacy no-separator
+    [InlineData("0.0.0-pr.5", 5)]                                // CI shape, short
+    [InlineData("0.0.0-pr.12345.gabcd1234", 12345)]              // real GH Actions shape
+    [InlineData("0.0.0-pr.12345.gabcd1234+abc", 12345)]          // with build metadata
+    [InlineData("1.2.3-preview.5", null)]                        // -preview must NOT match
     [InlineData(null, null)]
     [InlineData("0.0.0-pr0", 0)]
     [InlineData("", null)]
     [InlineData("0.0.0", null)]
-    [InlineData("0.0.0-pr", null)]
-    [InlineData("0.0.0-pr-12345", null)]
+    [InlineData("0.0.0-pr", null)]                               // marker but no digits
+    [InlineData("0.0.0-pr-12345", null)]                         // hyphen separator NOT accepted
     [InlineData("0.0.0-pr12345abc", 12345)]
     [InlineData("0.0.0-pr2147483647", int.MaxValue)]
-    [InlineData("0.0.0-pr2147483648", null)]
-    [InlineData("0.0.0-prabc.def", null)]
-    [InlineData("1.0.0-rc.1.pr12345", null)]
+    [InlineData("0.0.0-pr2147483648", null)]                     // overflow → null
+    [InlineData("0.0.0-prabc.def", null)]                        // marker followed by non-digits
+    [InlineData("1.0.0-rc.1.pr12345", null)]                     // `.pr` (no leading `-`) must NOT match
     public void ParsePrNumber_ReturnsExpected(string? input, int? expected)
     {
         Assert.Equal(expected, IdentityChannelReader.ParsePrNumber(input));
