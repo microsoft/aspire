@@ -62,6 +62,46 @@
         <target state="translated">Bei Microsoft anmelden</target>
         <note />
       </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandDescription">
+        <source>Shows the public, inspect, and local URLs for the dev tunnel port.</source>
+        <target state="new">Shows the public, inspect, and local URLs for the dev tunnel port.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandDisplayName">
+        <source>Show tunnel URLs</source>
+        <target state="new">Show tunnel URLs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandInspectUrlLabel">
+        <source>Inspect URL</source>
+        <target state="new">Inspect URL</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandLocalEndpointUrlLabel">
+        <source>Local endpoint URL</source>
+        <target state="new">Local endpoint URL</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandResultHeading">
+        <source>Dev tunnel URLs</source>
+        <target state="new">Dev tunnel URLs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandSuccess">
+        <source>Dev tunnel URLs are available.</source>
+        <target state="new">Dev tunnel URLs are available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandTunnelUrlLabel">
+        <source>Tunnel URL</source>
+        <target state="new">Tunnel URL</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ShowTunnelUrlsCommandUnavailable">
+        <source>Dev tunnel URLs are not available yet.</source>
+        <target state="new">Dev tunnel URLs are not available yet.</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

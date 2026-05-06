@@ -6,6 +6,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.DevTunnels.Tests;
 
@@ -202,6 +203,66 @@ public class DevTunnelResourceBuilderExtensionsTests
 
         // Verify they reference different ports (implicitly through the annotation)
         Assert.NotSame(httpTunnelEndpoint.EndpointAnnotation, httpsTunnelEndpoint.EndpointAnnotation);
+    }
+
+    [Fact]
+    public async Task ShowTunnelUrlsCommand_ReturnsMarkdownResultWithRelevantUrls()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+        var port = Assert.Single(tunnel.Resource.Ports);
+        var targetEndpoint = target.GetEndpoint("http");
+        targetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(targetEndpoint.EndpointAnnotation, "localhost", 3000);
+        port.LastKnownStatus = new DevTunnelPort(3000, "http")
+        {
+            PortUri = new Uri("https://n4skq32k-3000.use.devtunnels.ms/")
+        };
+
+        var command = Assert.Single(port.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == DevTunnelPortResource.ShowTunnelUrlsCommandName);
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+
+        var enabledState = command.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new()
+            {
+                ResourceType = "DevTunnelPort",
+                Properties = [],
+                State = KnownResourceStates.Running
+            },
+            ServiceProvider = serviceProvider
+        });
+        var stoppedState = command.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = new()
+            {
+                ResourceType = "DevTunnelPort",
+                Properties = [],
+                State = KnownResourceStates.Finished
+            },
+            ServiceProvider = serviceProvider
+        });
+        var result = await command.ExecuteCommand(new ExecuteCommandContext
+        {
+            ResourceName = port.Name,
+            ServiceProvider = serviceProvider,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance
+        });
+
+        Assert.Equal(ResourceCommandState.Enabled, enabledState);
+        Assert.Equal(ResourceCommandState.Disabled, stoppedState);
+        Assert.True(result.Success);
+        Assert.Equal("Dev tunnel URLs are available.", result.Message);
+        Assert.NotNull(result.Data);
+        Assert.Equal(CommandResultFormat.Markdown, result.Data.Format);
+        Assert.True(result.Data.DisplayImmediately);
+        Assert.Contains("- **Tunnel URL:** <https://n4skq32k-3000.use.devtunnels.ms>", result.Data.Value);
+        Assert.Contains("- **Inspect URL:** <https://n4skq32k-3000-inspect.use.devtunnels.ms/>", result.Data.Value);
+        Assert.Contains("- **Local endpoint URL:** <http://localhost:3000>", result.Data.Value);
     }
 
     private sealed class ProjectA : IProjectMetadata
