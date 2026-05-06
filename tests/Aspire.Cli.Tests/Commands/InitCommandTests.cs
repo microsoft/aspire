@@ -21,11 +21,17 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 {
     /// <summary>
     /// Configures the test packaging service factory to return a single implicit channel
-    /// whose template package cache yields one Aspire.ProjectTemplates entry. Init's project-mode path needs this
-    /// to resolve a template version before invoking dotnet new install.
+    /// whose template package cache yields one Aspire.ProjectTemplates entry, and pins the
+    /// running CLI's identity channel to <c>default</c> so the resolver matches that implicit
+    /// channel by name. Init's project-mode path uses
+    /// <see cref="CliExecutionContext.Channel"/> as the channel override; this helper keeps
+    /// tests that don't care about channel selection on a single, predictable channel.
     /// </summary>
     private static void ConfigureImplicitTemplateChannel(CliServiceCollectionTestOptions options, string version = "13.3.0")
     {
+        options.CliExecutionContextFactory = _ =>
+            BuildExecutionContext(options.WorkingDirectory, channel: "default", prNumber: null);
+
         options.PackagingServiceFactory = _ =>
         {
             var fakeCache = new FakeNuGetPackageCache
@@ -577,9 +583,6 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
     }
 
-    // Channel resolution uses explicit input or per-project aspire.config.json only,
-    // never the global ~/.aspire/aspire.config.json. Coverage is in TemplateNuGetConfigServiceTests.
-
     [Fact]
     public async Task InitCommand_WhenSolutionExistsAndChannelIsImplicit_LeavesNuGetConfigNull()
     {
@@ -641,6 +644,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliExecutionContextFactory = _ =>
+                BuildExecutionContext(options.WorkingDirectory, channel: "default", prNumber: null);
+
             options.PackagingServiceFactory = _ =>
             {
                 // Implicit channel offers the expected stable version; PR hive channel offers a much
@@ -710,6 +716,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliExecutionContextFactory = _ =>
+                BuildExecutionContext(options.WorkingDirectory, channel: "default", prNumber: null);
+
             options.InteractionServiceFactory = _ => interactionService;
 
             // Fake cache throws NuGetPackageCacheException to simulate offline / inaccessible feed.
@@ -747,6 +756,237 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
         Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// When the user does not pass <c>--channel</c>, the project-mode init path must resolve
+    /// its template package against the channel baked into the running CLI binary (exposed
+    /// as <see cref="CliExecutionContext.Channel"/>). One named explicit channel is registered
+    /// per theory row and uniquely sourced; the assertion captures the package source seen by
+    /// <c>dotnet new install</c> and verifies it came from the matching channel — proving the
+    /// resolver picked the binary's identity channel rather than the implicit default or any
+    /// other registered channel.
+    /// </summary>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("staging")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    public async Task InitCommand_ProjectMode_NoChannelOverride_ResolvesAgainstCliExecutionContextChannel(string contextChannel)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        string? capturedNuGetSource = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, nugetSource, _, _, _) =>
+                {
+                    capturedNuGetSource = nugetSource;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(SourceForChannel(contextChannel), capturedNuGetSource);
+    }
+
+    /// <summary>
+    /// Exercises the full produce → bake → resolve pipeline for PR builds: a CLI binary built
+    /// with identity channel <c>pr</c> and PR number 12345 must resolve its init-time template
+    /// against the <c>pr-12345</c> hive. This is a joint-contract test — per-layer unit tests
+    /// can pass while the producer emits <c>pr</c>, the consumer expects <c>pr-12345</c>, and
+    /// only an end-to-end run catches the mismatch.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_PrBuildResolvesToPrNumberedHive()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        string? capturedNuGetSource = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => BuildExecutionContext(workspace.WorkspaceRoot, channel: "pr", prNumber: 12345);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("pr-12345");
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, nugetSource, _, _, _) =>
+                {
+                    capturedNuGetSource = nugetSource;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(SourceForChannel("pr-12345"), capturedNuGetSource);
+    }
+
+    /// <summary>
+    /// Negative-shape tripwire: <c>aspire init</c> must never read the <c>channel</c> key from
+    /// the global <see cref="IConfigurationService"/>. The injected configuration service throws
+    /// on any <c>GetConfigurationAsync(key, ...)</c> or <c>GetConfigurationFromDirectoryAsync</c>
+    /// call where the key is <c>channel</c>; if init invokes either, the test fails with the
+    /// thrown message — reproducing the regression class that surfaced when the global-channel
+    /// fallback was removed but a caller continued to silently rely on it. Runs in project mode
+    /// (with a solution file present) so the template-package resolver — the previously-vulnerable
+    /// site — is exercised.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_DoesNotConsultGlobalConfigurationServiceForChannelKey()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var tripwireConfigService = new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
+        {
+            OnGetConfiguration = key =>
+            {
+                if (string.Equals(key, "channel", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "aspire init must not consult IConfigurationService for the 'channel' key. " +
+                        "Channel resolution sources from CliExecutionContext.Channel only.");
+                }
+                return null;
+            },
+            OnGetConfigurationFromDirectory = (key, _) =>
+            {
+                if (string.Equals(key, "channel", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        "aspire init must not consult IConfigurationService.GetConfigurationFromDirectoryAsync " +
+                        "for the 'channel' key. Channel resolution sources from CliExecutionContext.Channel only.");
+                }
+                return null;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "stable");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("stable");
+            options.ConfigurationServiceFactory = _ => tripwireConfigService;
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    private static CliExecutionContext CreateExecutionContextForChannel(DirectoryInfo workingDirectory, string contextChannel)
+    {
+        if (contextChannel.StartsWith("pr-", StringComparison.Ordinal) &&
+            int.TryParse(contextChannel.AsSpan(3), out var prNumber))
+        {
+            return BuildExecutionContext(workingDirectory, channel: "pr", prNumber: prNumber);
+        }
+
+        return BuildExecutionContext(workingDirectory, channel: contextChannel, prNumber: null);
+    }
+
+    private static CliExecutionContext BuildExecutionContext(DirectoryInfo workingDirectory, string channel, int? prNumber)
+    {
+        var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
+        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
+        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
+        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
+        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
+
+        return new CliExecutionContext(
+            workingDirectory: workingDirectory,
+            hivesDirectory: hivesDirectory,
+            cacheDirectory: cacheDirectory,
+            sdksDirectory: sdksDirectory,
+            logsDirectory: logsDirectory,
+            logFilePath: logFilePath,
+            channel: channel,
+            prNumber: prNumber);
+    }
+
+    private static TestPackagingService CreateNamedChannelPackagingService(string channelName)
+    {
+        var source = SourceForChannel(channelName);
+        var version = "13.3.0";
+
+        var fakeCache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                    [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = source, Version = version }])
+        };
+
+        var explicitChannel = PackageChannel.CreateExplicitChannel(
+            channelName,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", source)],
+            fakeCache);
+
+        return new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([explicitChannel])
+        };
+    }
+
+    private static string SourceForChannel(string channelName)
+        => $"https://feeds.test.invalid/{channelName}/v3/index.json";
 
     private sealed class TestScaffoldingService : IScaffoldingService
     {
