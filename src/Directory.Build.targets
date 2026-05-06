@@ -31,4 +31,13 @@
       <PackageName Include="$(PackageId)" Condition="'$(IsPackable)' == 'true'" WithPackageVersion="$(PackageVersion)" />
     </ItemGroup>
   </Target>
+
+  <!-- Used by Aspire.RepoTesting.targets to dynamically compute per-package versions for Helix testing.
+       Returns the PackageId and its computed PackageVersion for packable projects. The version is computed
+       per-project by the Arcade SDK, respecting SuppressFinalPackageVersion, StabilizePackageVersion, etc. -->
+  <Target Name="ReturnPackageVersion" Returns="@(_ReturnedPackageVersion)">
+    <ItemGroup>
+      <_ReturnedPackageVersion Include="$(PackageId)" Version="$(PackageVersion)" Condition="'$(IsPackable)' == 'true'" />
+    </ItemGroup>
+  </Target>
 </Project>

@@ -1,84 +1,13 @@
 <Project>
   <Import Project="$(MSBuildThisFileDirectory)Directory.Packages.Versions.props" />
 
-  <ItemGroup Label="Aspire packages">
-    <PackageVersion Include="Aspire.Azure.AI.OpenAI" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Data.Tables" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Messaging.EventHubs" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Messaging.ServiceBus" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Messaging.WebPubSub" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Search.Documents" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Security.KeyVault" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Storage.Blobs" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Storage.Queues" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Confluent.Kafka" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.AppConfiguration" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.AppContainers" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.ApplicationInsights" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.CognitiveServices" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.CosmosDB" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.ContainerRegistry" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.EventHubs" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Functions" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.KeyVault" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.OperationalInsights" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Redis" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Search" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.ServiceBus" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.SignalR" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Sql" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Azure.WebPubSub" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Docker" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Garnet" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Kafka" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Keycloak" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Milvus" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.MongoDB" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.MySql" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Nats" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Oracle" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Orleans" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Python" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Qdrant" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.RabbitMQ" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.AppHost.Sdk" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Seq" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.SqlServer" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Valkey" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Yarp" Version="$(PackageVersion)" />
-
-    <PackageVersion Include="Aspire.Keycloak.Authentication" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Microsoft.Azure.Cosmos" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Microsoft.Data.SqlClient" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Microsoft.EntityFrameworkCore.Cosmos" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Milvus.Client" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.MongoDB.Driver" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.MongoDB.Driver.v2" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.MySqlConnector" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.NATS.Net" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Npgsql" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Oracle.EntityFrameworkCore" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Pomelo.EntityFrameworkCore.MySql" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Qdrant.Client" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.RabbitMQ.Client" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.RabbitMQ.Client.v6" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.Seq" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.StackExchange.Redis" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.StackExchange.Redis.DistributedCaching" Version="$(PackageVersion)" />
-    <PackageVersion Include="Aspire.StackExchange.Redis.OutputCaching" Version="$(PackageVersion)" />
-  </ItemGroup>
+  <!--
+    Aspire package versions are dynamically computed and included in the generated
+    Directory.Packages.Versions.props file. They are produced by calling the ReturnPackageVersion
+    target on each packable src project, which returns the per-project PackageVersion computed by
+    the Arcade SDK (respecting SuppressFinalPackageVersion, StabilizePackageVersion, etc.).
+    See _GeneratePackagesVersionsProps target in Aspire.RepoTesting.targets for details.
+  -->
 
   <ItemGroup Label="For tests">
     <PackageVersion Include="mstest.testadapter" Version="$(MSTestTestAdapterVersion)" />
