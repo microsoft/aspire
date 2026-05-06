@@ -16,7 +16,7 @@ public static class KnownNetworkIdentifiers
     /// <summary>
     /// The network associated with the IP loopback interface (localhost).
     /// </summary>
-    public static readonly NetworkIdentifier LocalhostNetwork = new NetworkIdentifier("localhost");
+    public static readonly NetworkIdentifier LocalhostNetwork = new NetworkIdentifier(KnownHostNames.Localhost);
 
     /// <summary>
     /// Represents public Internet (globally routable).

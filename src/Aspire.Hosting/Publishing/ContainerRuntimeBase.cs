@@ -369,9 +369,9 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
             if (processResult.ExitCode != 0)
             {
-                var envHint = Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME") is not null
-                    ? $"The container runtime is configured via ASPIRE_CONTAINER_RUNTIME (current: '{RuntimeExecutable}')."
-                    : $"The container runtime was auto-detected as '{RuntimeExecutable}'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').";
+                var envHint = Environment.GetEnvironmentVariable(KnownConfigNames.ContainerRuntime) is not null
+                    ? $"The container runtime is configured via {KnownConfigNames.ContainerRuntime} (current: '{RuntimeExecutable}')."
+                    : $"The container runtime was auto-detected as '{RuntimeExecutable}'. Set {KnownConfigNames.ContainerRuntime} to override (e.g., 'docker' or 'podman').";
 
                 var message =
                     $"'{RuntimeExecutable} compose up' failed with exit code {processResult.ExitCode}. " +

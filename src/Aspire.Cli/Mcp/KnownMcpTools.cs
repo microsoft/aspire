@@ -6,6 +6,9 @@ namespace Aspire.Cli.Mcp;
 /// <summary>
 /// Defines the names of MCP tools exposed by the Aspire CLI.
 /// </summary>
+// Tool names like "doctor" are also used as CLI subcommand names elsewhere; scope
+// this catalog to MCP code so the analyzer doesn't suggest cross-domain matches.
+[InternalKnownConstants(Namespaces = new[] { "Aspire.Cli.Mcp" })]
 internal static class KnownMcpTools
 {
     internal const string ListResources = "list_resources";

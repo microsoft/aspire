@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Serialization;
+using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -43,6 +44,6 @@ internal sealed class DcpContainersInfo
         HostName ?? Runtime switch
         {
             "podman" => "host.containers.internal",
-            _ => "host.docker.internal",
+            _ => KnownHostNames.DockerDesktopHostBridge,
         };
 }

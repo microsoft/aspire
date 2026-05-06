@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -33,8 +34,8 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync("podman", "Podman", isDefault: false, logger, cancellationToken);
             var runtimes = await Task.WhenAll(dockerTask, podmanTask);
 
-            var configuredRuntime = Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME")
-                ?? Environment.GetEnvironmentVariable("DOTNET_ASPIRE_CONTAINER_RUNTIME");
+            var configuredRuntime = Environment.GetEnvironmentVariable(KnownConfigNames.ContainerRuntime)
+                ?? Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.ContainerRuntime);
 
             // Select best from already-probed results (no re-probing)
             ContainerRuntimeInfo? selected;

@@ -121,7 +121,7 @@ public static class MauiOtlpExtensions
             var endpoint = stubResource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault();
             if (endpoint is not null && endpoint.AllocatedEndpoint is null)
             {
-                endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", otlpPort);
+                endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, KnownHostNames.Localhost, otlpPort);
                 return appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(stubResource, evt.Services), ct);
             }
             return Task.CompletedTask;

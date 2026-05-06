@@ -76,7 +76,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     public string LanguageId => KnownLanguageId.CSharp;
 
     /// <inheritdoc />
-    public string DisplayName => "C# (.NET)";
+    public string DisplayName => KnownLanguageId.CSharpDisplayName;
 
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
@@ -422,7 +422,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         if (!string.IsNullOrEmpty(profile.ApplicationUrl))
         {
-            env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+            env[KnownConfigNames.AspNetCoreUrls] = profile.ApplicationUrl;
         }
 
         if (profile.EnvironmentVariables is not null)
@@ -443,9 +443,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static void ApplyDefaultSingleFileEndpoints(IDictionary<string, string> env)
     {
-        env["ASPNETCORE_URLS"] = "https://localhost:17193;http://localhost:15069";
-        env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:21293";
-        env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:22086";
+        env[KnownConfigNames.AspNetCoreUrls] = "https://localhost:17193;http://localhost:15069";
+        env[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "https://localhost:21293";
+        env[KnownConfigNames.ResourceServiceEndpointUrl] = "https://localhost:22086";
     }
 
     /// <inheritdoc />

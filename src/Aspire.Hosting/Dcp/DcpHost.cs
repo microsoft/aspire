@@ -42,7 +42,7 @@ internal sealed class DcpHost
     // These environment variables should never be inherited by DCP from app host.
     private static readonly string[] s_doNotInheritEnvironmentVars =
     {
-        "ASPNETCORE_URLS",
+        KnownConfigNames.AspNetCoreUrls,
         "DOTNET_LAUNCH_PROFILE",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT"

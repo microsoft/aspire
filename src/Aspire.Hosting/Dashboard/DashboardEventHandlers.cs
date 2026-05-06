@@ -616,7 +616,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         context.EnvironmentVariables["LOGGING__CONSOLE__FORMATTERNAME"] = "json";
 
         // Details for contacting AspireServer in an IDE debug session.
-        if (configuration["DEBUG_SESSION_PORT"] is { Length: > 0 } sessionPort)
+        if (configuration[KnownConfigNames.DebugSessionPort] is { Length: > 0 } sessionPort)
         {
             // DEBUG_SESSION_PORT env var is in the format localhost:port.
             // We assume the address is localhost and only want the port value.
@@ -630,11 +630,11 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 throw new InvalidOperationException($"Unexpected DEBUG_SESSION_PORT value. Expected localhost:port, got '{sessionPort}'.");
             }
         }
-        if (configuration["DEBUG_SESSION_TOKEN"] is { Length: > 0 } sessionToken)
+        if (configuration[KnownConfigNames.DebugSessionToken] is { Length: > 0 } sessionToken)
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTokenName.EnvVarName] = sessionToken;
         }
-        if (configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
+        if (configuration[KnownConfigNames.DebugSessionServerCertificate] is { Length: > 0 } sessionCertificate)
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
         }

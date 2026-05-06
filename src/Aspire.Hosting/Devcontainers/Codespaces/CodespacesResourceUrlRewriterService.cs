@@ -33,7 +33,7 @@ internal sealed class CodespacesResourceUrlRewriterService(ILogger<CodespacesRes
                     {
                         var uri = new Uri(originalUrlSnapshot.Url);
 
-                        if (!originalUrlSnapshot.IsInternal && (uri.Scheme == "http" || uri.Scheme == "https") && uri.Host == "localhost")
+                        if (!originalUrlSnapshot.IsInternal && (uri.Scheme == "http" || uri.Scheme == "https") && uri.Host == KnownHostNames.Localhost)
                         {
                             remappedUrls ??= new();
 

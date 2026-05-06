@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREEXTENSION001
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp.Model;
@@ -973,7 +974,7 @@ public static class ProjectResourceBuilderExtensions
             .ExcludeFromManifest()
             .WithInitialState(new CustomResourceSnapshot
             {
-                ResourceType = "Executable",
+                ResourceType = KnownResourceTypes.Executable,
                 State = KnownResourceStates.NotStarted,
                 Properties = [],
                 IsHidden = true,
@@ -984,7 +985,7 @@ public static class ProjectResourceBuilderExtensions
     {
         builder.WithEnvironment(context =>
         {
-            if (context.EnvironmentVariables.ContainsKey("ASPNETCORE_URLS"))
+            if (context.EnvironmentVariables.ContainsKey(KnownConfigNames.AspNetCoreUrls))
             {
                 // If the user has already set ASPNETCORE_URLS, we don't want to override it.
                 return;
@@ -1019,7 +1020,7 @@ public static class ProjectResourceBuilderExtensions
             if (!aspnetCoreUrls.IsEmpty)
             {
                 // Combine into a single expression
-                context.EnvironmentVariables["ASPNETCORE_URLS"] = aspnetCoreUrls.Build();
+                context.EnvironmentVariables[KnownConfigNames.AspNetCoreUrls] = aspnetCoreUrls.Build();
             }
         });
     }
@@ -1103,7 +1104,7 @@ public static class ProjectResourceBuilderExtensions
         if (EndpointHostHelpers.IsLocalhost(host))
         {
             // Localhost is used as-is rather than being resolved to a specific loopback IP address.
-            return "localhost";
+            return KnownHostNames.Localhost;
         }
         return host;
     }
