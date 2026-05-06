@@ -319,7 +319,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    // PR2-S11(c)(i): PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
+    // PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
     // do not collide with the script-route prefix or with other PR installs.
     [Fact]
     public async Task WhatIf_PRRoute_CliInstallPath_IsUnderDogfoodPrN()
@@ -334,7 +334,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains(expectedPathSegment, result.Output);
     }
 
-    // PR2-S11(c)(ii): PR-route sidecar at <prefix>/dogfood/pr-<N>/.aspire-install.json with
+    // PR-route sidecar at <prefix>/dogfood/pr-<N>/.aspire-install.json with
     // route="pr" and updateCommand naming the script + PR number. Written under -WhatIf via
     // raw .NET I/O so callers (including this test) can observe the file even though
     // PowerShell ShouldProcess-aware cmdlets silently no-op.
@@ -360,7 +360,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains("-r 99999", updateCommand);
     }
 
-    // PR2-S11(c)(iii): PR-route install prints the PATH-activation hint via Write-Host. The
+    // PR-route install prints the PATH-activation hint via Write-Host. The
     // OS path separator keeps the line valid on both Windows (;) and Unix (:).
     [Fact]
     public async Task WhatIf_PRRoute_PrintsPathHintToStdout()
@@ -376,7 +376,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains(Path.Combine("dogfood", "pr-99999", "bin"), result.Output);
     }
 
-    // PR2-S11(c)(iv): PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
+    // PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
     [Fact]
     public async Task WhatIf_PRRoute_HiveLocation_IsUnchanged()
     {
@@ -390,7 +390,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains(expectedHive, result.Output);
     }
 
-    // PR2-S11(d): PR-route sidecar carries route metadata only — never a "channel" key.
+    // PR-route sidecar carries route metadata only — never a "channel" key.
     [Fact]
     public async Task WhatIf_PRRouteSidecar_DoesNotContainChannelKey()
     {
@@ -410,7 +410,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
             $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
     }
 
-    // PR2-S11(d) companion: under -WhatIf no global aspire.config.json is created.
+    // Under -WhatIf no global aspire.config.json is created.
     [Fact]
     public async Task WhatIf_PRRoute_DoesNotCreateGlobalAspireConfigJson()
     {
@@ -424,7 +424,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
     }
 
-    // PR2-TG1: install_from_local_dir codepath — gap fix coverage. Local-dir installs land at
+    // install_from_local_dir codepath — gap fix coverage. Local-dir installs land at
     // <prefix>/bin and must write a script-route sidecar so InstallPathResolver can identify
     // them. Before the gap fix, this test FAILED (sidecar was never written for local-dir).
     [Fact]
@@ -456,7 +456,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
     }
 
-    // PR2-TG2: PR_NUMBER input validation — empty string. PowerShell parameter binding
+    // PR_NUMBER input validation — empty string. PowerShell parameter binding
     // rejects empty strings for [int] parameters before any path construction occurs.
     [Fact]
     public async Task EmptyPRNumber_ReturnsError_AndCreatesNoFiles()
@@ -470,7 +470,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         AssertNoDogfoodInstall(env.MockHome);
     }
 
-    // PR2-TG2: very large PR number above [int]::MaxValue (2147483647). PowerShell's [int]
+    // Very large PR number above [int]::MaxValue (2147483647). PowerShell's [int]
     // parameter binding fails the cast — the script must reject and create no files.
     [Fact]
     public async Task VeryLargePRNumber_AboveIntMax_Rejected_AndCreatesNoFiles()
@@ -484,7 +484,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         AssertNoDogfoodInstall(env.MockHome);
     }
 
-    // PR2-TG2 (security): non-numeric / special-char PR_NUMBER is rejected at parameter
+    // Non-numeric / special-char PR_NUMBER is rejected at parameter
     // binding ([int] cast or ValidateRange). This guards against path injection / command
     // injection routes via the PR_NUMBER value.
     [Theory]

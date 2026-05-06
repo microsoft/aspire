@@ -113,7 +113,7 @@ public class InstallPathResolverTests
         Assert.Throws<ArgumentException>(() => resolver.Resolve(string.Empty));
     }
 
-    // PR2-TG3(a): multi-hop symlink chain (link1 → link2 → real-binary). The resolver uses
+    // Multi-hop symlink chain (link1 → link2 → real-binary). The resolver uses
     // File.ResolveLinkTarget(returnFinalTarget: true), which must walk the entire chain to
     // the real file, then locate the sidecar relative to the real binary's directory — not
     // any of the intermediate launcher directories.
@@ -147,7 +147,7 @@ public class InstallPathResolverTests
         Assert.Equal(realInstallDir, prefix);
     }
 
-    // PR2-TG3(b): Windows filenames are case-insensitive. The resolver must locate a
+    // Windows filenames are case-insensitive. The resolver must locate a
     // sidecar regardless of casing on disk so a manually-renamed sidecar (or one written by
     // a tool that uppercased the extension) still resolves the install route.
     [Fact]
@@ -172,7 +172,7 @@ public class InstallPathResolverTests
         Assert.Equal(installDir, prefix);
     }
 
-    // PR2-TG3(c): paths containing spaces and Unicode characters must round-trip through the
+    // Paths containing spaces and Unicode characters must round-trip through the
     // resolver. Cross-platform — every supported OS supports Unicode filenames; spaces are
     // already common on Windows ("Program Files") and acceptable on POSIX.
     [Fact]
@@ -192,7 +192,7 @@ public class InstallPathResolverTests
         Assert.Equal(installDir, prefix);
     }
 
-    // PR2-TG3(c) Mode A variant: spaces+Unicode under Mode A layout (sidecar one dir above
+    // Spaces+Unicode under Mode A layout (sidecar one dir above
     // binary). Verifies the parent-dir traversal is path-encoding agnostic.
     [Fact]
     public void Resolve_ModeA_PathWithSpacesAndUnicode_FindsSidecar()

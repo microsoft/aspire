@@ -170,7 +170,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("--quality dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    // PR2-S11(a): script-route sidecar written under --dry-run at <prefix>/.aspire-install.json
+    // Script-route sidecar written under --dry-run at <prefix>/.aspire-install.json
     // with literal {"route":"script"} content. Sidecar is the source of truth that
     // InstallPathResolver consumes to identify Mode A (script route).
     [Fact]
@@ -190,8 +190,8 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
     }
 
-    // PR2-S11(b): the script-route sidecar carries route metadata only — no "channel" key.
-    // Channel storage was removed from the global aspire.config.json in PR1-S6; the sidecar
+    // The script-route sidecar carries route metadata only — no "channel" key.
+    // Channel storage was removed from the global aspire.config.json; the sidecar
     // must not reintroduce it. This guards against accidental field bleed-through.
     [Fact]
     public async Task DryRun_ScriptRouteSidecar_DoesNotContainChannelKey()
@@ -212,7 +212,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
             $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
     }
 
-    // PR2-S11(b) companion: under --dry-run no global aspire.config.json is created.
+    // Under --dry-run no global aspire.config.json is created.
     // save_global_settings short-circuits in dry-run, but we want a positive filesystem
     // assertion that channel state is not persisted by the install flow.
     [Fact]

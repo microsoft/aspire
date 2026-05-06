@@ -218,7 +218,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    // PR2-S11(a): script-route sidecar written under -WhatIf at <prefix>/.aspire-install.json.
+    // Script-route sidecar written under -WhatIf at <prefix>/.aspire-install.json.
     // The PowerShell script bypasses ShouldProcess for the sidecar write (uses raw .NET I/O),
     // so the file is observable even when WhatIfPreference is in effect.
     [Fact]
@@ -238,7 +238,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
     }
 
-    // PR2-S11(b): the script-route sidecar is route metadata only — no "channel" key.
+    // The script-route sidecar is route metadata only — no "channel" key.
     [Fact]
     public async Task WhatIf_ScriptRouteSidecar_DoesNotContainChannelKey()
     {
@@ -258,7 +258,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
             $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
     }
 
-    // PR2-S11(b) companion: under -WhatIf no global aspire.config.json is created.
+    // Under -WhatIf no global aspire.config.json is created.
     [Fact]
     public async Task WhatIf_DoesNotCreateGlobalAspireConfigJson()
     {

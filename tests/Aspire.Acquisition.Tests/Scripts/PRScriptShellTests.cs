@@ -418,7 +418,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    // PR2-S11(c)(i): PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
+    // PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
     // do not collide with the script-route prefix (<prefix>/bin) or with other PR installs.
     [Fact]
     public async Task DryRun_PRRoute_CliInstallPath_IsUnderDogfoodPrN()
@@ -435,7 +435,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain($"Would install CLI archive to: {scriptRouteBin}\n", result.Output);
     }
 
-    // PR2-S11(c)(ii): PR-route sidecar at <prefix>/dogfood/pr-<N>/.aspire-install.json with
+    // PR-route sidecar at <prefix>/dogfood/pr-<N>/.aspire-install.json with
     // route="pr" and updateCommand naming the script + PR number. Written under --dry-run via
     // raw printf so callers (including this test) can observe the file.
     [Fact]
@@ -460,7 +460,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("-r 99999", updateCommand);
     }
 
-    // PR2-S11(c)(iii): PR-route install prints the PATH-activation hint to stdout so users
+    // PR-route install prints the PATH-activation hint to stdout so users
     // know how to add <prefix>/dogfood/pr-<N>/bin to their shell profile.
     [Fact]
     public async Task DryRun_PRRoute_PrintsPathHintToStdout()
@@ -476,8 +476,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains(Path.Combine("dogfood", "pr-99999", "bin"), result.Output);
     }
 
-    // PR2-S11(c)(iv): PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
-    // The path relocation in PR2-S5 only touched the CLI binary install path.
+    // PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
     [Fact]
     public async Task DryRun_PRRoute_HiveLocation_IsUnchanged()
     {
@@ -491,7 +490,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains(expectedHive, result.Output);
     }
 
-    // PR2-S11(d): PR-route sidecar carries route metadata only — never a "channel" key.
+    // PR-route sidecar carries route metadata only — never a "channel" key.
     [Fact]
     public async Task DryRun_PRRouteSidecar_DoesNotContainChannelKey()
     {
@@ -511,7 +510,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
             $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
     }
 
-    // PR2-S11(d) companion: under --dry-run no global aspire.config.json is materialized.
+    // Under --dry-run no global aspire.config.json is materialized.
     [Fact]
     public async Task DryRun_PRRoute_DoesNotCreateGlobalAspireConfigJson()
     {
@@ -525,7 +524,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
     }
 
-    // PR2-TG1: install_from_local_dir codepath — gap fix coverage. Local-dir installs land at
+    // install_from_local_dir codepath — gap fix coverage. Local-dir installs land at
     // <prefix>/bin and must write a script-route sidecar so InstallPathResolver can identify
     // them. Before the gap fix, this test FAILED (sidecar was never written for local-dir).
     [Fact]
@@ -561,7 +560,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
     }
 
-    // PR2-TG2: PR_NUMBER input validation — empty string. The first positional arg must be a
+    // PR_NUMBER input validation — empty string. The first positional arg must be a
     // valid PR number, --run-id, or --local-dir. An empty string is none of those.
     [Fact]
     public async Task EmptyPRNumber_ReturnsError_AndCreatesNoFiles()
@@ -575,7 +574,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         AssertNoDogfoodInstall(env.MockHome);
     }
 
-    // PR2-TG2: very large PR number above int.MaxValue. Bash regex ^[1-9][0-9]*$ accepts
+    // Very large PR number above int.MaxValue. Bash regex ^[1-9][0-9]*$ accepts
     // any digit-only string so the script proceeds. Documented behavior: there is no upper
     // bound on PR_NUMBER bash-side; the path segment is constructed safely (digits only).
     // The mock gh would fail for an unknown PR, but path injection cannot occur.
@@ -592,7 +591,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
     }
 
-    // PR2-TG2 (security): path-traversal / command-injection in PR_NUMBER must be rejected at
+    // Path-traversal / command-injection in PR_NUMBER must be rejected at
     // parse time so it never reaches the path-construction code. The regex ^[1-9][0-9]*$ is
     // the gate; this test verifies the gate holds and no files leak under <prefix>/dogfood.
     [Theory]
