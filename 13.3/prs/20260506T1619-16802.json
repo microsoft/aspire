@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #16759 (mitchdenny). Consolidate Helm chart options on WithHelm() - breaking change.",
+  "mergedAt": "2026-05-06T16:19:57Z",
+  "number": 16802,
+  "runDate": "2026-05-06T16:34:15Z",
+  "status": "included",
+  "title": "[release/13.3] Consolidate Helm chart options on WithHelm(...) (#16759)"
+}

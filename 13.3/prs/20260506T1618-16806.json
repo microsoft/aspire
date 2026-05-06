@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #16805 (eerhardt). Require --yes with --non-interactive for destroy command.",
+  "mergedAt": "2026-05-06T16:18:44Z",
+  "number": 16806,
+  "runDate": "2026-05-06T16:34:15Z",
+  "status": "included",
+  "title": "[release/13.3] Require --yes with --non-interactive for destroy cmd"
+}

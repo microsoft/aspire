@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents YARP WithStaticFiles + WithDockerfile /wwwroot path requirement. No matching changelog entry in current batch.",
+  "mergedAt": "2026-05-06T15:00:49Z",
+  "number": 505,
+  "runDate": "2026-05-06T16:34:15Z",
+  "status": "excluded",
+  "title": "docs: document YARP WithStaticFiles + WithDockerfile /wwwroot path requirement"
+}

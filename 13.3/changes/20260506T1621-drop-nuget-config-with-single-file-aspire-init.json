@@ -1,0 +1,18 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When `aspire init` creates a C# single-file `apphost.cs`, it now also generates a workspace-local `nuget.config` listing any local Aspire hives. This enables SDK resolution during restore and operations like `aspire add` for users running local or PR builds.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-05-06T16:21:16Z",
+  "lastMergedAt": "2026-05-06T16:21:16Z",
+  "name": "Fix missing `nuget.config` with single-file `aspire init`",
+  "prs": [
+    16822
+  ]
+}

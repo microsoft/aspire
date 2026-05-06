@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Replaces hardcoded Azure OpenAI model names with generic placeholders. No matching changelog entry in current batch.",
+  "mergedAt": "2026-05-06T15:10:20Z",
+  "number": 511,
+  "runDate": "2026-05-06T16:34:15Z",
+  "status": "excluded",
+  "title": "Replace hardcoded Azure OpenAI model names/versions with generic placeholders"
+}

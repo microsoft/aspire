@@ -1,0 +1,18 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a hang during `aspire deploy` when a Foundry hosted agent referenced an Azure Container Apps (or other compute environment) endpoint. Endpoint values are now resolved through the target environment's deployed endpoint expressions, preventing indefinite waits on endpoint allocation snapshots.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-05-06T16:11:59Z",
+  "lastMergedAt": "2026-05-06T16:11:59Z",
+  "name": "Fix Foundry hosted agent endpoint resolution during publish",
+  "prs": [
+    16809
+  ]
+}

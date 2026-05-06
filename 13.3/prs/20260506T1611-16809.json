@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #16797 (eerhardt). Fix for Foundry hosted agent endpoint resolution hanging during aspire deploy.",
+  "mergedAt": "2026-05-06T16:11:59Z",
+  "number": 16809,
+  "runDate": "2026-05-06T16:34:15Z",
+  "status": "included",
+  "title": "[release/13.3] Fix Foundry hosted agent endpoint resolution"
+}

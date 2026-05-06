@@ -1,20 +1,21 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
-  "breaking": false,
+  "areaEmoji": "💻",
+  "breaking": true,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "New aspire destroy command tears down previously deployed environments across all compute targets: deletes the Azure resource group (ACA/App Service), runs docker compose down, or helm uninstall for Kubernetes. Supports --yes to skip confirmation prompts.",
+  "description": "New aspire destroy command tears down previously deployed environments across all compute targets: deletes the Azure resource group (ACA/App Service), runs docker compose down, or helm uninstall for Kubernetes. Supports --yes to skip confirmation prompts. As of a later update, --yes is required when --non-interactive is used, preventing accidental destructive operations from automated scripts.",
   "docsPrs": [
     769,
     790
   ],
   "docsRequired": true,
-  "emoji": "\ud83d\udca5",
+  "emoji": "💥",
   "firstMergedAt": "2026-04-13T16:19:26Z",
-  "lastMergedAt": "2026-04-13T16:19:26Z",
+  "lastMergedAt": "2026-05-06T16:18:44Z",
   "name": "New aspire destroy command",
   "prs": [
-    16097
+    16097,
+    16806
   ]
 }

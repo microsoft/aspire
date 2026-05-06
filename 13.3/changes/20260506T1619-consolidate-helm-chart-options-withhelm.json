@@ -1,0 +1,18 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Helm chart name, version, and description can now be configured exclusively via the `WithHelm()` extension using new `WithChartName()` and `WithChartDescription()` overloads on `HelmChartOptions`. The previous `WithProperties(k => k.HelmChartName = ...)` API has been removed — `HelmChartName`, `HelmChartVersion`, and `HelmChartDescription` are now internal.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⛵",
+  "firstMergedAt": "2026-05-06T16:19:57Z",
+  "lastMergedAt": "2026-05-06T16:19:57Z",
+  "name": "Consolidate Helm chart options on `WithHelm()`",
+  "prs": [
+    16802
+  ]
+}
