@@ -247,7 +247,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResolveChannelNameAsync_UsesProjectLocalAspireConfig_NotGlobalChannel()
+    public async Task ResolveChannelName_UsesProjectLocalAspireConfig_NotGlobalChannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -275,11 +275,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             configurationService,
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
-        var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelNameAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelName", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var channelTask = Assert.IsType<Task<string?>>(method.Invoke(server, [CancellationToken.None]));
-        var channel = await channelTask;
+        var channel = (string?)method.Invoke(server, []);
 
         Assert.Equal("pr-new", channel);
     }
