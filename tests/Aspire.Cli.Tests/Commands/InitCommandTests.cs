@@ -906,10 +906,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// the global <see cref="IConfigurationService"/>. The injected configuration service throws
     /// on any <c>GetConfigurationAsync(key, ...)</c> or <c>GetConfigurationFromDirectoryAsync</c>
     /// call where the key is <c>channel</c>; if init invokes either, the test fails with the
-    /// thrown message — reproducing the regression class that surfaced when the global-channel
-    /// fallback was removed but a caller continued to silently rely on it. Runs in project mode
-    /// (with a solution file present) so the template-package resolver — the previously-vulnerable
-    /// site — is exercised.
+    /// thrown message. Runs in project mode (with a solution file present) so the
+    /// template-package resolver is exercised.
     /// </summary>
     [Fact]
     public async Task InitCommand_DoesNotConsultGlobalConfigurationServiceForChannelKey()
