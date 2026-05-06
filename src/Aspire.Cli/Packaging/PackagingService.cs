@@ -178,14 +178,32 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         }, nuGetPackageCache, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: logger);
 
         // Surface the resolved feed so users can verify channel resolution from the
-        // CLI logs (suggested-fix option 3 from #16652).
+        // CLI logs without disclosing any embedded credentials or signed parameters.
         logger.LogInformation(
             "Resolved 'staging' channel: feed='{StagingFeedUrl}', quality='{Quality}', pinnedVersion='{PinnedVersion}'.",
-            stagingFeedUrl,
+            GetRedactedFeedUrlForLogging(stagingFeedUrl),
             stagingQuality,
             pinnedVersion ?? "(none)");
 
         return stagingChannel;
+    }
+
+    private static string GetRedactedFeedUrlForLogging(string feedUrl)
+    {
+        if (!Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri))
+        {
+            return "(invalid or non-standard feed URL)";
+        }
+
+        var builder = new UriBuilder(uri)
+        {
+            UserName = string.Empty,
+            Password = string.Empty,
+            Query = string.Empty,
+            Fragment = string.Empty
+        };
+
+        return builder.Uri.AbsoluteUri;
     }
 
     /// <summary>
