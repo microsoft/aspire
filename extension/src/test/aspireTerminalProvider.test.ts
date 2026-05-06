@@ -58,6 +58,8 @@ suite('AspireTerminalProvider tests', () => {
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {
+        const expectedCommand = process.platform === 'win32' ? '& "aspire" logs' : 'aspire logs';
+
         test('uses shell integration to execute command when available', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const sentTexts: string[] = [];
@@ -85,7 +87,7 @@ suite('AspireTerminalProvider tests', () => {
             try {
                 await terminalProvider.sendAspireCommandToAspireTerminal('logs');
 
-                assert.strictEqual(executedCommand, 'aspire logs');
+                assert.strictEqual(executedCommand, expectedCommand);
                 assert.deepStrictEqual(sentTexts, []);
                 assert.strictEqual(shown, true);
             }
@@ -113,7 +115,7 @@ suite('AspireTerminalProvider tests', () => {
 
                 assert.deepStrictEqual(sentTexts, [
                     { text: '\x03', shouldExecute: false },
-                    { text: 'aspire logs', shouldExecute: undefined }
+                    { text: expectedCommand, shouldExecute: undefined }
                 ]);
             }
             finally {
