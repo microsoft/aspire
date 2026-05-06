@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI change to aspire.dev repo (added release/* to branch filters), not documenting any product feature",
+  "mergedAt": "2026-05-06T18:53:21Z",
+  "number": 861,
+  "runDate": "2026-05-06T20:33:06Z",
+  "status": "excluded",
+  "title": "Run PR validation on release/* branches"
+}

@@ -5,6 +5,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "TypeScript, Python, and Java AppHosts can now use AddDockerfileBuilder and WithDockerfileBuilder to programmatically build container images from Dockerfiles, matching the capability already available in C# AppHosts.",
+  "docsPrs": [
+    846
+  ],
   "docsRequired": true,
   "emoji": "🐳",
   "firstMergedAt": "2026-04-14T14:10:23Z",

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documents TypeScript Dockerfile builder APIs, matched to Dockerfile builder APIs for polyglot AppHosts change",
+  "mergedAt": "2026-05-06T18:47:12Z",
+  "number": 846,
+  "runDate": "2026-05-06T20:33:06Z",
+  "status": "included",
+  "title": "Update TypeScript Dockerfile builder docs"
+}

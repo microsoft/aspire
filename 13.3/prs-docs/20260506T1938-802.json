@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Restructures VS Code extension docs, covering 13.2/13.3 features including CodeLens, sidebar, gutter decorations, context menus - matched to VS Code extension change files",
+  "mergedAt": "2026-05-06T19:38:36Z",
+  "number": 802,
+  "runDate": "2026-05-06T20:33:06Z",
+  "status": "included",
+  "title": "Restructure VS Code extension page (polyglot + 13.2 features)"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents skill-driven aspire init (aspire#15918), matched to aspire init delegates wiring to the aspireify agent skill change",
+  "mergedAt": "2026-05-06T20:14:19Z",
+  "number": 776,
+  "runDate": "2026-05-06T20:33:06Z",
+  "status": "included",
+  "title": "[docs] Update aspire init docs for skill-driven aspirification (aspire#15918)"
+}

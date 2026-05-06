@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Durable Task Scheduler support for Azure Functions (aspire#13711)",
+  "mergedAt": "2026-05-06T18:46:50Z",
+  "number": 820,
+  "runDate": "2026-05-06T20:33:06Z",
+  "status": "included",
+  "title": "[docs] Add Durable Task Scheduler documentation for Azure Functions hosting integration"
+}

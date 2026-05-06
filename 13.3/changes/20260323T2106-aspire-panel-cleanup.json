@@ -1,1 +1,19 @@
-{"area":"Extensions","areaEmoji":"🧩","breaking":false,"changeType":"Improvements","communityContributors":[],"description":"The Aspire panel in VS Code has been updated with cleaner context menus, improved loading state indicators, and better welcome messages when no app host is running.","docsRequired":false,"emoji":"🎨","firstMergedAt":"2026-03-23T21:06:13Z","lastMergedAt":"2026-03-23T21:06:13Z","name":"Aspire panel UX improvements in VS Code","prs":[15502]}
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire panel in VS Code has been updated with cleaner context menus, improved loading state indicators, and better welcome messages when no app host is running.",
+  "docsPrs": [
+    802
+  ],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-03-23T21:06:13Z",
+  "lastMergedAt": "2026-03-23T21:06:13Z",
+  "name": "Aspire panel UX improvements in VS Code",
+  "prs": [
+    15502
+  ]
+}

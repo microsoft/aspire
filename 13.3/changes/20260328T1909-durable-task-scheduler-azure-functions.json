@@ -1,1 +1,22 @@
-{"area":"Integrations","areaEmoji":"🔌","breaking":false,"changeType":"New features","communityContributors":["@philliphoff"],"description":"Added Durable Task Scheduler (DTS) resources to the Azure Functions hosting library. You can now start the DTS emulator or configure a connection string for an existing scheduler and pass connection strings to Azure Functions or other application resources.","docsRequired":true,"emoji":"⏱️","firstMergedAt":"2026-03-28T19:09:59Z","lastMergedAt":"2026-03-30T20:33:41Z","name":"Durable Task Scheduler support for Azure Functions","prs":[13711,15684]}
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@philliphoff"
+  ],
+  "description": "Added Durable Task Scheduler (DTS) resources to the Azure Functions hosting library. You can now start the DTS emulator or configure a connection string for an existing scheduler and pass connection strings to Azure Functions or other application resources.",
+  "docsPrs": [
+    820
+  ],
+  "docsRequired": true,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-03-28T19:09:59Z",
+  "lastMergedAt": "2026-03-30T20:33:41Z",
+  "name": "Durable Task Scheduler support for Azure Functions",
+  "prs": [
+    13711,
+    15684
+  ]
+}

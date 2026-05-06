@@ -7,7 +7,8 @@
   "description": "New aspire destroy command tears down previously deployed environments across all compute targets: deletes the Azure resource group (ACA/App Service), runs docker compose down, or helm uninstall for Kubernetes. Supports --yes to skip confirmation prompts. As of a later update, --yes is required when --non-interactive is used, preventing accidental destructive operations from automated scripts.",
   "docsPrs": [
     769,
-    790
+    790,
+    857
   ],
   "docsRequired": true,
   "emoji": "💥",
