@@ -121,4 +121,8 @@
     <value>based on NuGet.config</value>
     <comment>Source details text shown for packages from implicit channel or channels without Aspire* package source mappings</comment>
   </data>
+  <data name="StagingChannelUnavailableForDailyCliFormat" xml:space="preserve">
+    <value>The 'staging' channel cannot be resolved deterministically when running a daily/CI Aspire CLI build (CLI version: '{0}'). To update against staging, either run a stable Aspire CLI build, or set the 'overrideStagingFeed' configuration value to an explicit staging feed URL (for example: 'aspire config set overrideStagingFeed &lt;url&gt;').</value>
+    <comment>Error/warning shown when the 'staging' package channel is requested but the running CLI is itself a daily/CI build with no explicit staging feed override. {0} is the CLI's informational version.</comment>
+  </data>
 </root>

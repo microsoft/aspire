@@ -3,17 +3,42 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
-using System.Reflection;
+using System.Globalization;
 
 namespace Aspire.Cli.Packaging;
 
 internal interface IPackagingService
 {
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// When the running CLI cannot deterministically resolve the <c>staging</c> channel,
+    /// returns a localized, user-facing explanation of why. Returns <see langword="null"/>
+    /// when the staging channel can be created (or when the staging channel is not enabled
+    /// at all). Callers that observe a missing <c>staging</c> channel should consult this
+    /// to produce a clearer error message.
+    /// </summary>
+    public string? GetStagingChannelUnavailableReason();
+}
+
+/// <summary>
+/// Internal configuration keys consumed by <see cref="PackagingService"/>.
+/// </summary>
+internal static class PackagingConfigurationKeys
+{
+    /// <summary>
+    /// Test-only override of the CLI assembly informational version used when deciding
+    /// whether the running CLI is a daily/CI build. Production callers should never set
+    /// this value; it exists so unit tests can deterministically simulate stable, blessed
+    /// preview/RC, and daily CLI builds without depending on the actual assembly version
+    /// of <c>Aspire.Cli.dll</c> at test time.
+    /// </summary>
+    public const string CliVersionForTesting = "internal:packaging:cliVersionForTesting";
 }
 
 internal class PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration, ILogger<PackagingService> logger) : IPackagingService
@@ -79,8 +104,55 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
     }
 
+    public string? GetStagingChannelUnavailableReason()
+    {
+        // The 'staging' channel is only meaningful when the feature/channel-config
+        // explicitly enabled it. If it isn't enabled, there's no "unavailability"
+        // to report — the channel simply isn't created.
+        if (!KnownFeatures.IsStagingChannelEnabled(features, configuration))
+        {
+            return null;
+        }
+
+        // If the user has supplied an explicit staging feed override they are taking
+        // ownership of where staging packages come from, so any CLI build is allowed.
+        var hasExplicitFeedOverride = !string.IsNullOrEmpty(configuration["overrideStagingFeed"]);
+        if (hasExplicitFeedOverride)
+        {
+            return null;
+        }
+
+        // When the running CLI is itself a daily/CI build, there is no deterministic
+        // way to derive a real staging feed: a SHA-specific darc-pub-* feed is not
+        // created for daily commits, and falling back to the shared dotnet9 feed would
+        // resolve to daily packages — which is the bug tracked by #16652. Refuse to
+        // synthesize a staging channel in that case so the caller fails fast with an
+        // actionable error message instead of silently downgrading to daily packages.
+        var cliVersion = GetCliInformationalVersionForStagingDecision();
+        if (IsCliPrereleaseDailyBuild(cliVersion))
+        {
+            return string.Format(
+                CultureInfo.CurrentCulture,
+                PackagingStrings.StagingChannelUnavailableForDailyCliFormat,
+                cliVersion ?? "unknown");
+        }
+
+        return null;
+    }
+
     private PackageChannel? CreateStagingChannel()
     {
+        var unavailableReason = GetStagingChannelUnavailableReason();
+        if (unavailableReason is not null)
+        {
+            // Logged once per channel enumeration so users can see why staging was
+            // omitted without inspecting source. UpdateCommand surfaces the same
+            // message via ChannelNotFoundException when the user explicitly passes
+            // --channel staging.
+            logger.LogWarning("{UnavailableReason}", unavailableReason);
+            return null;
+        }
+
         var stagingQuality = GetStagingQuality();
         var hasExplicitFeedOverride = !string.IsNullOrEmpty(configuration["overrideStagingFeed"]);
 
@@ -105,7 +177,93 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         }, nuGetPackageCache, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: logger);
 
+        // Surface the resolved feed so users can verify channel resolution from the
+        // CLI logs without disclosing any embedded credentials or signed parameters.
+        logger.LogInformation(
+            "Resolved 'staging' channel: feed='{StagingFeedUrl}', quality='{Quality}', pinnedVersion='{PinnedVersion}'.",
+            GetRedactedFeedUrlForLogging(stagingFeedUrl),
+            stagingQuality,
+            pinnedVersion ?? "(none)");
+
         return stagingChannel;
+    }
+
+    private static string GetRedactedFeedUrlForLogging(string feedUrl)
+    {
+        if (!Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri))
+        {
+            return "(invalid or non-standard feed URL)";
+        }
+
+        var builder = new UriBuilder(uri)
+        {
+            UserName = string.Empty,
+            Password = string.Empty,
+            Query = string.Empty,
+            Fragment = string.Empty
+        };
+
+        return builder.Uri.AbsoluteUri;
+    }
+
+    /// <summary>
+    /// Returns the CLI informational version string used by staging-channel decisions.
+    /// Honors the test-only configuration override so tests can deterministically
+    /// simulate stable / blessed-prerelease / daily CLI builds.
+    /// </summary>
+    private string? GetCliInformationalVersionForStagingDecision()
+    {
+        var testOverride = configuration[PackagingConfigurationKeys.CliVersionForTesting];
+        if (!string.IsNullOrWhiteSpace(testOverride))
+        {
+            return testOverride;
+        }
+
+        try
+        {
+            return VersionHelper.GetDefaultTemplateVersion();
+        }
+        catch (InvalidOperationException)
+        {
+            // Cannot determine assembly version; treat as unknown so callers can decide.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether the supplied informational version represents a daily/CI
+    /// build of the Aspire CLI as opposed to either a stable release or a blessed
+    /// preview/RC build that has its own staging feed.
+    /// Heuristic: stable releases have no prerelease label; blessed preview/RC builds
+    /// use simple labels such as <c>preview.1</c> or <c>rc.1</c> (≤ 2 prerelease
+    /// identifiers). Daily/CI builds add date+revision suffixes from Arcade
+    /// (e.g. <c>preview.1.26210.1</c>, ≥ 3 identifiers), making them easy to distinguish.
+    /// </summary>
+    internal static bool IsCliPrereleaseDailyBuild(string? informationalVersion)
+    {
+        if (string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            // If we cannot determine the version, err on the side of safety and treat
+            // it as a daily build so we don't silently resolve to daily packages.
+            return true;
+        }
+
+        var withoutBuildMetadata = informationalVersion.Split('+')[0];
+        if (!SemVersion.TryParse(withoutBuildMetadata, SemVersionStyles.Strict, out var sv))
+        {
+            // Unparseable version — also err on the side of safety.
+            return true;
+        }
+
+        if (!sv.IsPrerelease)
+        {
+            // Stable release.
+            return false;
+        }
+
+        // Blessed prereleases (preview.1, rc.1, etc.) have at most 2 dot-separated
+        // identifiers. Daily builds add a date + revision suffix giving 3+ identifiers.
+        return sv.PrereleaseIdentifiers.Count > 2;
     }
 
     private string? GetStagingFeedUrl(bool useSharedFeed)
@@ -130,11 +288,9 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
         // Extract commit hash from assembly version to build staging feed URL
         // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{commitHash}/nuget/v3/index.json
-        var assembly = Assembly.GetExecutingAssembly();
-        var informationalVersion = assembly
-            .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
-            .OfType<AssemblyInformationalVersionAttribute>()
-            .FirstOrDefault()?.InformationalVersion;
+        // Honors the test seam so unit tests can deterministically simulate stable
+        // CLI builds with a known commit hash.
+        var informationalVersion = GetCliInformationalVersionForStagingDecision();
 
         if (informationalVersion is null)
         {
