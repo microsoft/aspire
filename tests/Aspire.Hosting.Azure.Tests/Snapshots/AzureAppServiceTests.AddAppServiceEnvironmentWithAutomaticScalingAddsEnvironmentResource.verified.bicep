@@ -31,8 +31,8 @@ resource env_asplan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: take('envasplan-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
-    elasticScaleEnabled: false
-    perSiteScaling: true
+    elasticScaleEnabled: true
+    perSiteScaling: false
     reserved: true
     maximumElasticWorkerCount: 10
   }
