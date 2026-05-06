@@ -29,20 +29,18 @@ steps:
       }
 
       if ([string]::IsNullOrWhiteSpace($channel)) {
-        Write-Error "Channel parameter is required (stable or prerelease)"
+        Write-Error "Channel parameter is required (stable)"
         exit 1
       }
 
-      if ($channel -eq 'stable') {
-        $templateDir = 'microsoft.aspire'
-        $artifactName = 'winget-manifests-stable'
-      } elseif ($channel -eq 'prerelease') {
-        $templateDir = 'microsoft.aspire.prerelease'
-        $artifactName = 'winget-manifests-prerelease'
-      } else {
-        Write-Error "Channel must be 'stable' or 'prerelease', got: $channel"
+      # Aspire CLI is published only on the stable channel today; the prerelease
+      # channel was retired in PR2 of the v3 acquisition coherence work.
+      if ($channel -ne 'stable') {
+        Write-Error "Channel must be 'stable', got: $channel"
         exit 1
       }
+      $templateDir = 'microsoft.aspire'
+      $artifactName = 'winget-manifests-stable'
 
       Write-Host "Version: $version"
       Write-Host "Channel: $channel"

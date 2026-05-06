@@ -217,4 +217,58 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    // Script-route sidecar written under -WhatIf at <prefix>/.aspire-install.json.
+    // The PowerShell script bypasses ShouldProcess for the sidecar write (uses raw .NET I/O),
+    // so the file is observable even when WhatIfPreference is in effect.
+    [Fact]
+    public async Task WhatIf_WritesScriptRouteSidecar_AtPrefixRoot()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("-Quality", "release", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
+    }
+
+    // The script-route sidecar is route metadata only — no "channel" key.
+    [Fact]
+    public async Task WhatIf_ScriptRouteSidecar_DoesNotContainChannelKey()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("-Quality", "dev", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.False(
+            doc.RootElement.TryGetProperty("channel", out _),
+            $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
+    }
+
+    // Under -WhatIf no global aspire.config.json is created.
+    [Fact]
+    public async Task WhatIf_DoesNotCreateGlobalAspireConfigJson()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("-Quality", "dev", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
+    }
 }

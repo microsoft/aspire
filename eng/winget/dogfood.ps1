@@ -42,8 +42,8 @@ if ($Uninstall) {
     Write-Host "Uninstalling dogfooded Aspire CLI..."
     Write-Host ""
 
-    # Try to find the package via winget
-    $packages = @("Microsoft.Aspire", "Microsoft.Aspire.Prerelease")
+    # Look for the stable Aspire package in the local installation.
+    $packages = @("Microsoft.Aspire")
     foreach ($pkg in $packages) {
         Write-Host "Checking for $pkg..."
         $result = winget list --id $pkg --accept-source-agreements 2>&1
@@ -65,8 +65,8 @@ if ($Uninstall) {
 
 # Auto-detect manifest path if not specified
 if (-not $ManifestPath) {
-    # Look for versioned manifest directories under the script directory
-    # Convention: manifests/m/Microsoft/Aspire/{Version}/ or manifests/m/Microsoft/Aspire/Prerelease/{Version}/
+    # Look for versioned manifest directories under the script directory.
+    # Convention: manifests/m/Microsoft/Aspire/{Version}/
     $candidates = Get-ChildItem -Path $ScriptDir -Directory -Recurse -Depth 6 |
         Where-Object {
             Test-Path (Join-Path $_.FullName "*.installer.yaml")

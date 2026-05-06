@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <Target Name="PublishToDisk"
-          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_PrepareOutputPathForPublishToDisk" />
+          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;_PrepareOutputPathForPublishToDisk;_StageArchiveRouteSidecar" />
 
   <Target Name="_PrepareOutputPathForPublishToDisk">
     <!-- TODO: avoid generating the file instead of manually deleting it here -->
@@ -39,6 +39,57 @@
       <DirectoriesToRemove Include="$(XlfLanguages)" />
     </ItemGroup>
     <RemoveDir Directories="$(OutputPath)\%(DirectoriesToRemove.Identity)" />
+  </Target>
+
+  <!--
+    Stage the route sidecar (.aspire-install.json) into the archive root.
+
+    Microsoft.DotNet.Build.Tasks.Archives' _CreateArchive target invokes our PublishToDisk
+    target with OutputPath set to the staging directory it will subsequently zip/tar. So a
+    file dropped at $(OutputPath)/.aspire-install.json ends up at the archive root next to
+    the `aspire` (or `aspire.exe`) binary — which is the flat single-directory prefix layout
+    that the
+    winget zip and brew tarball templates declare in their comments.
+
+    Sidecar route is gated on $(CliRuntime) so each per-RID archive ships the correct
+    content for its consumer:
+
+      - win-*  → winget consumer  → { "route": "winget", "updateCommand": "winget upgrade Microsoft.Aspire" }
+      - osx-*  → brew cask        → { "route": "brew",   "updateCommand": "brew upgrade aspire" }
+      - linux-*: no sidecar shipped. The homebrew cask only references osx-* archives and
+        winget is Windows-only, so linux archives have no managed-route consumer at the
+        archive layer. The script route writes its own sidecar after extraction
+        (eng/scripts/get-aspire-cli.sh / .ps1); a standalone linux archive consumed
+        without a script is "unmanaged" and InstallPathResolver returns Unknown.
+
+    Distinct from the dotnet-tool nupkg sidecar (Aspire.Cli.csproj `_PreparePreBuiltCliBinaryForPackTool`)
+    which copies a static src/Aspire.Cli/.aspire-install.json into the RID-specific tool nupkg —
+    that's a separate route ("dotnet-tool") and a separate packaging layer (NuGet pack vs. Archives zip/tar).
+  -->
+  <Target Name="_StageArchiveRouteSidecar"
+          Condition="'$(CliRuntime)' != ''">
+    <PropertyGroup>
+      <_ArchiveSidecarRoute Condition="$(CliRuntime.StartsWith('win-'))">winget</_ArchiveSidecarRoute>
+      <_ArchiveSidecarRoute Condition="$(CliRuntime.StartsWith('osx-'))">brew</_ArchiveSidecarRoute>
+
+      <_ArchiveSidecarUpdateCommand Condition="'$(_ArchiveSidecarRoute)' == 'winget'">winget upgrade Microsoft.Aspire</_ArchiveSidecarUpdateCommand>
+      <_ArchiveSidecarUpdateCommand Condition="'$(_ArchiveSidecarRoute)' == 'brew'">brew upgrade aspire</_ArchiveSidecarUpdateCommand>
+
+      <_ArchiveSidecarPath>$([MSBuild]::NormalizePath($(OutputPath), '.aspire-install.json'))</_ArchiveSidecarPath>
+      <_ArchiveSidecarContent>{ &quot;route&quot;: &quot;$(_ArchiveSidecarRoute)&quot;, &quot;updateCommand&quot;: &quot;$(_ArchiveSidecarUpdateCommand)&quot; }</_ArchiveSidecarContent>
+    </PropertyGroup>
+
+    <Message Condition="'$(_ArchiveSidecarRoute)' == ''" Importance="High"
+             Text="No archive route sidecar staged for $(CliRuntime); archive will ship without .aspire-install.json (unmanaged route)." />
+
+    <WriteLinesToFile Condition="'$(_ArchiveSidecarRoute)' != ''"
+                      File="$(_ArchiveSidecarPath)"
+                      Lines="$(_ArchiveSidecarContent)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+
+    <Message Condition="'$(_ArchiveSidecarRoute)' != ''" Importance="High"
+             Text="Staged archive route sidecar -> $(_ArchiveSidecarPath) (route=$(_ArchiveSidecarRoute))" />
   </Target>
 
   <Target Name="_PublishProject">

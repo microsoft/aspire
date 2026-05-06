@@ -169,4 +169,63 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("--quality dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    // Script-route sidecar written under --dry-run at <prefix>/.aspire-install.json
+    // with literal {"route":"script"} content. Sidecar is the source of truth that
+    // InstallPathResolver consumes to identify the script route (multi-component
+    // prefix layout, with the sidecar one directory above the binary).
+    [Fact]
+    public async Task DryRun_WritesScriptRouteSidecar_AtPrefixRoot()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release", "--skip-path");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
+    }
+
+    // The script-route sidecar carries route metadata only — no "channel" key.
+    // Verify the sidecar does not include a channel field, guarding against field
+    // bleed-through from other configuration sources.
+    [Fact]
+    public async Task DryRun_ScriptRouteSidecar_DoesNotContainChannelKey()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev", "--skip-path");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.False(
+            doc.RootElement.TryGetProperty("channel", out _),
+            $"Sidecar at {sidecarPath} unexpectedly contains a 'channel' key. Content: {sidecarContent}");
+    }
+
+    // Under --dry-run no global aspire.config.json is created.
+    // save_global_settings short-circuits in dry-run, but we want a positive filesystem
+    // assertion that channel state is not persisted by the install flow.
+    [Fact]
+    public async Task DryRun_DoesNotCreateGlobalAspireConfigJson()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev", "--skip-path");
+
+        result.EnsureSuccessful();
+
+        var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
+    }
 }

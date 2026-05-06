@@ -189,11 +189,55 @@ try {
         throw "RID package contains managed publish artifacts: $($managedArtifacts.Name -join ', ')"
     }
 
+    # The route sidecar (.aspire-install.json) MUST live next to the binary in the
+    # RID-specific nupkg at tools/net10.0/<rid>/. The CLI's IInstallPathResolver
+    # reads it to identify the install route; missing sidecar leaves
+    # 'aspire update --self' unable to delegate.
+    $expectedSidecarPath = "tools/net10.0/$Rid/.aspire-install.json"
+    $sidecarFullPath = Join-Path $ridExtract $expectedSidecarPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $sidecarFullPath)) {
+        throw "RID package $($ridPackage.Name) is missing the route sidecar at '$expectedSidecarPath'."
+    }
+
+    $sidecarRaw = Get-Content -LiteralPath $sidecarFullPath -Raw
+    try {
+        $sidecarJson = $sidecarRaw | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw "RID package sidecar at '$expectedSidecarPath' is not valid JSON: $($_.Exception.Message)"
+    }
+
+    if (-not $sidecarJson.PSObject.Properties.Match('route') -or [string]::IsNullOrWhiteSpace([string]$sidecarJson.route)) {
+        throw "RID package sidecar at '$expectedSidecarPath' is missing the required 'route' field."
+    }
+
+    $allowedRoutes = @('script', 'pr', 'winget', 'brew', 'dotnet-tool')
+    if ($allowedRoutes -notcontains [string]$sidecarJson.route) {
+        throw "RID package sidecar at '$expectedSidecarPath' has unrecognized route '$($sidecarJson.route)'. Allowed: $($allowedRoutes -join ', ')."
+    }
+
+    if ($sidecarJson.route -ne 'script' -and (-not $sidecarJson.PSObject.Properties.Match('updateCommand') -or [string]::IsNullOrWhiteSpace([string]$sidecarJson.updateCommand))) {
+        throw "RID package sidecar at '$expectedSidecarPath' has route '$($sidecarJson.route)' but is missing the required 'updateCommand' field."
+    }
+
+    Write-Step "RID package contains valid sidecar (route='$($sidecarJson.route)')."
+
     $pointerBinary = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter 'aspire*' -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -eq 'aspire' -or $_.Name -eq 'aspire.exe' }
     if ($pointerBinary) {
         throw "Pointer package should not contain native binaries: $($pointerBinary.Name -join ', ')"
     }
+
+    # The pointer nupkg is a routing stub. It must NOT carry the route sidecar:
+    # presence here would make the SDK consider the pointer a self-contained
+    # install and break IInstallPathResolver discovery on the consumer side.
+    $pointerSidecar = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter '.aspire-install.json' -Force -ErrorAction SilentlyContinue
+    if ($pointerSidecar) {
+        $pointerSidecarPaths = $pointerSidecar | ForEach-Object { $_.FullName.Substring($pointerExtract.Length + 1).Replace('\', '/') }
+        throw "Pointer package $($pointerPackage.Name) must not contain '.aspire-install.json'. Found: $($pointerSidecarPaths -join ', ')"
+    }
+
+    Write-Step "Pointer package correctly omits the route sidecar."
 
     $pointerNuspec = Get-ChildItem -Path $pointerExtract -Filter '*.nuspec' -File | Select-Object -First 1
     if (-not $pointerNuspec) {

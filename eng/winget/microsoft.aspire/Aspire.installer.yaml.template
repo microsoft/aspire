@@ -4,6 +4,9 @@ PackageIdentifier: Microsoft.Aspire
 PackageVersion: "${VERSION}"
 InstallerType: zip
 NestedInstallerType: portable
+# The zip ships aspire.exe plus the route sidecar (.aspire-install.json) at the
+# zip root. Both files extract to the same package working directory, giving the
+# flat single-directory prefix layout: <prefix>/{aspire.exe, .aspire-install.json}.
 NestedInstallerFiles:
 - RelativeFilePath: aspire.exe
   PortableCommandAlias: aspire
@@ -11,6 +14,9 @@ Commands:
 - aspire
 InstallModes:
 - silent
+# Scope: user keeps the install under %LOCALAPPDATA% so admin-machine installs
+# do not land in read-only system directories like %PROGRAMFILES%.
+Scope: user
 UpgradeBehavior: uninstallPrevious
 ReleaseDate: ${RELEASE_DATE}
 ${INSTALLERS}
