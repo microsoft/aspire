@@ -276,6 +276,9 @@ jobs:
   extension_tests_win:
     name: Run VS Code extension tests (Windows)
     runs-on: windows-latest
+    env:
+      YARN_NPM_ALWAYS_AUTH: 'false'
+      YARN_NPM_REGISTRY_SERVER: https://registry.npmjs.org
     defaults:
       run:
         working-directory: ./extension
@@ -286,8 +289,14 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '20.x'
+      - name: Setup Yarn
+        run: |
+          npm install -g corepack@0.34.7 --force
+          corepack enable yarn
+          corepack prepare yarn@4.14.1 --activate
+          yarn --version
       - name: Install dependencies
-        run: npm install
+        run: yarn install --immutable
       - name: Run tests
         run: npm test
       - name: Override extension version for PR builds
@@ -296,7 +305,7 @@ jobs:
           EXTENSION_VERSION: ${{ inputs.extensionVersionOverride }}
         run: npm version "$EXTENSION_VERSION" --no-git-tag-version
       - name: Package VSIX
-        run: npm exec @vscode/vsce -- package --pre-release -o out/aspire-extension.vsix
+        run: npm exec @vscode/vsce -- package --pre-release --no-dependencies -o out/aspire-extension.vsix
       - name: Upload VSIX
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:

@@ -3,7 +3,7 @@
 ## Install Prerequisites
 
 - Node.js (LTS version)
-- NPM and yarn accessible in the PATH
+- NPM and Corepack accessible in the PATH. Use Corepack to enable the Yarn version pinned in `package.json`.
 - Visual Studio Code (latest) or Visual Studio Code Insiders
 - [Aspire CLI](https://aspire.dev/get-started/install-cli/) must be installed and available in the PATH
 

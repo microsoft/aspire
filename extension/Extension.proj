@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <ExtensionSrcDir>$(MSBuildThisFileDirectory)</ExtensionSrcDir>
+    <RequiredYarnVersion>4.14.1</RequiredYarnVersion>
   </PropertyGroup>
 
   <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="CheckYarnInstalled;CheckVsceInstalled">
@@ -43,7 +44,7 @@
     <MakeDir Directories="$(_VscodeOutputDir)" />
 
     <!-- Package extension -->
-    <Exec Command="vsce package --out $(_VsixPath)"
+    <Exec Command="vsce package --no-dependencies --out $(_VsixPath)"
           IgnoreStandardErrorWarningFormat="true"
           WorkingDirectory="$(ExtensionSrcDir)" />
 
@@ -68,12 +69,16 @@
   </Target>
 
   <Target Name="CheckYarnInstalled">
+    <Exec Command="corepack enable yarn" ContinueOnError="true" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="corepack prepare yarn@$(RequiredYarnVersion) --activate" ContinueOnError="true" IgnoreStandardErrorWarningFormat="true" />
+
     <Exec Command="yarn --version" ContinueOnError="true" ConsoleToMSBuild="true" IgnoreStandardErrorWarningFormat="true">
       <Output TaskParameter="ExitCode" PropertyName="YarnExitCode" />
       <Output TaskParameter="ConsoleOutput" PropertyName="YarnVersion" />
     </Exec>
 
-    <Error Condition="'$(YarnExitCode)' != '0'" Text="yarn is not installed or not available in PATH. To build the extension, install yarn: https://yarnpkg.com/getting-started/install" />
+    <Error Condition="'$(YarnExitCode)' != '0'" Text="yarn is not installed or not available in PATH. To build the extension, install Corepack and activate yarn $(RequiredYarnVersion): https://yarnpkg.com/getting-started/install" />
+    <Error Condition="'$(YarnExitCode)' == '0' and '$(YarnVersion)' != '$(RequiredYarnVersion)'" Text="yarn $(RequiredYarnVersion) is required, but found $(YarnVersion). To build the extension, use Corepack to activate yarn $(RequiredYarnVersion): corepack prepare yarn@$(RequiredYarnVersion) --activate" />
 
     <Message Importance="high" Text="yarn version: $(YarnVersion)" />
   </Target>

@@ -3,6 +3,8 @@ set -e
 
 echo "Checking prerequisites..."
 
+REQUIRED_YARN_VERSION="4.14.1"
+
 # Check for Node.js
 if ! command -v node &> /dev/null; then
     echo "Error: Node.js is not installed. Please install Node.js first."
@@ -15,10 +17,23 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
-# Check for yarn
+# Activate the pinned yarn version through Corepack when available.
+if command -v corepack &> /dev/null; then
+    echo "Activating yarn $REQUIRED_YARN_VERSION with corepack..."
+    corepack enable yarn || true
+    corepack prepare "yarn@$REQUIRED_YARN_VERSION" --activate
+fi
+
 if ! command -v yarn &> /dev/null; then
-    echo "Error: yarn is not installed. Please install yarn first."
-    echo "You can install yarn by running: npm install -g yarn"
+    echo "Error: yarn is not available. Install Corepack and activate yarn $REQUIRED_YARN_VERSION."
+    echo "You can install Corepack by running: npm install -g corepack@0.34.7 && corepack prepare yarn@$REQUIRED_YARN_VERSION --activate"
+    exit 1
+fi
+
+YARN_VERSION="$(yarn --version)"
+if [[ "$YARN_VERSION" != "$REQUIRED_YARN_VERSION" ]]; then
+    echo "Error: yarn $REQUIRED_YARN_VERSION is required, but found $YARN_VERSION."
+    echo "Use Corepack to activate the pinned version: corepack prepare yarn@$REQUIRED_YARN_VERSION --activate"
     exit 1
 fi
 

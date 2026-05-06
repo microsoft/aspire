@@ -129,6 +129,8 @@ config.ps1
 
 # Node.js modules
 node_modules/
+.pnp.*
+.yarn/
 
 # Generated Aspire polyglot modules
 .modules/
