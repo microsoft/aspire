@@ -778,10 +778,9 @@ If a docs PR is clearly unrelated to the milestone (e.g., it matched the date
 filter but documents an unrelated product or version), record it as
 `"excluded"` in the docs PR tracker (Step 6d) with a comment explaining why.
 
-For each remaining docs PR, determine whether it documents a changelog entry
-that has `docsRequired: true`. The batch data already contains each docs PR's
-`title`, `body`, and `files` (changed file paths) — no additional API calls
-are needed. Match by:
+For each remaining docs PR, determine whether it documents a changelog entry.
+The batch data already contains each docs PR's `title`, `body`, and `files`
+(changed file paths) — no additional API calls are needed. Match by:
 
 1. **Explicit product PR reference** — the docs PR body or title mentions a
    product PR number (e.g., "Documents #1234", links to
@@ -797,8 +796,7 @@ are needed. Match by:
    the docs PR to inspect its actual content. Use the diff to identify which
    product feature is being documented.
 4. **No match** — if the docs PR cannot be confidently matched to any
-   changelog entry with `docsRequired: true` (even after reading the diff),
-   record it as `"excluded"` in
+   changelog entry (even after reading the diff), record it as `"excluded"` in
    the docs PR tracker (Step 6d) with a comment explaining why (e.g.,
    "No matching changelog entry found").
 
@@ -1191,9 +1189,8 @@ if it exists) and check that:
 4. **Footer and metadata updates are expected** — changes to "PRs analyzed
    through", "PRs processed" counts, "Docs PRs" counts, "What's New" section,
    and Table of Contents summaries are normal and should not be flagged.
-5. **Docs PR links are expected additions** — new `Docs:` lines on entries whose
-   `docsRequired` is `true` are valid additions when corresponding docs PRs exist
-   in `/tmp/gh-aw/pr-data/batch-docs-prs.json`.
+5. **Docs PR links are expected additions** — new `Docs:` lines on entries when
+   corresponding docs PRs exist in `/tmp/gh-aw/pr-data/batch-docs-prs.json`.
 
 If any violation is found:
 - Log the specific violation (which entry was removed/modified, which PR number is
