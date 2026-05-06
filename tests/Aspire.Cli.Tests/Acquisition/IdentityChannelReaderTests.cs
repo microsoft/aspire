@@ -49,6 +49,63 @@ public class IdentityChannelReaderTests
         Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
+    // PR1-TG1: edge cases for AssemblyMetadata semantics.
+
+    [Fact]
+    public void ReadChannel_ChannelMetadataValueIsUnknownString_ReturnedVerbatim()
+    {
+        // The reader does not validate the value — invalid values are caught at build time
+        // by AssemblyMetadataChannelTests (the smoke test from PR1-S5). Document the
+        // intentional "trust the build" behavior here.
+        var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Foobar", "foobar");
+
+        var reader = new IdentityChannelReader(assembly);
+
+        Assert.Equal("foobar", reader.ReadChannel());
+    }
+
+    [Fact]
+    public void ReadChannel_AssemblyHasMultipleChannelMetadataAttributes_ReturnsFirstNonEmpty()
+    {
+        // MSBuild misconfiguration could conceivably emit two AspireCliChannel entries.
+        // The reader uses FirstOrDefault, so the first attribute encountered wins. Document
+        // this so future changes don't silently flip ordering.
+        var assembly = BuildFakeAssemblyWithChannelMetadata(
+            "FakeCli_DualChannel",
+            channelValues: ["staging", "pr"]);
+
+        var reader = new IdentityChannelReader(assembly);
+
+        Assert.Equal("staging", reader.ReadChannel());
+    }
+
+    [Fact]
+    public void ReadChannel_ChannelMetadataValueIsWhitespaceOnly_ReturnedVerbatim()
+    {
+        // Production reader treats only null/empty as "missing" (string.IsNullOrEmpty), not
+        // string.IsNullOrWhiteSpace. A whitespace-only value is therefore returned. This is
+        // a known but low-risk gap — the build-time smoke test catches it. Documenting the
+        // current behavior here so any future tightening is a deliberate decision.
+        var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Whitespace", "   ");
+
+        var reader = new IdentityChannelReader(assembly);
+
+        Assert.Equal("   ", reader.ReadChannel());
+    }
+
+    [Fact]
+    public void ReadChannel_KeyLookupIsCaseSensitive_DifferentCaseTreatedAsMissing()
+    {
+        var assembly = BuildFakeAssemblyWithMetadata(
+            "FakeCli_CaseMismatch",
+            metadata: [(Key: "aspirecliChannel", Value: "stable")]);
+
+        var reader = new IdentityChannelReader(assembly);
+
+        var ex = Assert.Throws<InvalidOperationException>(reader.ReadChannel);
+        Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void ParsePrNumber_PrChannelInformationalVersion_ReturnsPrNumber()
     {
@@ -91,6 +148,14 @@ public class IdentityChannelReaderTests
         return BuildFakeAssemblyWithMetadata(
             assemblyName,
             metadata: [(Key: ChannelMetadataKey, Value: channelValue)]);
+    }
+
+    private static Assembly BuildFakeAssemblyWithChannelMetadata(string assemblyName, string[] channelValues)
+    {
+        var metadata = channelValues
+            .Select(v => (Key: ChannelMetadataKey, Value: v))
+            .ToArray();
+        return BuildFakeAssemblyWithMetadata(assemblyName, metadata);
     }
 
     private static Assembly BuildFakeAssemblyWithMetadata(string assemblyName, (string Key, string Value)[] metadata)
