@@ -88,6 +88,10 @@ jobs:
             --filter-not-trait "outerloop=true" \
             --hangdump --hangdump-type none --hangdump-timeout 15m
 
+      - name: Verify Aspire CLI versions match
+        shell: pwsh
+        run: ./eng/scripts/verify-daily-smoke-cli-versions.ps1 -VersionsDir (Join-Path $env:GITHUB_WORKSPACE 'testresults/cli-versions')
+
       - name: Upload logs and test results
         id: upload-logs
         if: always()

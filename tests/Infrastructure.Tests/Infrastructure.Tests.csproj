@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <Compile Include="..\Aspire.Hosting.Tests\Utils\MSBuildUtils.cs" Link="shared/MSBuildUtils.cs" />
   </ItemGroup>
 
   <ItemGroup>

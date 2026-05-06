@@ -1247,7 +1247,7 @@ public static class FailingTestIssueLogic
         var normalizedWorkflowFile = workflowFile.Trim().Replace('\\', '/').ToLowerInvariant();
         var payload = $"{normalizedTestName}|{normalizedWorkflowFile}";
         var hash = XxHash3.Hash(Encoding.UTF8.GetBytes(payload));
-        return Convert.ToHexStringLower(hash);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     public static TruncationResult TruncateContent(string? content, int maxChars, TruncationPreference preference)

@@ -142,8 +142,8 @@ public sealed class SmokeTests(ITestOutputHelper output)
             throw new FileNotFoundException($"Expected TypeScript AppHost file to exist: {appHostPath}", appHostPath);
         }
 
-        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"));
-        output.WriteLine("Stable TypeScript AppHost config verified.");
+        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"), "stable");
+        output.WriteLine("Stable TypeScript AppHost config verified with channel 'stable'.");
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
@@ -169,17 +169,17 @@ public sealed class SmokeTests(ITestOutputHelper output)
             : throw new InvalidOperationException($"Could not find Aspire.AppHost.Sdk directive in {appHostPath}.");
     }
 
-    private static void AssertStableTypeScriptAppHostConfig(string configPath)
+    private static void AssertStableTypeScriptAppHostConfig(string configPath, string expectedChannel)
     {
         if (!File.Exists(configPath))
         {
             throw new FileNotFoundException($"Expected Aspire config file to exist: {configPath}", configPath);
         }
 
-        // Expected shape: { "appHost": { "path": "apphost.ts", "language": "typescript/nodejs" }, "sdk": { "version": "13.2.0" }, "channel": "stable" }
+        // Expected shape: { "appHost": { "path": "apphost.ts", "language": "typescript/nodejs" }, "sdk": { "version": "13.2.0" }, "channel": "<expected>" }
         using var config = JsonDocument.Parse(File.ReadAllText(configPath));
         var root = config.RootElement;
-        AssertJsonStringProperty(root, "channel", "stable", configPath);
+        AssertJsonStringProperty(root, "channel", expectedChannel, configPath);
         var sdk = GetRequiredJsonObjectProperty(root, "sdk", configPath);
         var sdkVersion = GetRequiredJsonStringProperty(sdk, "version", configPath);
         if (sdkVersion.Contains('-', StringComparison.Ordinal) ||
