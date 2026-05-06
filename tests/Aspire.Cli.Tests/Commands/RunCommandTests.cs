@@ -714,7 +714,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        // Pass --start-debug-session to avoid watch mode (which skips build)
         var result = command.Parse("run --start-debug-session");
 
         using var cts = new CancellationTokenSource();
@@ -728,6 +727,60 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.True(buildCalled, "Build should be called when extension has build-dotnet-using-cli capability.");
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenExtensionNoDebugBuildFails_DoesNotRunAppHost()
+    {
+        var buildCalled = false;
+        var runCalled = false;
+
+        var extensionBackchannel = new TestExtensionBackchannel();
+        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCli);
+
+        var extensionInteractionServiceFactory = (IServiceProvider sp) => new TestExtensionInteractionService(sp);
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
+            {
+                buildCalled = true;
+                return 1;
+            };
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                runCalled = true;
+                return Task.FromResult(0);
+            };
+            return runner;
+        };
+
+        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = projectLocatorFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+            options.InteractionServiceFactory = extensionInteractionServiceFactory;
+            options.ConfigurationCallback += config =>
+            {
+                config["ASPIRE_EXTENSION_DEBUG_SESSION_ID"] = "test-session-id";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+        Assert.True(buildCalled, "Build should be called before launching the AppHost in extension no-debug mode.");
+        Assert.False(runCalled, "AppHost should not be launched when the pre-build fails.");
     }
 
     [Fact]
