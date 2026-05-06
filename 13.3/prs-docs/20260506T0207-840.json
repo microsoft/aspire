@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#16759 (WithHelm chart options) which is milestone 13.4, not 13.3 - no matching changelog entry",
+  "mergedAt": "2026-05-06T02:07:11Z",
+  "number": 840,
+  "runDate": "2026-05-06T06:55:11Z",
+  "status": "excluded",
+  "title": "[docs] Update Kubernetes deployment docs to use WithHelm chart options"
+}

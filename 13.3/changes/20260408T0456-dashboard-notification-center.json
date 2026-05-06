@@ -1,12 +1,15 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "📊",
+  "areaEmoji": "\ud83d\udcca",
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "A new notification center in the dashboard header shows command execution results (start, stop, restart, rebuild) as timestamped notifications with success/failure styling. Notifications support markdown rendering and include a \"View response\" action to inspect full command output. The text visualizer also now supports rendering markdown content.",
+  "docsPrs": [
+    850
+  ],
   "docsRequired": true,
-  "emoji": "🔔",
+  "emoji": "\ud83d\udd14",
   "firstMergedAt": "2026-04-08T04:56:35Z",
   "lastMergedAt": "2026-04-08T04:56:35Z",
   "name": "Dashboard notification center for command results",

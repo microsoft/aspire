@@ -7,7 +7,8 @@
   "description": "Added a --list-steps flag to aspire do, aspire publish, and aspire deploy that prints pipeline steps in execution order with their dependencies and tags, without actually running them.",
   "docsPrs": [
     436,
-    801
+    801,
+    847
   ],
   "docsRequired": true,
   "emoji": "\ud83d\uddd2\ufe0f",

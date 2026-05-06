@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Logger property added to ExecuteCommandContext (aspire#15678)",
+  "mergedAt": "2026-05-06T02:00:03Z",
+  "number": 818,
+  "runDate": "2026-05-06T06:55:11Z",
+  "status": "included",
+  "title": "[docs] Add Logger property to ExecuteCommandContext docs"
+}

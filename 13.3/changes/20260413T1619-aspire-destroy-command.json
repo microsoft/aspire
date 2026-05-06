@@ -6,6 +6,7 @@
   "communityContributors": [],
   "description": "New aspire destroy command tears down previously deployed environments across all compute targets: deletes the Azure resource group (ACA/App Service), runs docker compose down, or helm uninstall for Kubernetes. Supports --yes to skip confirmation prompts.",
   "docsPrs": [
+    769,
     790
   ],
   "docsRequired": true,

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#16772 (aspire new default output path) which is milestone 13.4, not 13.3 - no matching changelog entry",
+  "mergedAt": "2026-05-06T03:33:10Z",
+  "number": 848,
+  "runDate": "2026-05-06T06:55:11Z",
+  "status": "excluded",
+  "title": "[docs] Document default output path and validation for aspire new command"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Adds --list-steps sample output to aspire do docs (aspire#16085)",
+  "mergedAt": "2026-05-06T01:06:45Z",
+  "number": 847,
+  "runDate": "2026-05-06T06:55:11Z",
+  "status": "included",
+  "title": "[docs] Add --list-steps sample output to aspire do and pipelines pages"
+}
