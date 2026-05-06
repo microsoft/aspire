@@ -169,4 +169,8 @@
   <data name="PipelineStepsSummaryTitle" xml:space="preserve">
     <value>Steps Summary:</value>
   </data>
+  <data name="NonInteractiveRequiresYesFormat" xml:space="preserve">
+    <value>The {0} command requires --yes when the --non-interactive option is specified.</value>
+    <comment>{0} is the command name.</comment>
+  </data>
 </root>
