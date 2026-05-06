@@ -32,6 +32,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Server.Kestrel;
@@ -132,6 +133,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         AppContext.SetData("Microsoft.AspNetCore.Components.Web.Virtualization.Virtualize.MaxItemCount", 10_000);
 
         var builder = options is not null ? WebApplication.CreateBuilder(options) : WebApplication.CreateBuilder();
+        StaticWebAssetsLoader.UseStaticWebAssets(builder.Environment, builder.Configuration);
 
         preConfigureBuilder?.Invoke(builder);
 

@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
@@ -33,6 +34,41 @@ namespace Aspire.Dashboard.Tests.Integration;
 
 public class StartupTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task StaticWebAssets_NonDevelopmentEnvironment_FluentUiAssetsAvailable()
+    {
+        const string aspireDashboardAssemblyName = "Aspire.Dashboard";
+        var currentAssemblyName = Assembly.GetExecutingAssembly().GetName().Name!;
+        var currentAssemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
+        var aspireAssemblyDirectory = currentAssemblyDirectory.Replace(currentAssemblyName, aspireDashboardAssemblyName);
+
+        await using var app = new DashboardWebApplication(
+            options: new WebApplicationOptions
+            {
+                EnvironmentName = "Staging",
+                ContentRootPath = aspireAssemblyDirectory,
+                WebRootPath = Path.Combine(aspireAssemblyDirectory, "wwwroot"),
+                ApplicationName = aspireDashboardAssemblyName
+            },
+            preConfigureBuilder: builder =>
+            {
+                RemoveEnvironmentVariableSources(builder);
+                builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
+                    [DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://127.0.0.1:0",
+                    [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
+                    [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
+                    [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
+                });
+            });
+
+        var environment = app.Services.GetRequiredService<IWebHostEnvironment>();
+        var file = environment.WebRootFileProvider.GetFileInfo("_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js");
+
+        Assert.True(file.Exists, $"Expected static web asset to exist at '{file.PhysicalPath ?? file.Name}'.");
+    }
+
     [Fact]
     public async Task EndPointAccessors_AppStarted_EndPointPortsAssigned()
     {
