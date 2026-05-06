@@ -163,6 +163,62 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_SingleFileSkeleton_CreatesAppHostRunJsonWithDashboardEnvVars()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/15986: without
+        // apphost.run.json, `dotnet run apphost.cs` after `aspire init` crashes because
+        // the dashboard env vars (ASPNETCORE_URLS, ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL)
+        // are not set. Init must emit apphost.run.json alongside aspire.config.json so
+        // the file-based runner picks up a launch profile.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var runJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json");
+        Assert.True(File.Exists(runJsonPath), "apphost.run.json should be created so `dotnet run apphost.cs` works.");
+
+        var runJson = JsonNode.Parse(File.ReadAllText(runJsonPath))!.AsObject();
+        var profiles = runJson["profiles"]!.AsObject();
+
+        var https = profiles["https"]!.AsObject();
+        Assert.Equal("Project", https["commandName"]!.GetValue<string>());
+        Assert.True(https["dotnetRunMessages"]!.GetValue<bool>());
+        var httpsUrls = https["applicationUrl"]!.GetValue<string>();
+        Assert.StartsWith("https://localhost:", httpsUrls);
+        var httpsEnv = https["environmentVariables"]!.AsObject();
+        Assert.Equal("Development", httpsEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.Equal("Development", httpsEnv["DOTNET_ENVIRONMENT"]!.GetValue<string>());
+        Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+
+        var http = profiles["http"]!.AsObject();
+        Assert.Equal("Project", http["commandName"]!.GetValue<string>());
+        var httpEnv = http["environmentVariables"]!.AsObject();
+        Assert.Equal("Development", httpEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("true", httpEnv["ASPIRE_ALLOW_UNSECURED_TRANSPORT"]!.GetValue<string>());
+
+        // The two files must agree on ports — otherwise `aspire run` and
+        // `dotnet run apphost.cs` would bind to different dashboard URLs.
+        var aspireConfig = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
+        var aspireProfiles = aspireConfig["profiles"]!.AsObject();
+        Assert.Equal(
+            aspireProfiles["https"]!["applicationUrl"]!.GetValue<string>(),
+            httpsUrls);
+        Assert.Equal(
+            aspireProfiles["http"]!["applicationUrl"]!.GetValue<string>(),
+            http["applicationUrl"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task InitCommand_WhenDeprecatedCompatibilityOptionsProvided_SucceedsAndWarns()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

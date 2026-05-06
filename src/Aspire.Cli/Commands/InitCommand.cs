@@ -279,10 +279,27 @@ internal sealed class InitCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created package sources file");
         }
 
-        // Drop aspire.config.json
-        var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null);
+        // Generate one set of ports so aspire.config.json (used by `aspire run`) and
+        // apphost.run.json (used by `dotnet run apphost.cs`) agree on the dashboard /
+        // OTLP / resource service endpoints.
+        var ports = AppHostProfilePortGenerator.Generate(Random.Shared);
 
-        return configResult;
+        // Drop aspire.config.json
+        var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null, ports);
+        if (configResult != ExitCodeConstants.Success)
+        {
+            return configResult;
+        }
+
+        // Drop apphost.run.json so `dotnet run apphost.cs` picks up the dashboard /
+        // OTLP / resource service env vars from the file-based launch profile. Without
+        // this file the AppHost crashes at startup because DashboardOptions validation
+        // requires ASPNETCORE_URLS and ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL to be set
+        // (these env vars are otherwise injected by the Aspire CLI when running via
+        // `aspire run`, but `dotnet run apphost.cs` does not go through that path).
+        DropAppHostRunJson(workingDirectory, ports);
+
+        return ExitCodeConstants.Success;
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
@@ -402,7 +419,7 @@ internal sealed class InitCommand : BaseCommand
         return ExitCodeConstants.Success;
     }
 
-    private int DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language)
+    private int DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, AppHostProfilePorts? ports = null)
     {
         var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
 
@@ -456,26 +473,26 @@ internal sealed class InitCommand : BaseCommand
         // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
         if (settings["profiles"] is null)
         {
-            var ports = AppHostProfilePortGenerator.Generate(Random.Shared);
+            var resolvedPorts = ports ?? AppHostProfilePortGenerator.Generate(Random.Shared);
 
             settings["profiles"] = new JsonObject
             {
                 ["https"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"https://localhost:{ports.DashboardHttpsPort};http://localhost:{ports.DashboardHttpPort}",
+                    ["applicationUrl"] = $"https://localhost:{resolvedPorts.DashboardHttpsPort};http://localhost:{resolvedPorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{ports.OtlpHttpsPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{resolvedPorts.OtlpHttpsPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{resolvedPorts.ResourceServiceHttpsPort}"
                     }
                 },
                 ["http"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"http://localhost:{ports.DashboardHttpPort}",
+                    ["applicationUrl"] = $"http://localhost:{resolvedPorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{ports.OtlpHttpPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{ports.ResourceServiceHttpPort}",
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{resolvedPorts.OtlpHttpPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{resolvedPorts.ResourceServiceHttpPort}",
                         ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
                     }
                 }
@@ -487,6 +504,62 @@ internal sealed class InitCommand : BaseCommand
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
         return ExitCodeConstants.Success;
+    }
+
+    // Writes apphost.run.json next to the single-file AppHost so that
+    // `dotnet run apphost.cs` (.NET file-based runner) picks up the dashboard / OTLP /
+    // resource service launch profile env vars. Mirrors the structure shipped by the
+    // aspire-apphost-singlefile MSBuild template. Skips if the file already exists.
+    private void DropAppHostRunJson(DirectoryInfo directory, AppHostProfilePorts ports)
+    {
+        const string fileName = "apphost.run.json";
+        var path = Path.Combine(directory.FullName, fileName);
+        if (File.Exists(path))
+        {
+            return;
+        }
+
+        var settings = new JsonObject
+        {
+            ["$schema"] = "https://json.schemastore.org/launchsettings.json",
+            ["profiles"] = new JsonObject
+            {
+                ["https"] = new JsonObject
+                {
+                    ["commandName"] = "Project",
+                    ["dotnetRunMessages"] = true,
+                    ["launchBrowser"] = true,
+                    ["applicationUrl"] = $"https://localhost:{ports.DashboardHttpsPort};http://localhost:{ports.DashboardHttpPort}",
+                    ["environmentVariables"] = new JsonObject
+                    {
+                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{ports.OtlpHttpsPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
+                    }
+                },
+                ["http"] = new JsonObject
+                {
+                    ["commandName"] = "Project",
+                    ["dotnetRunMessages"] = true,
+                    ["launchBrowser"] = true,
+                    ["applicationUrl"] = $"http://localhost:{ports.DashboardHttpPort}",
+                    ["environmentVariables"] = new JsonObject
+                    {
+                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{ports.OtlpHttpPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{ports.ResourceServiceHttpPort}",
+                        ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
+                    }
+                }
+            }
+        };
+
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(path, settings.ToJsonString(jsonOptions));
+
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {fileName}");
     }
 
 }
