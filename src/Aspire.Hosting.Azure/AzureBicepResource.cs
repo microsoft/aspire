@@ -50,6 +50,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             {
                 Name = $"provision-{name}",
                 Description = $"Provisions the Azure Bicep resource {name} using Azure infrastructure.",
+                Resource = factoryContext.Resource,
                 Action = async ctx => await ProvisionAzureBicepResourceAsync(ctx, this).ConfigureAwait(false),
                 Tags = [WellKnownPipelineTags.ProvisionInfrastructure]
             };

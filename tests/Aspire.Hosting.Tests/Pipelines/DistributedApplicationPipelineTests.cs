@@ -2564,6 +2564,161 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // would mutate built-in steps' DependsOnSteps via NormalizeRequiredByToDependsOn,
         // and a later resource removal (e.g. an unused default container registry) would
         // then cause the next ResolveStepsAsync to fail with "depends on unknown step".
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithResourceFilter_OnlyExecutesMatchingResourceSteps()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        builder.Services.Configure<PipelineOptions>(o => o.Resources = ["api"]);
+
+        var executedSteps = new List<string>();
+        var apiResource = builder.AddResource(new CustomResource("api"));
+        var workerResource = builder.AddResource(new CustomResource("worker"));
+
+        var pipeline = new DistributedApplicationPipeline();
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-api",
+            Action = ctx => { executedSteps.Add("build-api"); return Task.CompletedTask; },
+            Resource = apiResource.Resource
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-worker",
+            Action = ctx => { executedSteps.Add("build-worker"); return Task.CompletedTask; },
+            Resource = workerResource.Resource
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "shared-prereq",
+            Action = ctx => { executedSteps.Add("shared-prereq"); return Task.CompletedTask; },
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.Contains("build-api", executedSteps);
+        Assert.Contains("shared-prereq", executedSteps);
+        Assert.DoesNotContain("build-worker", executedSteps);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithResourceFilter_IncludesTransitiveDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        builder.Services.Configure<PipelineOptions>(o => o.Resources = ["api"]);
+
+        var executedSteps = new List<string>();
+        var apiResource = builder.AddResource(new CustomResource("api"));
+        var dbResource = builder.AddResource(new CustomResource("db"));
+
+        var pipeline = new DistributedApplicationPipeline();
+
+        // db step is a dependency of api step, but owned by a different resource
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "provision-db",
+            Action = ctx => { executedSteps.Add("provision-db"); return Task.CompletedTask; },
+            Resource = dbResource.Resource
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "deploy-api",
+            Action = ctx => { executedSteps.Add("deploy-api"); return Task.CompletedTask; },
+            Resource = apiResource.Resource,
+            DependsOnSteps = ["provision-db"]
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        // provision-db should run because deploy-api depends on it
+        Assert.Contains("deploy-api", executedSteps);
+        Assert.Contains("provision-db", executedSteps);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithUnknownResourceFilter_ThrowsInvalidOperationException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        builder.Services.Configure<PipelineOptions>(o => o.Resources = ["nonexistent"]);
+
+        builder.AddResource(new CustomResource("api"));
+
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-api",
+            Action = _ => Task.CompletedTask,
+            Resource = builder.Resources.First()
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => pipeline.ExecuteAsync(context));
+
+        Assert.Contains("nonexistent", ex.Message);
+        Assert.Contains("api", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithMultipleResourceFilters_ExecutesAllMatchingSteps()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        builder.Services.Configure<PipelineOptions>(o => o.Resources = ["api", "web"]);
+
+        var executedSteps = new List<string>();
+        var apiResource = builder.AddResource(new CustomResource("api"));
+        var webResource = builder.AddResource(new CustomResource("web"));
+        var workerResource = builder.AddResource(new CustomResource("worker"));
+
+        var pipeline = new DistributedApplicationPipeline();
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-api",
+            Action = ctx => { executedSteps.Add("build-api"); return Task.CompletedTask; },
+            Resource = apiResource.Resource
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-web",
+            Action = ctx => { executedSteps.Add("build-web"); return Task.CompletedTask; },
+            Resource = webResource.Resource
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-worker",
+            Action = ctx => { executedSteps.Add("build-worker"); return Task.CompletedTask; },
+            Resource = workerResource.Resource
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.Contains("build-api", executedSteps);
+        Assert.Contains("build-web", executedSteps);
+        Assert.DoesNotContain("build-worker", executedSteps);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithNoResourceFilter_ExecutesAllSteps()
+    {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -2605,5 +2760,39 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var deployStep = resolved.Single(s => s.Name == WellKnownPipelineSteps.Deploy);
         Assert.DoesNotContain("transient-step", deployStep.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithNoResourceFilter_ExecutesAllSteps_AllResourcesIncluded()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var executedSteps = new List<string>();
+        var apiResource = builder.AddResource(new CustomResource("api"));
+        var workerResource = builder.AddResource(new CustomResource("worker"));
+
+        var pipeline = new DistributedApplicationPipeline();
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-api",
+            Action = ctx => { executedSteps.Add("build-api"); return Task.CompletedTask; },
+            Resource = apiResource.Resource
+        });
+
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "build-worker",
+            Action = ctx => { executedSteps.Add("build-worker"); return Task.CompletedTask; },
+            Resource = workerResource.Resource
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.Contains("build-api", executedSteps);
+        Assert.Contains("build-worker", executedSteps);
     }
 }

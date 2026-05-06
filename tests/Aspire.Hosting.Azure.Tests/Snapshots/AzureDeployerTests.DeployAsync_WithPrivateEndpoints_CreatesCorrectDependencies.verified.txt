@@ -109,7 +109,7 @@ Step: deploy
 Step: deploy-api
     Description: Aggregation step for deploying api to Azure Container Apps.
     Dependencies: ✓ print-api-summary
-    Resource: api-containerapp (AzureContainerAppResource)
+    Resource: api (ProjectResource)
     Tags: deploy-compute
 
 Step: deploy-prereq
@@ -146,7 +146,7 @@ Step: prepare-azure-container-apps-env
 Step: print-api-summary
     Description: Prints the deployment summary and URL for api.
     Dependencies: ✓ provision-api-containerapp
-    Resource: api-containerapp (AzureContainerAppResource)
+    Resource: api (ProjectResource)
     Tags: print-summary
 
 Step: print-dashboard-url-env

@@ -90,12 +90,6 @@ public class AzureContainerAppEnvironmentResource :
 
                         var deploymentTargetSteps = await annotation.CreateStepsAsync(childFactoryContext).ConfigureAwait(false);
 
-                        foreach (var step in deploymentTargetSteps)
-                        {
-                            // Ensure the step is associated with the deployment target resource
-                            step.Resource ??= deploymentTarget;
-                        }
-
                         steps.AddRange(deploymentTargetSteps);
                     }
                 }

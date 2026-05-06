@@ -43,6 +43,7 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
             {
                 Name = $"print-{targetResource.Name}-summary",
                 Description = $"Prints the deployment summary and URL for {targetResource.Name}.",
+                Resource = targetResource,
                 Action = async ctx =>
                 {
                     var computerEnv = (AzureAppServiceEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
@@ -72,6 +73,7 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
             {
                 Name = $"deploy-{targetResource.Name}",
                 Description = $"Aggregation step for deploying {targetResource.Name} to Azure App Service.",
+                Resource = targetResource,
                 Action = _ => Task.CompletedTask,
                 Tags = [WellKnownPipelineTags.DeployCompute]
             };
@@ -93,8 +95,9 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
             var pushSteps = context.GetSteps(targetResource, WellKnownPipelineTags.PushContainerImage);
             provisionSteps.DependsOn(pushSteps);
 
-            // Ensure summary step runs after provision
-            context.GetSteps(this, "print-summary").DependsOn(provisionSteps);
+            // Ensure summary step runs after provision.
+            // Use targetResource because the print step has Resource = targetResource (set in the step annotation above).
+            context.GetSteps(targetResource, "print-summary").DependsOn(provisionSteps);
         }));
     }
 

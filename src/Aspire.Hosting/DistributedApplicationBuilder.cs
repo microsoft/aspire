@@ -665,6 +665,25 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Configuration.AddCommandLine(options.Args ?? [], switchMappings);
 
+        // Parse --resource flags manually since AddCommandLine doesn't handle repeated keys for array binding.
+        // Each --resource <name> becomes Pipeline:Resources:<index> in configuration.
+        var args = options.Args ?? [];
+        var resourceIndex = 0;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (string.Equals(args[i], "--resource", StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("The --resource flag requires a resource name value (e.g., --resource api).");
+                }
+
+                _innerBuilder.Configuration[$"Pipeline:Resources:{resourceIndex}"] = args[i + 1];
+                resourceIndex++;
+                i++; // skip the value
+            }
+        }
+
         // Configure PipelineOptions from the Pipeline section
         _innerBuilder.Services.Configure<PipelineOptions>(_innerBuilder.Configuration.GetSection("Pipeline"));
 

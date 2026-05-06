@@ -114,13 +114,13 @@ Step: deploy
 Step: deploy-api-service
     Description: Aggregation step for deploying api-service to Azure App Service.
     Dependencies: ✓ print-api-service-summary
-    Resource: api-service-website (AzureAppServiceWebSiteResource)
+    Resource: api-service (ProjectResource)
     Tags: deploy-compute
 
 Step: deploy-cache
     Description: Aggregation step for deploying cache to Azure Container Apps.
     Dependencies: ✓ print-cache-summary
-    Resource: cache-containerapp (AzureContainerAppResource)
+    Resource: cache (RedisResource)
     Tags: deploy-compute
 
 Step: deploy-prereq
@@ -130,7 +130,7 @@ Step: deploy-prereq
 Step: deploy-python-app
     Description: Aggregation step for deploying python-app to Azure Container Apps.
     Dependencies: ✓ print-python-app-summary
-    Resource: python-app-containerapp (AzureContainerAppResource)
+    Resource: python-app (ContainerResource)
     Tags: deploy-compute
 
 Step: destroy
@@ -173,13 +173,13 @@ Step: prepare-azure-container-apps-aca-env
 Step: print-api-service-summary
     Description: Prints the deployment summary and URL for api-service.
     Dependencies: ✓ provision-api-service-website
-    Resource: api-service-website (AzureAppServiceWebSiteResource)
+    Resource: api-service (ProjectResource)
     Tags: print-summary
 
 Step: print-cache-summary
     Description: Prints the deployment summary and URL for cache.
     Dependencies: ✓ provision-cache-containerapp
-    Resource: cache-containerapp (AzureContainerAppResource)
+    Resource: cache (RedisResource)
     Tags: print-summary
 
 Step: print-dashboard-url-aas-env
@@ -197,7 +197,7 @@ Step: print-dashboard-url-aca-env
 Step: print-python-app-summary
     Description: Prints the deployment summary and URL for python-app.
     Dependencies: ✓ provision-python-app-containerapp
-    Resource: python-app-containerapp (AzureContainerAppResource)
+    Resource: python-app (ContainerResource)
     Tags: print-summary
 
 Step: process-parameters
