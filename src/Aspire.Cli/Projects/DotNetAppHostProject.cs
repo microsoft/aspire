@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
@@ -370,15 +371,26 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         string[]? args = null)
     {
         var runJsonFilePath = appHostFile.FullName[..^2] + "run.json";
-        if (!File.Exists(runJsonFilePath))
+        if (File.Exists(runJsonFilePath))
         {
-            AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(
-                env,
-                AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
-                inheritedEnvironmentVariables,
-                args);
+            // dotnet run reads the launch profile from apphost.run.json natively, so the CLI
+            // does not need to inject any environment variables itself.
+            return;
+        }
+
+        // No apphost.run.json — fall back to aspire.config.json profiles (if any), then to
+        // hardcoded defaults. ApplyEffectiveEnvironment is always called last so that explicit
+        // --environment arguments still win.
+        if (!TryApplyAspireConfigProfile(appHostFile, env, filterEnvironmentNames: false))
+        {
             ApplyDefaultSingleFileEndpoints(env);
         }
+
+        AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(
+            env,
+            AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
+            inheritedEnvironmentVariables,
+            args);
     }
 
     internal static void ConfigureSingleFilePublishEnvironment(
@@ -387,7 +399,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IReadOnlyDictionary<string, string?>? inheritedEnvironmentVariables = null,
         string[]? args = null)
     {
-        if (!TryApplySingleFileLaunchProfileEnvironmentVariables(appHostFile, env))
+        if (!TryApplySingleFileLaunchProfileEnvironmentVariables(appHostFile, env)
+            && !TryApplyAspireConfigProfile(appHostFile, env, filterEnvironmentNames: true))
         {
             ApplyDefaultSingleFileEndpoints(env);
         }
@@ -404,6 +417,55 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env)
     {
         var profiles = AspireConfigFile.ReadApphostRunProfiles(appHostFile.FullName[..^2] + "run.json");
+        return TryApplyProfile(profiles, env, filterEnvironmentNames: true);
+    }
+
+    private static bool TryApplyAspireConfigProfile(
+        FileInfo appHostFile,
+        Dictionary<string, string> env,
+        bool filterEnvironmentNames)
+    {
+        if (appHostFile.DirectoryName is not { Length: > 0 } directoryName)
+        {
+            return false;
+        }
+
+        AspireConfigFile? config;
+        try
+        {
+            config = AspireConfigFile.Load(directoryName);
+        }
+        catch (JsonException)
+        {
+            // Malformed aspire.config.json — fall back to the next source rather than failing
+            // the run/publish. This mirrors what happens when apphost.run.json is malformed.
+            return false;
+        }
+
+        if (config?.Profiles is null)
+        {
+            return false;
+        }
+
+        // If aspire.config.json names a different AppHost file, don't apply its profile to
+        // this AppHost. (Covers layouts where multiple AppHosts share a directory.)
+        if (!string.IsNullOrEmpty(config.AppHost?.Path))
+        {
+            var resolvedAppHostPath = Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path));
+            if (!string.Equals(resolvedAppHostPath, appHostFile.FullName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return TryApplyProfile(config.Profiles, env, filterEnvironmentNames);
+    }
+
+    private static bool TryApplyProfile(
+        IReadOnlyDictionary<string, AspireConfigProfile>? profiles,
+        Dictionary<string, string> env,
+        bool filterEnvironmentNames)
+    {
         AspireConfigProfile? profile;
 
         if (profiles?.TryGetValue("https", out var httpsProfile) == true)
@@ -415,21 +477,18 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             profile = profiles?.Values.FirstOrDefault();
         }
 
-        if (profile is null)
+        if (profile is null || string.IsNullOrEmpty(profile.ApplicationUrl))
         {
             return false;
         }
 
-        if (!string.IsNullOrEmpty(profile.ApplicationUrl))
-        {
-            env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
-        }
+        env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
 
         if (profile.EnvironmentVariables is not null)
         {
             foreach (var (key, value) in profile.EnvironmentVariables)
             {
-                if (AppHostEnvironmentDefaults.IsEnvironmentVariableName(key))
+                if (filterEnvironmentNames && AppHostEnvironmentDefaults.IsEnvironmentVariableName(key))
                 {
                     continue;
                 }
