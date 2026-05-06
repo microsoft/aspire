@@ -389,6 +389,37 @@ extends:
                 name: computeChannel
                 displayName: 🟣Determine installer channel
 
+              # Determine the Aspire CLI channel (pr / stable / staging / daily) used by
+              # the AspireCliChannel MSBuild property when packing Aspire.Cli. This is
+              # independent of installerChannel above and is consumed by build_sign_native.yml.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $reason = '$(Build.Reason)'
+                  $sourceBranch = '$(Build.SourceBranch)'
+                  Write-Host "Build.Reason: '$reason'"
+                  Write-Host "Build.SourceBranch: '$sourceBranch'"
+
+                  $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
+                  $versionKind = $versionKind.Trim()
+                  Write-Host "DotNetFinalVersionKind: '$versionKind'"
+
+                  if ($reason -eq 'PullRequest') {
+                    $channel = 'pr'
+                  } elseif ($versionKind -eq 'release') {
+                    $channel = 'stable'
+                  } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
+                    $channel = 'staging'
+                  } elseif ($sourceBranch -eq 'refs/heads/main') {
+                    $channel = 'daily'
+                  } else {
+                    $channel = 'daily'
+                  }
+
+                  Write-Host "Aspire CLI channel: $channel"
+                  Write-Host "##vso[task.setvariable variable=aspireCliChannel;isOutput=true]$channel"
+                name: computeCliChannel
+                displayName: 🟣Determine Aspire CLI channel
+
       # OneLocBuild is temporarily disabled while we work with the loc team
       # to reconfigure it after the repo migration from dotnet/aspire to microsoft/aspire.
       # - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:

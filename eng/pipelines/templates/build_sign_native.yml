@@ -143,6 +143,7 @@ jobs:
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
+              /p:AspireCliChannel=$(aspireCliChannel)
               $(_buildArgs)
               ${{ parameters.extraBuildArgs }}
               /bl:$(Build.Arcade.LogsPath)Build.binlog
