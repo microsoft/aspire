@@ -64,6 +64,11 @@
       <!-- Pass through version properties so the CLI gets the correct version -->
       <AdditionalProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
       <AdditionalProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+      <!-- Forward AspireCliChannel explicitly rather than relying on global-property
+           inheritance through the inner <MSBuild> invocation below. Matches the
+           explicit-forwarding pattern used for RuntimeIdentifier, VersionSuffix,
+           and Configuration. -->
+      <AdditionalProperties Condition="'$(AspireCliChannel)' != ''" Include="AspireCliChannel=$(AspireCliChannel)" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(PublishNativeAot)' == 'true'">
