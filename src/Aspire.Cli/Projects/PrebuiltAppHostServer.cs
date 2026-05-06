@@ -33,6 +33,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IPackagingService _packagingService;
     private readonly IConfigurationService _configurationService;
+    private readonly CliExecutionContext _executionContext;
     private readonly ILogger _logger;
     private readonly string _workingDirectory;
 
@@ -50,6 +51,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// <param name="sdkInstaller">The SDK installer for checking .NET SDK availability.</param>
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="configurationService">The configuration service for reading channel settings.</param>
+    /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     public PrebuiltAppHostServer(
         string appPath,
@@ -60,6 +62,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         IDotNetSdkInstaller sdkInstaller,
         IPackagingService packagingService,
         IConfigurationService configurationService,
+        CliExecutionContext executionContext,
         ILogger logger)
     {
         _appDirectoryPath = Path.GetFullPath(appPath);
@@ -70,6 +73,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         _sdkInstaller = sdkInstaller;
         _packagingService = packagingService;
         _configurationService = configurationService;
+        _executionContext = executionContext;
         _logger = logger;
 
         // Create a working directory for this app host session
@@ -411,6 +415,15 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
         if (channel?.Mappings is null)
+        {
+            return null;
+        }
+
+        // Skip PSM for the local identity hive — it exists for dev convenience
+        // but should not restrict NuGet resolution (restores pre-Wave-7 behavior).
+        // PR hives (pr-*) retain PSM because they represent isolated package sets.
+        if (string.Equals(channelName, _executionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase)
+            && !channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

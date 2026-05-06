@@ -175,6 +175,7 @@ public class GlobalChannelFallbackRemovalTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             MockPackagingServiceFactory.Create(),
             configurationService,
+            TestExecutionContextFactory.CreateTestContext(),
             NullLogger.Instance);
     }
 }

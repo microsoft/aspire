@@ -166,6 +166,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var workingDirectory = Assert.IsType<string>(
@@ -216,6 +217,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var firstServer = CreateServer(firstAppHost.FullName);
@@ -273,6 +275,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             configurationService,
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelName", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
