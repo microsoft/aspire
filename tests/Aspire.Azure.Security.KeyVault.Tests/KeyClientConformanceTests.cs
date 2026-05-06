@@ -90,9 +90,7 @@ public class KeyClientConformanceTests : ConformanceTests<KeyClient, AzureSecuri
     }
 
     protected override void SetHealthCheck(AzureSecurityKeyVaultSettings options, bool enabled)
-    // Disable Key Vault health check tests until https://github.com/Xabaril/AspNetCore.Diagnostics.HealthChecks/issues/2279 is fixed
-    //    => options.DisableHealthChecks = !enabled;
-        => throw new NotImplementedException();
+        => options.DisableHealthChecks = !enabled;
 
     protected override void SetMetrics(AzureSecurityKeyVaultSettings options, bool enabled)
         => throw new NotImplementedException();
