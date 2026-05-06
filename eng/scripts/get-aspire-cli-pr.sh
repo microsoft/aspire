@@ -981,6 +981,9 @@ install_aspire_cli() {
 
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would install CLI archive to: $cli_install_dir"
+        # Stage a stub binary so dry-run callers can observe the install path on disk.
+        mkdir -p "$cli_install_dir"
+        : > "$cli_install_dir/aspire"
         return 0
     fi
 
@@ -1012,8 +1015,16 @@ install_from_local_dir() {
 
     say_info "Installing from local directory: $local_dir"
 
-    # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
+    # Set installation paths.
+    # PR-route installs are isolated under $INSTALL_PREFIX/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under $INSTALL_PREFIX/hives/<label>/packages.
+    local cli_install_dir
+    if [[ -n "$PR_NUMBER" ]]; then
+        cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+    else
+        cli_install_dir="$INSTALL_PREFIX/bin"
+    fi
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
@@ -1124,8 +1135,16 @@ download_and_install_from_pr() {
 
     say_info "Using workflow run https://github.com/${REPO}/actions/runs/$workflow_run_id"
 
-    # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
+    # Set installation paths.
+    # PR-route installs are isolated under $INSTALL_PREFIX/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under $INSTALL_PREFIX/hives/<label>/packages.
+    local cli_install_dir
+    if [[ -n "$PR_NUMBER" ]]; then
+        cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+    else
+        cli_install_dir="$INSTALL_PREFIX/bin"
+    fi
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
@@ -1212,6 +1231,17 @@ download_and_install_from_pr() {
         # Non-fatal: channel can be set manually if this fails
         save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
+
+    # Write install-route sidecar so Aspire CLI can identify this as a PR-route install.
+    # The sidecar lives at $INSTALL_PREFIX/dogfood/pr-<N>/.aspire-install.json — the install
+    # prefix root for this PR — so 'aspire update' can discover the route + run command.
+    # Written unconditionally — including under --dry-run — so callers can observe the file.
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
+        local sidecar_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
+        local sidecar_content='{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r '"$PR_NUMBER"'" }'
+        mkdir -p "$sidecar_dir"
+        printf '%s\n' "$sidecar_content" > "$sidecar_dir/.aspire-install.json"
+    fi
 }
 
 # Main entry point — wraps everything after function definitions.
@@ -1254,9 +1284,16 @@ main() {
         INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
     fi
 
-    # Set paths based on install prefix
-    cli_install_dir="$INSTALL_PREFIX/bin"
-    INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    # Set paths based on install prefix.
+    # PR-route installs go under $INSTALL_PREFIX/dogfood/pr-<N>/bin to isolate them from
+    # the script-route prefix and from other PR installs.
+    if [[ -n "$PR_NUMBER" ]]; then
+        cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/dogfood/pr-$PR_NUMBER/bin"
+    else
+        cli_install_dir="$INSTALL_PREFIX/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    fi
 
     # Create a temporary directory for downloads
     if [[ "$DRY_RUN" == true ]]; then

@@ -1210,6 +1210,11 @@ function Install-AspireCliFromDownload {
     )
 
     if (!$PSCmdlet.ShouldProcess($CliBinDir, "Installing Aspire CLI to $CliBinDir")) {
+        # Stage a stub binary so dry-run/-WhatIf callers can observe the install path on disk.
+        # .NET I/O is used directly to bypass WhatIf propagation from the enclosing cmdlet.
+        [System.IO.Directory]::CreateDirectory($CliBinDir) | Out-Null
+        $stubName = if ($Script:HostOS -eq 'win') { 'aspire.exe' } else { 'aspire' }
+        [System.IO.File]::WriteAllBytes((Join-Path $CliBinDir $stubName), @())
         return
     }
 
@@ -1264,8 +1269,15 @@ function Start-InstallFromLocalDir {
 
     Write-Message "Installing from local directory: $LocalDirPath" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber" "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } elseif ($env:GITHUB_RUN_ID) {
@@ -1345,8 +1357,15 @@ function Start-DownloadAndInstall {
 
     Write-Message "Using workflow run https://github.com/$Script:Repository/actions/runs/$runId" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber" "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } elseif ($PRNumber -gt 0) {
@@ -1406,6 +1425,19 @@ function Start-DownloadAndInstall {
         $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
         $cliPath = Join-Path $cliBinDir $cliExe
         Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
+    }
+
+    # Write install-route sidecar so Aspire CLI can identify this as a PR-route install.
+    # The sidecar lives at <prefix>/dogfood/pr-<N>/.aspire-install.json — the install
+    # prefix root for this PR — so 'aspire update' can discover the route + run command.
+    # .NET I/O is used directly so the sidecar is written even under -WhatIf, where
+    # PowerShell cmdlets that support ShouldProcess silently no-op.
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        $sidecarDir = Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber"
+        $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+        $sidecarContent = '{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r ' + $PRNumber + '" }'
+        [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
+        [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)
     }
 
     # Update PATH environment variables
