@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #16812. Bug fix: aspire init single-file skeleton now emits apphost.run.json so dotnet run apphost.cs works.",
+  "mergedAt": "2026-05-06T18:13:08Z",
+  "number": 16821,
+  "runDate": "2026-05-06T18:35:17Z",
+  "status": "included",
+  "title": "[release/13.3] Fix #15986: emit apphost.run.json from aspire init single-file skeleton"
+}

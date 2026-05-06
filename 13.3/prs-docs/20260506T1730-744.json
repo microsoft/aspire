@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to non-interactive-cli-prompt-bindings entry (documents aspire#16235).",
+  "mergedAt": "2026-05-06T17:30:02Z",
+  "number": 744,
+  "runDate": "2026-05-06T18:35:17Z",
+  "status": "included",
+  "title": "[docs] Update CLI command docs for non-interactive options"
+}

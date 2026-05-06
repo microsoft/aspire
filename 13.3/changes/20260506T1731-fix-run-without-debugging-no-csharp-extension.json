@@ -1,0 +1,18 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension now correctly falls back to direct process execution for project resources when the C# extension is not installed. Previously these resources would fail to start, taking the dashboard down with them. The extension also now honors the IDE-advertised SupportedLaunchConfigurations list for all resource types.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1b",
+  "firstMergedAt": "2026-05-06T17:31:08Z",
+  "lastMergedAt": "2026-05-06T17:31:08Z",
+  "name": "Fix VS Code extension project resources failing without C# extension",
+  "prs": [
+    16803
+  ]
+}

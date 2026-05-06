@@ -1,12 +1,15 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "TypeScript, Python, and Java AppHosts can now reference individual endpoint properties such as Host and Port through EndpointReference.Property(). This allows polyglot AppHosts to construct endpoint URL expressions like http://${Host}:${Port} in generated SDKs.",
+  "docsPrs": [
+    854
+  ],
   "docsRequired": false,
-  "emoji": "🔗",
+  "emoji": "\ud83d\udd17",
   "firstMergedAt": "2026-04-29T04:53:34Z",
   "lastMergedAt": "2026-04-29T04:53:34Z",
   "name": "Endpoint property expressions available in polyglot AppHost SDKs",

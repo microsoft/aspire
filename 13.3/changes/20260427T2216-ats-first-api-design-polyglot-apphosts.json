@@ -1,12 +1,15 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The Aspire.Hosting exported capability surface is now designed around TypeScript/Java/Python guest SDK consumers first. API shapes for addProject, addConnectionString, withUrl, and related methods are consolidated and aligned across TypeScript, Java, and Python, making polyglot AppHost code more idiomatic in each language.",
+  "docsPrs": [
+    756
+  ],
   "docsRequired": false,
-  "emoji": "🌍",
+  "emoji": "\ud83c\udf0d",
   "firstMergedAt": "2026-04-27T22:16:02Z",
   "lastMergedAt": "2026-04-27T22:16:02Z",
   "name": "ATS-first API design for polyglot AppHost exports",

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Backport of #16794. Bug fix: VS Code extension project resources now fall back to process execution when C# extension is absent.",
+  "mergedAt": "2026-05-06T17:31:08Z",
+  "number": 16803,
+  "runDate": "2026-05-06T18:35:17Z",
+  "status": "included",
+  "title": "[release/13.3] Use plain dotnet run for extension Run Without Debugging"
+}

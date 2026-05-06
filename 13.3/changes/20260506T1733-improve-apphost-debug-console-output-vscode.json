@@ -1,0 +1,18 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "VS Code extension AppHost debug console output is now cleaner and more informative. Debugger noise (module loads, banners, low-level logs) is filtered from the parent console while critical errors are preserved. TypeScript/Node pre-launch failures (e.g. tsc --noEmit errors) are now surfaced immediately instead of leaving the extension stuck at \"Connecting to AppHost...\".",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udda5\ufe0f",
+  "firstMergedAt": "2026-05-06T17:33:53Z",
+  "lastMergedAt": "2026-05-06T17:33:53Z",
+  "name": "Improved AppHost debug console output in VS Code",
+  "prs": [
+    16816
+  ]
+}

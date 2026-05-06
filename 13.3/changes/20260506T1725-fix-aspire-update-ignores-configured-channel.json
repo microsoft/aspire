@@ -1,0 +1,18 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire update now follows the documented channel-resolution precedence: explicit --channel flag, then local aspire.config.json channel setting, then global config channel, before falling back to the default. Previously, any configured channel was silently ignored when no --channel flag was passed, causing unexpected updates from the wrong channel.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd27",
+  "firstMergedAt": "2026-05-06T17:25:23Z",
+  "lastMergedAt": "2026-05-06T17:25:23Z",
+  "name": "Fix aspire update ignoring configured channel",
+  "prs": [
+    16808
+  ]
+}

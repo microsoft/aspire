@@ -1,0 +1,18 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire init now generates apphost.run.json alongside apphost.cs when creating a C# single-file AppHost skeleton. This fixes a crash when running dotnet run apphost.cs where dashboard and OTLP configuration environment variables were missing because the file-based runner had no launch profile to apply.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccb",
+  "firstMergedAt": "2026-05-06T18:13:08Z",
+  "lastMergedAt": "2026-05-06T18:13:08Z",
+  "name": "Fix aspire init single-file skeleton missing apphost.run.json",
+  "prs": [
+    16821
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #16716. Bug fix: aspire update now honors configured channel from aspire.config.json/global settings.",
+  "mergedAt": "2026-05-06T17:25:23Z",
+  "number": 16808,
+  "runDate": "2026-05-06T18:35:17Z",
+  "status": "included",
+  "title": "[release/13.3] Honor configured channel in 'aspire update'"
+}

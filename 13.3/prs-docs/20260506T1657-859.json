@@ -1,0 +1,9 @@
+{
+  "author": "Jeffreyyvdb",
+  "comment": "Trivial keyboard shortcut correction in docs; no matching changelog entry.",
+  "mergedAt": "2026-05-06T16:57:50Z",
+  "number": 859,
+  "runDate": "2026-05-06T18:35:17Z",
+  "status": "excluded",
+  "title": "fix: update keyboard shortcut for stopping AppHost in documentation"
+}

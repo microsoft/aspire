@@ -1,12 +1,15 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "A new ASPIREEXPORT013 analyzer diagnostic detects assembly-wide duplicate capability IDs in polyglot AppHost exports, including collisions between static exports and overloaded context-type methods. This catches ID conflicts at build time before they cause failures in generated TypeScript, Java, or Python guest SDKs.",
+  "docsPrs": [
+    856
+  ],
   "docsRequired": false,
-  "emoji": "🔍",
+  "emoji": "\ud83d\udd0d",
   "firstMergedAt": "2026-04-28T20:01:33Z",
   "lastMergedAt": "2026-04-28T20:01:33Z",
   "name": "Build-time detection of duplicate polyglot capability IDs",

@@ -1,12 +1,15 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The CLI now resolves interactive prompts from command-line arguments in non-interactive mode, with consistent behavior across all prompt types. Commands like aspire update support --yes/-y to auto-confirm, and aspire agent init supports --workspace-root for unattended scripting scenarios.",
+  "docsPrs": [
+    744
+  ],
   "docsRequired": false,
-  "emoji": "🤖",
+  "emoji": "\ud83e\udd16",
   "firstMergedAt": "2026-04-22T02:28:49Z",
   "lastMergedAt": "2026-04-22T02:28:49Z",
   "name": "Improved non-interactive CLI mode with PromptBinding",
