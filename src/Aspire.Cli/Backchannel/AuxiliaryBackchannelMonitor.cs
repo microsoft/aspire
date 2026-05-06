@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -20,7 +21,8 @@ namespace Aspire.Cli.Backchannel;
 internal sealed class AuxiliaryBackchannelMonitor(
     ILogger<AuxiliaryBackchannelMonitor> logger,
     CliExecutionContext executionContext,
-    TimeProvider timeProvider) : BackgroundService, IAuxiliaryBackchannelMonitor
+    TimeProvider timeProvider,
+    ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor
 {
     private static readonly TimeSpan s_maxRetryElapsed = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(1);
@@ -406,7 +408,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             // Use the centralized factory to create the connection
             // This ensures capabilities are always fetched
-            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, socket, logger, cancellationToken).ConfigureAwait(false);
+            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, socket, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
 
             // Update isInScope based on actual appHostInfo now that we have it
             connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);

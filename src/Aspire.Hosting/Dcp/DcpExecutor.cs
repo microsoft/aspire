@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Utils;
@@ -112,7 +113,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         _executionContext = executionContext;
         _appResources = appResources;
 
-        _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, _shutdownCancellation.Token);
+        _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, _configuration, _shutdownCancellation.Token);
 
         DeleteResourceRetryPipeline = DcpPipelineBuilder.BuildDeleteRetryPipeline(logger);
 
@@ -126,6 +127,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     public async Task RunApplicationAsync(CancellationToken ct = default)
     {
+        using var activity = ProfilingTelemetry.StartDcpRunApplication(_configuration, _model.Resources.Count);
+
         _dcpInfo = await _dcpDependencyCheckService.GetDcpInfoAsync(cancellationToken: ct).ConfigureAwait(false);
 
         Debug.Assert(_dcpInfo is not null, "DCP info should not be null at this point");
@@ -147,16 +150,40 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             AspireEventSource.Instance.DcpServiceObjectPreparationStart();
             try
             {
-                PrepareServices();
+                using var prepareServicesActivity = ProfilingTelemetry.StartDcpPrepareServices(_configuration);
+                try
+                {
+                    PrepareServices();
+                }
+                catch (Exception ex)
+                {
+                    prepareServicesActivity.SetError(ex);
+                    throw;
+                }
             }
             finally
             {
                 AspireEventSource.Instance.DcpServiceObjectPreparationStop();
             }
 
-            var containers = _containerCreator.PrepareObjects().ToArray();
-            _containerCreator.PrepareContainerExecutables();
-            var executables = _executableCreator.PrepareObjects().ToArray();
+            RenderedModelResource<Container>[] containers;
+            RenderedModelResource<Executable>[] executables;
+            using (var prepareResourcesActivity = ProfilingTelemetry.StartDcpPrepareResources(_configuration))
+            {
+                try
+                {
+                    containers = _containerCreator.PrepareObjects().ToArray();
+                    _containerCreator.PrepareContainerExecutables();
+                    executables = _executableCreator.PrepareObjects().ToArray();
+
+                    prepareResourcesActivity.SetDcpPreparedResourceCounts(containers.Length, executables.Length);
+                }
+                catch (Exception ex)
+                {
+                    prepareResourcesActivity.SetError(ex);
+                    throw;
+                }
+            }
 
             await _executorEvents.PublishAsync(new OnResourcesPreparedContext(ct)).ConfigureAwait(false);
 
@@ -227,6 +254,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             _shutdownCancellation.Cancel();
             _containerContextSource.TrySetException(ex);
             throw;
@@ -455,6 +483,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var createServicePipeline = DcpPipelineBuilder.BuildObjectWatchRetryPipeline(_options.Value, _logger, timeout);
         var initialServiceCount = needAddressAllocated.Length;
         HashSet<string> stillPending = [.. needAddressAllocated.Select(s => s.Metadata.Name)];
+        using var activity = ProfilingTelemetry.StartDcpAllocateServiceAddresses(_configuration, initialServiceCount);
 
         try
         {
@@ -470,6 +499,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     }
 
                     original.ApplyAddressInfoFrom(observed);
+                    activity.AddDcpServiceAddressAllocated(original.Metadata.Name);
                     AspireEventSource.Instance.DcpServiceAddressAllocated(original.Metadata.Name);
                     return true;
                 },
@@ -482,6 +512,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 if (stillPending.Contains(sar.Metadata.Name))
                 {
                     _distributedApplicationLogger.LogWarning("Unable to allocate a network port for service '{ServiceName}'; service may be unreachable and its clients may not work properly.", sar.Metadata.Name);
+                    activity.AddDcpServiceAddressAllocationFailed(sar.Metadata.Name);
                     AspireEventSource.Instance.DcpServiceAddressAllocationFailed(sar.Metadata.Name);
                 }
             }
@@ -509,9 +540,15 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 cs.Service!.Status!.EffectiveAddress = ContainerHostName;
             }
         }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
         finally
         {
             AspireEventSource.Instance.DcpServiceAddressAllocationStop(initialServiceCount - stillPending.Count);
+            activity.SetDcpServiceAllocatedCount(initialServiceCount - stillPending.Count);
         }
     }
 
@@ -580,6 +617,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             return;
         }
 
+        using var activity = ProfilingTelemetry.StartDcpCreateObjects(_configuration, RT.ObjectKind, toCreate.Length);
+
         AspireEventSource.Instance.DcpObjectSetCreationStart(RT.ObjectKind, toCreate.Length);
         try
         {
@@ -590,8 +629,18 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 {
                     try
                     {
+                        using var createObjectActivity = ProfilingTelemetry.StartDcpCreateObject(_configuration, rtc.Kind, rtc.Metadata.Name);
+                        createObjectActivity.AnnotateTraceContext(rtc.Annotate);
                         AspireEventSource.Instance.DcpObjectCreationStart(rtc.Kind, rtc.Metadata.Name);
-                        await _kubernetesService.CreateAsync(rtc, cancellationToken).ConfigureAwait(false);
+                        try
+                        {
+                            await _kubernetesService.CreateAsync(rtc, cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            createObjectActivity.SetError(ex);
+                            throw;
+                        }
                     }
                     finally
                     {
@@ -604,9 +653,15 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
         catch (OperationCanceledException ex)
         {
+            activity.SetError(ex);
             // We catch and suppress the OperationCancelledException because the user may CTRL-C
             // during start up of the resources.
             _logger.LogDebug(ex, "Cancellation during creation of resources.");
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
         }
         finally
         {
@@ -868,6 +923,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         var resourceKind = allResourceKinds.First();
         var tasks = new List<Task>();
+        using var activity = ProfilingTelemetry.StartDcpCreateRenderedResources(_configuration, resourceKind, allResources.Length);
 
         try
         {
@@ -880,6 +936,11 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }
 
             await Task.WhenAll(tasks).WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
         }
         finally
         {
@@ -903,6 +964,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var resourceType = GetResourceType(replicaResources.First().DcpResource, modelResource);
         Debug.Assert(replicaResources.Any());
         var replicas = replicaResources.ToArray();
+        using var activity = ProfilingTelemetry.StartResourceCreate(_configuration, modelResource, resourceType, replicas.Length);
 
         try
         {
@@ -956,10 +1018,16 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             {
                 try
                 {
+                    using var replicaActivity = ProfilingTelemetry.StartDcpCreateResourceReplica(_configuration, er.ModelResource, er.DcpResourceKind, er.DcpResourceName);
                     AspireEventSource.Instance.DcpObjectCreationStart(er.DcpResourceKind, er.DcpResourceName);
                     try
                     {
                         await creator.CreateObjectAsync(er, context, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        replicaActivity.SetError(ex);
+                        throw;
                     }
                     finally
                     {
@@ -983,6 +1051,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             resourceLogger.LogError(ex, "Failed to create resource {ResourceName}", modelResource.Name);
             await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, modelResource, DcpResourceName: null)).ConfigureAwait(false);
         }
@@ -1066,6 +1135,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var appResource = (IAppResource)resourceReference;
         bool stopped = false;
 
+        using var activity = ProfilingTelemetry.StartResourceStop(_configuration, resourceReference.ModelResource, appResource.DcpResourceKind, appResource.DcpResourceName);
         AspireEventSource.Instance.StopResourceStart(appResource.DcpResourceKind, appResource.DcpResourceName);
         try
         {
@@ -1113,8 +1183,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 }
             }, resourceReference.DcpResourceName, cancellationToken).ConfigureAwait(false);
         }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
         finally
         {
+            activity.SetResourceStopped(stopped);
             AspireEventSource.Instance.StopResourceStop(appResource.DcpResourceKind, appResource.DcpResourceName);
         }
 
@@ -1129,6 +1205,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var appResource = (IAppResource)resourceReference;
         var resourceType = GetResourceType(appResource.DcpResource, resourceReference.ModelResource);
         var resourceLogger = _loggerService.GetLogger(resourceReference.DcpResourceName);
+        using var activity = ProfilingTelemetry.StartResourceStart(_configuration, resourceReference.ModelResource, appResource.DcpResourceKind, appResource.DcpResourceName, resourceType);
         AspireEventSource.Instance.StartResourceStart(appResource.DcpResourceKind, appResource.DcpResourceName);
 
         try
@@ -1181,6 +1258,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
             await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
             throw;

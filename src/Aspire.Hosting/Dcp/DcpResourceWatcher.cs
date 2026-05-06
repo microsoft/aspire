@@ -8,10 +8,12 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Shared.ConsoleLogs;
 using k8s;
 using k8s.Autorest;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 
@@ -27,6 +29,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly ResourceLoggerService _loggerService;
     private readonly DcpExecutorEvents _executorEvents;
     private readonly ILogger _logger;
+    private readonly IConfiguration _configuration;
     private readonly CancellationToken _shutdownToken;
 
     private readonly DcpResourceState _resourceState;
@@ -51,12 +54,14 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         DcpExecutorEvents executorEvents,
         DistributedApplicationModel model,
         DcpAppResourceStore appResources,
+        IConfiguration configuration,
         CancellationToken shutdownToken)
     {
         _kubernetesService = kubernetesService;
         _loggerService = loggerService;
         _executorEvents = executorEvents;
         _logger = logger;
+        _configuration = configuration;
         _shutdownToken = shutdownToken;
 
         _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources.Get());
@@ -262,6 +267,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
                     var resourceType = DcpExecutor.GetResourceType(resource, appModelResource);
                     var status = GetResourceStatus(resource);
+                    AddDcpResourceObservedEvent(resource, appModelResource, resourceKind, status);
                     await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
 
                     if (resource is Container { LogsAvailable: true } ||
@@ -324,6 +330,19 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
 
         return new(null, null, null);
+    }
+
+    private void AddDcpResourceObservedEvent(CustomResource resource, IResource appModelResource, string resourceKind, ResourceStatus status)
+    {
+        using var activity = ProfilingTelemetry.StartDcpResourceObserved(
+            _configuration,
+            appModelResource,
+            resourceKind,
+            resource.Metadata.Name,
+            status.State,
+            status.StartupTimestamp,
+            status.FinishedTimestamp,
+            resource.Metadata.Annotations);
     }
 
     public async IAsyncEnumerable<IReadOnlyList<LogEntry>> GetAllLogsAsync(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)

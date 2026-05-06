@@ -25,6 +25,19 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public void StartReportedActivity_WithParentContext_CreatesChildActivity()
+    {
+        using var fixture = new TelemetryFixture(sampleResult: ActivitySamplingResult.AllData);
+        var parentContext = ActivityContext.Parse("00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01", null);
+
+        using var activity = fixture.Telemetry.StartReportedActivity("test-activity", ActivityKind.Internal, parentContext);
+
+        Assert.NotNull(activity);
+        Assert.Equal(parentContext.TraceId, activity.TraceId);
+        Assert.Equal(parentContext.SpanId, activity.ParentSpanId);
+    }
+
+    [Fact]
     public void StartDiagnosticActivity_CreatesActivityWithCorrectNameAndDefaultTags()
     {
         using var fixture = new TelemetryFixture(sampleResult: ActivitySamplingResult.AllData);
@@ -54,6 +67,19 @@ public class AspireCliTelemetryTests
         Assert.NotNull(activity);
         Assert.Equal("test-client", activity.OperationName);
         Assert.Equal(ActivityKind.Client, activity.Kind);
+    }
+
+    [Fact]
+    public void StartDiagnosticActivity_WithParentContext_CreatesChildActivity()
+    {
+        using var fixture = new TelemetryFixture(sampleResult: ActivitySamplingResult.AllData);
+        var parentContext = ActivityContext.Parse("00-1112131415161718191a1b1c1d1e1f20-2122232425262728-01", null);
+
+        using var activity = fixture.Telemetry.StartDiagnosticActivity("test-activity", ActivityKind.Internal, parentContext);
+
+        Assert.NotNull(activity);
+        Assert.Equal(parentContext.TraceId, activity.TraceId);
+        Assert.Equal(parentContext.SpanId, activity.ParentSpanId);
     }
 
     [Fact]

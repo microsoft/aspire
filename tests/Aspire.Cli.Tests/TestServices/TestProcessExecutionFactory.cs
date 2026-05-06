@@ -104,6 +104,8 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public int ExitCode => 0;
 
+    public int ProcessId { get; init; } = Environment.ProcessId;
+
     public bool StartReturnValue { get; init; } = true;
 
     public bool Start()
@@ -166,12 +168,14 @@ internal static class DotNetCliRunnerTestHelper
             AssertionCallback = assertionCallback,
             DefaultExitCode = exitCode
         };
+        var resolvedConfiguration = configuration ?? serviceProvider.GetRequiredService<IConfiguration>();
 
         return new DotNetCliRunner(
             logger ?? serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
             serviceProvider,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
-            configuration ?? serviceProvider.GetRequiredService<IConfiguration>(),
+            new ProfilingTelemetry(resolvedConfiguration),
+            resolvedConfiguration,
             diskCache ?? new NullDiskCache(),
             serviceProvider.GetRequiredService<IFeatures>(),
             serviceProvider.GetRequiredService<IInteractionService>(),
@@ -196,12 +200,14 @@ internal static class DotNetCliRunnerTestHelper
         {
             AttemptCallback = attemptCallback
         };
+        var resolvedConfiguration = configuration ?? serviceProvider.GetRequiredService<IConfiguration>();
 
         var runner = new DotNetCliRunner(
             logger ?? serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
             serviceProvider,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
-            configuration ?? serviceProvider.GetRequiredService<IConfiguration>(),
+            new ProfilingTelemetry(resolvedConfiguration),
+            resolvedConfiguration,
             diskCache ?? new NullDiskCache(),
             serviceProvider.GetRequiredService<IFeatures>(),
             serviceProvider.GetRequiredService<IInteractionService>(),

@@ -100,6 +100,7 @@ internal static class CliTestHelper
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(options.TelemetryFactory);
+        services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
         services.AddSingleton(options.SolutionLocatorFactory);
         services.AddSingleton(options.ExtensionRpcTargetFactory);
@@ -458,6 +459,7 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var logger = serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+        var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var diskCache = serviceProvider.GetRequiredService<IDiskCache>();
@@ -465,7 +467,7 @@ internal sealed class CliServiceCollectionTestOptions
         var executionFactory = serviceProvider.GetRequiredService<IProcessExecutionFactory>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
 
-        return new DotNetCliRunner(logger, serviceProvider, telemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory);
+        return new DotNetCliRunner(logger, serviceProvider, telemetry, profilingTelemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory);
     };
 
     public Func<IServiceProvider, IDotNetSdkInstaller> DotNetSdkInstallerFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -486,7 +488,8 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var logger = serviceProvider.GetRequiredService<ILogger<AppHostCliBackchannel>>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new AppHostCliBackchannel(logger, telemetry);
+        var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
+        return new AppHostCliBackchannel(logger, telemetry, profilingTelemetry);
     };
 
     public Func<IServiceProvider, IExtensionRpcTarget> ExtensionRpcTargetFactory { get; set; } = (IServiceProvider serviceProvider) =>

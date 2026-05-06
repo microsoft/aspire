@@ -8,6 +8,8 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -29,6 +31,7 @@ public class ResourceNotificationService : IDisposable
     private readonly ResourceLoggerService _resourceLoggerService;
 
     private Action<ResourceEvent>? OnResourceUpdated { get; set; }
+    private IConfiguration? Configuration => _serviceProvider.GetService<IConfiguration>();
 
     // This is for testing
     internal WaitBehavior DefaultWaitBehavior { get; set; }
@@ -138,33 +141,45 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilHealthyAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        await WaitUntilStateAsync(resource, dependency, waitBehavior, async (resourceLogger, displayName, resourceId, resourceEvent) =>
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitUntilHealthy, waitBehavior);
+
+        try
         {
-            // If our dependency resource has health check annotations we want to wait until they turn healthy
-            // otherwise we don't care about their health status.
-            if (dependency.TryGetAnnotationsOfType<HealthCheckAnnotation>(out var _))
+            await WaitUntilStateAsync(resource, dependency, waitBehavior, async (resourceLogger, displayName, resourceId, resourceEvent) =>
             {
-                resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to become healthy.", displayName);
-                await WaitForResourceCoreAsync(
+                // If our dependency resource has health check annotations we want to wait until they turn healthy
+                // otherwise we don't care about their health status.
+                if (dependency.TryGetAnnotationsOfType<HealthCheckAnnotation>(out var _))
+                {
+                    resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to become healthy.", displayName);
+                    await WaitForResourceCoreAsync(
+                        dependency.Name,
+                        re => re.ResourceId == resourceId && re.Snapshot.HealthStatus == HealthStatus.Healthy,
+                        $"Resource '{displayName}' failed to become healthy before the operation was cancelled.",
+                        waitCondition: "healthy",
+                        cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+
+                // Now wait for the resource ready event to be executed.
+                resourceLogger.LogInformation("Waiting for resource ready to execute for '{ResourceName}'.", displayName);
+                resourceEvent = await WaitForResourceCoreAsync(
                     dependency.Name,
-                    re => re.ResourceId == resourceId && re.Snapshot.HealthStatus == HealthStatus.Healthy,
-                    $"Resource '{displayName}' failed to become healthy before the operation was cancelled.",
-                    cancellationToken).ConfigureAwait(false);
-            }
+                    re => re.ResourceId == resourceId && re.Snapshot.ResourceReadyEvent is not null,
+                    $"Resource '{displayName}' failed to execute the resource ready event before the operation was cancelled.",
+                    waitCondition: "resource_ready",
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            // Now wait for the resource ready event to be executed.
-            resourceLogger.LogInformation("Waiting for resource ready to execute for '{ResourceName}'.", displayName);
-            resourceEvent = await WaitForResourceCoreAsync(
-                dependency.Name,
-                re => re.ResourceId == resourceId && re.Snapshot.ResourceReadyEvent is not null,
-                $"Resource '{displayName}' failed to execute the resource ready event before the operation was cancelled.",
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                // Observe the result of the resource ready event task
+                await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-            // Observe the result of the resource ready event task
-            await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-            resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}'.", displayName);
-        }, cancellationToken).ConfigureAwait(false);
+                resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}'.", displayName);
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
     }
 
     /// <summary>
@@ -226,6 +241,7 @@ public class ResourceNotificationService : IDisposable
             resourceName,
             re => ShouldYieldHealthyWait(waitBehavior, re.Snapshot),
             $"Resource '{resourceName}' failed to become healthy before the operation was cancelled.",
+            waitCondition: "healthy",
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
@@ -240,6 +256,7 @@ public class ResourceNotificationService : IDisposable
             resourceName,
             re => re.ResourceId == resourceEvent.ResourceId && re.Snapshot.ResourceReadyEvent is not null,
             $"Resource '{resourceName}' failed to execute the resource ready event before the operation was cancelled.",
+            waitCondition: "resource_ready",
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Observe the result of the resource ready event task
@@ -264,6 +281,9 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilCompletionAsync(IResource resource, IResource dependency, int exitCode, CancellationToken cancellationToken)
     {
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitForCompletion, waitBehavior: null);
+        activity.SetResourceWaitExpectedExitCode(exitCode);
+
         var names = dependency.GetResolvedResourceNames();
         var tasks = new Task[names.Length];
 
@@ -287,7 +307,15 @@ public class ResourceNotificationService : IDisposable
             tasks[i] = Core(displayName, names[i]);
         }
 
-        await Task.WhenAll(tasks).ConfigureAwait(false);
+        try
+        {
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
 
         async Task Core(string displayName, string resourceId)
         {
@@ -295,6 +323,7 @@ public class ResourceNotificationService : IDisposable
                 dependency.Name,
                 re => re.ResourceId == resourceId && IsKnownTerminalState(re.Snapshot),
                 $"Resource '{displayName}' failed to reach a terminal state before the operation was cancelled.",
+                waitCondition: "terminal",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             var snapshot = resourceEvent.Snapshot;
 
@@ -364,6 +393,7 @@ public class ResourceNotificationService : IDisposable
                 dependency.Name,
                 re => re.ResourceId == resourceId && IsContinuableState(waitBehavior, re.Snapshot),
                 $"Resource '{displayName}' failed to reach the 'Running' state before the operation was cancelled.",
+                waitCondition: "running",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             var snapshot = resourceEvent.Snapshot;
 
@@ -413,13 +443,23 @@ public class ResourceNotificationService : IDisposable
 
     private async Task WaitUntilStartedAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
     {
-        await WaitUntilStateAsync(resource, dependency, waitBehavior, (resourceLogger, displayName, resourceId, resourceEvent) =>
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitUntilStarted, waitBehavior);
+
+        try
         {
-            // Unlike WaitUntilHealthyAsync, we don't wait for health checks here.
-            // We only wait for the resource to reach the Running state.
-            resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}' to start.", displayName);
-            return Task.CompletedTask;
-        }, cancellationToken).ConfigureAwait(false);
+            await WaitUntilStateAsync(resource, dependency, waitBehavior, (resourceLogger, displayName, resourceId, resourceEvent) =>
+            {
+                // Unlike WaitUntilHealthyAsync, we don't wait for health checks here.
+                // We only wait for the resource to reach the Running state.
+                resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}' to start.", displayName);
+                return Task.CompletedTask;
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
     }
 
     /// <summary>
@@ -436,26 +476,42 @@ public class ResourceNotificationService : IDisposable
             return;
         }
 
-        var pendingDependencies = new List<Task>();
-        foreach (var waitAnnotation in waitAnnotations)
+        var waitAnnotationList = waitAnnotations.ToArray();
+        if (waitAnnotationList.Length == 0)
         {
-            if (waitAnnotation.Resource is IResourceWithoutLifetime)
-            {
-                // IResourceWithoutLifetime are inert and don't need to be waited on.
-                continue;
-            }
-
-            var pendingDependency = waitAnnotation.WaitType switch
-            {
-                WaitType.WaitUntilHealthy => WaitUntilHealthyAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
-                WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken),
-                WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
-                _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
-            };
-            pendingDependencies.Add(pendingDependency);
+            return;
         }
 
-        await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+        using var activity = ProfilingTelemetry.StartResourceWaitForDependencies(Configuration, resource, waitAnnotationList.Length);
+
+        try
+        {
+            var pendingDependencies = new List<Task>();
+            foreach (var waitAnnotation in waitAnnotationList)
+            {
+                if (waitAnnotation.Resource is IResourceWithoutLifetime)
+                {
+                    // IResourceWithoutLifetime are inert and don't need to be waited on.
+                    continue;
+                }
+
+                var pendingDependency = waitAnnotation.WaitType switch
+                {
+                    WaitType.WaitUntilHealthy => WaitUntilHealthyAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
+                    WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken),
+                    WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
+                    _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
+                };
+                pendingDependencies.Add(pendingDependency);
+            }
+
+            await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
     }
 
     /// <summary>
@@ -485,29 +541,43 @@ public class ResourceNotificationService : IDisposable
         return resourceEvent;
     }
 
-    private async Task<ResourceEvent> WaitForResourceCoreAsync(string resourceName, Func<ResourceEvent, bool> predicate, string cancellationMessage, CancellationToken cancellationToken = default)
+    private async Task<ResourceEvent> WaitForResourceCoreAsync(string resourceName, Func<ResourceEvent, bool> predicate, string cancellationMessage, CancellationToken cancellationToken = default, string waitCondition = "predicate")
     {
+        // Waits can run under non-profiling activities; don't attach high-cardinality
+        // resource wait tags/events unless profiling was explicitly enabled.
+        var activity = ProfilingTelemetry.CurrentActivity(Configuration);
+        activity.SetResourceWaitTarget(resourceName, waitCondition);
+
         try
         {
             using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(_disposing.Token, cancellationToken);
             var watchToken = watchCts.Token;
             await foreach (var resourceEvent in WatchAsync(watchToken).ConfigureAwait(false))
             {
-                if (string.Equals(resourceName, resourceEvent.Resource.Name, StringComparisons.ResourceName) && predicate(resourceEvent))
+                if (!string.Equals(resourceName, resourceEvent.Resource.Name, StringComparisons.ResourceName))
                 {
+                    continue;
+                }
+
+                activity.AddResourceWaitObserved(resourceEvent, waitCondition);
+
+                if (predicate(resourceEvent))
+                {
+                    activity.AddResourceWaitCompleted(resourceEvent, waitCondition);
                     return resourceEvent;
                 }
             }
         }
         catch (OperationCanceledException ex)
         {
+            activity.AddResourceWaitCancelled(resourceName, waitCondition);
+
             var errorMessage = BuildCancellationErrorMessage(cancellationMessage, resourceName);
             throw new OperationCanceledException(errorMessage, ex, ex.CancellationToken);
         }
 
         throw new OperationCanceledException(BuildCancellationErrorMessage(cancellationMessage, resourceName));
     }
-
     private readonly object _onResourceUpdatedLock = new();
 
     /// <summary>

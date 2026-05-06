@@ -763,7 +763,8 @@ public class Program
             EnableDefaultExceptionHandler = false
         };
 
-        using var mainActivity = telemetry.StartReportedActivity(name: TelemetryConstants.Activities.Main, kind: ActivityKind.Internal);
+        var executionContext = app.Services.GetRequiredService<CliExecutionContext>();
+        using var mainActivity = telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
 
         if (mainActivity != null)
         {

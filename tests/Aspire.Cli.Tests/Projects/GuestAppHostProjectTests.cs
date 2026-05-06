@@ -4,6 +4,7 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -555,6 +556,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             features: new Features(configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             logger: NullLogger<GuestAppHostProject>.Instance,
-            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
+            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
+            profilingTelemetry: new ProfilingTelemetry(configuration));
     }
 }
