@@ -23,8 +23,32 @@ public class ResourceSnapshotMapperTests
             ],
             Commands =
             [
-                new ResourceSnapshotCommand { Name = "stop", State = "Enabled", Description = "Stop" },
-                new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" }
+                new ResourceSnapshotCommand
+                {
+                    Name = "stop",
+                    State = "Enabled",
+                    Description = "Stop",
+                    Visibility = "Api",
+                    ArgumentInputs =
+                    [
+                        new ResourceSnapshotCommandArgument
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            Description = "CSS selector to click.",
+                            EnableDescriptionMarkdown = true,
+                            InputType = "Text",
+                            Required = true,
+                            Placeholder = "#submit",
+                            Options = new Dictionary<string, string> { ["primary"] = "Primary" },
+                            AllowCustomChoice = true,
+                            Disabled = true,
+                            MaxLength = 128
+                        }
+                    ]
+                },
+                new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" },
+                new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "Dashboard only", Visibility = "Dashboard" }
             ],
             EnvironmentVariables =
             [
@@ -44,8 +68,21 @@ public class ResourceSnapshotMapperTests
         Assert.Equal("http://localhost:5000", result.Urls![0].Url);
 
         // Only enabled commands should be included
-        Assert.Single(result.Commands!);
-        Assert.True(result.Commands!.ContainsKey("stop"));
+        var command = Assert.Single(result.Commands!);
+        Assert.Equal("stop", command.Key);
+        Assert.Equal("Api", command.Value.Visibility);
+        var argumentInput = Assert.Single(command.Value.ArgumentInputs!);
+        Assert.Equal("selector", argumentInput.Name);
+        Assert.Equal("Selector", argumentInput.Label);
+        Assert.Equal("CSS selector to click.", argumentInput.Description);
+        Assert.True(argumentInput.EnableDescriptionMarkdown);
+        Assert.Equal("Text", argumentInput.InputType);
+        Assert.True(argumentInput.Required);
+        Assert.Equal("#submit", argumentInput.Placeholder);
+        Assert.Equal("Primary", argumentInput.Options!["primary"]);
+        Assert.True(argumentInput.AllowCustomChoice);
+        Assert.True(argumentInput.Disabled);
+        Assert.Equal(128, argumentInput.MaxLength);
 
         // Only IsFromSpec environment variables should be included
         Assert.Single(result.Environment!);

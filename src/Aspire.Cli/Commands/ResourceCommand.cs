@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -63,6 +64,7 @@ internal sealed class ResourceCommand : BaseCommand
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_commandArgument);
         Options.Add(s_appHostOption);
+        TreatUnmatchedTokensAsErrors = false;
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -70,6 +72,7 @@ internal sealed class ResourceCommand : BaseCommand
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var capturedArguments = parseResult.UnmatchedTokens.ToArray();
 
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
@@ -83,11 +86,16 @@ internal sealed class ResourceCommand : BaseCommand
             return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
         }
 
+        var connection = result.Connection!;
+        var commandArguments = capturedArguments.Length > 0
+            ? JsonSerializer.SerializeToElement(capturedArguments, JsonSourceGenerationContext.Default.StringArray)
+            : (JsonElement?)null;
+
         // Map well-known friendly names (start/stop/restart) to their display metadata
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
         {
             return await ResourceCommandHelper.ExecuteResourceCommandAsync(
-                result.Connection!,
+                connection,
                 _interactionService,
                 _logger,
                 resourceName,
@@ -95,15 +103,18 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.ProgressVerb,
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
+                commandArguments,
                 cancellationToken);
         }
 
         return await ResourceCommandHelper.ExecuteGenericCommandAsync(
-            result.Connection!,
+            connection,
             _interactionService,
             _logger,
             resourceName,
             commandName,
+            commandArguments,
             cancellationToken);
     }
+
 }

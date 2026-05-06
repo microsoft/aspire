@@ -104,14 +104,18 @@ internal static class ResourceSnapshotMapper
 
         // Only include enabled commands
         var commands = snapshot.Commands
-            .Where(c => string.Equals(c.State, "Enabled", StringComparison.OrdinalIgnoreCase))
+            .Where(c => string.Equals(c.State, "Enabled", StringComparison.OrdinalIgnoreCase) && IsCommandVisibleToApi(c.Visibility))
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
-                c => c.Name,
-                c => new ResourceCommandJson
-                {
-                    Description = c.Description
-                });
+                 c => c.Name,
+                  c => new ResourceCommandJson
+                  {
+                      Description = c.Description,
+                      Visibility = IsDefaultCommandVisibility(c.Visibility) ? null : c.Visibility,
+                      ArgumentInputs = c.ArgumentInputs.Length > 0
+                          ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
+                          : null
+                 });
 
         // Get source information using the shared ResourceSourceViewModel
         var sourceViewModel = ResourceSource.GetSourceModel(snapshot.ResourceType, snapshot.Properties);
@@ -145,6 +149,35 @@ internal static class ResourceSnapshotMapper
             Properties = properties,
             Relationships = relationships.ToArray(),
             Commands = commands
+        };
+
+        static bool IsDefaultCommandVisibility(string visibility)
+        {
+            return string.Equals(visibility, "Dashboard, Api", StringComparison.OrdinalIgnoreCase);
+        }
+
+        static bool IsCommandVisibleToApi(string visibility)
+        {
+            return visibility.Split(',').Any(static value => string.Equals(value.Trim(), "Api", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)
+    {
+        return new ResourceCommandArgumentJson
+        {
+            Name = input.Name,
+            Label = input.Label,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            InputType = input.InputType,
+            Required = input.Required,
+            Placeholder = input.Placeholder,
+            Value = input.Value,
+            Options = input.Options,
+            AllowCustomChoice = input.AllowCustomChoice,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength
         };
     }
 

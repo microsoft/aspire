@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Represents a command annotation for a resource.
@@ -15,6 +18,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceCommandAnnotation"/> class.
     /// </summary>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ResourceCommandAnnotation(
         string name,
         string displayName,
@@ -26,6 +30,27 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         string? iconName,
         IconVariant? iconVariant,
         bool isHighlighted)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, arguments: null, confirmationMessage, iconName, iconVariant, isHighlighted)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceCommandAnnotation"/> class.
+    /// </summary>
+    public ResourceCommandAnnotation(
+        string name,
+        string displayName,
+        Func<UpdateCommandStateContext, ResourceCommandState> updateState,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        string? displayDescription,
+        object? parameter,
+        IReadOnlyList<InteractionInput>? arguments,
+        string? confirmationMessage,
+        string? iconName,
+        IconVariant? iconVariant,
+        bool isHighlighted,
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api,
+        Func<CommandArgumentsValidationContext, Task>? validateArguments = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -37,11 +62,16 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         UpdateState = updateState;
         ExecuteCommand = executeCommand;
         DisplayDescription = displayDescription;
+#pragma warning disable CS0618 // Parameter is obsolete but still stored for compatibility.
         Parameter = parameter;
+#pragma warning restore CS0618
+        Arguments = arguments ?? [];
+        ValidateArguments = validateArguments;
         ConfirmationMessage = confirmationMessage;
         IconName = iconName;
         IconVariant = iconVariant;
         IsHighlighted = isHighlighted;
+        Visibility = visibility;
     }
 
     /// <summary>
@@ -73,10 +103,30 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     public string? DisplayDescription { get; }
 
     /// <summary>
-    /// Optional parameter that configures the command in some way.
+    /// Obsolete optional parameter that configures the command in some way.
     /// Clients must return any value provided by the server when invoking the command.
     /// </summary>
+    [Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
     public object? Parameter { get; }
+
+    /// <summary>
+    /// Gets the invocation arguments accepted by the command.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The list order is part of the command contract. CLI positional arguments are mapped to this list by index before the
+    /// command executes. Clients that submit named argument payloads, such as Dashboard and MCP clients, map values by
+    /// <see cref="InteractionInput.Name"/>.
+    /// </para>
+    /// </remarks>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public IReadOnlyList<InteractionInput> Arguments { get; }
+
+    /// <summary>
+    /// Gets the callback that validates invocation arguments before the command callback is executed.
+    /// </summary>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public Func<CommandArgumentsValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -98,6 +148,11 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// A flag indicating whether the command is highlighted in the UI.
     /// </summary>
     public bool IsHighlighted { get; }
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public ResourceCommandVisibility Visibility { get; }
 }
 
 /// <summary>
@@ -235,6 +290,8 @@ public sealed class ExecuteCommandResult
     /// An optional value produced by the command.
     /// </summary>
     public CommandResultData? Data { get; init; }
+
+    internal InteractionInputCollection? InvalidArguments { get; init; }
 }
 
 /// <summary>
@@ -301,4 +358,74 @@ public sealed class ExecuteCommandContext
     /// The logger for the resource.
     /// </summary>
     public required ILogger Logger { get; init; }
+
+    /// <summary>
+    /// Gets the invocation arguments supplied by the client when the command is executed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The collection contains the arguments described by <see cref="ResourceCommandAnnotation.Arguments"/> with their
+    /// submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
+    /// named-payload clients are mapped by <see cref="InteractionInput.Name"/>.
+    /// </para>
+    /// </remarks>
+    public required InteractionInputCollection Arguments { get; init; }
+
 }
+
+/// <summary>
+/// Context for validating resource command invocation arguments.
+/// </summary>
+[AspireExport(ExposeProperties = true)]
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class CommandArgumentsValidationContext
+{
+    internal bool HasErrors { get; private set; }
+
+    /// <summary>
+    /// Gets the invocation arguments being validated.
+    /// </summary>
+    public required InteractionInputCollection Arguments { get; init; }
+
+    /// <summary>
+    /// Gets the service provider for resolving services during validation.
+    /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
+    public required IServiceProvider Services { get; init; }
+
+    /// <summary>
+    /// Gets the cancellation token.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// Adds a validation error for the specified argument.
+    /// </summary>
+    /// <param name="argument">The argument to add a validation error for.</param>
+    /// <param name="errorMessage">The error message to add.</param>
+    public void AddValidationError(InteractionInput argument, string errorMessage)
+    {
+        ArgumentNullException.ThrowIfNull(argument);
+
+        if (string.IsNullOrEmpty(errorMessage))
+        {
+            throw new ArgumentException("Error message cannot be null or empty.", nameof(errorMessage));
+        }
+
+        argument.ValidationErrors.Add(errorMessage);
+        HasErrors = true;
+    }
+
+    /// <summary>
+    /// Adds a validation error for the argument with the specified name.
+    /// </summary>
+    /// <param name="argumentName">The name of the argument to add a validation error for.</param>
+    /// <param name="errorMessage">The error message to add.</param>
+    [AspireExport("CommandArgumentsValidationContext.addValidationError", MethodName = "addValidationError")]
+    public void AddValidationError(string argumentName, string errorMessage)
+    {
+        AddValidationError(Arguments[argumentName], errorMessage);
+    }
+}
+
+#pragma warning restore ASPIREINTERACTION001

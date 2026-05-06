@@ -34,10 +34,10 @@ message ResourceCommand {
     // before sending the request for this command to be executed.
     // The user will be presented with Ok/Cancel options.
     optional string confirmation_message = 3;
-    // Optional parameter that configures the command in some way.
+    // Deprecated. Optional parameter that configures the command in some way.
     // Clients must return any value provided by the server when invoking
     // the command.
-    optional google.protobuf.Value parameter = 4;
+    optional google.protobuf.Value parameter = 4 [deprecated = true];
     // A flag that indicates whether the command is highlighted in the UI.
     bool is_highlighted = 5;
     // Optional icon name. This name should be a valid FluentUI icon name.
@@ -51,6 +51,9 @@ message ResourceCommand {
     // The state of the command. Controls whether the command is enabled, disabled,
     // or hidden in the UI.
     ResourceCommandState state = 9;
+    // Static, ordered input metadata that describes the invocation arguments accepted by the command.
+    // Dashboard clients can render these inputs and send object-shaped values in ResourceCommandRequest.arguments.
+    repeated InteractionInput argument_inputs = 10;
 }
 
 enum IconVariant {
@@ -71,9 +74,15 @@ message ResourceCommandRequest {
     // The unique name of the resource type. Matches ResourceType.unique_name and Resource.resource_type.
     // Copied from the ResourceCommand that this request object is initialized from.
     string resource_type = 3;
-    // An optional parameter to accompany the command.
+    // Deprecated. An optional parameter to accompany the command.
     // Copied from the ResourceCommand that this request object is initialized from.
-    optional google.protobuf.Value parameter = 4;
+    optional google.protobuf.Value parameter = 4 [deprecated = true];
+    // Optional invocation arguments to pass to the command.
+    // Unlike parameter, this value is supplied by the client for this execution.
+    // Dashboard requests encode arguments as an object-valued google.protobuf.Value keyed by InteractionInput.name.
+    optional google.protobuf.Value arguments = 5;
+    // When true, validate the supplied arguments without executing the command.
+    bool validate_only = 6;
 }
 
 enum ResourceCommandState {
@@ -87,6 +96,7 @@ enum ResourceCommandResponseKind {
     RESOURCE_COMMAND_RESPONSE_KIND_SUCCEEDED = 1;
     RESOURCE_COMMAND_RESPONSE_KIND_FAILED = 2;
     RESOURCE_COMMAND_RESPONSE_KIND_CANCELLED = 3;
+    RESOURCE_COMMAND_RESPONSE_KIND_VALIDATION_FAILED = 4;
 }
 
 message ResourceCommandResponse {
@@ -94,6 +104,7 @@ message ResourceCommandResponse {
     optional string error_message = 2 [deprecated = true];
     optional string message = 3;
     optional ResourceCommandResult result = 4;
+    repeated InteractionInput argument_inputs = 5;
 }
 
 message ResourceCommandResult {

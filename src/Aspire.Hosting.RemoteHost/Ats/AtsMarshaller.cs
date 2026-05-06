@@ -190,6 +190,79 @@ internal sealed class AtsMarshaller
         return JsonNode.Parse(json);
     }
 
+    private object? DeserializeDto(JsonObject jsonObj, Type targetType, UnmarshalContext context)
+    {
+        if (!HasPopulatedDelegateProperty(jsonObj, targetType))
+        {
+            return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+        }
+
+        var instance = Activator.CreateInstance(targetType)
+            ?? throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Failed to create DTO instance of type '{targetType.Name}'");
+
+        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
+        foreach (var prop in typeInfo.Properties)
+        {
+            if (prop.Set is null)
+            {
+                continue;
+            }
+
+            if (!TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue))
+            {
+                continue;
+            }
+
+            var propContext = new UnmarshalContext
+            {
+                CapabilityId = context.CapabilityId,
+                ParameterName = $"{context.ParameterName ?? targetType.Name}.{prop.Name}"
+            };
+            prop.Set(instance, UnmarshalFromJson(jsonValue, prop.PropertyType, propContext));
+        }
+
+        return instance;
+    }
+
+    private static bool HasPopulatedDelegateProperty(JsonObject jsonObj, Type targetType)
+    {
+        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
+        foreach (var prop in typeInfo.Properties)
+        {
+            if (typeof(Delegate).IsAssignableFrom(prop.PropertyType) &&
+                TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue) &&
+                jsonValue is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetJsonProperty(JsonObject jsonObj, string propertyName, out JsonNode? value)
+    {
+        if (jsonObj.TryGetPropertyValue(propertyName, out value))
+        {
+            return true;
+        }
+
+        foreach (var property in jsonObj)
+        {
+            if (string.Equals(property.Key, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
     private JsonNode? SerializeArray(object value, AtsTypeRef? elementType)
     {
         var jsonArray = new JsonArray();
@@ -335,6 +408,11 @@ internal sealed class AtsMarshaller
             return exprRef.ToReferenceExpression(_handles, capabilityId, paramName);
         }
 
+        if (targetType == typeof(object))
+        {
+            return node is JsonValue value ? ConvertPrimitive(value, targetType) : node;
+        }
+
         // Handle callbacks - any delegate type is treated as a callback
         if (typeof(Delegate).IsAssignableFrom(targetType))
         {
@@ -469,7 +547,7 @@ internal sealed class AtsMarshaller
                         capabilityId, paramName,
                         $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
                 }
-                return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+                return DeserializeDto(jsonObj, targetType, context);
             }
 
             return null;

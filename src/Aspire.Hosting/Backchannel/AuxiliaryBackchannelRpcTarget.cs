@@ -17,6 +17,8 @@ using ModelContextProtocol.Protocol;
 
 namespace Aspire.Hosting.Backchannel;
 
+#pragma warning disable ASPIREINTERACTION001 // InteractionInputCollection is used to validate resource command arguments.
+
 /// <summary>
 /// RPC target for the auxiliary backchannel.
 /// </summary>
@@ -247,7 +249,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentNullException.ThrowIfNull(request);
 
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
-        var result = await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, cancellationToken).ConfigureAwait(false);
+        var (arguments, argumentErrorMessage) = CreateCommandArguments(resourceCommandService, request);
+        if (argumentErrorMessage is not null)
+        {
+            return new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = argumentErrorMessage,
+#pragma warning disable CS0618 // Type or member is obsolete
+                ErrorMessage = argumentErrorMessage,
+#pragma warning restore CS0618 // Type or member is obsolete
+            };
+        }
+
+        var result = request.ValidateOnly
+            ? await ValidateResourceCommandAsync(resourceCommandService, request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false)
+            : await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false);
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var resolvedMessage = result.Message ?? result.ErrorMessage;
@@ -261,6 +278,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             ErrorMessage = resolvedMessage,
 #pragma warning restore CS0618 // Type or member is obsolete
             Message = resolvedMessage,
+            ValidationErrors = CreateValidationErrors(result.InvalidArguments),
             Value = result.Data is { } v ? new ExecuteResourceCommandResult
             {
                 Value = v.Value,
@@ -272,6 +290,94 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 },
                 DisplayImmediately = v.DisplayImmediately
             } : null
+        };
+    }
+
+    private static (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(ResourceCommandService resourceCommandService, ExecuteResourceCommandRequest request)
+    {
+        if (request.Arguments is null)
+        {
+            return (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, argumentValues: null), null);
+        }
+
+        var arguments = request.Arguments.Value;
+        return arguments.ValueKind switch
+        {
+            JsonValueKind.Object => (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertObjectArgumentValues(arguments)), null),
+            JsonValueKind.Array => resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertOrderedArgumentValues(arguments)),
+            _ => throw new InvalidOperationException("Resource command arguments must be a JSON object or array.")
+        };
+    }
+
+    private static async Task<ExecuteCommandResult> ValidateResourceCommandAsync(ResourceCommandService resourceCommandService, string resourceName, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    {
+        var invalidArguments = await resourceCommandService.ValidateCommandArgumentsAsync(resourceName, commandName, arguments, cancellationToken).ConfigureAwait(false);
+        if (invalidArguments is null)
+        {
+            return CommandResults.Success();
+        }
+
+        return new ExecuteCommandResult
+        {
+            Success = false,
+            Message = "Command argument validation failed.",
+            InvalidArguments = invalidArguments
+        };
+    }
+
+    private static ResourceCommandArgumentValidationError[] CreateValidationErrors(InteractionInputCollection? invalidArguments)
+    {
+        return invalidArguments is null
+            ? []
+            : invalidArguments
+                .SelectMany(argument => argument.ValidationErrors.Select(error => new ResourceCommandArgumentValidationError
+                {
+                    ArgumentName = argument.Name,
+                    ErrorMessage = error
+                }))
+                .ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, string?> ConvertObjectArgumentValues(JsonElement arguments)
+    {
+        // ExecuteResourceCommandRequest arguments are encoded as a JSON object in the auxiliary backchannel protocol:
+        // {
+        //   "resourceName": "web-browser-logs",
+        //   "commandName": "click",
+        //   "arguments": { "selector": "#submit" }
+        // }
+        var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
+        foreach (var property in arguments.EnumerateObject())
+        {
+            values[property.Name] = ConvertArgumentValue(property.Name, property.Value);
+        }
+
+        return values;
+    }
+
+    private static string?[] ConvertOrderedArgumentValues(JsonElement arguments)
+    {
+        // ExecuteResourceCommandRequest arguments can be encoded as a JSON array in the auxiliary backchannel protocol:
+        // {
+        //   "resourceName": "web-browser-logs",
+        //   "commandName": "click",
+        //   "arguments": [ "#submit" ]
+        // }
+        return arguments.EnumerateArray()
+            .Select((value, index) => ConvertArgumentValue($"[{index}]", value))
+            .ToArray();
+    }
+
+    private static string? ConvertArgumentValue(string name, JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => null,
+            _ => throw new InvalidOperationException($"Resource command argument '{name}' must be a string, number, boolean, or null.")
         };
     }
 
@@ -738,6 +844,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 Name = c.Name,
                 DisplayName = c.DisplayName,
                 Description = c.DisplayDescription,
+                ArgumentInputs = c.Arguments.Select(i => new ResourceSnapshotCommandArgument
+                {
+                    Name = i.Name,
+                    Label = i.Label,
+                    Description = i.Description,
+                    EnableDescriptionMarkdown = i.EnableDescriptionMarkdown,
+                    InputType = i.InputType.ToString(),
+                    Required = i.Required,
+                    Placeholder = i.Placeholder,
+                    Value = i.Value,
+                    Options = i.Options?.ToDictionary(),
+                    AllowCustomChoice = i.AllowCustomChoice,
+                    Disabled = i.Disabled,
+                    MaxLength = i.MaxLength
+                }).ToArray(),
+                Visibility = c.Visibility.ToString(),
                 State = c.State.ToString()
             })
             .ToArray();

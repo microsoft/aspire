@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -213,7 +214,7 @@ public static class AtsCapabilityScanner
         // Valid types are ALL types with [AspireExport] - the ExposeProperties/ExposeMethods
         // flags control whether a wrapper class is generated, not whether the type is valid
         var validTypes = new HashSet<string>(allTypeInfos.Select(t => t.AtsTypeId));
-        ResolveUnknownTypes(allCapabilities, validTypes);
+        ResolveUnknownTypes(allCapabilities, allDtoTypes, validTypes);
 
         // Pass 3: Filter capabilities with unresolved Unknown types
         FilterInvalidCapabilities(allCapabilities, allDiagnostics);
@@ -251,7 +252,7 @@ public static class AtsCapabilityScanner
 
         // Build universe and resolve Unknown types
         var validTypes = new HashSet<string>(result.HandleTypes.Select(t => t.AtsTypeId));
-        ResolveUnknownTypes(result.Capabilities, validTypes);
+        ResolveUnknownTypes(result.Capabilities, result.DtoTypes, validTypes);
 
         // Filter capabilities with unresolved Unknown types
         FilterInvalidCapabilities(result.Capabilities, result.Diagnostics);
@@ -538,6 +539,19 @@ public static class AtsCapabilityScanner
             foreach (var prop in dto.Properties)
             {
                 CollectEnumClrTypes(prop.Type, enumTypes);
+
+                if (prop.IsCallback)
+                {
+                    if (prop.CallbackParameters != null)
+                    {
+                        foreach (var cbParam in prop.CallbackParameters)
+                        {
+                            CollectEnumClrTypes(cbParam.Type, enumTypes);
+                        }
+                    }
+
+                    CollectEnumClrTypes(prop.CallbackReturnType, enumTypes);
+                }
             }
         }
 
@@ -594,6 +608,7 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static void ResolveUnknownTypes(
         List<AtsCapabilityInfo> capabilities,
+        List<AtsDtoTypeInfo> dtoTypes,
         HashSet<string> validTypes)
     {
         foreach (var capability in capabilities)
@@ -614,6 +629,27 @@ public static class AtsCapabilityScanner
                         }
                     }
                     ResolveTypeRef(param.CallbackReturnType, validTypes);
+                }
+            }
+        }
+
+        foreach (var dto in dtoTypes)
+        {
+            foreach (var prop in dto.Properties)
+            {
+                ResolveTypeRef(prop.Type, validTypes);
+
+                if (prop.IsCallback)
+                {
+                    if (prop.CallbackParameters != null)
+                    {
+                        foreach (var cbParam in prop.CallbackParameters)
+                        {
+                            ResolveTypeRef(cbParam.Type, validTypes);
+                        }
+                    }
+
+                    ResolveTypeRef(prop.CallbackReturnType, validTypes);
                 }
             }
         }
@@ -986,10 +1022,20 @@ public static class AtsCapabilityScanner
                 continue;
             }
 
-            var propTypeRef = CreateTypeRef(prop.PropertyType, enumCollector: null, assemblyExportedTypeCache);
+            var isCallback = typeof(Delegate).IsAssignableFrom(prop.PropertyType);
+            var propTypeRef = isCallback
+                ? new AtsTypeRef { TypeId = "callback", ClrType = prop.PropertyType, Category = AtsTypeCategory.Callback }
+                : CreateTypeRef(prop.PropertyType, enumCollector: null, assemblyExportedTypeCache);
             if (propTypeRef == null)
             {
                 continue;
+            }
+
+            IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters = null;
+            AtsTypeRef? callbackReturnType = null;
+            if (isCallback)
+            {
+                (callbackParameters, callbackReturnType) = ExtractCallbackSignature(prop.PropertyType, assemblyExportedTypeCache);
             }
 
             var propDescription = GetXmlDocSummary(xmlDoc, $"P:{type.FullName}.{prop.Name}");
@@ -998,6 +1044,9 @@ public static class AtsCapabilityScanner
             {
                 Name = prop.Name,
                 Type = propTypeRef,
+                IsCallback = isCallback,
+                CallbackParameters = callbackParameters,
+                CallbackReturnType = callbackReturnType,
                 IsOptional = !prop.CanWrite, // If no setter, it's likely init-only and required
                 Description = propDescription
             });
@@ -1543,7 +1592,7 @@ public static class AtsCapabilityScanner
 
                 // Generate setter capability if property is writable
                 // Naming: {TypeName}.set{PropertyName} (keep "set" prefix, PascalCase property name)
-                if (property.CanWrite)
+                if (CanWriteAfterInitialization(property))
                 {
                     var setterMethodNameSuffix = methodNameOverride is { Length: > 0 }
                         ? char.ToUpperInvariant(methodNameOverride[0]) + methodNameOverride[1..]
@@ -2344,6 +2393,12 @@ public static class AtsCapabilityScanner
         }
 
         return null;
+    }
+
+    private static bool CanWriteAfterInitialization(PropertyInfo property)
+    {
+        return property.CanWrite &&
+            property.SetMethod?.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(IsExternalInit)) != true;
     }
 
     /// <summary>

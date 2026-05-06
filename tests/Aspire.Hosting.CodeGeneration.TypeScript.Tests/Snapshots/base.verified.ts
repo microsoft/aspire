@@ -331,6 +331,133 @@ export function refExpr(strings: TemplateStringsArray, ...values: unknown[]): Re
 }
 
 // ============================================================================
+// Interaction Inputs
+// ============================================================================
+
+const interactionInputCollectionTypeId = 'Aspire.Hosting/Aspire.Hosting.InteractionInputCollection';
+
+/**
+ * Specifies the type of input for an interaction.
+ */
+export enum InputType {
+    Text = 'Text',
+    SecretText = 'SecretText',
+    Choice = 'Choice',
+    Boolean = 'Boolean',
+    Number = 'Number'
+}
+
+export interface InteractionInputOption {
+    key?: string;
+    value?: string;
+}
+
+export interface InteractionInput {
+    name?: string;
+    label?: string;
+    description?: string;
+    enableDescriptionMarkdown?: boolean;
+    inputType?: InputType;
+    required?: boolean;
+    options?: InteractionInputOption[];
+    dynamicLoading?: unknown;
+    value?: string;
+    placeholder?: string;
+    allowCustomChoice?: boolean;
+    disabled?: boolean;
+    maxLength?: number;
+}
+
+type InteractionInputCollectionHandle = Handle<typeof interactionInputCollectionTypeId>;
+
+const interactionInputCollectionState = new WeakMap<InteractionInputCollection, {
+    handle: InteractionInputCollectionHandle;
+    client: AspireClientRpc;
+    inputsPromise?: Promise<InteractionInput[]>;
+}>();
+
+/**
+ * Provides access to interaction inputs by name.
+ */
+export class InteractionInputCollection {
+    constructor(handle: InteractionInputCollectionHandle, client: AspireClientRpc) {
+        interactionInputCollectionState.set(this, { handle, client });
+    }
+
+    toJSON(): MarshalledHandle {
+        return getInteractionInputCollectionState(this).handle.toJSON();
+    }
+
+    toTransportValue(): MarshalledHandle {
+        return this.toJSON();
+    }
+
+    async toArray(): Promise<InteractionInput[]> {
+        const inputs = await getInteractionInputs(this);
+        return [...inputs];
+    }
+
+    async get(name: string): Promise<InteractionInput | undefined> {
+        const normalizedName = normalizeInteractionInputName(name);
+        const inputs = await getInteractionInputs(this);
+
+        return inputs.find(input => normalizeInteractionInputName(input.name) === normalizedName);
+    }
+
+    async required(name: string): Promise<InteractionInput> {
+        const input = await this.get(name);
+
+        if (!input) {
+            throw new Error(`No input with name '${name}' was found.`);
+        }
+
+        return input;
+    }
+
+    async value(name: string): Promise<string | undefined> {
+        return (await this.get(name))?.value;
+    }
+
+    async requiredValue(name: string): Promise<string> {
+        const value = (await this.required(name)).value;
+
+        if (value === undefined || value === null) {
+            throw new Error(`Input '${name}' does not have a value.`);
+        }
+
+        return value;
+    }
+}
+
+function normalizeInteractionInputName(name: string | undefined): string | undefined {
+    return name?.toLowerCase();
+}
+
+function getInteractionInputCollectionState(collection: InteractionInputCollection) {
+    const state = interactionInputCollectionState.get(collection);
+
+    if (!state) {
+        throw new Error('InteractionInputCollection was not initialized correctly.');
+    }
+
+    return state;
+}
+
+async function getInteractionInputs(collection: InteractionInputCollection): Promise<InteractionInput[]> {
+    const state = getInteractionInputCollectionState(collection);
+    state.inputsPromise ??= state.client.invokeCapability<InteractionInput[]>(
+        'Aspire.Hosting/InteractionInputCollection.toArray',
+        { context: state.handle }
+    );
+
+    return state.inputsPromise;
+}
+
+registerHandleWrapper(interactionInputCollectionTypeId, (handle, client) =>
+    new InteractionInputCollection(handle as InteractionInputCollectionHandle, client)
+);
+
+// ============================================================================
 // ResourceBuilderBase
 // ============================================================================
 

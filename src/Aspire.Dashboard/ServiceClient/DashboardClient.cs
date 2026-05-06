@@ -13,6 +13,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
@@ -751,16 +752,17 @@ internal sealed class DashboardClient : IDashboardClient
         return resourceLogLines;
     }
 
-    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken)
+    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, bool validateOnly, CancellationToken cancellationToken)
     {
         EnsureInitialized();
 
         var request = new ResourceCommandRequest()
         {
             CommandName = command.Name,
-            Parameter = command.Parameter,
+            Arguments = arguments,
             ResourceName = resourceName,
-            ResourceType = resourceType
+            ResourceType = resourceType,
+            ValidateOnly = validateOnly
         };
 
         try

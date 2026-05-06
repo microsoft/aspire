@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.WellKnownTypes;
 
 namespace Aspire.Dashboard.Tests.Shared;
 
@@ -15,6 +16,7 @@ public class TestDashboardClient : IDashboardClient
     private readonly Func<Channel<IReadOnlyList<ResourceViewModelChange>>>? _resourceChannelProvider;
     private readonly Func<Channel<WatchInteractionsResponseUpdate>>? _interactionChannelProvider;
     private readonly Channel<ResourceCommandResponseViewModel>? _resourceCommandsChannel;
+    private readonly Func<string, string, CommandViewModel, Value?, CancellationToken, Task<ResourceCommandResponseViewModel>>? _executeResourceCommand;
     private readonly Channel<WatchInteractionsRequestUpdate>? _sendInteractionUpdateChannel;
     private readonly IList<ResourceViewModel>? _initialResources;
 
@@ -29,6 +31,7 @@ public class TestDashboardClient : IDashboardClient
         Func<Channel<IReadOnlyList<ResourceViewModelChange>>>? resourceChannelProvider = null,
         Func<Channel<WatchInteractionsResponseUpdate>>? interactionChannelProvider = null,
         Channel<ResourceCommandResponseViewModel>? resourceCommandsChannel = null,
+        Func<string, string, CommandViewModel, Value?, CancellationToken, Task<ResourceCommandResponseViewModel>>? executeResourceCommand = null,
         Channel<WatchInteractionsRequestUpdate>? sendInteractionUpdateChannel = null,
         IList<ResourceViewModel>? initialResources = null,
         Task? whenConnected = null)
@@ -40,6 +43,7 @@ public class TestDashboardClient : IDashboardClient
         _resourceChannelProvider = resourceChannelProvider;
         _interactionChannelProvider = interactionChannelProvider;
         _resourceCommandsChannel = resourceCommandsChannel;
+        _executeResourceCommand = executeResourceCommand;
         _sendInteractionUpdateChannel = sendInteractionUpdateChannel;
         _initialResources = initialResources;
     }
@@ -49,8 +53,13 @@ public class TestDashboardClient : IDashboardClient
         return default;
     }
 
-    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken)
+    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, bool validateOnly, CancellationToken cancellationToken)
     {
+        if (_executeResourceCommand is not null)
+        {
+            return _executeResourceCommand(resourceName, resourceType, command, arguments, cancellationToken);
+        }
+
         if (_resourceCommandsChannel == null)
         {
             throw new InvalidOperationException("No resource command channel set.");

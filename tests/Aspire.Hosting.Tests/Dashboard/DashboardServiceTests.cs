@@ -151,6 +151,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var testResource = new TestResource("test-resource");
         using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
         var builder = applicationBuilder.AddResource(testResource);
+#pragma warning disable CS0618 // Parameter is obsolete but this verifies dashboard wire compatibility.
         builder.WithCommand(
             name: "TestName",
             displayName: "Display name!",
@@ -160,10 +161,32 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
                 UpdateState = c => Aspire.Hosting.ApplicationModel.ResourceCommandState.Enabled,
                 Description = "Display description!",
                 Parameter = new[] { "One", "Two" },
+                Arguments =
+                [
+                    new Aspire.Hosting.InteractionInput
+                    {
+                        Name = "selector",
+                        Label = "Selector",
+                        Description = "CSS selector to click.",
+                        InputType = Aspire.Hosting.InputType.Text,
+                        Required = true,
+                        Placeholder = "#submit"
+                    }
+                ],
                 ConfirmationMessage = "Confirmation message!",
                 IconName = "Icon name!",
                 IconVariant = Aspire.Hosting.ApplicationModel.IconVariant.Filled,
                 IsHighlighted = true
+            });
+#pragma warning restore CS0618
+        builder.WithCommand(
+            name: "HeadlessName",
+            displayName: "Headless display name",
+            executeCommand: c => Task.FromResult(CommandResults.Success()),
+            commandOptions: new()
+            {
+                UpdateState = c => Aspire.Hosting.ApplicationModel.ResourceCommandState.Enabled,
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api
             });
 
         logger.LogInformation("Publishing resource.");
@@ -175,7 +198,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         logger.LogInformation("Waiting for the resource with a command. Required so added resource is always in the service's initial data collection");
         await dashboardServiceData.WaitForResourceAsync(testResource.Name, r =>
         {
-            return r.Commands.Length == 1;
+            return r.Commands.Length == 2;
         }).DefaultTimeout();
 
         var cts = new CancellationTokenSource();
@@ -202,13 +225,158 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("TestName", commandData.Name);
         Assert.Equal("Display name!", commandData.DisplayName);
         Assert.Equal("Display description!", commandData.DisplayDescription);
+#pragma warning disable CS0612 // Parameter is obsolete but still verified for compatibility.
         Assert.Equal(Value.ForList(Value.ForString("One"), Value.ForString("Two")), commandData.Parameter);
+#pragma warning restore CS0612
+        var argumentInput = Assert.Single(commandData.ArgumentInputs);
+        Assert.Equal("selector", argumentInput.Name);
+        Assert.Equal("Selector", argumentInput.Label);
+        Assert.Equal("CSS selector to click.", argumentInput.Description);
+        Assert.Equal(Aspire.DashboardService.Proto.V1.InputType.Text, argumentInput.InputType);
+        Assert.True(argumentInput.Required);
+        Assert.Equal("#submit", argumentInput.Placeholder);
         Assert.Equal("Confirmation message!", commandData.ConfirmationMessage);
         Assert.Equal("Icon name!", commandData.IconName);
         Assert.Equal(DashboardService.Proto.V1.IconVariant.Filled, commandData.IconVariant);
         Assert.True(commandData.IsHighlighted);
+        Assert.DoesNotContain(resourceData.Commands, command => command.Name == "HeadlessName");
 
         await CancelTokenAndAwaitTask(cts, task).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommand_WithArguments_PassesArgumentsToCommand()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
+        using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+
+        InteractionInputCollection? capturedArguments = null;
+        var testResource = new TestResource("test-resource");
+        using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
+        var builder = applicationBuilder.AddResource(testResource);
+        builder.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: c =>
+            {
+                capturedArguments = c.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new()
+            {
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    },
+                    new InteractionInput
+                    {
+                        Name = "clickCount",
+                        InputType = InputType.Number
+                    }
+                ]
+            });
+
+        await resourceNotificationService.PublishUpdateAsync(testResource, s =>
+        {
+            return s with { State = new ResourceStateSnapshot("Running", null) };
+        }).DefaultTimeout();
+
+        var context = TestServerCallContext.Create();
+        var response = await dashboardService.ExecuteResourceCommand(
+            new ResourceCommandRequest
+            {
+                ResourceName = testResource.Name,
+                CommandName = "click",
+                Arguments = Value.ForStruct(new Struct
+                {
+                    Fields =
+                    {
+                        ["selector"] = Value.ForString("#submit"),
+                        ["clickCount"] = Value.ForNumber(2)
+                    }
+                })
+            },
+            context);
+
+        Assert.Equal(ResourceCommandResponseKind.Succeeded, response.Kind);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommand_ValidateOnlyWithInvalidArguments_ReturnsValidationErrors()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
+        using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+
+        var executed = false;
+        var testResource = new TestResource("test-resource");
+        using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
+        var builder = applicationBuilder.AddResource(testResource);
+        builder.WithCommand(
+            name: "validate",
+            displayName: "Validate",
+            executeCommand: c =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new()
+            {
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "target",
+                        InputType = InputType.Text
+                    }
+                ],
+                ValidateArguments = context =>
+                {
+                    var target = context.Arguments.Single(argument => argument.Name == "target");
+                    context.AddValidationError(target, "Target must not be prod.");
+
+                    return Task.CompletedTask;
+                }
+            });
+
+        await resourceNotificationService.PublishUpdateAsync(testResource, s =>
+        {
+            return s with { State = new ResourceStateSnapshot("Running", null) };
+        }).DefaultTimeout();
+
+        var context = TestServerCallContext.Create();
+        var response = await dashboardService.ExecuteResourceCommand(
+            new ResourceCommandRequest
+            {
+                ResourceName = testResource.Name,
+                CommandName = "validate",
+                ValidateOnly = true,
+                Arguments = Value.ForStruct(new Struct
+                {
+                    Fields =
+                    {
+                        ["target"] = Value.ForString("prod")
+                    }
+                })
+            },
+            context);
+
+        Assert.Equal(ResourceCommandResponseKind.ValidationFailed, response.Kind);
+        Assert.False(executed);
+        var invalidArgument = Assert.Single(response.ArgumentInputs);
+        Assert.Equal("target", invalidArgument.Name);
+        Assert.Equal("Target must not be prod.", Assert.Single(invalidArgument.ValidationErrors));
     }
 
     [Theory]

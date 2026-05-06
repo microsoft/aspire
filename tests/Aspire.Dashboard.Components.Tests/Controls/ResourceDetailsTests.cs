@@ -511,7 +511,7 @@ public class ResourceDetailsTests : DashboardTestContext
             displayName: "Set value",
             displayDescription: "Set the parameter value",
             confirmationMessage: string.Empty,
-            parameter: null,
+            argumentInputs: [],
             isHighlighted: false,
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
@@ -562,7 +562,7 @@ public class ResourceDetailsTests : DashboardTestContext
             displayName: "Set value",
             displayDescription: "Set the parameter value",
             confirmationMessage: string.Empty,
-            parameter: null,
+            argumentInputs: [],
             isHighlighted: false,
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
@@ -613,7 +613,7 @@ public class ResourceDetailsTests : DashboardTestContext
             displayName: "Set value",
             displayDescription: "Set the parameter value",
             confirmationMessage: string.Empty,
-            parameter: null,
+            argumentInputs: [],
             isHighlighted: false,
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);

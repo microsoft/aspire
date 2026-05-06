@@ -2568,6 +2568,8 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(executeCommand);
 
         commandOptions ??= CommandOptions.Default;
+#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
+        ValidateCommandArguments(commandOptions.Arguments);
 
         // Replace existing annotation with the same name.
         var existingAnnotation = builder.Resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == name);
@@ -2576,7 +2578,10 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted));
+#pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
+#pragma warning restore CS0618
+#pragma warning restore ASPIREINTERACTION001
     }
 
     /// <summary>
@@ -2641,8 +2646,15 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, confirmationMessage, iconName, iconVariant, isHighlighted));
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, arguments: null, confirmationMessage, iconName, iconVariant, isHighlighted));
     }
+
+#pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.
+    private static void ValidateCommandArguments(IReadOnlyList<InteractionInput> arguments)
+    {
+        _ = new InteractionInputCollection(arguments);
+    }
+#pragma warning restore ASPIREINTERACTION001
 
     /// <summary>
     /// Adds a command to the resource that when invoked sends an HTTP request to the specified endpoint and path.

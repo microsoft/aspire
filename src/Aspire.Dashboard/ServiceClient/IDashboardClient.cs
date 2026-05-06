@@ -4,6 +4,7 @@
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.WellKnownTypes;
 
 namespace Aspire.Dashboard.ServiceClient;
 
@@ -70,7 +71,7 @@ public interface IDashboardClient : IAsyncDisposable
 
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
-    Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken);
+    Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, bool validateOnly, CancellationToken cancellationToken);
 }
 
 public sealed record ResourceViewModelSubscription(

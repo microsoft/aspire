@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -256,6 +257,7 @@ public sealed class LoadInputContext
 /// Represents an input for an interaction.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 [DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
 public sealed class InteractionInput
 {
@@ -348,6 +350,7 @@ public sealed class InteractionInput
 /// A collection of interaction inputs that supports both indexed and name-based access.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 [DebuggerDisplay("Count = {Count}")]
 public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
 {
@@ -429,6 +432,64 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     }
 
     /// <summary>
+    /// Gets the value of the input with the specified name as a string.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input, or <see langword="null"/> when the input has no value.</returns>
+    public string? GetString(string name)
+    {
+        return this[name].Value;
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="bool"/>.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="bool"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="bool"/>.</exception>
+    public bool GetBoolean(string name)
+    {
+        return bool.Parse(GetRequiredString(name));
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="int"/>.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="int"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="int"/>.</exception>
+    /// <exception cref="OverflowException">Thrown when the input value is outside the range of a <see cref="int"/>.</exception>
+    public int GetInt32(string name)
+    {
+        return int.Parse(GetRequiredString(name), NumberStyles.Integer, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="double"/>.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="double"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="double"/>.</exception>
+    /// <exception cref="OverflowException">Thrown when the input value is outside the range of a <see cref="double"/>.</exception>
+    public double GetDouble(string name)
+    {
+        return double.Parse(GetRequiredString(name), NumberStyles.Float, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Gets all inputs in declaration order.
+    /// </summary>
+    /// <returns>A copy of the inputs in declaration order.</returns>
+    [AspireExport("InteractionInputCollection.toArray", MethodName = "toArray")]
+    public InteractionInput[] ToArray()
+    {
+        return [.. _inputs];
+    }
+
+    /// <summary>
     /// Gets the names of all inputs in the collection.
     /// </summary>
     public IEnumerable<string> Names => _inputsByName.Keys;
@@ -446,6 +507,17 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     IEnumerator IEnumerable.GetEnumerator() => _inputs.GetEnumerator();
 
     internal int IndexOf(InteractionInput input) => _inputs.IndexOf(input);
+
+    private string GetRequiredString(string name)
+    {
+        var value = GetString(name);
+        if (value is null)
+        {
+            throw new InvalidOperationException($"Input '{name}' does not have a value.");
+        }
+
+        return value;
+    }
 }
 
 /// <summary>

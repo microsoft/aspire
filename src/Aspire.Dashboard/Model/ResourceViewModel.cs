@@ -12,6 +12,7 @@ using Humanizer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using InteractionInput = Aspire.DashboardService.Proto.V1.InteractionInput;
 
 namespace Aspire.Dashboard.Model;
 
@@ -237,12 +238,12 @@ public sealed class CommandViewModel
     private string DisplayDescription { get; }
 
     public string ConfirmationMessage { get; }
-    public Value? Parameter { get; }
+    public ImmutableArray<InteractionInput> ArgumentInputs { get; }
     public bool IsHighlighted { get; }
     public string IconName { get; }
     public IconVariant IconVariant { get; }
 
-    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, Value? parameter, bool isHighlighted, string iconName, IconVariant iconVariant)
+    public CommandViewModel(string name, CommandViewModelState state, string displayName, string displayDescription, string confirmationMessage, ImmutableArray<InteractionInput> argumentInputs, bool isHighlighted, string iconName, IconVariant iconVariant)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
@@ -252,7 +253,7 @@ public sealed class CommandViewModel
         DisplayName = displayName;
         DisplayDescription = displayDescription;
         ConfirmationMessage = confirmationMessage;
-        Parameter = parameter;
+        ArgumentInputs = argumentInputs;
         IsHighlighted = isHighlighted;
         IconName = iconName;
         IconVariant = iconVariant;
