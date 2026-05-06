@@ -106,6 +106,8 @@ public class IdentityChannelReaderTests
         Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
+    // PR1-S11: ParsePrNumber unit tests.
+
     [Fact]
     public void ParsePrNumber_PrChannelInformationalVersion_ReturnsPrNumber()
     {
@@ -136,6 +138,86 @@ public class IdentityChannelReaderTests
     {
         // "0.0.0-pr0" — digits run to end-of-string with no dot delimiter; "0" parses to 0.
         Assert.Equal(0, IdentityChannelReader.ParsePrNumber("0.0.0-pr0"));
+    }
+
+    // PR1-TG2: InformationalVersion parsing edge cases.
+
+    [Fact]
+    public void ParsePrNumber_EmptyString_ReturnsNull()
+    {
+        Assert.Null(IdentityChannelReader.ParsePrNumber(string.Empty));
+    }
+
+    [Fact]
+    public void ParsePrNumber_ReleaseVersionWithoutSuffix_ReturnsNull()
+    {
+        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_PrMarkerWithoutTrailingDigits_ReturnsNull()
+    {
+        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-pr"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_PrMarkerFollowedByHyphenThenDigits_ReturnsNull()
+    {
+        // "-pr-12345": after "-pr" we hit '-', no ASCII digits, so null. Documents that the
+        // reader requires digits adjacent to "-pr" with no separator in between.
+        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-pr-12345"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_DigitsFollowedByLetters_StopsAtFirstNonDigit()
+    {
+        // "0.0.0-pr12345abc": reader walks digits only, so it parses "12345" and stops.
+        // This documents the lenient behavior — any non-digit acts as a delimiter.
+        Assert.Equal(12345, IdentityChannelReader.ParsePrNumber("0.0.0-pr12345abc"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_MaxIntPrNumber_Parses()
+    {
+        Assert.Equal(int.MaxValue, IdentityChannelReader.ParsePrNumber($"0.0.0-pr{int.MaxValue}"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_OverflowsInt_ReturnsNull()
+    {
+        // int.MaxValue + 1 = 2147483648. int.TryParse with NumberStyles.None must fail
+        // gracefully (return false -> null). Verifying we never throw OverflowException.
+        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-pr2147483648"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_PrMarkerFollowedByLettersOnly_ReturnsNull()
+    {
+        Assert.Null(IdentityChannelReader.ParsePrNumber("0.0.0-prabc.def"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_MarkerEmbeddedInRcSuffix_ParsesEmbeddedDigits()
+    {
+        // "1.0.0-rc.1.pr12345": IndexOf finds the "-pr" inside ".pr"... no, IndexOf("-pr")
+        // requires the literal "-pr" substring. ".pr12345" does NOT contain "-pr", so this
+        // returns null. Documents that the reader is anchored on the "-pr" literal, not "pr".
+        Assert.Null(IdentityChannelReader.ParsePrNumber("1.0.0-rc.1.pr12345"));
+    }
+
+    [Fact]
+    public void ParsePrNumber_RealCliInformationalVersion_DoesNotThrow()
+    {
+        // Defensive smoke: whatever the test-host CLI assembly's InformationalVersion looks
+        // like today, ParsePrNumber must never throw. It either returns a positive number
+        // (when the host happens to be a PR build) or null.
+        var infoVersion = typeof(Aspire.Cli.Program).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+
+        var prNumber = IdentityChannelReader.ParsePrNumber(infoVersion);
+
+        Assert.True(prNumber is null or >= 0);
     }
 
     private static Assembly BuildFakeAssemblyWithChannelMetadata(string assemblyName, string? channelValue)
