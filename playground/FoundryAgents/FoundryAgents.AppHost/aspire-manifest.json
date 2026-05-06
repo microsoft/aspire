@@ -1,0 +1,223 @@
+{
+  "resources": {
+    "env-acr": {
+      "type": "azure.bicep.v0",
+      "path": "env-acr.module.bicep"
+    },
+    "env": {
+      "type": "azure.bicep.v0",
+      "path": "env.module.bicep",
+      "params": {
+        "env_acr_outputs_name": "{env-acr.outputs.name}",
+        "userPrincipalId": ""
+      }
+    },
+    "aif-myfoundry": {
+      "type": "azure.bicep.v0",
+      "connectionString": "Endpoint={aif-myfoundry.outputs.endpoint};EndpointAIInference={aif-myfoundry.outputs.aiFoundryApiEndpoint}models",
+      "path": "aif-myfoundry.module.bicep"
+    },
+    "proj-myproject": {
+      "type": "azure.bicep.v0",
+      "connectionString": "Endpoint={proj-myproject.outputs.endpoint}",
+      "path": "proj-myproject.module.bicep",
+      "params": {
+        "aif_myfoundry_outputs_name": "{aif-myfoundry.outputs.name}",
+        "proj_myproject_acr_outputs_name": "{proj-myproject-acr.outputs.name}",
+        "userPrincipalId": ""
+      }
+    },
+    "proj-myproject-acr": {
+      "type": "azure.bicep.v0",
+      "path": "proj-myproject-acr.module.bicep"
+    },
+    "chat": {
+      "type": "value.v0",
+      "connectionString": "{aif-myfoundry.connectionString};Deployment=chat"
+    },
+    "search": {
+      "type": "azure.bicep.v0",
+      "connectionString": "{search.outputs.connectionString}",
+      "path": "search.module.bicep"
+    },
+    "aisearch-tool": {
+      "error": "This resource does not support generation in the manifest."
+    },
+    "connection-dc5878fa0d0b490886a83d97407d0b9b": {
+      "type": "azure.bicep.v0",
+      "path": "connection-dc5878fa0d0b490886a83d97407d0b9b.module.bicep",
+      "params": {
+        "proj_myproject_outputs_name": "{proj-myproject.outputs.name}",
+        "search_outputs_name": "{search.outputs.name}"
+      }
+    },
+    "code-interp": {
+      "error": "This resource does not support generation in the manifest."
+    },
+    "weather-hosted-agent": {
+      "type": "container.v1",
+      "build": {
+        "context": "../app",
+        "dockerfile": "weather-hosted-agent.Dockerfile"
+      },
+      "deployment": {
+        "type": "azure.ai.agent.v0",
+        "definition": {
+          "kind": "hosted",
+          "target": "weather-hosted-agent"
+        }
+      },
+      "env": {
+        "OTEL_TRACES_EXPORTER": "otlp",
+        "OTEL_LOGS_EXPORTER": "otlp",
+        "OTEL_METRICS_EXPORTER": "otlp",
+        "OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED": "true",
+        "ConnectionStrings__proj-myproject": "{proj-myproject.connectionString}",
+        "PROJ_MYPROJECT_URI": "{proj-myproject.outputs.endpoint}",
+        "PROJ_MYPROJECT_CONNECTIONSTRING": "Endpoint={proj-myproject.outputs.endpoint}",
+        "PROJ_MYPROJECT_APPLICATIONINSIGHTSCONNECTIONSTRING": "{proj-myproject.outputs.APPLICATION_INSIGHTS_CONNECTION_STRING}",
+        "ConnectionStrings__chat": "{chat.connectionString}",
+        "CHAT_URI": "{aif-myfoundry.outputs.aiFoundryApiEndpoint}",
+        "CHAT_MODELNAME": "chat",
+        "CHAT_FORMAT": "OpenAI",
+        "CHAT_VERSION": "2025-04-14"
+      }
+    },
+    "weather-hosted-agent-ha": {
+      "type": "azure.ai.agent.v0",
+      "definition": {
+        "kind": "hosted",
+        "target": "weather-hosted-agent"
+      }
+    },
+    "proj-dotnet-hosted-agent": {
+      "type": "project.v1",
+      "path": "../DotNetHostedAgent/DotNetHostedAgent.csproj",
+      "deployment": {
+        "type": "azure.ai.agent.v0",
+        "definition": {
+          "kind": "hosted",
+          "target": "proj-dotnet-hosted-agent"
+        }
+      },
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{proj-dotnet-hosted-agent.bindings.http.targetPort}",
+        "ConnectionStrings__proj-myproject": "{proj-myproject.connectionString}",
+        "PROJ_MYPROJECT_URI": "{proj-myproject.outputs.endpoint}",
+        "PROJ_MYPROJECT_CONNECTIONSTRING": "Endpoint={proj-myproject.outputs.endpoint}",
+        "PROJ_MYPROJECT_APPLICATIONINSIGHTSCONNECTIONSTRING": "{proj-myproject.outputs.APPLICATION_INSIGHTS_CONNECTION_STRING}",
+        "ConnectionStrings__chat": "{chat.connectionString}",
+        "CHAT_URI": "{aif-myfoundry.outputs.aiFoundryApiEndpoint}",
+        "CHAT_MODELNAME": "chat",
+        "CHAT_FORMAT": "OpenAI",
+        "CHAT_VERSION": "2025-04-14"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 9000
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "proj-dotnet-hosted-agent-ha": {
+      "type": "azure.ai.agent.v0",
+      "definition": {
+        "kind": "hosted",
+        "target": "proj-dotnet-hosted-agent"
+      }
+    },
+    "research-agent": {
+      "type": "azure.ai.agent.v0",
+      "definition": {
+        "kind": "prompt",
+        "model": "chat",
+        "instructions": "You are a research assistant. When asked a question:\r\n1. Use Bing grounding to search the web for current information\r\n2. Use the code interpreter to analyze data or perform calculations\r\nAlways cite your sources and be thorough in your analysis."
+      }
+    },
+    "joker-agent": {
+      "type": "azure.ai.agent.v0",
+      "definition": {
+        "kind": "prompt",
+        "model": "chat",
+        "instructions": "You are a hilarious comedian. Tell jokes, be witty, and make people laugh.\r\nIf someone asks you to analyze something, use the code interpreter to\r\ncreate funny charts or calculations about the topic."
+      }
+    },
+    "chat-app": {
+      "type": "project.v1",
+      "path": "../PromptAgentChat/PromptAgentChat.csproj",
+      "deployment": {
+        "type": "azure.bicep.v0",
+        "path": "chat-app-containerapp.module.bicep",
+        "params": {
+          "env_outputs_azure_container_apps_environment_default_domain": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+          "env_outputs_azure_container_apps_environment_id": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+          "env_outputs_azure_container_registry_endpoint": "{env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+          "env_outputs_azure_container_registry_managed_identity_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+          "chat_app_containerimage": "{chat-app.containerImage}",
+          "chat_app_containerport": "{chat-app.containerPort}",
+          "proj_myproject_outputs_endpoint": "{proj-myproject.outputs.endpoint}"
+        }
+      },
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{chat-app.bindings.http.targetPort}",
+        "ConnectionStrings__joker-agent": "{joker-agent.connectionString}",
+        "JOKER_AGENT_AGENTNAME": "joker-agent",
+        "JOKER_AGENT_PROJECTENDPOINT": "{proj-myproject.outputs.endpoint}",
+        "JOKER_AGENT_CONNECTIONSTRING": "{proj-myproject.outputs.endpoint}/agents/joker-agent",
+        "ConnectionStrings__research-agent": "{research-agent.connectionString}",
+        "RESEARCH_AGENT_AGENTNAME": "research-agent",
+        "RESEARCH_AGENT_PROJECTENDPOINT": "{proj-myproject.outputs.endpoint}",
+        "RESEARCH_AGENT_CONNECTIONSTRING": "{proj-myproject.outputs.endpoint}/agents/research-agent"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http",
+          "external": true
+        }
+      }
+    },
+    "weather-hosted-agent-identity": {
+      "type": "azure.bicep.v0",
+      "path": "weather-hosted-agent-identity.module.bicep"
+    },
+    "weather-hosted-agent-roles-aif-myfoundry": {
+      "type": "azure.bicep.v0",
+      "path": "weather-hosted-agent-roles-aif-myfoundry.module.bicep",
+      "params": {
+        "aif_myfoundry_outputs_name": "{aif-myfoundry.outputs.name}",
+        "principalId": "{weather-hosted-agent-identity.outputs.principalId}"
+      }
+    },
+    "proj-dotnet-hosted-agent-identity": {
+      "type": "azure.bicep.v0",
+      "path": "proj-dotnet-hosted-agent-identity.module.bicep"
+    },
+    "proj-dotnet-hosted-agent-roles-aif-myfoundry": {
+      "type": "azure.bicep.v0",
+      "path": "proj-dotnet-hosted-agent-roles-aif-myfoundry.module.bicep",
+      "params": {
+        "aif_myfoundry_outputs_name": "{aif-myfoundry.outputs.name}",
+        "principalId": "{proj-dotnet-hosted-agent-identity.outputs.principalId}"
+      }
+    }
+  }
+}

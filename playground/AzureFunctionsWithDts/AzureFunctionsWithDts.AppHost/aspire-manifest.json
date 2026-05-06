@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "storage": {
+      "type": "azure.bicep.v0",
+      "path": "storage.module.bicep"
+    },
+    "funcapp": {
+      "type": "project.v0",
+      "path": "../AzureFunctionsWithDts.Functions/AzureFunctionsWithDts.Functions.csproj"

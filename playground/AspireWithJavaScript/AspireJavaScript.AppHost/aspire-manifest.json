@@ -130,6 +130,34 @@
         }
       }
     },
+    "vite-static": {
+      "type": "container.v1",
+      "build": {
+        "context": "../AspireJavaScript.Vite",
+        "dockerfile": "vite-static.Dockerfile"
+      },
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": "{vite-static.bindings.http.targetPort}",
+        "WEATHERAPI_HTTP": "{weatherapi.bindings.http.url}",
+        "services__weatherapi__http__0": "{weatherapi.bindings.http.url}",
+        "WEATHERAPI_HTTPS": "{weatherapi.bindings.https.url}",
+        "services__weatherapi__https__0": "{weatherapi.bindings.https.url}",
+        "YARP_ENABLE_STATIC_FILES": "true",
+        "REVERSEPROXY__ROUTES__api__CLUSTERID": "api",
+        "REVERSEPROXY__ROUTES__api__MATCH__PATH": "/api/{**catch-all}",
+        "REVERSEPROXY__CLUSTERS__api__DESTINATIONS__destination1__ADDRESS": "https\u002Bhttp://weatherapi"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 5000,
+          "external": true
+        }
+      }
+    },
     "node": {
       "type": "container.v1",
       "build": {

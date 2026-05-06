@@ -50,9 +50,7 @@
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{apiservice.bindings.http.targetPort}",
         "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
-        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
-        "KEYCLOAK_MANAGEMENT": "{keycloak.bindings.management.url}",
-        "services__keycloak__http__1": "{keycloak.bindings.management.url}"
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}"
       },
       "bindings": {
         "http": {
@@ -76,8 +74,6 @@
         "HTTP_PORTS": "{webfrontend.bindings.http.targetPort}",
         "KEYCLOAK_HTTP": "{keycloak.bindings.http.url}",
         "services__keycloak__http__0": "{keycloak.bindings.http.url}",
-        "KEYCLOAK_MANAGEMENT": "{keycloak.bindings.management.url}",
-        "services__keycloak__http__1": "{keycloak.bindings.management.url}",
         "APISERVICE_HTTP": "{apiservice.bindings.http.url}",
         "services__apiservice__http__0": "{apiservice.bindings.http.url}",
         "APISERVICE_HTTPS": "{apiservice.bindings.https.url}",
