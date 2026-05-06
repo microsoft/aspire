@@ -1,0 +1,15 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "myapp-config"
+  labels:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  BOOL_TRUE: "{{ .Values.config.myapp.BOOL_TRUE }}"
+  BOOL_FALSE: "{{ .Values.config.myapp.BOOL_FALSE }}"
+  INT_VALUE: "{{ .Values.config.myapp.INT_VALUE }}"
+  DOUBLE_VALUE: "{{ .Values.config.myapp.DOUBLE_VALUE }}"
+  STRING_VALUE: "{{ .Values.config.myapp.STRING_VALUE }}"

@@ -1,0 +1,36 @@
+﻿---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "myapp-deployment"
+  labels:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "aspire-hosting-tests"
+        app.kubernetes.io/component: "myapp"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - image: "mcr.microsoft.com/dotnet/aspnet:8.0"
+          name: "myapp"
+          envFrom:
+            - configMapRef:
+                name: "myapp-config"
+          imagePullPolicy: "IfNotPresent"
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "aspire-hosting-tests"
+      app.kubernetes.io/component: "myapp"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: "RollingUpdate"

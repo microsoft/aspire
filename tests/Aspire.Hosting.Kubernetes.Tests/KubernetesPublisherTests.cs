@@ -636,6 +636,55 @@ public class KubernetesPublisherTests()
         await settingsTask;
     }
 
+    [Fact]
+    public async Task PublishAsync_HandlesScalarEnvironmentVariableTypes()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["BOOL_TRUE"] = true;
+                context.EnvironmentVariables["BOOL_FALSE"] = false;
+                context.EnvironmentVariables["INT_VALUE"] = 42;
+                context.EnvironmentVariables["DOUBLE_VALUE"] = 3.14;
+            })
+            .WithEnvironment("STRING_VALUE", "hello");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "Chart.yaml",
+            "values.yaml",
+            "templates/myapp/deployment.yaml",
+            "templates/myapp/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
     private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
     {
         public string ValueExpression => "test-condition";
