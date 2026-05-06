@@ -7,7 +7,7 @@ These instructions will get you ready to contribute to this project. If you just
 See [machine-requirements.md](/docs/machine-requirements.md).
 ## Build the repo
 
-`.\build.sh` (macOS and Linux) or `.\build.cmd` (Windows)
+`./build.sh` (macOS and Linux) or `.\build.cmd` (Windows)
 
 ## Using the `dotnet` CLI
 
@@ -104,7 +104,7 @@ If you want to try local changes on a separate Aspire based project or solution 
 in a local folder and use it as a package source.
 
 To do so simply execute:
-`.\build.sh -pack` (macOS and Linux) or `.\build.cmd -pack` (Windows)
+`./build.sh -pack` (macOS and Linux) or `.\build.cmd -pack` (Windows)
 
 This will generate all the packages in the folder `./artifacts/packages/Debug/Shipping`. At this point from your solution folder run:
 
