@@ -112,3 +112,4 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         await pendingRun;
     }
 }
+
