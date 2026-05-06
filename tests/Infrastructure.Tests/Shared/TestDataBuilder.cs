@@ -29,6 +29,7 @@ public static class TestDataBuilder
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
+        bool requiresPolyglotJavaImage = false,
         bool enablePlaywrightInstall = false,
         string? extraTestArgs = null,
         string[]? supportedOSes = null,
@@ -46,6 +47,7 @@ public static class TestDataBuilder
                 ["requiresNugets"] = requiresNugets,
                 ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
+                ["requiresPolyglotJavaImage"] = requiresPolyglotJavaImage,
                 ["enablePlaywrightInstall"] = enablePlaywrightInstall
             },
             ExtraTestArgs = extraTestArgs,
@@ -76,6 +78,7 @@ public static class TestDataBuilder
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
+        bool requiresPolyglotJavaImage = false,
         bool enablePlaywrightInstall = false,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
@@ -93,6 +96,7 @@ public static class TestDataBuilder
                 ["requiresNugets"] = requiresNugets,
                 ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
+                ["requiresPolyglotJavaImage"] = requiresPolyglotJavaImage,
                 ["enablePlaywrightInstall"] = enablePlaywrightInstall
             },
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],
@@ -192,6 +196,7 @@ public static class TestDataBuilder
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
+        bool requiresPolyglotJavaImage = false,
         bool enablePlaywrightInstall = false,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
@@ -213,6 +218,7 @@ public static class TestDataBuilder
                 ["requiresNugets"] = requiresNugets,
                 ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
+                ["requiresPolyglotJavaImage"] = requiresPolyglotJavaImage,
                 ["enablePlaywrightInstall"] = enablePlaywrightInstall
             },
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],

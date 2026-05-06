@@ -19,6 +19,7 @@ env:
   CLI_E2E_POLYGLOT_IMAGE_TAG: aspire-cli-e2e-polyglot:prebuilt
   CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT: cli-e2e-polyglot-java-image
   CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG: aspire-cli-e2e-polyglot-java:prebuilt
+  CLI_E2E_POLYGLOT_JAVA_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-java
   CLI_E2E_POLYGLOT_BASE_IMAGE_TAG: aspire-e2e-polyglot-base:latest
   CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-base
   CLI_E2E_INCLUDE_POLYGLOT_IMAGES: ${{ inputs.includePolyglotImages }}
@@ -34,7 +35,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Verify Docker is running
-        run: docker info
+        uses: ./.github/actions/verify-docker
+        with:
+          diagnostics: true
 
       - name: Export GitHub Actions cache runtime
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
@@ -81,24 +84,6 @@ jobs:
               .
           }
 
-          build_java_image() {
-            local mirror="$1"
-            local -a build_args=()
-
-            if [[ -n "$mirror" ]]; then
-              echo "Building Java polyglot image with Ubuntu apt mirror: $mirror"
-              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
-            else
-              echo "Building Java polyglot image with the default Ubuntu apt sources"
-            fi
-
-            DOCKER_BUILDKIT=1 docker build \
-              "${build_args[@]}" \
-              -f tests/Shared/Docker/Dockerfile.e2e-polyglot-java \
-              -t "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" \
-              .
-          }
-
           build_with_mirror_retry() {
             local display_name="$1"
             local dockerfile="$2"
@@ -117,10 +102,7 @@ jobs:
             build_with_mirror_retry "polyglot base image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-base" "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE"
             docker tag "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_IMAGE_TAG"
 
-            if ! build_java_image "http://azure.archive.ubuntu.com/ubuntu/"; then
-              echo "Java polyglot image build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
-              build_java_image ""
-            fi
+            build_with_mirror_retry "Java polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-java" "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" "$CLI_E2E_POLYGLOT_JAVA_IMAGE_CACHE_SCOPE"
           fi
 
           mkdir -p artifacts/cli-e2e-image

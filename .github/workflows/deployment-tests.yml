@@ -245,11 +245,9 @@ jobs:
           echo "✅ Azure authentication successful"
 
       - name: Verify Docker is running
-        run: |
-          echo "Verifying Docker daemon..."
-          docker version
-          docker info | head -20
-          echo "✅ Docker is available"
+        uses: ./.github/actions/verify-docker
+        with:
+          diagnostics: true
 
       - name: Run deployment test (${{ matrix.shortname }})
         id: run_tests

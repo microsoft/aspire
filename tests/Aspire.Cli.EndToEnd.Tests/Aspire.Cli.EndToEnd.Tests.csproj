@@ -13,6 +13,7 @@
     <SplitTestsOnCI>true</SplitTestsOnCI>
     <RequiresNugets>true</RequiresNugets>
     <RequiresCliArchive>true</RequiresCliArchive>
+    <RequiresPolyglotJavaImage>true</RequiresPolyglotJavaImage>
     <RequiresGitHubToken>true</RequiresGitHubToken>
 
     <!-- Disable strong name signing because Hex1b package is not signed -->

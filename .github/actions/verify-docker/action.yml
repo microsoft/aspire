@@ -1,0 +1,21 @@
+name: 'Verify Docker'
+description: 'Verify that the runner Docker daemon is available'
+inputs:
+  diagnostics:
+    description: 'When true, emit Docker and disk diagnostics after the daemon check.'
+    required: false
+    default: 'false'
+runs:
+  using: "composite"
+  steps:
+    - name: Verify Docker daemon
+      shell: bash
+      run: docker info
+
+    - name: Emit Docker diagnostics
+      if: ${{ inputs.diagnostics == 'true' }}
+      shell: bash
+      run: |
+        docker version || echo "::warning::docker version failed with exit code $?"
+        docker buildx version || echo "::warning::docker buildx version failed with exit code $?"
+        df -h / || echo "::warning::df failed with exit code $?"

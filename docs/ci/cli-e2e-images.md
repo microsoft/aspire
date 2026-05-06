@@ -24,7 +24,7 @@ This preserves the local development path while making opted-in CI jobs fail ear
 
 The image build workflow has an `includePolyglotImages` input. It defaults to `true` and builds all three shared images. Daily CLI smoke tests set it to `false` because they only need the DotNet image.
 
-Consumer workflows download image artifacts into `${{ github.workspace }}/cli-e2e-image` and call `eng/scripts/load-cli-e2e-images.sh` to load the images and export the matching environment variables. Regular split CLI E2E jobs always require DotNet and Polyglot images. Java image download and loading is conditional on Java test jobs to avoid transferring the larger Java tarball to every split job.
+Consumer workflows download image artifacts into `${{ github.workspace }}/cli-e2e-image` and call `eng/scripts/load-cli-e2e-images.sh` to load the images and export the matching environment variables. Regular split CLI E2E jobs always require DotNet and Polyglot images. Java image download and loading is controlled by the `requiresPolyglotJavaImage` CI test property owned by the test project.
 
 ## Adding another variant
 
