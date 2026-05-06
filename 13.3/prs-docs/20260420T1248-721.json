@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Docs editorial cleanup, no matching changelog entry",
+  "mergedAt": "2026-04-20T12:48:38Z",
+  "number": 721,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Remove redundant Overview headings on TOC-enabled docs pages"
+}

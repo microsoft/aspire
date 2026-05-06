@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "npm dependency bump, not product documentation",
+  "mergedAt": "2026-04-14T12:58:49Z",
+  "number": 711,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "chore(deps): bump the npm-all group across 1 directory with 6 updates"
+}

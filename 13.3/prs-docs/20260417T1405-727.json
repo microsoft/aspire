@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Security dependency bump, not product documentation",
+  "mergedAt": "2026-04-17T14:05:02Z",
+  "number": 727,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Address security alert: bump dompurify"
+}

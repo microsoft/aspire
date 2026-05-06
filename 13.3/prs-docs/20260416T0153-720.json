@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "General deployment doc reorganization, no specific docsRequired changelog entry match",
+  "mergedAt": "2026-04-16T01:53:35Z",
+  "number": 720,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Improve deployment overview and CI/CD guidance"
+}

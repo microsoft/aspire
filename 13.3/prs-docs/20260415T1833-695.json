@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Cosmetic accessibility improvement, no matching changelog entry",
+  "mergedAt": "2026-04-15T18:33:36Z",
+  "number": 695,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Add <abbr> tooltip tags to first occurrence of abbreviations in docs"
+}

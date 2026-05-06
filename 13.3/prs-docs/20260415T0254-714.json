@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Follow-on fix to environment guide - matched to ASPIRE_ENVIRONMENT variable support (#16098 entry)",
+  "mergedAt": "2026-04-15T02:54:13Z",
+  "number": 714,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "included",
+  "title": "Fix aspire start environment docs"
+}

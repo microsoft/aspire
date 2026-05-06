@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Support page update, not a product feature changelog entry",
+  "mergedAt": "2026-04-15T20:31:25Z",
+  "number": 710,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Update support.mdx: Aspire 13.2.2 current patch, fix 13.1.3 out-of-support entry"
+}

@@ -1,12 +1,15 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The `describe`, `logs`, and `export` commands now hide resources marked as hidden by default, consistent with dashboard behavior. Use the new `--include-hidden` option to show them when needed.",
+  "docsPrs": [
+    723
+  ],
   "docsRequired": true,
-  "emoji": "👁️",
+  "emoji": "\ud83d\udc41\ufe0f",
   "firstMergedAt": "2026-04-15T23:51:57Z",
   "lastMergedAt": "2026-04-15T23:51:57Z",
   "name": "Hidden resources filtered by default in CLI commands",

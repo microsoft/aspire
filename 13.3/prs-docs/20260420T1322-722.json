@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents CLI config preview features, no matching docsRequired changelog entry found",
+  "mergedAt": "2026-04-20T13:22:11Z",
+  "number": 722,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Add preview feature toggle guidance to CLI configuration docs"
+}

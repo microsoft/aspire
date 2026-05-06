@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Explicitly documents microsoft/aspire#16146 - matched to hidden resources CLI entry",
+  "mergedAt": "2026-04-16T08:42:10Z",
+  "number": 723,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "included",
+  "title": "[docs] Add --include-hidden option docs to describe, logs, and export commands"
+}

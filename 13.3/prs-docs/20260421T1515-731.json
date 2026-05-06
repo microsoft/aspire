@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Documents microsoft/aspire#16175 but that changelog entry has docsRequired: false",
+  "mergedAt": "2026-04-21T15:15:38Z",
+  "number": 731,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Document Azure:CredentialProcessTimeoutSeconds option"
+}

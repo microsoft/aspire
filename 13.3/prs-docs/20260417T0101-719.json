@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Website search/UI fix, not product documentation",
+  "mergedAt": "2026-04-17T01:01:11Z",
+  "number": 719,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Fix TypeScript API search routes and mobile results"
+}

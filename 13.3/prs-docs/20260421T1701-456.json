@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Testing advanced docs, no matching docsRequired changelog entry",
+  "mergedAt": "2026-04-21T17:01:43Z",
+  "number": 456,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "Add testing docs: advanced scenarios and CI/CD patterns"
+}

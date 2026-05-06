@@ -5,6 +5,10 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The ASPIRE_ENVIRONMENT environment variable is now recognized by DistributedApplicationBuilder when launching via dotnet run, azd, or any non-CLI path. Priority order is: --environment flag > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default (Production).",
+  "docsPrs": [
+    705,
+    714
+  ],
   "docsRequired": true,
   "emoji": "🌿",
   "firstMergedAt": "2026-04-14T14:11:28Z",

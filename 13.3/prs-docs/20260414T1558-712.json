@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI/build fix, not product documentation",
+  "mergedAt": "2026-04-14T15:58:41Z",
+  "number": 712,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "excluded",
+  "title": "fix: build frontend before tests to prevent Lunaria CI failures"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Documents ASPIRE_ENVIRONMENT variable support in AppHost (matched to #16098 entry)",
+  "mergedAt": "2026-04-14T03:37:28Z",
+  "number": 705,
+  "runDate": "2026-05-06T00:15:44Z",
+  "status": "included",
+  "title": "Add environments documentation guide"
+}
