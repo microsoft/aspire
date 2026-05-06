@@ -335,9 +335,13 @@ public class Program
         {
             var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
             var channel = channelReader.ReadChannel();
-            var infoVersion = typeof(Program).Assembly
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-            var prNumber = IdentityChannelReader.ParsePrNumber(infoVersion);
+            int? prNumber = null;
+            if (channel == "pr")
+            {
+                var infoVersion = typeof(Program).Assembly
+                    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                prNumber = IdentityChannelReader.ParsePrNumber(infoVersion);
+            }
             return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel, prNumber);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
