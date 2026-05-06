@@ -1718,6 +1718,94 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         return OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
     }
+
+    // PR1-S9 regression: `aspire update --self` no longer mutates the global identity
+    // channel via IConfigurationService. The freshly extracted binary already carries
+    // its own channel via [AssemblyMetadata("AspireCliChannel")], so the global write
+    // is dead weight and a contamination source.
+
+    [Theory]
+    [InlineData("update --self --channel stable")]
+    [InlineData("update --self --channel staging")]
+    [InlineData("update --self --channel daily")]
+    [InlineData("update --self --quality daily")]
+    public async Task UpdateCommand_SelfUpdate_DoesNotWriteChannelToGlobalConfiguration(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var setKeys = new List<(string Key, string Value, bool IsGlobal)>();
+        var deleteKeys = new List<(string Key, bool IsGlobal)>();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationServiceFactory = _ => new Aspire.Cli.Tests.TestServices.TestConfigurationService
+            {
+                OnSetConfiguration = (key, value, isGlobal) => setKeys.Add((key, value, isGlobal)),
+                OnDeleteConfiguration = (key, isGlobal) => deleteKeys.Add((key, isGlobal)),
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        // Extraction will fail (the fake archive isn't a real tar.gz) — that's fine,
+        // the assertions are about what was/wasn't written to global config before
+        // extraction completed.
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(setKeys, e => e.Key.Equals("channel", StringComparison.Ordinal) && e.IsGlobal);
+        Assert.DoesNotContain(deleteKeys, e => e.Key.Equals("channel", StringComparison.Ordinal) && e.IsGlobal);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_StableChannel_DoesNotDeleteGlobalChannel()
+    {
+        // Pre-S9, selecting `stable` triggered DeleteConfigurationAsync("channel", isGlobal: true)
+        // to roll back any prior write. Verify the delete is gone — it shouldn't fire even
+        // for the stable channel (no writer => no rollback).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var deleteCalls = new List<(string Key, bool IsGlobal)>();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationServiceFactory = _ => new Aspire.Cli.Tests.TestServices.TestConfigurationService
+            {
+                OnDeleteConfiguration = (key, isGlobal) => deleteCalls.Add((key, isGlobal)),
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel stable");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(deleteCalls, e => e.Key.Equals("channel", StringComparison.Ordinal) && e.IsGlobal);
+    }
 }
 
 // Helper class to track DisplayCancellationMessage calls
