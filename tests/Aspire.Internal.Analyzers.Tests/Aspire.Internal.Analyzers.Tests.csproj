@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!--
+      The analyzer being tested is intentionally NOT shipped in any package. We
+      reference it as IsAspireProjectResource="false" purely to make sure it's
+      built before the tests run. The actual analyzer pipeline is exercised by
+      the Microsoft.CodeAnalysis.CSharp.Testing harness, not by applying the
+      analyzer to this test project's own source.
+    -->
+    <SkipAspireInternalAnalyzersReference>true</SkipAspireInternalAnalyzersReference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Internal.Analyzers\Aspire.Internal.Analyzers.csproj" IsAspireProjectResource="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" />
+  </ItemGroup>
+
+</Project>

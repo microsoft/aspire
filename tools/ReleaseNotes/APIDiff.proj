@@ -13,6 +13,7 @@
     <ExcludedProjects Include="Aspire.Hosting.AppHost" />
     <ExcludedProjects Include="Aspire.Hosting.Testing" />
     <ExcludedProjects Include="Aspire.Hosting.Analyzers" />
+    <ExcludedProjects Include="Aspire.Internal.Analyzers" />
     <ExcludedProjects Include="Aspire.RuntimeIdentifier.Tool" />
   </ItemGroup>
 
