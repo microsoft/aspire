@@ -1337,6 +1337,13 @@ main() {
             fi
         fi
     fi
+
+    # Print PATH activation hint for PR installs.
+    # Goes to stdout (not stderr) so it's visible in normal install output and tests can grep it.
+    # Printed in success path (after install completes) and also under --dry-run.
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
+        echo "Add to your shell profile: export PATH=\"$INSTALL_PATH_UNEXPANDED:\$PATH\""
+    fi
 }
 
 # Only run main when executed directly (not when sourced for unit tests).

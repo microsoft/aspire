@@ -1448,6 +1448,15 @@ function Start-DownloadAndInstall {
             Update-PathEnvironment -CliBinDir $cliBinDir
         }
     }
+
+    # Print PATH activation hint for PR installs.
+    # Uses Write-Host so the hint is visible on the host stream (not stderr) in normal output.
+    # Printed in success path (after install completes) and also under -WhatIf.
+    # The OS path separator is used so the line is valid on both Windows (;) and Unix (:).
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        $pathSep = [System.IO.Path]::PathSeparator
+        Write-Host "Add to your shell profile: `$env:PATH = '$cliBinDir$pathSep`$env:PATH';"
+    }
 }
 
 # =============================================================================
