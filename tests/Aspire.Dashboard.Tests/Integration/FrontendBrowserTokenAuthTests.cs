@@ -194,6 +194,38 @@ public class FrontendBrowserTokenAuthTests
     }
 
     [Fact]
+    public async Task Get_LoginPage_ValidToken_ForwardedHttps_UsesHttpsCookie()
+    {
+        var apiKey = "TestKey123!";
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.ForwardedHeaders.ConfigKey] = bool.TrueString;
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        using var handler = new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            UseCookies = true
+        };
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}")
+        };
+        client.DefaultRequestHeaders.Add("X-Forwarded-Proto", "https");
+        client.DefaultRequestHeaders.Add("X-Forwarded-Host", "localhost");
+
+        var response = await client.GetAsync(DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey)).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".Aspire.Dashboard.Auth=", StringComparison.Ordinal));
+        Assert.Contains("; secure", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Get_LoginPage_ValidToken_OtlpHttpConnection_Denied()
     {
         // Arrange

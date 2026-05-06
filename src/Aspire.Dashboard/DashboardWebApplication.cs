@@ -465,6 +465,13 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             _app.UseCors();
         }
 
+        // Use Forwarded Headers middleware if configured. This must run before token validation because sign-in cookie
+        // behavior depends on the normalized request scheme.
+        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
+        {
+            _app.UseForwardedHeaders();
+        }
+
         _app.UseMiddleware<ValidateTokenMiddleware>();
 
         // Configure the HTTP request pipeline.
@@ -500,12 +507,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 }
             }
         });
-
-        // Use Forwarded Headers middleware if configured.
-        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
-        {
-            _app.UseForwardedHeaders();
-        }
 
         _app.UseAuthorization();
 
