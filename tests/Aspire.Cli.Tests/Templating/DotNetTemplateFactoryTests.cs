@@ -355,19 +355,16 @@ public class DotNetTemplateFactoryTests
         var configurationService = new FakeConfigurationService();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService, prompter, hostEnvironment);
 
         return new DotNetTemplateFactory(
             interactionService,
             runner,
             certificateService,
-            packagingService,
-            prompter,
             prompter,
             executionContext,
             sdkInstaller,
             features,
-            configurationService,
             telemetry,
             hostEnvironment,
             templateNuGetConfigService);
@@ -401,6 +398,11 @@ public class DotNetTemplateFactoryTests
         }
 
         public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<string?>(null);
         }
@@ -517,7 +519,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, CancellationToken cancellationToken)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

@@ -22,7 +22,7 @@
     <PackageVersion Include="Testcontainers.Milvus" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers.Oracle" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers" Version="$(TestcontainersPackageVersion)" />
-    <PackageVersion Include="Verify.XunitV3" Version="31.1.0" />
+    <PackageVersion Include="Verify.XunitV3" Version="31.16.2" />
     <PackageVersion Include="xunit.v3.extensibility.core" Version="$(XunitV3Version)" />
   </ItemGroup>
 </Project>

@@ -8,9 +8,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 var funcApp = builder.AddAzureFunctionsProject<Projects.AzureFunctionsService>("azure-functions-service")
     .WithExternalHttpEndpoints();
 
-// Bug #15606/#15647 repro: A standard project resource should always get
-// IDE execution when DEBUG_SESSION_PORT is set, even if the extension
-// advertises SupportedLaunchConfigurations that don't include "project".
+// Bug #15606/#15647 repro: A standard project resource should get
+// IDE execution when DEBUG_SESSION_PORT is set and the extension
+// advertises SupportedLaunchConfigurations that include "project"
+// (or omits the list entirely, e.g. Visual Studio).
 builder.AddProject<Projects.StandardService>("standard-service")
     .WithReference(funcApp)
     .WaitFor(funcApp);

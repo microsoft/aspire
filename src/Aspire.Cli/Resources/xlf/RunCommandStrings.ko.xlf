@@ -68,8 +68,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
-        <source>Aspire Dashboard failed to start.</source>
-        <target state="translated">Azure 대시보드를 시작하지 못했습니다.</target>
+        <source>Aspire Dashboard failed to start or is disabled.</source>
+        <target state="needs-review-translation">Azure 대시보드를 시작하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">

@@ -7,6 +7,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -425,13 +426,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenDashboardFailsToStart_ReturnsNonZeroExitCodeWithClearErrorMessage()
+    public async Task RunCommand_WhenDashboardFailsToStart_ContinuesWithWarning()
     {
 
         var backchannelFactory = (IServiceProvider sp) =>
         {
             var backchannel = new TestAppHostBackchannel();
-            // Configure the backchannel to throw DashboardStartupException when GetDashboardUrlsAsync is called
+            // Configure the backchannel to return unhealthy dashboard state
             backchannel.GetDashboardUrlsAsyncCallback = (ct) =>
             {
                 return Task.FromResult(new DashboardUrlsState
@@ -470,6 +471,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         };
 
         var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+        var testInteractionService = new TestInteractionService();
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -477,17 +479,29 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = projectLocatorFactory;
             options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
-            options.InteractionServiceFactory = (sp) => new TestInteractionService();
+            options.InteractionServiceFactory = (sp) => testInteractionService;
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        // Assert that the command returns the expected failure exit code
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        // Simulate CTRL-C - the command should continue past the unhealthy dashboard
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        // The command should succeed even when the dashboard is unhealthy
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // Verify a warning was displayed (not an error)
+        var m = Assert.Single(testInteractionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.Warning, m.Emoji);
+        Assert.Equal(RunCommandStrings.DashboardFailedToStart, m.Message);
+        Assert.Empty(testInteractionService.DisplayedErrors);
     }
 
     [Fact]
@@ -714,7 +728,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        // Pass --start-debug-session to avoid watch mode (which skips build)
         var result = command.Parse("run --start-debug-session");
 
         using var cts = new CancellationTokenSource();
@@ -728,6 +741,60 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.True(buildCalled, "Build should be called when extension has build-dotnet-using-cli capability.");
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenExtensionNoDebugBuildFails_DoesNotRunAppHost()
+    {
+        var buildCalled = false;
+        var runCalled = false;
+
+        var extensionBackchannel = new TestExtensionBackchannel();
+        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCli);
+
+        var extensionInteractionServiceFactory = (IServiceProvider sp) => new TestExtensionInteractionService(sp);
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
+            {
+                buildCalled = true;
+                return 1;
+            };
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                runCalled = true;
+                return Task.FromResult(0);
+            };
+            return runner;
+        };
+
+        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = projectLocatorFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+            options.InteractionServiceFactory = extensionInteractionServiceFactory;
+            options.ConfigurationCallback += config =>
+            {
+                config["ASPIRE_EXTENSION_DEBUG_SESSION_ID"] = "test-session-id";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+        Assert.True(buildCalled, "Build should be called before launching the AppHost in extension no-debug mode.");
+        Assert.False(runCalled, "AppHost should not be launched when the pre-build fails.");
     }
 
     [Fact]

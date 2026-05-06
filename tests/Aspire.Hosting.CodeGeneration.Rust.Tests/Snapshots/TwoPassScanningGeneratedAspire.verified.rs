@@ -941,6 +941,11 @@ pub mod test_configs {
 pub mod well_known_pipeline_steps {
     use super::*;
 
+    /// The step that runs before the application starts.
+    pub fn before_start() -> String {
+        serde_json::from_value::<String>(serde_json::json!("before-start"))
+            .expect("generated exported value should deserialize")
+    }
     /// The well-known step for building resources.
     pub fn build() -> String {
         serde_json::from_value::<String>(serde_json::json!("build"))
@@ -949,6 +954,11 @@ pub mod well_known_pipeline_steps {
     /// The prerequisite step that runs before any build operations.
     pub fn build_prereq() -> String {
         serde_json::from_value::<String>(serde_json::json!("build-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The step that checks whether the container runtime (e.g., Docker or Podman) is running. Build steps that need a container runtime should depend on this step.
+    pub fn check_container_runtime() -> String {
+        serde_json::from_value::<String>(serde_json::json!("check-container-runtime"))
             .expect("generated exported value should deserialize")
     }
     /// Aggregation step for all deploy operations. All deploy steps should be required by this step.

@@ -63,6 +63,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string HeaderSdk {
+            get {
+                return ResourceManager.GetString("HeaderSdk", resourceCulture);
+            }
+        }
+
         public static string HeaderPid {
             get {
                 return ResourceManager.GetString("HeaderPid", resourceCulture);

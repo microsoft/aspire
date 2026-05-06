@@ -136,7 +136,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     {
         Labels = new()
         {
-            ["app.kubernetes.io/name"] = Parent.HelmChartName,
+            ["app.kubernetes.io/name"] = ".Chart.Name".ToHelmExpression(),
             ["app.kubernetes.io/component"] = resource.Name,
             ["app.kubernetes.io/instance"] = ".Release.Name".ToHelmExpression(),
         };

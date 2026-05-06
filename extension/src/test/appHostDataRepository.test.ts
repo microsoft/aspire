@@ -158,6 +158,90 @@ suite('AppHostDataRepository', () => {
     });
 });
 
+suite('AppHostDataRepository AppHost-file gate', () => {
+    let terminalProvider: AspireTerminalProvider;
+    let subscriptions: vscode.Disposable[];
+    let getCliPathStub: sinon.SinonStub;
+    let spawnStub: sinon.SinonStub;
+
+    setup(() => {
+        subscriptions = [];
+        terminalProvider = new AspireTerminalProvider(subscriptions);
+        getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
+        spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
+        spawnStub.callsFake(() => new TestChildProcess());
+    });
+
+    teardown(() => {
+        spawnStub.restore();
+        getCliPathStub.restore();
+        subscriptions.forEach(subscription => subscription.dispose());
+    });
+
+    test('opening AppHost file with hidden panel starts describe watch', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setAppHostFileOpen(true);
+        await waitForMicrotasks();
+
+        assert.strictEqual(spawnStub.calledOnce, true);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json']);
+
+        repository.dispose();
+    });
+
+    test('closing all AppHost files with hidden panel stops describe watch', async () => {
+        const childProcess = new TestChildProcess();
+        spawnStub.returns(childProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setAppHostFileOpen(true);
+        await waitForMicrotasks();
+
+        repository.setAppHostFileOpen(false);
+
+        assert.strictEqual(childProcess.killed, true);
+
+        repository.dispose();
+    });
+
+    test('describe watch stays alive while either gate is open', async () => {
+        const childProcess = new TestChildProcess();
+        spawnStub.returns(childProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setAppHostFileOpen(true);
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        // Closing the AppHost file should not stop the watch while the panel is still visible.
+        repository.setAppHostFileOpen(false);
+        assert.strictEqual(childProcess.killed, false);
+
+        // Hiding the panel now stops it.
+        repository.setPanelVisible(false);
+        assert.strictEqual(childProcess.killed, true);
+
+        repository.dispose();
+    });
+
+    test('redundant setAppHostFileOpen calls do not respawn describe', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setAppHostFileOpen(true);
+        repository.setAppHostFileOpen(true);
+        await waitForMicrotasks();
+
+        assert.strictEqual(spawnStub.calledOnce, true);
+
+        repository.dispose();
+    });
+});
+
 async function waitForMicrotasks(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();

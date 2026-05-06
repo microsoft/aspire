@@ -102,7 +102,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
               extends: [tseslint.configs.base],
               languageOptions: {
                 parserOptions: {
-                  projectService: true,
+                  project: './tsconfig.apphost.json',
+                  tsconfigRootDir: import.meta.dirname,
                 },
               },
               rules: {
@@ -120,19 +121,16 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             ? new Random(request.PortSeed.Value)
             : Random.Shared;
 
-        var httpsPort = random.Next(10000, 65000);
-        var httpPort = random.Next(10000, 65000);
-        var otlpPort = random.Next(10000, 65000);
-        var resourceServicePort = random.Next(10000, 65000);
+        var ports = AppHostProfilePortGenerator.Generate(random);
 
         files["apphost.run.json"] = $$"""
             {
               "profiles": {
                 "https": {
-                  "applicationUrl": "https://localhost:{{httpsPort}};http://localhost:{{httpPort}}",
+                  "applicationUrl": "https://localhost:{{ports.DashboardHttpsPort}};http://localhost:{{ports.DashboardHttpPort}}",
                   "environmentVariables": {
-                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{otlpPort}}",
-                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{resourceServicePort}}"
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{ports.OtlpHttpsPort}}",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{ports.ResourceServiceHttpsPort}}"
                   }
                 }
               }
@@ -151,7 +149,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var packageJson = new JsonObject();
         var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
 
-        if (!File.Exists(packageJsonPath))
+        var isGreenfield = !File.Exists(packageJsonPath);
+        if (isGreenfield)
         {
             // Greenfield: include root metadata so the scaffold output is a complete package.json.
             var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
@@ -173,6 +172,16 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         scripts["aspire:start"] = "aspire run";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
+
+        if (isGreenfield)
+        {
+            scripts["lint"] = "npm run aspire:lint";
+            scripts["predev"] = "npm run aspire:lint";
+            scripts["dev"] = "npm run aspire:start";
+            scripts["prebuild"] = "npm run aspire:lint";
+            scripts["build"] = "npm run aspire:build";
+            scripts["watch"] = "npm run aspire:dev";
+        }
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
         EnsureDependency(packageJson, "devDependencies", "@types/node", "^22.0.0");
@@ -257,6 +266,14 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 Command = "npm",
                 Args = ["install"]
             },
+            PreExecute =
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "-p", AppHostTsConfigFileName]
+                }
+            ],
             Execute = new CommandSpec
             {
                 Command = "npx",
@@ -273,7 +290,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"npx --no-install tsx --tsconfig {AppHostTsConfigFileName} {{appHostFile}}"
+                    "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>

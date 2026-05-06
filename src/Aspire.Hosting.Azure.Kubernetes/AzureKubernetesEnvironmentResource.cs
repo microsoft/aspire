@@ -5,11 +5,10 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 
-using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 
-namespace Aspire.Hosting.Azure;
+namespace Aspire.Hosting.Azure.Kubernetes;
 
 /// <summary>
 /// Represents an Azure Kubernetes Service (AKS) environment resource that provisions
@@ -111,11 +110,6 @@ public partial class AzureKubernetesEnvironmentResource :
     /// Gets or sets the Kubernetes version for the AKS cluster.
     /// </summary>
     internal string? KubernetesVersion { get; set; }
-
-    /// <summary>
-    /// Gets or sets the SKU tier for the AKS cluster.
-    /// </summary>
-    internal AksSkuTier SkuTier { get; set; } = AksSkuTier.Free;
 
     /// <summary>
     /// Gets or sets whether OIDC issuer is enabled on the cluster.

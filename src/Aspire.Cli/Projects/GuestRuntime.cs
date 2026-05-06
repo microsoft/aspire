@@ -136,9 +136,20 @@ internal sealed class GuestRuntime
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken)
     {
-        var commandSpec = watchMode && _spec.WatchExecute is not null
-            ? _spec.WatchExecute
+        var useWatchCommand = watchMode && _spec.WatchExecute is not null;
+        var commandSpec = useWatchCommand
+            ? _spec.WatchExecute!
             : _spec.Execute;
+
+        await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+        if (!useWatchCommand)
+        {
+            var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
+            if (preExecuteResult.ExitCode != 0)
+            {
+                return preExecuteResult;
+            }
+        }
 
         return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, launcher, cancellationToken);
     }
@@ -163,7 +174,43 @@ internal sealed class GuestRuntime
     {
         var commandSpec = _spec.PublishExecute ?? _spec.Execute;
 
+        await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+        var preExecuteResult = await RunPreExecuteCommandsAsync(appHostFile, directory, environmentVariables, launcher, cancellationToken);
+        if (preExecuteResult.ExitCode != 0)
+        {
+            return preExecuteResult;
+        }
+
         return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, publishArgs, launcher, cancellationToken);
+    }
+
+    private async Task<(int ExitCode, OutputCollector? Output)> RunPreExecuteCommandsAsync(
+        FileInfo appHostFile,
+        DirectoryInfo directory,
+        IDictionary<string, string> environmentVariables,
+        IGuestProcessLauncher launcher,
+        CancellationToken cancellationToken)
+    {
+        if (_spec.PreExecute is null or { Length: 0 })
+        {
+            return (0, new OutputCollector());
+        }
+
+        var preExecuteLauncher = launcher is ExtensionGuestLauncher ? CreateDefaultLauncher() : launcher;
+        foreach (var commandSpec in _spec.PreExecute)
+        {
+            var args = ReplacePlaceholders(commandSpec.Args, appHostFile, directory, null);
+            var mergedEnvironment = MergeEnvironmentVariables(environmentVariables, commandSpec);
+
+            _logger.LogDebug("Launching pre-execution command: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
+            var (exitCode, output) = await preExecuteLauncher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+            if (exitCode != 0)
+            {
+                return (exitCode, output ?? new OutputCollector());
+            }
+        }
+
+        return (0, new OutputCollector());
     }
 
     private async Task<(int ExitCode, OutputCollector? Output)> ExecuteCommandAsync(
@@ -177,8 +224,16 @@ internal sealed class GuestRuntime
     {
         var args = ReplacePlaceholders(commandSpec.Args, appHostFile, directory, additionalArgs);
 
-        await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+        var mergedEnvironment = MergeEnvironmentVariables(environmentVariables, commandSpec);
 
+        _logger.LogDebug("Launching: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
+        return await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+    }
+
+    private static Dictionary<string, string> MergeEnvironmentVariables(
+        IDictionary<string, string> environmentVariables,
+        CommandSpec commandSpec)
+    {
         var mergedEnvironment = new Dictionary<string, string>(environmentVariables);
         if (commandSpec.EnvironmentVariables is not null)
         {
@@ -188,8 +243,7 @@ internal sealed class GuestRuntime
             }
         }
 
-        _logger.LogDebug("Launching: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
-        return await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+        return mergedEnvironment;
     }
 
     /// <summary>

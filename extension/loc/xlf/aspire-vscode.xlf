@@ -340,6 +340,9 @@
     <trans-unit id="command.openAppHostSource">
       <source xml:lang="en">Open AppHost source</source>
     </trans-unit>
+    <trans-unit id="command.codeLensOpenDashboard">
+      <source xml:lang="en">Open Aspire Dashboard</source>
+    </trans-unit>
     <trans-unit id="command.openDashboard">
       <source xml:lang="en">Open Aspire Dashboard</source>
     </trans-unit>
@@ -507,6 +510,9 @@
     </trans-unit>
     <trans-unit id="command.verifyCliInstalled">
       <source xml:lang="en">Verify Aspire CLI installation</source>
+    </trans-unit>
+    <trans-unit id="command.codeLensViewAppHostLogs">
+      <source xml:lang="en">View Aspire AppHost logs</source>
     </trans-unit>
     <trans-unit id="command.codeLensViewLogs">
       <source xml:lang="en">View Aspire resource logs</source>

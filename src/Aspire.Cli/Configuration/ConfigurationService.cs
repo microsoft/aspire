@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -352,5 +355,92 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Convert dot notation to colon notation for IConfiguration access
         var configKey = key.Replace('.', ':');
         return Task.FromResult(configuration[configKey]);
+    }
+
+    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(startDirectory);
+
+        var configKey = key.Replace('.', ':');
+
+        // 1. Project-relative local settings: walk up from startDirectory.
+        //    Intentionally bypasses the process-wide IConfiguration (which is rooted at the
+        //    CLI's launch cwd via ConfigurationHelper.RegisterSettingsFiles) so that commands
+        //    that operate on a path other than cwd (e.g. `aspire update --apphost <elsewhere>`)
+        //    consult the project's own aspire.config.json instead of the caller's cwd.
+        var localConfigPath = ConfigurationHelper.FindNearestConfigFilePath(startDirectory);
+        if (localConfigPath is not null)
+        {
+            var localConfig = LoadSettingsFileForReading(localConfigPath);
+            var localValue = localConfig[configKey];
+            if (!string.IsNullOrWhiteSpace(localValue))
+            {
+                return Task.FromResult<string?>(localValue);
+            }
+        }
+
+        // 2. Global settings file fallback (lower precedence).
+        if (File.Exists(globalSettingsFile.FullName))
+        {
+            var globalConfig = LoadSettingsFileForReading(globalSettingsFile.FullName);
+            var globalValue = globalConfig[configKey];
+            if (!string.IsNullOrWhiteSpace(globalValue))
+            {
+                return Task.FromResult<string?>(globalValue);
+            }
+        }
+
+        return Task.FromResult<string?>(null);
+    }
+
+    /// <summary>
+    /// Loads a single settings file into an isolated <see cref="IConfigurationRoot"/> for
+    /// directory-scoped lookups, mirroring <c>ConfigurationHelper.AddSettingsFile</c>'s
+    /// JSON-with-comments parsing and "throw on invalid JSON" behavior so directory-scoped
+    /// reads fail loudly the same way startup-time loads do.
+    /// </summary>
+    private static IConfigurationRoot LoadSettingsFileForReading(string filePath)
+    {
+        string content;
+        try
+        {
+            content = File.ReadAllText(filePath);
+        }
+        catch (IOException)
+        {
+            return new ConfigurationBuilder().Build();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new ConfigurationBuilder().Build();
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return new ConfigurationBuilder().Build();
+        }
+
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(content, documentOptions: ConfigurationHelper.ParseOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, filePath, ex.Message),
+                ex);
+        }
+
+        if (node is not JsonObject)
+        {
+            return new ConfigurationBuilder().Build();
+        }
+
+        var cleanJson = node.ToJsonString();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
+        return new ConfigurationBuilder()
+            .AddJsonStream(new MemoryStream(bytes))
+            .Build();
     }
 }

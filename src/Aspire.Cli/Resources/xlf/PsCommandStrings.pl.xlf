@@ -27,6 +27,11 @@
         <target state="translated">Identyfikator PID</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderSdk">
+        <source>SDK</source>
+        <target state="new">SDK</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Wynik w formacie JSON.</target>

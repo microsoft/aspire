@@ -8,7 +8,8 @@ export default defineConfig({
   extends: [tseslint.configs.base],
   languageOptions: {
     parserOptions: {
-      projectService: true,
+      project: './tsconfig.apphost.json',
+      tsconfigRootDir: import.meta.dirname,
     },
   },
   rules: {

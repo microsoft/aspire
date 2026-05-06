@@ -93,6 +93,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
@@ -128,6 +129,7 @@
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\IsolatedUserSecretsHelper.cs" Link="Utils\IsolatedUserSecretsHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="Secrets\SecretsStore.cs" />
+    <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="Utils\AtsJsonCodeWriter.cs" />
     <Compile Include="$(SharedDir)Json\JsonFlattener.cs" Link="Utils\JsonFlattener.cs" />
     <Compile Include="$(SharedDir)Otlp\OtlpHelpers.cs" Link="Otlp\OtlpHelpers.cs" />
     <Compile Include="$(SharedDir)Otlp\IOtlpResource.cs" Link="Otlp\IOtlpResource.cs" />
@@ -240,6 +242,9 @@
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="Templating\Templates\py-starter\**\*" LogicalName="py-starter.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Templating\Templates\go-starter\**\*" LogicalName="go-starter.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">

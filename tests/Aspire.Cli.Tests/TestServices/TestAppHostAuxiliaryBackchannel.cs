@@ -31,6 +31,11 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public DashboardUrlsState? DashboardUrlsState { get; set; }
 
     /// <summary>
+    /// Gets or sets the AppHost info response to return from GetAppHostInfoV2Async.
+    /// </summary>
+    public GetAppHostInfoResponse? AppHostInfoResponse { get; set; }
+
+    /// <summary>
     /// Gets or sets the log lines to return from GetResourceLogsAsync.
     /// </summary>
     public List<ResourceLogLine> LogLines { get; set; } = [];
@@ -66,6 +71,30 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardUrlsState);
+    }
+
+    public Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken;
+
+        if (AppHostInfoResponse is not null)
+        {
+            return Task.FromResult<GetAppHostInfoResponse?>(AppHostInfoResponse);
+        }
+
+        if (AppHostInfo is null)
+        {
+            return Task.FromResult<GetAppHostInfoResponse?>(null);
+        }
+
+        return Task.FromResult<GetAppHostInfoResponse?>(new GetAppHostInfoResponse
+        {
+            Pid = AppHostInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            AspireHostVersion = "unknown",
+            AppHostPath = AppHostInfo.AppHostPath,
+            CliProcessId = AppHostInfo.CliProcessId,
+            StartedAt = AppHostInfo.StartedAt
+        });
     }
 
     public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
