@@ -16,6 +16,12 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
 {
     private const string SharedAssemblyName = "Aspire.TypeSystem";
 
+    /// <summary>
+    /// Gets the assembly names that this load context shares with the default
+    /// <see cref="AssemblyLoadContext"/> (i.e., resolution always defers to the default ALC).
+    /// </summary>
+    internal static IReadOnlyList<string> GetSharedAssemblyNames() => [SharedAssemblyName];
+
     private readonly string[] _probeDirectories;
     private readonly ILogger _logger;
 
