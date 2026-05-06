@@ -62,8 +62,12 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
         const workspaceAppHostPath = this._treeProvider.workspaceAppHostPath ?? '';
-        const hasRunningData = appHosts.length > 0 || workspaceResources.length > 0;
-        const findWorkspace = findWorkspaceResourceState(workspaceResources, workspaceAppHostPath);
+        const globalAppHost = this._resolveGlobalAppHostForDocument(document, appHosts);
+        const workspaceAppHostMatchesDocument = workspaceAppHostPath !== '' && this._documentMatchesAppHostPath(document, workspaceAppHostPath);
+        const hasRunningData = globalAppHost !== undefined || (workspaceAppHostMatchesDocument && workspaceResources.length > 0);
+        const findWorkspace = workspaceAppHostMatchesDocument
+            ? findWorkspaceResourceState(workspaceResources, workspaceAppHostPath)
+            : () => undefined;
 
         const lenses: vscode.CodeLens[] = [];
 
@@ -108,7 +112,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             } else if (resource.kind === 'resource') {
                 // Resources get state lenses when live data is available
                 if (hasRunningData) {
-                    const match = findResourceState(appHosts, resource.name)
+                    const match = (globalAppHost ? findResourceState([globalAppHost], resource.name) : undefined)
                         ?? findWorkspace(resource.name);
                     if (match) {
                         this._addStateLenses(lenses, lineRange, match.resource, match.appHost);
@@ -202,6 +206,19 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             }
         }
         return undefined;
+    }
+
+    private _resolveGlobalAppHostForDocument(document: vscode.TextDocument, appHosts: readonly AppHostDisplayInfo[]): AppHostDisplayInfo | undefined {
+        return appHosts.find(host => this._documentMatchesAppHostPath(document, host.appHostPath));
+    }
+
+    private _documentMatchesAppHostPath(document: vscode.TextDocument, appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        const docPath = document.uri.fsPath;
+        return appHostPath === docPath || path.dirname(appHostPath) === path.dirname(docPath);
     }
 
     private _addStateLenses(

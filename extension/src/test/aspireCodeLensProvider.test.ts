@@ -211,6 +211,27 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('does not emit resource lenses from a different running AppHost', () => {
+        const runningHostPath = p('repo', 'RunningAppHost', 'AppHost.csproj');
+        const stoppedHostPath = p('repo', 'StoppedAppHost', 'AppHost.cs');
+        const runningAppHost = {
+            ...makeAppHost(runningHostPath),
+            resources: [makeResource('cache')],
+        };
+        const harness = createHarness({ appHosts: [runningAppHost] });
+
+        const doc = createMockDocument(APP_HOST_DOC, stoppedHostPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const resourceLenses = lenses.filter(l =>
+            l.command?.command !== 'aspire-vscode.codeLensOpenDashboard'
+            && l.command?.command !== 'aspire-vscode.codeLensViewAppHostLogs'
+            && l.command?.command !== 'aspire-vscode.codeLensDebugPipelineStep'
+        );
+
+        assert.strictEqual(resourceLenses.length, 0);
+        harness.dispose();
+    });
+
     test('emits builder lenses for AppHost file with no Add* calls when host is running', () => {
         const docPath = p('repo', 'AppHost', 'AppHost.cs');
         const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
