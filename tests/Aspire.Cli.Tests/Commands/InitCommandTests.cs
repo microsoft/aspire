@@ -862,6 +862,46 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
+    /// When the user does not pass <c>--channel</c>, the single-file init path must wire the
+    /// workspace <c>nuget.config</c> to the channel baked into the running CLI binary
+    /// (exposed as <see cref="CliExecutionContext.Channel"/>). One named explicit channel is
+    /// registered per theory row with a uniquely-sourced feed; the assertion reads the
+    /// workspace <c>nuget.config</c> emitted by <c>NuGetConfigMerger</c> and verifies it
+    /// carries the matching feed URL — proving the resolver picked the binary's identity
+    /// channel rather than skipping the merge or selecting a different registered channel.
+    /// </summary>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("staging")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    public async Task InitCommand_SingleFileMode_NoChannelOverride_WiresNuGetConfigToCliExecutionContextChannel(string contextChannel)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath), $"nuget.config should be created in workspace for channel '{contextChannel}'.");
+
+        var nugetConfigContent = File.ReadAllText(nugetConfigPath);
+        Assert.Contains(SourceForChannel(contextChannel), nugetConfigContent);
+    }
+
+    /// <summary>
     /// Negative-shape tripwire: <c>aspire init</c> must never read the <c>channel</c> key from
     /// the global <see cref="IConfigurationService"/>. The injected configuration service throws
     /// on any <c>GetConfigurationAsync(key, ...)</c> or <c>GetConfigurationFromDirectoryAsync</c>
