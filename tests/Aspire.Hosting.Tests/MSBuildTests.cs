@@ -337,7 +337,9 @@ public class MSBuildTests
         var output = BuildProjectWithFailure(appHostDirectory);
 
         Assert.Contains("ASPIRE009", output);
-        Assert.Contains("Aspire CLI bundle path", output);
+        Assert.Contains("Aspire CLI bundle could not be resolved", output);
+        Assert.Contains("https://get.aspire.dev", output);
+        Assert.DoesNotContain("DCP path could not be resolved", output);
     }
 
     [Fact]

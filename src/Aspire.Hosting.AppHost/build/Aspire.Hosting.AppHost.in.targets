@@ -200,14 +200,18 @@ namespace Projects%3B
       <AspireDashboardDir Condition="'$(AspireDashboardDir)' == ''">$(_AspireCliBundleDashboardDir)</AspireDashboardDir>
       <AspireDashboardPath Condition="'$(AspireDashboardPath)' == ''">$(_AspireCliBundleDashboardPath)</AspireDashboardPath>
     </PropertyGroup>
+
+    <PropertyGroup>
+      <_AspireCliBundleNotFoundError>$(MSBuildProjectName) is configured with AspireUseCliBundle=true, but the Aspire CLI bundle could not be resolved. Install the Aspire CLI from https://get.aspire.dev and ensure the aspire command is available on PATH, or set AspireCliBundlePath/AspireCliPath to a valid Aspire CLI installation or bundle layout.</_AspireCliBundleNotFoundError>
+    </PropertyGroup>
+
+    <Error Code="ASPIRE009"
+           Condition="'$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == '')"
+           Text="$(_AspireCliBundleNotFoundError)" />
   </Target>
 
   <!-- This target registers the location of the Aspire orchestration dependencies -->
   <Target Name="SetOrchestrationDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(DcpDir)' != '' or '$(AspireUseCliBundle)' == 'true' ">
-    <Error Code="ASPIRE009"
-           Condition="'$(DcpDir)' == ''"
-           Text="$(MSBuildProjectName) project is configured with AspireUseCliBundle=true, but the DCP path could not be resolved. Ensure 'aspire' is installed on PATH, set 'AspireCliBundlePath' to a valid bundle layout, or set 'DcpDir' explicitly." />
-
     <PropertyGroup>
       <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(DcpDir)'))</DcpDir>
       <DcpExtensionsDir Condition=" '$(DcpExtensionsDir)' == '' ">$([MSBuild]::NormalizePath($(DcpDir), 'ext'))</DcpExtensionsDir>
@@ -237,10 +241,6 @@ namespace Projects%3B
   </Target>
 
   <Target Name="SetDashboardDiscoveryAttributes" DependsOnTargets="ResolveAspireCliBundlePaths" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireDashboardDir)' != '' or '$(AspireDashboardPath)' != '' or '$(AspireUseCliBundle)' == 'true' ">
-    <Error Code="ASPIRE009"
-           Condition="'$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''"
-           Text="$(MSBuildProjectName) project is configured with AspireUseCliBundle=true, but the Aspire Dashboard path could not be resolved. Ensure 'aspire' is installed on PATH, set 'AspireCliBundlePath' to a valid bundle layout, or set 'AspireDashboardDir' explicitly." />
-
     <PropertyGroup>
       <AspireDashboardDir Condition=" '$(AspireDashboardDir)' != '' ">$([MSBuild]::EnsureTrailingSlash('$(AspireDashboardDir)'))</AspireDashboardDir>
       <_AspireDashboardPathInferredFromDir Condition=" '$(AspireDashboardPath)' == '' and '$(AspireDashboardDir)' != '' ">true</_AspireDashboardPathInferredFromDir>

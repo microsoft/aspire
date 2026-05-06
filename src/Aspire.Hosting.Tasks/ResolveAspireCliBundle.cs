@@ -48,8 +48,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
-            LogBundleNotFound($"The Aspire CLI bundle path '{AspireCliBundlePath}' does not contain a valid bundle layout.");
-            return false;
+            return true;
         }
 
         if (!string.IsNullOrWhiteSpace(AspireCliPath))
@@ -60,8 +59,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
-            LogBundleNotFound($"The Aspire CLI path '{AspireCliPath}' does not resolve to a valid bundle layout.");
-            return false;
+            return true;
         }
 
         if (TryResolveFromPath(out var pathBundle))
@@ -70,8 +68,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return true;
         }
 
-        LogBundleNotFound("Unable to locate an Aspire CLI bundle. Ensure 'aspire' is installed on PATH, set 'AspireCliBundlePath' to a valid bundle layout, or set 'DcpDir' and 'AspireDashboardDir' explicitly.");
-        return false;
+        return true;
     }
 
     private void SetOutputs(BundleResolution resolution)
@@ -190,20 +187,6 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     }
 
     private static bool IsWindows() => Path.DirectorySeparatorChar == '\\';
-
-    private void LogBundleNotFound(string message)
-    {
-        Log.LogError(
-            subcategory: null,
-            errorCode: "ASPIRE009",
-            helpKeyword: null,
-            file: null,
-            lineNumber: 0,
-            columnNumber: 0,
-            endLineNumber: 0,
-            endColumnNumber: 0,
-            message: message);
-    }
 
     private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath)
     {
