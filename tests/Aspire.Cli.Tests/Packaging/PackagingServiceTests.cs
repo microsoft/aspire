@@ -1058,6 +1058,47 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(packageList, p => p.Id == "Aspire.AppHost.Sdk");
     }
 
+    /// <summary>
+    /// Regression test for the Wave 8 bug: when the CLI identity channel is "local" and
+    /// the hive directory is named "pr-&lt;N&gt;" (installed by get-aspire-cli-pr.ps1/sh),
+    /// the channel must keep the "pr-&lt;N&gt;" name rather than being aliased to "local".
+    /// Aliasing it broke cli-starter-validation.ps1, which looks up the channel by the PR number.
+    /// </summary>
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsLocal_PrNamedHiveKeepsItsName()
+    {
+        // Arrange
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+
+        // Simulate what get-aspire-cli-pr.ps1/sh creates: a "pr-<N>" hive directory
+        const string prHiveName = "pr-16820";
+        var prPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, prHiveName, "packages"));
+        prPackagesDir.Create();
+
+        const string pinnedVersion = "13.4.0-pr.16820.g9fe9daf8";
+        File.WriteAllText(Path.Combine(prPackagesDir.FullName, $"Aspire.ProjectTemplates.{pinnedVersion}.nupkg"), string.Empty);
+
+        // CLI binary built with AspireCliChannel=local (as build-cli-native-archives.yml does)
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
+            "test.log", channel: "local");
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        // Act
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        // Assert: the pr-<N> hive must keep its name, NOT be aliased to "local"
+        var prChannel = channels.FirstOrDefault(c => c.Name == prHiveName);
+        Assert.NotNull(prChannel);
+        Assert.Equal(pinnedVersion, prChannel.PinnedVersion);
+        Assert.Null(channels.FirstOrDefault(c => c.Name == PackageChannelNames.Local && c.PinnedVersion is not null));
+    }
+
     private sealed class FakeNuGetPackageCacheWithPackages(List<Aspire.Shared.NuGetPackageCli> packages) : INuGetPackageCache
     {
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)

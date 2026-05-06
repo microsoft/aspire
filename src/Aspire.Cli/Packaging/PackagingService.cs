@@ -51,10 +51,13 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
                 // Use forward slashes for cross-platform NuGet config compatibility
                 var packagesPath = packagesDirectory.FullName.Replace('\\', '/');
 
-                // When the CLI binary is a local build (AspireCliChannel=local), alias the hive
-                // channel to "local" so that channel lookups by name (e.g. in TemplateNuGetConfigService)
-                // find the right channel regardless of the hive directory's run-specific name.
+                // When the CLI binary is a local build (AspireCliChannel=local), alias ephemeral
+                // hive directories (e.g. "run-<runId>") to "local" so that channel lookups by name
+                // (e.g. in TemplateNuGetConfigService) find the right channel regardless of the
+                // run-specific directory name.  PR-install hives ("pr-<N>") keep their exact name
+                // because callers (e.g. cli-starter-validation.ps1) look them up by that name.
                 var channelName = executionContext.IdentityChannel == PackageChannelNames.Local
+                    && !prHive.Name.StartsWith("pr-", StringComparison.OrdinalIgnoreCase)
                     ? PackageChannelNames.Local
                     : prHive.Name;
 
