@@ -7,6 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.DevTunnels;
@@ -601,6 +602,21 @@ public static partial class DevTunnelsResourceBuilderExtensions
             .WithReferenceRelationship(targetResource)
             .ExcludeFromManifest() // Dev tunnels do not get deployed
             .WithHealthCheck(healtCheckKey)
+            .WithCommand(
+                DevTunnelPortResource.ShowTunnelUrlsCommandName,
+                MessageStrings.ShowTunnelUrlsCommandDisplayName,
+                context => ShowTunnelUrlsAsync(portResource, context),
+                new CommandOptions
+                {
+                    Description = MessageStrings.ShowTunnelUrlsCommandDescription,
+                    IconName = "LinkMultiple",
+                    IconVariant = IconVariant.Regular,
+                    UpdateState = context =>
+                        context.ResourceSnapshot.State?.Text == KnownResourceStates.Running &&
+                        portResource.LastKnownStatus?.PortUri is not null
+                        ? ResourceCommandState.Enabled
+                        : ResourceCommandState.Disabled
+                })
             // NOTE:
             // The endpoint target full host is set by the dev tunnels service and is not known in advance, but the suffix is always devtunnels.ms
             // We might consider updating the central logic that creates endpoint URLs to allow setting a target host like *.devtunnels.ms & if the
@@ -633,15 +649,11 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                 // Add the inspect URL if available
                 var portResource = (DevTunnelPortResource)context.Resource;
-                if (portResource.LastKnownStatus?.PortUri is { } portUri)
+                if (portResource.LastKnownStatus?.PortUri is { } portUri && GetInspectUrl(portUri) is { } inspectUrlString)
                 {
-                    // If tunnel host is sdfdff-3456.usw.devtunnels.ms, the inspect host is sdfdff-3456-inspect.usw.devtunnels.ms
-                    var hostPrefixLength = portUri.Host.IndexOf('.');
-                    var hostPrefix = portUri.Host[..hostPrefixLength];
-                    var hostSuffix = portUri.Host[hostPrefixLength..];
                     urls.Add(new()
                     {
-                        Url = new UriBuilder(portUri) { Host = $"{hostPrefix}-inspect{hostSuffix}" }.Uri.ToString(),
+                        Url = inspectUrlString,
                         DisplayText = "Inspect",
                         DisplayLocation = UrlDisplayLocation.DetailsOnly
                     });
@@ -768,6 +780,81 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 }).ConfigureAwait(false);
                 await eventing.PublishAsync<ResourceStoppedEvent>(new(portResource, e.Services, new(portResource, portResource.Name, stoppedSnapshot!)), ct).ConfigureAwait(false);
             });
+    }
+
+    private static async Task<ExecuteCommandResult> ShowTunnelUrlsAsync(DevTunnelPortResource portResource, ExecuteCommandContext context)
+    {
+        if (portResource.LastKnownStatus?.PortUri is not { } portUri)
+        {
+            return CommandResults.Failure(MessageStrings.ShowTunnelUrlsCommandUnavailable);
+        }
+
+        var publicUrl = NormalizeUrl(portUri);
+        var localUrl = await portResource.TargetEndpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        var markdown = new StringBuilder()
+            .Append("## ")
+            .AppendLine(MessageStrings.ShowTunnelUrlsCommandResultHeading)
+            .AppendLine()
+            .Append("- **")
+            .Append(MessageStrings.ShowTunnelUrlsCommandTunnelUrlLabel)
+            .Append(":** ")
+            .AppendMarkdownLink(publicUrl)
+            .AppendLine();
+
+        var inspectUrl = GetInspectUrl(portUri);
+        if (inspectUrl is not null)
+        {
+            markdown
+                .Append("- **")
+                .Append(MessageStrings.ShowTunnelUrlsCommandInspectUrlLabel)
+                .Append(":** ")
+                .AppendMarkdownLink(inspectUrl)
+                .AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(localUrl))
+        {
+            markdown
+                .Append("- **")
+                .Append(MessageStrings.ShowTunnelUrlsCommandLocalEndpointUrlLabel)
+                .Append(":** ")
+                .AppendMarkdownLink(localUrl)
+                .AppendLine();
+        }
+
+        return CommandResults.Success(
+            MessageStrings.ShowTunnelUrlsCommandSuccess,
+            new CommandResultData
+            {
+                Value = markdown.ToString(),
+                Format = CommandResultFormat.Markdown,
+                DisplayImmediately = true
+            });
+    }
+
+    private static string NormalizeUrl(Uri url) => new UriBuilder(url).Uri.ToString().TrimEnd('/');
+
+    private static string? GetInspectUrl(Uri portUri)
+    {
+        var hostPrefixLength = portUri.Host.IndexOf('.');
+        if (hostPrefixLength < 0)
+        {
+            return null;
+        }
+
+        var hostPrefix = portUri.Host[..hostPrefixLength];
+        var hostSuffix = portUri.Host[hostPrefixLength..];
+        return new UriBuilder(portUri) { Host = $"{hostPrefix}-inspect{hostSuffix}" }.Uri.ToString();
+    }
+
+    private static StringBuilder AppendMarkdownLink(this StringBuilder builder, string url)
+    {
+        builder
+            .Append('<')
+            .Append(url)
+            .Append('>');
+
+        return builder;
     }
 
     private static string GetUserAgent()

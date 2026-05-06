@@ -46,6 +46,8 @@ public sealed class DevTunnelPortResource : Resource, IResourceWithServiceDiscov
     /// </summary>
     internal const string TunnelEndpointName = "tunnel";
 
+    internal const string ShowTunnelUrlsCommandName = "show-tunnel-urls";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="DevTunnelPortResource"/> class, representing a single forwarded endpoint/port on a dev tunnel.
     /// </summary>
