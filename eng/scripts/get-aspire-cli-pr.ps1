@@ -1317,21 +1317,22 @@ function Start-InstallFromLocalDir {
         Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
-    # Write install-route sidecar so Aspire CLI can identify this install. The sidecar path
-    # mirrors the cliBinDir branch chosen earlier: PR-route installs land at
-    # <prefix>/dogfood/pr-<N>/.aspire-install.json; otherwise local-dir installs
-    # use the script-route sidecar location at <prefix>/.aspire-install.json so
-    # InstallPathResolver Mode A discovery works for the binary at <prefix>/bin.
+    # Write install-route sidecar so Aspire CLI can identify this install.
+    # Only PR-route installs (with $PRNumber > 0) get a sidecar — its updateCommand
+    # points back at this script with the original PR number, so 'aspire update' has
+    # a self-update path.
+    #
+    # --local-dir installs (no $PRNumber) intentionally skip the sidecar: the
+    # source artifacts are gone after extraction, so there is no managed self-update
+    # path. Without a sidecar, InstallPathResolver returns Unknown and downstream
+    # consumers (e.g. 'aspire update') will not assume any managed route.
+    # See acquisition design v3 §2.2.
+    #
     # .NET I/O is used directly so the sidecar is written even under -WhatIf, where
     # PowerShell cmdlets that support ShouldProcess silently no-op.
-    if (-not $HiveOnly) {
-        if ($PRNumber -gt 0) {
-            $sidecarDir = Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber"
-            $sidecarContent = '{ "route": "pr", "updateCommand": "get-aspire-cli-pr.ps1 -PRNumber ' + $PRNumber + '" }'
-        } else {
-            $sidecarDir = $resolvedInstallPrefix
-            $sidecarContent = '{ "route": "script" }'
-        }
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        $sidecarDir = Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber"
+        $sidecarContent = '{ "route": "pr", "updateCommand": "get-aspire-cli-pr.ps1 -PRNumber ' + $PRNumber + '" }'
         $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
         [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
         [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)

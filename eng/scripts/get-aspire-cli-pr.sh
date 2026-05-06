@@ -1098,21 +1098,20 @@ install_from_local_dir() {
         save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 
-    # Write install-route sidecar so Aspire CLI can identify this install. The sidecar path
-    # mirrors the cli_install_dir branch above: PR-route installs land at
-    # $INSTALL_PREFIX/dogfood/pr-<N>/.aspire-install.json; otherwise local-dir installs
-    # use the script-route sidecar location at $INSTALL_PREFIX/.aspire-install.json so
-    # InstallPathResolver Mode A discovery works for the binary at $INSTALL_PREFIX/bin.
-    # Written unconditionally — including under --dry-run — so callers can observe the file.
-    if [[ "$HIVE_ONLY" != true ]]; then
+    # Write install-route sidecar so Aspire CLI can identify this install.
+    # Only PR-route installs (with $PR_NUMBER set) get a sidecar — its updateCommand
+    # points back at this script with the original PR number, so 'aspire update' has
+    # a self-update path.
+    #
+    # --local-dir installs (no $PR_NUMBER) intentionally skip the sidecar: the
+    # source artifacts are gone after extraction, so there is no managed self-update
+    # path. Without a sidecar, InstallPathResolver returns Unknown and downstream
+    # consumers (e.g. 'aspire update') will not assume any managed route.
+    # See acquisition design v3 §2.2.
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
         local sidecar_dir sidecar_content
-        if [[ -n "$PR_NUMBER" ]]; then
-            sidecar_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
-            sidecar_content='{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r '"$PR_NUMBER"'" }'
-        else
-            sidecar_dir="$INSTALL_PREFIX"
-            sidecar_content='{ "route": "script" }'
-        fi
+        sidecar_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
+        sidecar_content='{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r '"$PR_NUMBER"'" }'
         mkdir -p "$sidecar_dir"
         printf '%s\n' "$sidecar_content" > "$sidecar_dir/.aspire-install.json"
     fi
