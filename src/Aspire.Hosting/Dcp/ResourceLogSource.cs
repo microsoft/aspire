@@ -187,7 +187,18 @@ internal sealed class ResourceLogSource<TResource>(
 
     private static string GetTextAfterLastCarriageReturn(string text)
     {
-        var carriageReturnIndex = text.LastIndexOf('\r');
-        return carriageReturnIndex >= 0 ? text[(carriageReturnIndex + 1)..] : text;
+        if (text.Length == 0)
+        {
+            return text;
+        }
+
+        var endIndex = text[^1] == '\r' ? text.Length - 1 : text.Length;
+        if (endIndex == 0)
+        {
+            return string.Empty;
+        }
+
+        var carriageReturnIndex = text.LastIndexOf('\r', endIndex - 1);
+        return carriageReturnIndex >= 0 ? text[(carriageReturnIndex + 1)..endIndex] : text[..endIndex];
     }
 }
