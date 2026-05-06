@@ -14,6 +14,30 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<CancellationToken, Task<FileInfo?>>? GetAppHostFromSettingsAsyncCallback { get; set; }
 
+    public Func<DirectoryInfo, CancellationToken, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsAsyncCallback { get; set; }
+
+    public Func<DirectoryInfo, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
+
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken)
+    {
+        if (FindAppHostProjectsAsyncCallback != null)
+        {
+            return await FindAppHostProjectsAsyncCallback(searchDirectory, cancellationToken);
+        }
+
+        return [];
+    }
+
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, CancellationToken cancellationToken)
+    {
+        if (FindAppHostProjectFilesAsyncCallback != null)
+        {
+            return await FindAppHostProjectFilesAsyncCallback(searchDirectory, cancellationToken);
+        }
+
+        return [];
+    }
+
     public async Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)
     {
         if (UseOrFindAppHostProjectFileAsyncCallback != null)
@@ -59,4 +83,3 @@ internal sealed class TestProjectLocator : IProjectLocator
         return null;
     }
 }
-

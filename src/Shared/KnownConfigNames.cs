@@ -42,6 +42,8 @@ internal static class KnownConfigNames
 
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
+    public const string DotnetCliTelemetryOptOut = "DOTNET_CLI_TELEMETRY_OPTOUT";
+    public const string DotnetCliWorkloadUpdateNotifyDisable = "DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE";
     public const string MsBuildTerminalLogger = "MSBUILDTERMINALLOGGER";
 
     public const string ExtensionEndpoint = "ASPIRE_EXTENSION_ENDPOINT";

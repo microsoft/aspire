@@ -22,9 +22,39 @@
         <target state="new">Output format for detached AppHost results</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderLanguage">
+        <source>Language</source>
+        <target state="new">Language</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderPath">
+        <source>Path</source>
+        <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderRelativePath">
+        <source>Relative Path</source>
+        <target state="new">Relative Path</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
         <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsCommandDescription">
+        <source>List candidate AppHosts</source>
+        <target state="new">List candidate AppHosts</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsFormatOptionDescription">
+        <source>Output format (Table or Json)</source>
+        <target state="new">Output format (Table or Json)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsNoCandidateAppHostsFound">
+        <source>No candidate AppHosts found.</source>
+        <target state="new">No candidate AppHosts found.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">

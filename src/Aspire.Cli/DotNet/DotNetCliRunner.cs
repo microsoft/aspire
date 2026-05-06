@@ -415,6 +415,11 @@ internal sealed class DotNetCliRunner(
         cliArgsList.Add(projectFile.FullName);
 
         string[] cliArgs = [.. cliArgsList];
+        var env = new Dictionary<string, string>
+        {
+            [KnownConfigNames.DotnetCliTelemetryOptOut] = "1",
+            [KnownConfigNames.DotnetCliWorkloadUpdateNotifyDisable] = "1"
+        };
 
         var existingStandardOutputCallback = options.StandardOutputCallback;
         var existingStandardErrorCallback = options.StandardErrorCallback;
@@ -438,7 +443,7 @@ internal sealed class DotNetCliRunner(
 
             var exitCode = await ExecuteAsync(
                 args: cliArgs,
-                env: null,
+                env: env,
                 projectFile: projectFile,
                 workingDirectory: projectFile.Directory!,
                 backchannelCompletionSource: null,

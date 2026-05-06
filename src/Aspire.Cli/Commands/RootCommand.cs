@@ -113,6 +113,7 @@ internal sealed class RootCommand : BaseRootCommand
         StopCommand stopCommand,
         StartCommand startCommand,
         WaitCommand waitCommand,
+        LsCommand lsCommand,
         ResourceCommand commandCommand,
         PsCommand psCommand,
         DescribeCommand describeCommand,
@@ -205,6 +206,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(stopCommand);
         Subcommands.Add(startCommand);
         Subcommands.Add(waitCommand);
+        Subcommands.Add(lsCommand);
         Subcommands.Add(commandCommand);
         Subcommands.Add(psCommand);
         Subcommands.Add(describeCommand);

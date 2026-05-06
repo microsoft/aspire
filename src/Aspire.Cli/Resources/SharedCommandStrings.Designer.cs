@@ -87,6 +87,42 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string LsCommandDescription {
+            get {
+                return ResourceManager.GetString("LsCommandDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsFormatOptionDescription {
+            get {
+                return ResourceManager.GetString("LsFormatOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsNoCandidateAppHostsFound {
+            get {
+                return ResourceManager.GetString("LsNoCandidateAppHostsFound", resourceCulture);
+            }
+        }
+
+        internal static string HeaderPath {
+            get {
+                return ResourceManager.GetString("HeaderPath", resourceCulture);
+            }
+        }
+
+        internal static string HeaderRelativePath {
+            get {
+                return ResourceManager.GetString("HeaderRelativePath", resourceCulture);
+            }
+        }
+
+        internal static string HeaderLanguage {
+            get {
+                return ResourceManager.GetString("HeaderLanguage", resourceCulture);
+            }
+        }
+
         internal static string IsolatedOptionDescription {
             get {
                 return ResourceManager.GetString("IsolatedOptionDescription", resourceCulture);
