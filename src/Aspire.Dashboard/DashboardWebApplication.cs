@@ -135,6 +135,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         preConfigureBuilder?.Invoke(builder);
 
+        // Local build output relies on the static web assets manifest instead of copying all web assets to wwwroot.
+        builder.WebHost.UseStaticWebAssets();
+
 #if !DEBUG
         builder.Logging.AddFilter("Default", LogLevel.Information);
         builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
