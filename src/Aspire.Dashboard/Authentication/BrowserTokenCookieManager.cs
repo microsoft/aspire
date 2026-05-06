@@ -22,6 +22,11 @@ internal sealed class BrowserTokenCookieManager(string httpCookieName) : ICookie
     public void DeleteCookie(HttpContext context, string key, CookieOptions options)
     {
         _inner.DeleteCookie(context, GetCookieName(context, key), options);
+
+        if (context.Request.IsHttps && key != httpCookieName)
+        {
+            _inner.DeleteCookie(context, httpCookieName, options);
+        }
     }
 
     private string GetCookieName(HttpContext context, string key)

@@ -162,6 +162,46 @@ public class FrontendBrowserTokenAuthTests
     }
 
     [Fact]
+    public async Task Get_Signout_HttpsEndpointWithHttpAndHttpsCookies_DeletesBothCookies()
+    {
+        var apiKey = "TestKey123!";
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        var endpoints = app.FrontendEndPointsAccessor
+            .Select(accessor => accessor())
+            .ToList();
+        var httpsEndpoint = endpoints.Single(endpoint => endpoint.IsHttps);
+        var httpEndpoint = endpoints.Single(endpoint => !endpoint.IsHttps);
+
+        using var handler = new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+            UseCookies = true
+        };
+        using var client = new HttpClient(handler);
+
+        var httpsBaseAddress = new Uri(httpsEndpoint.GetResolvedAddress());
+        var httpBaseAddress = new Uri(httpEndpoint.GetResolvedAddress());
+
+        await client.GetAsync(new Uri(httpsBaseAddress, DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey))).DefaultTimeout();
+        await client.GetAsync(new Uri(httpBaseAddress, DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey))).DefaultTimeout();
+
+        var signoutResponse = await client.GetAsync(new Uri(httpsBaseAddress, "/api/signout")).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.Redirect, signoutResponse.StatusCode);
+        var deletedCookies = signoutResponse.Headers.GetValues("Set-Cookie").ToList();
+        Assert.Contains(deletedCookies, c => c.StartsWith(".Aspire.Dashboard.Auth=", StringComparison.Ordinal) && c.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(deletedCookies, c => c.StartsWith(".Aspire.Dashboard.Auth.Http=", StringComparison.Ordinal) && c.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Get_LoginPage_ValidToken_HttpEndpointWithHttpsEndpoint_RedirectToApp()
     {
         var apiKey = "TestKey123!";
