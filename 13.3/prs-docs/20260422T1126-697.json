@@ -1,0 +1,9 @@
+{
+  "author": "copilot-swe-agent",
+  "comment": "No matching changelog entry with docsRequired=True for dev.localhost aspire new prompt",
+  "mergedAt": "2026-04-22T11:26:11Z",
+  "number": 697,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "docs: document the 'Use *.dev.localhost URLs?' interactive prompt for `aspire new`"
+}

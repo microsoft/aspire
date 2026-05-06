@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Transitive dependency security bump",
+  "mergedAt": "2026-04-24T20:36:02Z",
+  "number": 752,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "Bump transitive deps postcss, fast-xml-parser, uuid to patched versions"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs infra fix (twoslash), not documenting a product feature",
+  "mergedAt": "2026-04-21T19:11:08Z",
+  "number": 741,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "Fix twoslash in AppHostBuilder; source-control twoslash .d.ts bundle"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents PR #16157 which has docsRequired=False in changelog",
+  "mergedAt": "2026-04-21T21:27:12Z",
+  "number": 716,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "[docs] Update aspire publish --output-path default description for TypeScript AppHosts"
+}

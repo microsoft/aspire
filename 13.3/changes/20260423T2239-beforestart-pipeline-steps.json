@@ -1,12 +1,15 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": true,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Azure hosting infrastructure (Azure Container Apps, App Service, Kubernetes, Docker Compose, and AKS) now exposes startup logic as named pipeline steps, allowing developers to declare ordering dependencies between BeforeStart operations and ensure correct sequencing during app startup. The previous eventing-subscriber classes for Kubernetes, Docker Compose, and AKS have been replaced with pipeline steps.",
+  "docsPrs": [
+    436
+  ],
   "docsRequired": true,
-  "emoji": "🔀",
+  "emoji": "\ud83d\udd00",
   "firstMergedAt": "2026-04-23T22:39:29Z",
   "lastMergedAt": "2026-04-27T23:10:11Z",
   "name": "BeforeStart pipeline steps for ordered startup across all compute environments",

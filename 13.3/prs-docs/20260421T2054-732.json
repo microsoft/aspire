@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents PR #16326 which has docsRequired=False in changelog",
+  "mergedAt": "2026-04-21T20:54:17Z",
+  "number": 732,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "[docs] Dashboard telemetry API defaults and otel command standalone usage"
+}

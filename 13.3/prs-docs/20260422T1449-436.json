@@ -1,0 +1,9 @@
+{
+  "author": "copilot-swe-agent",
+  "comment": "Documents aspire do pipelines and BeforeStart pipeline steps (PRs #16085, #13780/#16414)",
+  "mergedAt": "2026-04-22T14:49:01Z",
+  "number": 436,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "included",
+  "title": "Document aspire do pipelines and migration from publishing callbacks"
+}

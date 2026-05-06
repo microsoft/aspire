@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "No matching changelog entry with docsRequired=True for VS Code extension prerequisite update",
+  "mergedAt": "2026-04-28T03:42:48Z",
+  "number": 759,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "Remove .NET 10 prerequisite from VS Code extension page"
+}

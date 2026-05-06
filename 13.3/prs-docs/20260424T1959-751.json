@@ -1,0 +1,9 @@
+{
+  "author": "dependabot",
+  "comment": "OpenTelemetry dependency bump",
+  "mergedAt": "2026-04-24T19:59:29Z",
+  "number": 751,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "Bump OpenTelemetry.Exporter.OpenTelemetryProtocol from 1.15.0 to 1.15.3"
+}

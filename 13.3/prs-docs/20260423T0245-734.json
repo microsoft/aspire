@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Documents AKS hosting support and Kubernetes Ingress/Gateway API resources",
+  "mergedAt": "2026-04-23T02:45:29Z",
+  "number": 734,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "included",
+  "title": "Rewrite Kubernetes docs for Aspire 13.3"
+}

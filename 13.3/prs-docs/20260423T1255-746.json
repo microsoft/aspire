@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents alternative TypeScript AppHost toolchains (PR #16162)",
+  "mergedAt": "2026-04-23T12:55:50Z",
+  "number": 746,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "included",
+  "title": "[docs] Support alternative TypeScript AppHost toolchains (Bun, Yarn, pnpm)"
+}

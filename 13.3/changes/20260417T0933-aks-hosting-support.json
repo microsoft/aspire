@@ -1,12 +1,15 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "A new `Aspire.Hosting.Azure.Kubernetes` package adds first-class Azure Kubernetes Service (AKS) support with `AddAzureKubernetesEnvironment()`, configuration for node pools, SKU tiers, private clusters, and Azure Container Insights integration.",
+  "docsPrs": [
+    734
+  ],
   "docsRequired": true,
-  "emoji": "☸️",
+  "emoji": "\u2638\ufe0f",
   "firstMergedAt": "2026-04-17T09:33:50Z",
   "lastMergedAt": "2026-04-17T09:33:50Z",
   "name": "Azure Kubernetes Service (AKS) hosting support",

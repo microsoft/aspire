@@ -1,12 +1,15 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": true,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Kubernetes environments now support Ingress (networking.k8s.io/v1) and Gateway API (gateway.networking.k8s.io/v1) resources with fluent WithRoute(), WithTls(), WithHostname(), and class configuration. Gateway TLS now supports FQDN auto-discovery: when WithTls() is used without WithHostname(), Aspire polls for the controller-assigned address and patches it in automatically. Extension methods have moved to the Aspire.Hosting namespace (source-breaking for early adopters who had explicit using Aspire.Hosting.Kubernetes directives).",
+  "docsPrs": [
+    734
+  ],
   "docsRequired": true,
-  "emoji": "🚦",
+  "emoji": "\ud83d\udea6",
   "firstMergedAt": "2026-04-28T06:51:46Z",
   "lastMergedAt": "2026-05-01T20:54:15Z",
   "name": "Kubernetes Ingress and Gateway API routing resources",

@@ -1,0 +1,9 @@
+{
+  "author": "copilot-swe-agent",
+  "comment": "Docs infra feature (schema hosting), no matching product changelog entry",
+  "mergedAt": "2026-04-22T15:43:38Z",
+  "number": 743,
+  "runDate": "2026-05-06T01:53:41Z",
+  "status": "excluded",
+  "title": "feat: host aspire.config.json JSON Schema at versioned aspire.dev URLs"
+}
