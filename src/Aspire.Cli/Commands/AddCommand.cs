@@ -209,17 +209,9 @@ internal sealed class AddCommand : BaseCommand
                 // then try a fuzzy search to create a broader filtered list.
                 // Materialize the query with ToList() to avoid multiple enumerations
                 // (which would recalculate fuzzy scores on each Count()/First() call).
-                filteredPackagesWithShortName = packagesWithShortName
-                        .Select(p => new
-                        {
-                            Package = p,
-                            Score = GetIntegrationSearchScore(integrationName, p)
-                        })
-                        .Where(x => x.Score > FuzzyMatchThreshold)
-                        .OrderByDescending(x => x.Score)
-                        .ThenByDescending(x => x.Package.FriendlyName, new CommunityToolkitFirstComparer())
-                        .Select(x => x.Package)
-                        .ToList();
+                filteredPackagesWithShortName = GetIntegrationSearchMatches(packagesWithShortName, integrationName)
+                    .Select(x => (x.FriendlyName, x.Package, x.Channel))
+                    .ToList();
             }
 
             // If we didn't match any, show a complete list. If we matched one, and its
@@ -372,23 +364,22 @@ internal sealed class AddCommand : BaseCommand
 
     private int DisplayIntegrationDiscoveryResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, bool jsonRequested)
     {
-        var matches = packages
-            .Select(p => (Package: p, SearchScore: searchTerm is null ? 0 : GetIntegrationSearchScore(searchTerm, p)))
-            .Where(p => searchTerm is null || p.SearchScore > FuzzyMatchThreshold)
-            .GroupBy(p => p.Package.Package.Id)
-            .Select(g => g.OrderByDescending(p => SemVersion.Parse(p.Package.Package.Version), SemVersion.PrecedenceComparer).First());
+        var matches = (searchTerm is null
+            ? packages.Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: 0.0))
+            : GetIntegrationSearchMatches(packages, searchTerm))
+            .GroupBy(p => p.Package.Id)
+            .Select(g => g.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer).First());
 
         var orderedMatches = searchTerm is null
-            ? matches.OrderBy(p => p.Package.FriendlyName, new CommunityToolkitFirstComparer()).ThenBy(p => p.Package.Package.Id, StringComparer.OrdinalIgnoreCase)
-            : matches.OrderByDescending(p => p.SearchScore).ThenBy(p => p.Package.FriendlyName, new CommunityToolkitFirstComparer())
-                .ThenBy(p => p.Package.Package.Id, StringComparer.OrdinalIgnoreCase);
+            ? matches.OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer()).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
+            : matches;
 
         var results = orderedMatches
             .Select(p => new AddCommandIntegrationResult
             {
-                Name = p.Package.FriendlyName,
-                Package = p.Package.Package.Id,
-                Version = p.Package.Package.Version
+                Name = p.FriendlyName,
+                Package = p.Package.Id,
+                Version = p.Package.Version
             })
             .ToArray();
 
@@ -437,6 +428,15 @@ internal sealed class AddCommand : BaseCommand
 
         InteractionService.DisplayRenderable(table);
         return ExitCodeConstants.Success;
+    }
+
+    private static IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> GetIntegrationSearchMatches(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string searchTerm)
+    {
+        return packages
+            .Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: GetIntegrationSearchScore(searchTerm, p)))
+            .Where(p => p.SearchScore > FuzzyMatchThreshold)
+            .OrderByDescending(p => p.SearchScore)
+            .ThenByDescending(p => p.FriendlyName, new CommunityToolkitFirstComparer());
     }
 
     private static double GetIntegrationSearchScore(string searchTerm, (string FriendlyName, NuGetPackage Package, PackageChannel Channel) package)
