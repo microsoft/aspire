@@ -356,8 +356,13 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Equal("pr", doc.RootElement.GetProperty("route").GetString());
         var updateCommand = doc.RootElement.GetProperty("updateCommand").GetString();
         Assert.NotNull(updateCommand);
-        Assert.Contains("get-aspire-cli-pr.sh", updateCommand);
-        Assert.Contains("-r 99999", updateCommand);
+        // Spec parity: PowerShell-installed PR routes get a PowerShell updateCommand.
+        // Mirroring this assertion across the two scripts catches the cross-platform
+        // divergence bug where the .ps1 script accidentally emitted the .sh path.
+        Assert.Contains("get-aspire-cli-pr.ps1", updateCommand);
+        Assert.DoesNotContain("get-aspire-cli-pr.sh", updateCommand);
+        // PowerShell update path uses -PRNumber; the .sh-side test asserts -r.
+        Assert.Contains("-PRNumber 99999", updateCommand);
     }
 
     // PR-route install prints the PATH-activation hint via Write-Host. The
