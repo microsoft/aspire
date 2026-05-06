@@ -189,11 +189,9 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_UsesDotNetImageWhenEnvironmentVariableIsSet()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
-            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
         var options = new DockerContainerOptions();
 
@@ -207,32 +205,45 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureContainer_BuildArgsCanBeClearedForPrebuiltImage()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
-            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, null),
             (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
         var strategy = CliInstallStrategy.LatestGa();
         var options = new DockerContainerOptions();
 
         CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
-        CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy);
+        CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy, prebuiltImageSelected: true);
 
         Assert.Equal("aspire-cli-e2e-dotnet:prebuilt", options.Image);
         Assert.Empty(options.BuildArgs);
     }
 
     [Fact]
+    public void ConfigureContainer_ThrowsWhenPrebuiltImageAlsoHasDockerfileConfiguration()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"));
+        var strategy = CliInstallStrategy.LatestGa();
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.DotNet);
+        options.DockerfilePath = "/unexpected/Dockerfile";
+        options.BuildContext = "/unexpected";
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerStrategy(options, strategy, prebuiltImageSelected: true));
+
+        Assert.Contains("prebuilt CLI E2E image", exception.Message);
+    }
+
+    [Fact]
     public void ConfigureContainer_PreservesBuildArgsForDockerfileVariant()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
-            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             (CliInstallStrategy.UbuntuAptMirrorEnvironmentVariableName, "http://azure.archive.ubuntu.com/ubuntu/"));
         var strategy = CliInstallStrategy.LatestGa();
         var options = new DockerContainerOptions();
@@ -248,7 +259,7 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_UsesPolyglotImageWhenEnvironmentVariableIsSet()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, "aspire-cli-e2e-polyglot:prebuilt"),
             (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, "true"),
             ("GITHUB_ACTIONS", "true"));
@@ -264,7 +275,7 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_RequiresPolyglotImageWhenConfigured()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, "true"),
             ("GITHUB_ACTIONS", "true"));
@@ -279,11 +290,9 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_UsesPolyglotJavaImageWhenEnvironmentVariableIsSet()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-java:prebuilt"),
             (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
-            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
         var options = new DockerContainerOptions();
 
@@ -297,7 +306,7 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_RequiresPolyglotJavaImageWhenConfigured()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
             ("GITHUB_ACTIONS", "true"));
@@ -312,11 +321,9 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_IgnoresPolyglotJavaImageForPolyglotVariant()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-java:prebuilt"),
             (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, "true"),
-            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
         var options = new DockerContainerOptions();
 
@@ -329,7 +336,7 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_FallsBackToDockerfileOutsideCI()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", null));
@@ -344,7 +351,7 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_RequiresDotNetImageWhenConfigured()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
             ("GITHUB_ACTIONS", "true"));
@@ -359,7 +366,7 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_FallsBackToDockerfileInCIWhenDotNetImageIsNotRequired()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
@@ -374,11 +381,9 @@ public class CliInstallStrategyTests
     [Fact]
     public void ConfigureDockerContainerSource_IgnoresDotNetImageForPolyglotVariant()
     {
-        using var environment = new EnvironmentVariableScope(
+        using var environment = WithCleanCliE2ETestEnvironment(
             (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, "aspire-cli-e2e-dotnet:prebuilt"),
             (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, "true"),
-            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
-            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", "true"));
         var options = new DockerContainerOptions();
 
@@ -972,6 +977,28 @@ public class CliInstallStrategyTests
         var strategy = CliInstallStrategy.Detect();
 
         Assert.Equal(CliInstallMode.Preinstalled, strategy.Mode);
+    }
+
+    private static EnvironmentVariableScope WithCleanCliE2ETestEnvironment(params (string Name, string? Value)[] variables)
+    {
+        (string Name, string? Value)[] defaults =
+        [
+            (CliE2ETestHelpers.DotNetImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequireDotNetImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.PolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", null),
+        ];
+
+        var cleanVariables = defaults.ToDictionary(variable => variable.Name, variable => variable.Value);
+        foreach (var (name, value) in variables)
+        {
+            cleanVariables[name] = value;
+        }
+
+        return new EnvironmentVariableScope([.. cleanVariables.Select(variable => (variable.Key, variable.Value))]);
     }
 
     private sealed class EnvironmentVariableScope : IDisposable

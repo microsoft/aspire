@@ -405,29 +405,29 @@ jobs:
         if: >-
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
-                contains(needs.*.result, 'cancelled') ||
-                (github.event_name == 'pull_request' &&
-                 (needs.extension_tests_win.result == 'skipped' ||
-                    needs.cli_starter_validation_windows.result == 'skipped' ||
-                    needs.typescript_sdk_tests.result == 'skipped' ||
-                     needs.tests_no_nugets.result == 'skipped' ||
-                     needs.tests_requires_nugets_linux.result == 'skipped' ||
-                    needs.tests_requires_nugets_windows.result == 'skipped' ||
-                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                     needs.tests_requires_nugets_macos.result == 'skipped') ||
-                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
-                     needs.build_cli_e2e_image.result == 'skipped') ||
-                    needs.tests_requires_cli_archive.result == 'skipped' ||
-                   needs.polyglot_validation.result == 'skipped')) ||
-                (github.event_name != 'pull_request' &&
-                 (needs.extension_tests_win.result == 'skipped' ||
-                    needs.typescript_sdk_tests.result == 'skipped' ||
-                    needs.tests_no_nugets.result == 'skipped' ||
-                   needs.tests_requires_nugets_linux.result == 'skipped' ||
-                   needs.tests_requires_nugets_windows.result == 'skipped' ||
-                   (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                    needs.tests_requires_nugets_macos.result == 'skipped') ||
-                  needs.polyglot_validation.result == 'skipped'))) }}
+               contains(needs.*.result, 'cancelled') ||
+               (github.event_name == 'pull_request' &&
+                (needs.extension_tests_win.result == 'skipped' ||
+                 needs.cli_starter_validation_windows.result == 'skipped' ||
+                 needs.typescript_sdk_tests.result == 'skipped' ||
+                 needs.tests_no_nugets.result == 'skipped' ||
+                 needs.tests_requires_nugets_linux.result == 'skipped' ||
+                 needs.tests_requires_nugets_windows.result == 'skipped' ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                  needs.tests_requires_nugets_macos.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
+                  needs.build_cli_e2e_image.result == 'skipped') ||
+                 needs.tests_requires_cli_archive.result == 'skipped' ||
+                 needs.polyglot_validation.result == 'skipped')) ||
+               (github.event_name != 'pull_request' &&
+                (needs.extension_tests_win.result == 'skipped' ||
+                 needs.typescript_sdk_tests.result == 'skipped' ||
+                 needs.tests_no_nugets.result == 'skipped' ||
+                 needs.tests_requires_nugets_linux.result == 'skipped' ||
+                 needs.tests_requires_nugets_windows.result == 'skipped' ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                  needs.tests_requires_nugets_macos.result == 'skipped') ||
+                 needs.polyglot_validation.result == 'skipped'))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

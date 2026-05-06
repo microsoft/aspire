@@ -36,13 +36,13 @@ jobs:
       - name: Verify Docker is running
         run: docker info
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
       - name: Build CLI E2E Docker image
         shell: bash
         run: |
           set -euo pipefail
-
-          docker buildx create --name cli-e2e-builder --use
-          docker buildx inspect --bootstrap
 
           build_image() {
             local display_name="$1"

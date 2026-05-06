@@ -218,18 +218,24 @@ internal static class CliE2ETestHelpers
                     }
                 }
 
-                ConfigureDockerContainerStrategy(c, strategy);
+                ConfigureDockerContainerStrategy(c, strategy, prebuiltImageSelected: prebuiltImageName is not null);
             });
 
         return builder.Build();
     }
 
-    internal static void ConfigureDockerContainerStrategy(DockerContainerOptions options, CliInstallStrategy strategy)
+    internal static void ConfigureDockerContainerStrategy(DockerContainerOptions options, CliInstallStrategy strategy, bool prebuiltImageSelected = false)
     {
         // Delegate all mode-specific Docker config to the strategy.
         strategy.ConfigureContainer(options);
-        if (string.IsNullOrEmpty(options.DockerfilePath))
+
+        if (prebuiltImageSelected)
         {
+            if (!string.IsNullOrEmpty(options.DockerfilePath) || !string.IsNullOrEmpty(options.BuildContext))
+            {
+                throw new InvalidOperationException("A prebuilt CLI E2E image was selected, but Dockerfile configuration was also set. Prebuilt-image runs must not fall back to Dockerfile builds.");
+            }
+
             options.BuildArgs.Clear();
         }
     }

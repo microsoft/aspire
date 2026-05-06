@@ -207,19 +207,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          docker load -i "${{ github.workspace }}/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz"
-          docker image inspect "aspire-cli-e2e-dotnet:prebuilt" > /dev/null
-          echo "ASPIRE_E2E_DOTNET_IMAGE=aspire-cli-e2e-dotnet:prebuilt" >> "$GITHUB_ENV"
-          echo "ASPIRE_E2E_REQUIRE_DOTNET_IMAGE=true" >> "$GITHUB_ENV"
-          docker load -i "${{ github.workspace }}/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz"
-          docker image inspect "aspire-cli-e2e-polyglot:prebuilt" > /dev/null
-          echo "ASPIRE_E2E_POLYGLOT_IMAGE=aspire-cli-e2e-polyglot:prebuilt" >> "$GITHUB_ENV"
-          echo "ASPIRE_E2E_REQUIRE_POLYGLOT_IMAGE=true" >> "$GITHUB_ENV"
-          docker load -i "${{ github.workspace }}/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz"
-          docker image inspect "aspire-cli-e2e-polyglot-java:prebuilt" > /dev/null
-          echo "ASPIRE_E2E_POLYGLOT_JAVA_IMAGE=aspire-cli-e2e-polyglot-java:prebuilt" >> "$GITHUB_ENV"
-          echo "ASPIRE_E2E_REQUIRE_POLYGLOT_JAVA_IMAGE=true" >> "$GITHUB_ENV"
+          eng/scripts/load-cli-e2e-images.sh \
+            --image-dir "${{ github.workspace }}/cli-e2e-image" \
+            --require-dotnet true \
+            --require-polyglot true \
+            --require-java true
 
       - name: Unlock macOS keychain
         if: runner.os == 'macOS'
