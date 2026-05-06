@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
+    <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <!-- Enable WebAssembly diagnostics for OpenTelemetry tracing -->
+    <MetricsSupport>true</MetricsSupport>
+    <EventSourceSupport>true</EventSourceSupport>
+    <!-- Enable Activity/DiagnosticSource support for distributed tracing -->
+    <HttpActivityPropagationSupport>true</HttpActivityPropagationSupport>
+  </PropertyGroup>
+
+  <!-- Runtime configuration options for HttpClient activity propagation -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Net.Http.EnableActivityPropagation">
+      <Value>true</Value>
+    </RuntimeHostConfigurationOption>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" VersionOverride="10.0.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AspireWithBlazorHosted.ClientServiceDefaults\AspireWithBlazorHosted.ClientServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

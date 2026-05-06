@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="AspireWithBlazorHosted.AppHost\AspireWithBlazorHosted.AppHost.csproj" />
+  <Project Path="AspireWithBlazorHosted.Server\AspireWithBlazorHosted.csproj" />
+  <Project Path="AspireWithBlazorHosted.Client\AspireWithBlazorHosted.Client.csproj" />
+  <Project Path="AspireWithBlazorHosted.ClientServiceDefaults\AspireWithBlazorHosted.ClientServiceDefaults.csproj" />
+  <Project Path="AspireWithBlazorHosted.WeatherApi\AspireWithBlazorHosted.WeatherApi.csproj" />
+  <Project Path="AspireWithBlazorHosted.ServiceDefaults\AspireWithBlazorHosted.ServiceDefaults.csproj" />
+</Solution>

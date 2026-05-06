@@ -1,0 +1,14 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Packages.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Pin packages compatible with net10.0 and the WASM client.
+       OpenTelemetry alpha versions from myget support browser export. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    <PackageVersion Update="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.2-alpha.0.19" />
+    <PackageVersion Update="OpenTelemetry.Extensions.Hosting" Version="1.15.2-alpha.0.19" />
+    <PackageVersion Update="OpenTelemetry.Instrumentation.Http" Version="1.15.1-alpha.0.224" />
+  </ItemGroup>
+</Project>

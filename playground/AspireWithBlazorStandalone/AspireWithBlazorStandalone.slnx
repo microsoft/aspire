@@ -1,0 +1,81 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Components/">
+    <Project Path="../../src/Components/Aspire.Azure.AI.Inference/Aspire.Azure.AI.Inference.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.AI.OpenAI/Aspire.Azure.AI.OpenAI.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Data.Tables/Aspire.Azure.Data.Tables.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Messaging.EventHubs/Aspire.Azure.Messaging.EventHubs.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Messaging.ServiceBus/Aspire.Azure.Messaging.ServiceBus.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Messaging.WebPubSub/Aspire.Azure.Messaging.WebPubSub.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL/Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Npgsql/Aspire.Azure.Npgsql.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Search.Documents/Aspire.Azure.Search.Documents.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Security.KeyVault/Aspire.Azure.Security.KeyVault.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Storage.Blobs/Aspire.Azure.Storage.Blobs.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.Storage.Queues/Aspire.Azure.Storage.Queues.csproj" />
+    <Project Path="../../src/Components/Aspire.Confluent.Kafka/Aspire.Confluent.Kafka.csproj" />
+    <Project Path="../../src/Components/Aspire.Keycloak.Authentication/Aspire.Keycloak.Authentication.csproj" />
+    <Project Path="../../src/Components/Aspire.Microsoft.Azure.Cosmos/Aspire.Microsoft.Azure.Cosmos.csproj" />
+    <Project Path="../../src/Components/Aspire.Microsoft.Azure.StackExchangeRedis/Aspire.Microsoft.Azure.StackExchangeRedis.csproj" />
+    <Project Path="../../src/Components/Aspire.Microsoft.Data.SqlClient/Aspire.Microsoft.Data.SqlClient.csproj" />
+    <Project Path="../../src/Components/Aspire.Microsoft.EntityFrameworkCore.Cosmos/Aspire.Microsoft.EntityFrameworkCore.Cosmos.csproj" />
+    <Project Path="../../src/Components/Aspire.Microsoft.EntityFrameworkCore.SqlServer/Aspire.Microsoft.EntityFrameworkCore.SqlServer.csproj" />
+    <Project Path="../../src/Components/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.csproj" />
+    <Project Path="../../src/Components/Aspire.Milvus.Client/Aspire.Milvus.Client.csproj" />
+    <Project Path="../../src/Components/Aspire.MongoDB.Driver.v2/Aspire.MongoDB.Driver.v2.csproj" />
+    <Project Path="../../src/Components/Aspire.MongoDB.Driver/Aspire.MongoDB.Driver.csproj" />
+    <Project Path="../../src/Components/Aspire.MySqlConnector/Aspire.MySqlConnector.csproj" />
+    <Project Path="../../src/Components/Aspire.NATS.Net/Aspire.NATS.Net.csproj" />
+    <Project Path="../../src/Components/Aspire.Npgsql.EntityFrameworkCore.PostgreSQL/Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.csproj" />
+    <Project Path="../../src/Components/Aspire.Npgsql/Aspire.Npgsql.csproj" />
+    <Project Path="../../src/Components/Aspire.OpenAI/Aspire.OpenAI.csproj" />
+    <Project Path="../../src/Components/Aspire.Oracle.EntityFrameworkCore/Aspire.Oracle.EntityFrameworkCore.csproj" />
+    <Project Path="../../src/Components/Aspire.Pomelo.EntityFrameworkCore.MySql/Aspire.Pomelo.EntityFrameworkCore.MySql.csproj" />
+    <Project Path="../../src/Components/Aspire.Qdrant.Client/Aspire.Qdrant.Client.csproj" />
+    <Project Path="../../src/Components/Aspire.RabbitMQ.Client.v6/Aspire.RabbitMQ.Client.v6.csproj" />
+    <Project Path="../../src/Components/Aspire.RabbitMQ.Client/Aspire.RabbitMQ.Client.csproj" />
+    <Project Path="../../src/Components/Aspire.Seq/Aspire.Seq.csproj" />
+    <Project Path="../../src/Components/Aspire.StackExchange.Redis.DistributedCaching/Aspire.StackExchange.Redis.DistributedCaching.csproj" />
+    <Project Path="../../src/Components/Aspire.StackExchange.Redis.OutputCaching/Aspire.StackExchange.Redis.OutputCaching.csproj" />
+    <Project Path="../../src/Components/Aspire.StackExchange.Redis/Aspire.StackExchange.Redis.csproj" />
+  </Folder>
+  <Folder Name="/Hosting/">
+    <Project Path="../../src/Aspire.Cli/Aspire.Cli.csproj" />
+    <Project Path="../../src/Aspire.Dashboard/Aspire.Dashboard.csproj" />
+    <Project Path="../../src/Aspire.Hosting.Analyzers/Aspire.Hosting.Analyzers.csproj" />
+    <Project Path="../../src/Aspire.Hosting.AppHost/Aspire.Hosting.AppHost.csproj" />
+    <Project Path="../../src/Aspire.Hosting/Aspire.Hosting.csproj" />
+    <Project Path="../../src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj" />
+  </Folder>
+  <Folder Name="/playground/">
+    <File Path="../.editorconfig" />
+    <File Path="../Directory.Build.props" />
+    <File Path="../Directory.Build.targets" />
+    <File Path="../README.md" />
+    <Project Path="../Playground.ServiceDefaults/Playground.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/playground/AspireWithBlazorStandalone/">
+    <Project Path="AspireWithBlazorStandalone.AppHost/AspireWithBlazorStandalone.AppHost.csproj" />
+    <Project Path="AspireWithBlazorStandalone/AspireWithBlazorStandalone.csproj" />
+    <Project Path="AspireWithBlazorStandalone.ServiceDefaults/AspireWithBlazorStandalone.ServiceDefaults.csproj" />
+    <Project Path="AspireWithBlazorStandalone.ClientServiceDefaults/AspireWithBlazorStandalone.ClientServiceDefaults.csproj" />
+    <Project Path="AspireWithBlazorStandalone.WeatherApi/AspireWithBlazorStandalone.WeatherApi.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="../../.editorconfig" />
+    <File Path="../../Directory.Build.props" />
+    <File Path="../../Directory.Build.targets" />
+    <File Path="../../Directory.Packages.props" />
+    <File Path="../../eng/Versions.props" />
+    <File Path="../../global.json" />
+    <File Path="../../spelling.dic" />
+    <File Path="../../src/Schema/aspire-8.0.json" />
+  </Folder>
+  <Folder Name="/Testing/">
+    <Project Path="../../src/Aspire.Hosting.Testing/Aspire.Hosting.Testing.csproj" />
+  </Folder>
+</Solution>
