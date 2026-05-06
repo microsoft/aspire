@@ -219,6 +219,63 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_SingleFileSkeleton_AppHostRunJsonAdoptsPortsFromExistingAspireConfig()
+    {
+        // If aspire.config.json already exists with a `profiles` section (e.g. user
+        // re-ran `aspire init` after editing it, or copied a stale file in), the new
+        // apphost.run.json must adopt those same ports — the two files should never
+        // disagree on dashboard / OTLP / resource service endpoints.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        const string existingAspireConfig = """
+            {
+              "appHost": {
+                "path": "apphost.cs"
+              },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:18000;http://localhost:18001",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:18002",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:18003"
+                  }
+                },
+                "http": {
+                  "applicationUrl": "http://localhost:18001",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:18005",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:18006",
+                    "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+                  }
+                }
+              }
+            }
+            """;
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), existingAspireConfig);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var runJson = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json")))!.AsObject();
+        var profiles = runJson["profiles"]!.AsObject();
+        var https = profiles["https"]!.AsObject();
+        var http = profiles["http"]!.AsObject();
+
+        Assert.Equal("https://localhost:18000;http://localhost:18001", https["applicationUrl"]!.GetValue<string>());
+        Assert.Equal("https://localhost:18002", https["environmentVariables"]!["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("https://localhost:18003", https["environmentVariables"]!["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18001", http["applicationUrl"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18005", http["environmentVariables"]!["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18006", http["environmentVariables"]!["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task InitCommand_WhenDeprecatedCompatibilityOptionsProvided_SucceedsAndWarns()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

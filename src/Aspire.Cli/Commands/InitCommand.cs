@@ -284,8 +284,11 @@ internal sealed class InitCommand : BaseCommand
         // OTLP / resource service endpoints.
         var ports = AppHostProfilePortGenerator.Generate(Random.Shared);
 
-        // Drop aspire.config.json
-        var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null, ports);
+        // Drop aspire.config.json. The returned ports are whatever ended up effective
+        // in aspire.config.json — newly generated, or pre-existing if the file already
+        // had a `profiles` section. Use the SAME ports for apphost.run.json so the two
+        // files always agree on dashboard / OTLP / resource service endpoints.
+        var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, ports);
         if (configResult != ExitCodeConstants.Success)
         {
             return configResult;
@@ -297,7 +300,7 @@ internal sealed class InitCommand : BaseCommand
         // requires ASPNETCORE_URLS and ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL to be set
         // (these env vars are otherwise injected by the Aspire CLI when running via
         // `aspire run`, but `dotnet run apphost.cs` does not go through that path).
-        DropAppHostRunJson(workingDirectory, ports);
+        DropAppHostRunJson(workingDirectory, effectivePorts);
 
         return ExitCodeConstants.Success;
     }
@@ -419,7 +422,7 @@ internal sealed class InitCommand : BaseCommand
         return ExitCodeConstants.Success;
     }
 
-    private int DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, AppHostProfilePorts? ports = null)
+    private (int ExitCode, AppHostProfilePorts EffectivePorts) DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, AppHostProfilePorts? ports = null)
     {
         var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
 
@@ -443,7 +446,7 @@ internal sealed class InitCommand : BaseCommand
                 {
                     InteractionService.DisplayError($"Failed to parse existing {AspireConfigFile.FileName} at '{configPath}': {ex.Message}");
                     InteractionService.DisplayMessage(KnownEmojis.Warning, $"Fix or remove {AspireConfigFile.FileName} and re-run `aspire init`.");
-                    return ExitCodeConstants.FailedToCreateNewProject;
+                    return (ExitCodeConstants.FailedToCreateNewProject, default);
                 }
             }
         }
@@ -468,42 +471,116 @@ internal sealed class InitCommand : BaseCommand
             appHost["language"] = language;
         }
 
-        // Write default profiles with random ports for dashboard/OTLP/resource service.
-        // Matches the profile structure used by `aspire new` templates (see Templates/*/aspire.config.json).
-        // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
-        if (settings["profiles"] is null)
+        // Resolve the effective ports. If aspire.config.json already had a `profiles`
+        // section we adopt those ports so apphost.run.json (written next by the caller
+        // of this method) stays in sync. Otherwise write fresh profiles using either
+        // the caller-supplied ports or freshly generated ones.
+        AppHostProfilePorts effectivePorts;
+        if (settings["profiles"] is JsonObject existingProfiles && TryReadAppHostProfilePorts(existingProfiles, out var readPorts))
         {
-            var resolvedPorts = ports ?? AppHostProfilePortGenerator.Generate(Random.Shared);
+            effectivePorts = readPorts;
+        }
+        else
+        {
+            // Matches the profile structure used by `aspire new` templates (see Templates/*/aspire.config.json).
+            // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
+            effectivePorts = ports ?? AppHostProfilePortGenerator.Generate(Random.Shared);
 
             settings["profiles"] = new JsonObject
             {
                 ["https"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"https://localhost:{resolvedPorts.DashboardHttpsPort};http://localhost:{resolvedPorts.DashboardHttpPort}",
+                    ["applicationUrl"] = $"https://localhost:{effectivePorts.DashboardHttpsPort};http://localhost:{effectivePorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{resolvedPorts.OtlpHttpsPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{resolvedPorts.ResourceServiceHttpsPort}"
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{effectivePorts.OtlpHttpsPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{effectivePorts.ResourceServiceHttpsPort}"
                     }
                 },
                 ["http"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"http://localhost:{resolvedPorts.DashboardHttpPort}",
+                    ["applicationUrl"] = $"http://localhost:{effectivePorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{resolvedPorts.OtlpHttpPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{resolvedPorts.ResourceServiceHttpPort}",
+                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{effectivePorts.OtlpHttpPort}",
+                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{effectivePorts.ResourceServiceHttpPort}",
                         ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
                     }
                 }
             };
         }
 
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(configPath, settings.ToJsonString(jsonOptions));
+        File.WriteAllText(configPath, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
-        return ExitCodeConstants.Success;
+        return (ExitCodeConstants.Success, effectivePorts);
+    }
+
+    // Best-effort extraction of the dashboard / OTLP / resource service ports from an
+    // existing `profiles` section. Returns true only if every expected port can be parsed
+    // from the https + http profiles, otherwise the caller falls back to fresh ports.
+    private static bool TryReadAppHostProfilePorts(JsonObject profiles, out AppHostProfilePorts ports)
+    {
+        ports = default;
+
+        if (profiles["https"] is not JsonObject https || profiles["http"] is not JsonObject http)
+        {
+            return false;
+        }
+
+        var httpsEnv = https["environmentVariables"] as JsonObject;
+        var httpEnv = http["environmentVariables"] as JsonObject;
+        if (httpsEnv is null || httpEnv is null)
+        {
+            return false;
+        }
+
+        if (!TryParseHostPort(https["applicationUrl"]?.GetValue<string>(), "https", out var dashboardHttps)
+            || !TryParseHostPort(http["applicationUrl"]?.GetValue<string>(), "http", out var dashboardHttp)
+            || !TryParseHostPort(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>(), "https", out var otlpHttps)
+            || !TryParseHostPort(httpEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>(), "http", out var otlpHttp)
+            || !TryParseHostPort(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>(), "https", out var resourceServiceHttps)
+            || !TryParseHostPort(httpEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>(), "http", out var resourceServiceHttp))
+        {
+            return false;
+        }
+
+        ports = new AppHostProfilePorts(
+            DashboardHttpsPort: dashboardHttps,
+            DashboardHttpPort: dashboardHttp,
+            OtlpHttpsPort: otlpHttps,
+            OtlpHttpPort: otlpHttp,
+            ResourceServiceHttpsPort: resourceServiceHttps,
+            ResourceServiceHttpPort: resourceServiceHttp);
+        return true;
+    }
+
+    // Parses the first `<scheme>://host:<port>` segment from a (possibly semicolon-
+    // separated) URL list. Returns false if no segment with the requested scheme is found
+    // or the port can't be parsed.
+    private static bool TryParseHostPort(string? value, string scheme, out int port)
+    {
+        port = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var raw in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+            {
+                continue;
+            }
+
+            if (string.Equals(uri.Scheme, scheme, StringComparison.OrdinalIgnoreCase) && uri.Port > 0)
+            {
+                port = uri.Port;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Writes apphost.run.json next to the single-file AppHost so that
@@ -556,8 +633,7 @@ internal sealed class InitCommand : BaseCommand
             }
         };
 
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(path, settings.ToJsonString(jsonOptions));
+        File.WriteAllText(path, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {fileName}");
     }

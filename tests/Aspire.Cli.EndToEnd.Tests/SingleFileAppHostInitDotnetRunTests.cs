@@ -93,15 +93,16 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>()));
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>()));
 
-        // Drive the actual user flow that #15986 broke: `dotnet run apphost.cs`. The
-        // success line is the AppHost's "Distributed application started." log. Before
-        // the fix, this never appears — instead the AppHost crashes with the dashboard
-        // env-var OptionsValidationException covered by the precondition above.
+        // `dotnet run apphost.cs` should print "Distributed application started." once the
+        // AppHost is fully up. 1 minute is plenty — even a cold dotnet build of the bare
+        // single-file AppHost completes well inside that budget; if it hasn't started by
+        // then something is wrong (build failure, missing env var, hang) and we should
+        // fail fast rather than wait several minutes.
         await auto.TypeAsync("dotnet run apphost.cs");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(
             "Distributed application started.",
-            timeout: TimeSpan.FromMinutes(7));
+            timeout: TimeSpan.FromMinutes(1));
 
         // Stop the running AppHost with Ctrl+C and wait for the shell prompt.
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
