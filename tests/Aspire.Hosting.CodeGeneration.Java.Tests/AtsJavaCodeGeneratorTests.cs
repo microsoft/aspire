@@ -314,6 +314,33 @@ public class AtsJavaCodeGeneratorTests
         Assert.Contains("public class Aspire", aspireJava);
     }
 
+    [Fact]
+    public void GeneratedTransport_HandlesJsonRpcArrayCallbackParameters()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireClientJava = files["AspireClient.java"];
+
+        Assert.Contains("private String getCallbackId(Object params)", aspireClientJava);
+        Assert.Contains("if (params instanceof List<?> list && !list.isEmpty())", aspireClientJava);
+        Assert.Contains("var key = \"p\" + i;", aspireClientJava);
+    }
+
+    [Fact]
+    public void GeneratedDtoValues_AreSerializedAsMaps()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireClientJava = files["AspireClient.java"];
+        var testConfigDtoJava = files["TestConfigDto.java"];
+
+        Assert.Contains("interface JsonSerializable", files["JsonSerializable.java"]);
+        Assert.Contains("if (value instanceof JsonSerializable jsonSerializable)", aspireClientJava);
+        Assert.Contains("public class TestConfigDto implements JsonSerializable", testConfigDtoJava);
+    }
+
     private static string JoinGeneratedFiles(Dictionary<string, string> files)
     {
         return string.Join(
