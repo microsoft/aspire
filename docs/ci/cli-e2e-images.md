@@ -26,6 +26,21 @@ The image build workflow has an `includePolyglotImages` input. It defaults to `t
 
 Consumer workflows download image artifacts into `${{ github.workspace }}/cli-e2e-image` and call `eng/scripts/load-cli-e2e-images.sh` to load the images and export the matching environment variables. Regular split CLI E2E jobs always require DotNet and Polyglot images. Java image download and loading is conditional on Java test jobs to avoid transferring the larger Java tarball to every split job.
 
+The reusable image build workflow also has an `uploadArtifacts` input. It defaults to `true` for test workflows because each isolated test job needs the image tarballs. Cache-warming workflows set it to `false` so they only build the images and export BuildKit cache layers.
+
+## Cross-PR BuildKit cache
+
+The image build workflow exports BuildKit layers to the GitHub Actions cache with stable scopes:
+
+| Variant | Cache scope |
+| --- | --- |
+| DotNet | `cli-e2e-dotnet` |
+| Polyglot | `cli-e2e-polyglot-base` |
+
+GitHub Actions does not let one pull request restore cache entries written by a sibling pull request. Pull request runs can restore cache entries from the current PR ref and from the base/default branch. The `.github/workflows/warm-cli-e2e-image-cache.yml` workflow runs on `main` by schedule, manual dispatch, and relevant `main` pushes so new PRs can restore layers seeded from `main`.
+
+The Java image is built from the local polyglot base image and does not use a separate shared BuildKit cache scope.
+
 ## Adding another variant
 
 When adding a new shared CLI E2E Dockerfile variant:

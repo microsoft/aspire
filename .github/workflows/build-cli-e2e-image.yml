@@ -10,6 +10,10 @@ on:
         required: false
         type: boolean
         default: true
+      uploadArtifacts:
+        required: false
+        type: boolean
+        default: true
 
 env:
   CLI_E2E_DOTNET_IMAGE_ARTIFACT: cli-e2e-dotnet-image
@@ -22,6 +26,7 @@ env:
   CLI_E2E_POLYGLOT_BASE_IMAGE_TAG: aspire-e2e-polyglot-base:latest
   CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-base
   CLI_E2E_INCLUDE_POLYGLOT_IMAGES: ${{ inputs.includePolyglotImages }}
+  CLI_E2E_UPLOAD_ARTIFACTS: ${{ inputs.uploadArtifacts }}
 
 jobs:
   build:
@@ -123,14 +128,17 @@ jobs:
             fi
           fi
 
-          mkdir -p artifacts/cli-e2e-image
-          docker save "$CLI_E2E_DOTNET_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
-          if [[ "$CLI_E2E_INCLUDE_POLYGLOT_IMAGES" == "true" ]]; then
-            docker save "$CLI_E2E_POLYGLOT_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
-            docker save "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
+          if [[ "$CLI_E2E_UPLOAD_ARTIFACTS" == "true" ]]; then
+            mkdir -p artifacts/cli-e2e-image
+            docker save "$CLI_E2E_DOTNET_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
+            if [[ "$CLI_E2E_INCLUDE_POLYGLOT_IMAGES" == "true" ]]; then
+              docker save "$CLI_E2E_POLYGLOT_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
+              docker save "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
+            fi
           fi
 
       - name: Upload CLI E2E .NET Docker image
+        if: ${{ inputs.uploadArtifacts }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ env.CLI_E2E_DOTNET_IMAGE_ARTIFACT }}
@@ -138,7 +146,7 @@ jobs:
           retention-days: 1
 
       - name: Upload CLI E2E polyglot Docker image
-        if: ${{ inputs.includePolyglotImages }}
+        if: ${{ inputs.uploadArtifacts && inputs.includePolyglotImages }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ env.CLI_E2E_POLYGLOT_IMAGE_ARTIFACT }}
@@ -146,7 +154,7 @@ jobs:
           retention-days: 1
 
       - name: Upload CLI E2E Java Docker image
-        if: ${{ inputs.includePolyglotImages }}
+        if: ${{ inputs.uploadArtifacts && inputs.includePolyglotImages }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ env.CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT }}
