@@ -42,6 +42,7 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     private const string PrChannelMarker = "-pr";
 
     private readonly Assembly? _assembly;
+    private readonly Lazy<string> _channel;
 
     /// <summary>
     /// Initializes a new instance that reads metadata from the supplied
@@ -52,13 +53,26 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     /// The assembly to read metadata from. Production callers (DI) pass
     /// <see langword="null"/>; tests pass a fake assembly.
     /// </param>
+    /// <remarks>
+    /// The constructor does NOT read or validate the metadata; that is deferred
+    /// to the first <see cref="ReadChannel"/> call so DI consumers see the
+    /// validation error eagerly when they first try to read the channel rather
+    /// than at container build time. The resolved value is cached for the
+    /// lifetime of this instance via <see cref="Lazy{T}"/> with
+    /// <see cref="LazyThreadSafetyMode.ExecutionAndPublication"/> (the default),
+    /// avoiding repeated <see cref="AssemblyMetadataAttribute"/> scans under
+    /// the singleton DI registration.
+    /// </remarks>
     public IdentityChannelReader(Assembly? assembly = null)
     {
         _assembly = assembly ?? Assembly.GetEntryAssembly();
+        _channel = new Lazy<string>(ResolveChannel, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <inheritdoc />
-    public string ReadChannel()
+    public string ReadChannel() => _channel.Value;
+
+    private string ResolveChannel()
     {
         if (_assembly is null)
         {
