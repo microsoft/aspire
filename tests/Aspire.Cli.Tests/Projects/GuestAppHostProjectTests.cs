@@ -543,6 +543,15 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
 
         var logFilePath = Path.Combine(Path.GetTempPath(), $"test-guest-{Guid.NewGuid()}.log");
 
+        var workspace = new DirectoryInfo(AppContext.BaseDirectory);
+        var executionContext = new CliExecutionContext(
+            workingDirectory: workspace,
+            hivesDirectory: workspace,
+            cacheDirectory: workspace,
+            sdksDirectory: workspace,
+            logsDirectory: workspace,
+            logFilePath: logFilePath);
+
         return new GuestAppHostProject(
             language: language,
             interactionService: new TestInteractionService(),
@@ -554,6 +563,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             configuration: configuration,
             features: new Features(configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
+            executionContext: executionContext,
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
     }

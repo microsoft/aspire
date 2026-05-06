@@ -57,13 +57,18 @@ internal sealed partial class CliTemplateFactory
                     _logger.LogDebug("Copying embedded Go starter template files to '{OutputPath}'.", outputPath);
                     await CopyTemplateTreeToDiskAsync("go-starter", outputPath, ApplyAllTokens, cancellationToken);
 
-                    // Write channel to settings.json before restore so package resolution uses the selected channel.
-                    if (!string.IsNullOrEmpty(inputs.Channel))
+                    // Seed the channel into settings.json before restore so package resolution
+                    // uses the correct channel. Explicit input wins; otherwise default to the
+                    // channel baked into the running CLI (CliExecutionContext.Channel).
+                    var seedChannel = !string.IsNullOrEmpty(inputs.Channel)
+                        ? inputs.Channel
+                        : _executionContext.Channel;
+                    if (!string.IsNullOrEmpty(seedChannel))
                     {
                         var config = AspireJsonConfiguration.Load(outputPath);
                         if (config is not null)
                         {
-                            config.Channel = inputs.Channel;
+                            config.Channel = seedChannel;
                             config.Save(outputPath);
                         }
                     }
