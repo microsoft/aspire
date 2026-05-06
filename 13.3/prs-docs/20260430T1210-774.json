@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "References microsoft/aspire#16289 \u2014 matched to EF Core migration management integration entry",
+  "mergedAt": "2026-04-30T12:10:34Z",
+  "number": 774,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "included",
+  "title": "[docs] Document AddEFMigrations and PublishAsMigrationBundle with publishContainer option"
+}

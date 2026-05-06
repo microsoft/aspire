@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "References microsoft/aspire#16533 but matching changelog entry (Durable Task Scheduler APIs marked as Experimental) has docsRequired:false",
+  "mergedAt": "2026-04-30T12:10:23Z",
+  "number": 779,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "excluded",
+  "title": "[docs] Add ASPIREDURABLETASK001 diagnostic page and document Durable Task experimental APIs"
+}

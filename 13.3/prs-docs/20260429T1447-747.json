@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-only refactor with no specific product PR reference; no matching changelog entry with docsRequired:true",
+  "mergedAt": "2026-04-29T14:47:00Z",
+  "number": 747,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "excluded",
+  "title": "refactor: PostgreSQL integration documentation."
+}

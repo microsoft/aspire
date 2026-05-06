@@ -1,12 +1,15 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "New Aspire.Hosting.EntityFrameworkCore package adds EF Core migration management to AppHost projects. Commands include Update Database, Drop Database, Reset Database, Add Migration, Remove Migration, and Get Database Status. Supports running migrations on startup and generating migration scripts or bundles during publish. Fixes migration output and error detection for the dotnet-ef tool during deploy.",
+  "docsPrs": [
+    774
+  ],
   "docsRequired": true,
-  "emoji": "🗄️",
+  "emoji": "\ud83d\uddc4\ufe0f",
   "firstMergedAt": "2026-04-01T18:59:04Z",
   "lastMergedAt": "2026-04-29T04:30:45Z",
   "name": "EF Core migration management integration",

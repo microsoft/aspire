@@ -1,0 +1,9 @@
+{
+  "author": "Zylvian",
+  "comment": "Corrects WithBunPackageInstallation() method name in docs \u2014 matched to Alternative JavaScript toolchain support for TypeScript AppHosts entry",
+  "mergedAt": "2026-05-04T14:41:50Z",
+  "number": 803,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "included",
+  "title": "Fix method name for Bun package installation"
+}

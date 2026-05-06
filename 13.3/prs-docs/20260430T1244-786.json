@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "Editorial feedback on PostgreSQL docs refactor; no matching changelog entry with docsRequired:true",
+  "mergedAt": "2026-04-30T12:44:04Z",
+  "number": 786,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "excluded",
+  "title": "Implementing feedback on the new PostgreSQL articles"
+}

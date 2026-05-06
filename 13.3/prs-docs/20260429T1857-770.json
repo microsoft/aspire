@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "References microsoft/aspire#16132 \u2014 matched to Private endpoint support for Azure Container Registry entry",
+  "mergedAt": "2026-04-29T18:57:40Z",
+  "number": 770,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "included",
+  "title": "[docs] Add private endpoint support for Azure Container Registry"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents removal of MCP from dashboard and aspire agent mcp command \u2014 matched to MCP server removed from Aspire Dashboard entry",
+  "mergedAt": "2026-04-30T13:01:13Z",
+  "number": 784,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "included",
+  "title": "Replace dashboard Copilot and MCP server docs with AI coding agents and APIs pages"
+}

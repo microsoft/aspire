@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Expands JavaScript apps deployment guide for PublishAsStaticWebsite, PublishAsNodeServer, PublishAsNpmScript \u2014 matched to JavaScript publish methods and AddNextJsApp entry",
+  "mergedAt": "2026-04-30T19:26:36Z",
+  "number": 787,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "included",
+  "title": "Document framework-specific gotchas for JS publish methods"
+}

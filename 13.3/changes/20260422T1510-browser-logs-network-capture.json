@@ -1,12 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "New WithBrowserLogs() API attaches a tracked browser resource to any endpoint-capable resource using a private CDP pipe instead of an exposed TCP debug endpoint. Aspire launches Chromium and streams console logs, network requests, and errors into the resource log stream. The implementation ships from the new Aspire.Hosting.Browsers prerelease package. A dashboard command configures scope, browser, and user data mode at runtime, and a screenshot command saves PNGs as durable artifacts.",
+  "docsPrs": [
+    775,
+    792
+  ],
   "docsRequired": true,
-  "emoji": "🌐",
+  "emoji": "\ud83c\udf10",
   "firstMergedAt": "2026-04-22T15:10:09Z",
   "lastMergedAt": "2026-05-01T18:57:57Z",
   "name": "Browser log, network capture, and screenshot with WithBrowserLogs()",

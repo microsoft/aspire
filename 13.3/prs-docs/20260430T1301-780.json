@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Infrastructure fix for broken links redirects, not product documentation",
+  "mergedAt": "2026-04-30T13:01:35Z",
+  "number": 780,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "excluded",
+  "title": "Fix broken legacy links"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documentation editorial improvement for first-run setup; no matching product changelog entry with docsRequired:true",
+  "mergedAt": "2026-04-29T16:34:10Z",
+  "number": 768,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "excluded",
+  "title": "Clarify first-run setup choices"
+}

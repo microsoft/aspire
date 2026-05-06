@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Adds Aspire.Hosting.Browsers package info to browser logs documentation \u2014 matched to Browser log, network capture, and screenshot with WithBrowserLogs() entry",
+  "mergedAt": "2026-05-01T14:50:42Z",
+  "number": 792,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "included",
+  "title": "Document the Aspire.Hosting.Browsers package on the browser logs page"
+}

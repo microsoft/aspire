@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency version bump, not product documentation",
+  "mergedAt": "2026-04-28T12:54:02Z",
+  "number": 761,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "excluded",
+  "title": "build(deps): bump the npm-all group across 1 directory with 4 updates"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "References microsoft/aspire#16287 but matching changelog entry has docsRequired:false",
+  "mergedAt": "2026-04-29T20:29:11Z",
+  "number": 757,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "excluded",
+  "title": "[docs] Add [AspireValue] exported value catalogs to multi-language integration guide"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Matched to Kubernetes Ingress and Gateway API routing resources entry",
+  "mergedAt": "2026-04-29T22:58:55Z",
+  "number": 781,
+  "runDate": "2026-05-06T01:58:47Z",
+  "status": "included",
+  "title": "Add Kubernetes Ingress and Gateway API documentation"
+}

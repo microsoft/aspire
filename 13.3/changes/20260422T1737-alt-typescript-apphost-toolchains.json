@@ -6,7 +6,8 @@
   "communityContributors": [],
   "description": "TypeScript AppHosts can now use Bun, Yarn, or pnpm as the JavaScript toolchain instead of npm. The CLI detects the toolchain from package.json packageManager metadata and lockfiles, and adapts install, run, and watch commands accordingly. aspire doctor also reports toolchain-specific warnings and guidance.",
   "docsPrs": [
-    746
+    746,
+    803
   ],
   "docsRequired": true,
   "emoji": "\ud83e\uddf0",

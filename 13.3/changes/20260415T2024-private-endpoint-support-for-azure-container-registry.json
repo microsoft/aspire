@@ -1,15 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Azure Container Registry resources now support private endpoints via `WithPrivateEndpoint()`, automatically setting the Premium SKU and disabling public network access for secure private networking.",
   "docsPrs": [
-    433
+    433,
+    770
   ],
   "docsRequired": true,
-  "emoji": "🔒",
+  "emoji": "\ud83d\udd12",
   "firstMergedAt": "2026-04-15T20:24:40Z",
   "lastMergedAt": "2026-04-15T20:24:40Z",
   "name": "Private endpoint support for Azure Container Registry",
