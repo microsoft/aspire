@@ -1,8 +1,6 @@
 <Project>
 
   <PropertyGroup>
-    <IsAspireHost Condition="'$(AspireUseCliBundle)' == 'true' and '$(IsAspireHost)' == ''">true</IsAspireHost>
-
     <!-- Similar to ASP.NET Core and Worker apps, set the default CWD of orchestrator projects to be the project directory. -->
     <RunWorkingDirectory Condition=" '$(RunWorkingDirectory)' == '' and '$(EnableDefaultRunWorkingDirectory)' != 'false' ">$(MSBuildProjectDirectory)</RunWorkingDirectory>
     <AspireGeneratedClassesVisibility Condition="'$(AspireGeneratedClassesVisibility)' == ''">public</AspireGeneratedClassesVisibility>
@@ -188,14 +186,6 @@ namespace Projects%3B
      and reference them for compilation. There will be a ClassName.ProjectMetadata.g.cs file for each referenced project. -->
   <Target Name="WriteAspireProjectMetadataSources" DependsOnTargets="$(WriteAspireProjectMetadataSourcesDependsOn)" BeforeTargets="CoreCompile" />
 
-  <Target Name="SetAspireHostingSdkVersionForCliBundle"
-          BeforeTargets="_CheckForAspireWorkloadDeprecation;PrepareForBuild"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(AspireHostingSDKVersion)' == ''">
-    <PropertyGroup>
-      <AspireHostingSDKVersion>@VERSION@</AspireHostingSDKVersion>
-    </PropertyGroup>
-  </Target>
-
   <Target Name="ResolveAspireCliBundlePaths"
           Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))">
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
@@ -292,7 +282,7 @@ namespace Projects%3B
   </Target>
 
   <Target Name="__ErrorOnMininumSdkVersionMissing" BeforeTargets="PrepareForBuild"
-  Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' != 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
+  Condition="'$(IsAspireHost)' == 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
     <Error Code="ASPIRE007"
       Text="$(MSBuildProjectName) project requires a reference to &quot;Aspire.AppHost.Sdk&quot; with version &quot;9.0.0&quot; or greater to work correctly. Please add the following line after the Project declaration `&lt;Sdk Name=&quot;Aspire.AppHost.Sdk&quot; Version=&quot;9.0.0&quot; /&gt;`."
       File="$(MSBuildProjectFullPath)"

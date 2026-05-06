@@ -277,7 +277,7 @@ public class MSBuildTests
         using var tempDirectory = new TestTempDirectory();
 
         var bundle = CreateFakeCliBundle(tempDirectory.Path);
-        var appHostDirectory = CreatePackageOnlyAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
             $"""
               <AspireCliBundlePath>{bundle.LayoutRoot}</AspireCliBundlePath>
             """);
@@ -304,7 +304,7 @@ public class MSBuildTests
         Directory.CreateDirectory(repoDcpDir);
         Directory.CreateDirectory(repoDashboardDir);
 
-        var appHostDirectory = CreatePackageOnlyAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
             $"""
               <DcpDir>{repoDcpDir}</DcpDir>
               <AspireDashboardDir>{repoDashboardDir}</AspireDashboardDir>
@@ -327,7 +327,7 @@ public class MSBuildTests
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var tempDirectory = new TestTempDirectory();
 
-        var appHostDirectory = CreatePackageOnlyAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
             $"""
               <AspireCliBundlePath>{Path.Combine(tempDirectory.Path, "missing-bundle")}</AspireCliBundlePath>
             """);
@@ -340,7 +340,33 @@ public class MSBuildTests
         Assert.Contains("Aspire CLI bundle path", output);
     }
 
-    private static string CreatePackageOnlyAppHostProject(string basePath, string repoRoot, string additionalProperties)
+    [Fact]
+    public async Task CliBundleOptInKeepsSdkProjectReferenceMutation()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        CreateAppProject(tempDirectory.Path, "App");
+        var bundle = CreateFakeCliBundle(tempDirectory.Path);
+        var appHostDirectory = CreateSdkBundleOptInAppHostProject(tempDirectory.Path, repoRoot,
+            $"""
+              <AspireCliBundlePath>{bundle.LayoutRoot}</AspireCliBundlePath>
+            """,
+            """
+                <ProjectReference Include="..\App\App.csproj" />
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        BuildProject(appHostDirectory);
+
+        var metadataPath = Path.Combine(appHostDirectory, "obj", "Debug", "net8.0", "Aspire", "references", "App.ProjectMetadata.g.cs");
+        var appMetadata = await File.ReadAllTextAsync(metadataPath);
+
+        Assert.Contains("class App : global::Aspire.Hosting.IProjectMetadata", appMetadata);
+    }
+
+    private static string CreateSdkBundleOptInAppHostProject(string basePath, string repoRoot, string additionalProperties, string additionalProjectReferences = "")
     {
         var appHostDirectory = Path.Combine(basePath, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
@@ -354,13 +380,17 @@ public class MSBuildTests
                 <TargetFramework>net8.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
+                <IsAspireHost>true</IsAspireHost>
+                <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
                 <AspireUseCliBundle>true</AspireUseCliBundle>
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
                 <_AspireUseTaskHostFactory>true</_AspireUseTaskHostFactory>
             {additionalProperties}
               </PropertyGroup>
 
               <ItemGroup>
                 <ProjectReference Include="{repoRoot}\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" IsAspireProjectResource="false" />
+            {additionalProjectReferences}
               </ItemGroup>
 
               <Target Name="WriteResolvedAspirePaths" AfterTargets="GetAssemblyAttributes">
@@ -407,6 +437,7 @@ public class MSBuildTests
           </PropertyGroup>
 
           <Import Project="{repoRoot}\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets" />
+          <Import Project="{repoRoot}\src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets" />
         </Project>
         """);
     }
