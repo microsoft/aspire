@@ -13,17 +13,16 @@
     <RunOnGithubActionsMacOS>true</RunOnGithubActionsMacOS>
   </PropertyGroup>
 
-  <!-- The CLI bootstrap (Program.BuildApplicationAsync, PR1-S12) reads the AspireCliChannel
-       AssemblyMetadata from Assembly.GetEntryAssembly(), which under `dotnet test` is this
-       test host. In production the entry assembly is Aspire.Cli.dll with the metadata baked
-       in by Aspire.Cli.csproj. Mirror that here so any test resolving CliExecutionContext
-       from a real Program.BuildApplicationAsync host gets a coherent channel value.
+  <!-- The CLI bootstrap reads the AspireCliChannel AssemblyMetadata from Assembly.GetEntryAssembly(),
+       which under `dotnet test` is this test host. In production the entry assembly is Aspire.Cli.dll
+       with the metadata baked in by Aspire.Cli.csproj. Mirror that here so any test resolving
+       CliExecutionContext from the real bootstrap host gets a coherent channel value.
 
        Forward the same $(AspireCliChannel) the production csproj reads so the test host
-       and the production assembly stay in lockstep — under /p:AspireCliChannel=stable
-       both pick up "stable", under no override both default to "daily" via the production
-       csproj's fallback. CliBootstrapTests rely on this lockstep when comparing
-       context.Channel against the entry assembly's metadata. -->
+       and the production assembly stay in lockstep: under /p:AspireCliChannel=stable both pick up
+       "stable"; under no override both default to "daily" via the production csproj's fallback.
+       Tests relying on comparing context.Channel against the entry assembly's metadata depend on
+       this lockstep. -->
   <PropertyGroup>
     <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">daily</AspireCliChannel>
   </PropertyGroup>

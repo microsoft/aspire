@@ -11,25 +11,24 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Cli.Tests.Scaffolding;
 
 /// <summary>
-/// Spec-derived regression tests for PR1-S10: project-channel reseed sites read
-/// the value to persist from <see cref="CliExecutionContext.Channel"/> (option-(a)
-/// resolved label — <c>pr-&lt;N&gt;</c> for PR builds, identity verbatim otherwise).
+/// Regression tests for project-channel reseed sites, ensuring that when saving the resolved
+/// CLI channel to a project's aspire.config.json during scaffolding or initialization, the value
+/// persisted is the one from <see cref="CliExecutionContext.Channel"/> (the resolved, consumer-facing
+/// label: <c>pr-&lt;N&gt;</c> for PR builds, identity channel verbatim otherwise).
 /// <para>
-/// Earlier shape tests inlined the production expression and round-tripped it
-/// through <see cref="AspireConfigFile"/>. Those tests gave false confidence —
-/// they could pass against a regression that replaced
-/// <c>_executionContext.Channel</c> with a literal string. The tests here
-/// exercise the actual production codepath where possible, and otherwise lock
-/// the source-level reference shape so the regression cannot land silently.
+/// Earlier tests inlined the production expression and round-tripped it through
+/// <see cref="AspireConfigFile"/>. Those tests gave false confidence — they could pass against
+/// a regression that replaced <c>_executionContext.Channel</c> with a literal string. The tests
+/// here exercise the actual production codepath where possible, and otherwise lock the source-level
+/// reference shape so the regression cannot land silently.
 /// </para>
 /// </summary>
 public class ChannelReseedTests
 {
-    // The 5 reseed call sites identified in the PR1-S10 design spec.
-    // Behavioral coverage exists for ScaffoldingService below; the others are
-    // covered by source-level + structural reflection guards because they sit
-    // behind heavyweight DI (AppHostServerProjectFactory + RPC + project I/O)
-    // that this unit-test layer cannot reasonably stand up.
+    // The following reseed call sites must write the resolved channel from CliExecutionContext.Channel:
+    // Behavioral coverage exists for ScaffoldingService below; the others are covered by source-level
+    // + structural reflection guards because they sit behind heavyweight DI (AppHostServerProjectFactory
+    // + RPC + project I/O) that this unit-test layer cannot reasonably stand up.
     //
     //   ScaffoldingService.cs                               — line 75 (early-save)  ← behavioral
     //   ScaffoldingService.cs                               — line 208 (post-prepare)

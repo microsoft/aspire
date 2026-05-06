@@ -353,8 +353,6 @@ public class DotNetTemplateFactoryTests
         sdkInstaller ??= new TestDotNetSdkInstaller();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        // PR1-spec: TemplateNuGetConfigService MUST NOT take an IConfigurationService — the
-        // global-channel fallback was removed (see TemplateNuGetConfigServiceTests).
         var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
 
         return new DotNetTemplateFactory(

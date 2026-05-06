@@ -12,10 +12,8 @@ using Aspire.Cli.Utils;
 namespace Aspire.Cli.Tests.Templating;
 
 /// <summary>
-/// Spec-derived regression tests for the "4th reader" channel-fallback removal.
+/// Regression tests for the template NuGet config service's channel-resolution behavior.
 /// <para>
-/// Per PR1's design contract (mirroring the 3 readers covered by
-/// <see cref="Configuration.GlobalChannelFallbackRemovalTests"/>),
 /// <see cref="TemplateNuGetConfigService"/> MUST NOT consult
 /// <see cref="IConfigurationService.GetConfigurationAsync(string, CancellationToken)"/>
 /// (or the directory-scoped variant) to resolve the channel from any of its
@@ -100,12 +98,11 @@ public class TemplateNuGetConfigServiceTests
     [Fact]
     public async Task ResolveTemplatePackageAsync_NullChannelOverride_DoesNotConsultGlobalConfig_AndUsesImplicitOnly()
     {
-        // Spec §G1 (cross-route channel contamination): when the caller does not supply
-        // a channel override (--channel), the resolver MUST fall back to implicit-only
-        // channels — not to the global ~/.aspire/aspire.config.json#channel. This test
-        // exercises the actual production codepath with a tracking packaging service that
-        // returns one implicit + one explicit channel; the resolver must request only the
-        // implicit one.
+        // When the caller does not supply an explicit channel override (--channel), the resolver
+        // MUST fall back to implicit-only channels only — never to the global
+        // ~/.aspire/aspire.config.json#channel. This test exercises the actual production codepath
+        // with a tracking packaging service that returns one implicit + one explicit channel;
+        // the resolver must request only the implicit one.
         var requestedChannels = new List<PackageChannelType>();
         var packagingService = new TestPackagingService
         {

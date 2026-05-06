@@ -577,16 +577,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
     }
 
-    // Pre-existing test InitCommand_WhenSolutionExistsAndChannelIsExplicit_PassesTemporaryNuGetConfigToTemplateInstall
-    // was deleted in PR1: it exercised the now-removed global-channel fallback (FakeConfigurationServiceWithChannel
-    // → TemplateNuGetConfigService) that PR1 G1 forbids. With ResolveTemplatePackageAsync no longer reading the
-    // global config, the only way init can pick up a non-implicit channel is via an explicit query parameter,
-    // and InitCommand currently forces ChannelOverride: null. Coverage shifts to TemplateNuGetConfigServiceTests.
-
-    // Pre-existing test InitCommand_WhenChannelResolutionThrowsChannelNotFound_DisplaysFriendlyError was also
-    // deleted: it triggered ChannelNotFoundException via the same global-channel fallback path. Friendly-error
-    // behavior is still covered by InitCommand_WhenChannelTemplateSearchFails_DisplaysFriendlyError below
-    // (NuGetPackageCacheException) and InitCommand_WhenInstallTemplateFails_DisplaysFriendlyError above.
+    // Channel resolution uses explicit input or per-project aspire.config.json only,
+    // never the global ~/.aspire/aspire.config.json. Coverage is in TemplateNuGetConfigServiceTests.
 
     [Fact]
     public async Task InitCommand_WhenSolutionExistsAndChannelIsImplicit_LeavesNuGetConfigNull()

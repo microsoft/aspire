@@ -36,7 +36,7 @@ public class GlobalChannelFallbackRemovalTests(ITestOutputHelper outputHelper)
         {
             OnGetConfiguration = key => throw new InvalidOperationException(
                 $"PrebuiltAppHostServer.ResolveChannelName must not consult IConfigurationService (key='{key}'). " +
-                "PR1-S7 removed the global-channel read fallback.")
+                "Channel resolution uses per-project aspire.config.json only, never the global config.")
         };
 
         var server = CreateServer(appHostDirectory.FullName, tripwireConfig);
