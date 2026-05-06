@@ -560,4 +560,69 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
         Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
     }
+
+    // PR2-TG2: PR_NUMBER input validation — empty string. The first positional arg must be a
+    // valid PR number, --run-id, or --local-dir. An empty string is none of those.
+    [Fact]
+    public async Task EmptyPRNumber_ReturnsError_AndCreatesNoFiles()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("", "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+        AssertNoDogfoodInstall(env.MockHome);
+    }
+
+    // PR2-TG2: very large PR number above int.MaxValue. Bash regex ^[1-9][0-9]*$ accepts
+    // any digit-only string so the script proceeds. Documented behavior: there is no upper
+    // bound on PR_NUMBER bash-side; the path segment is constructed safely (digits only).
+    // The mock gh would fail for an unknown PR, but path injection cannot occur.
+    [Fact]
+    public async Task VeryLargePRNumber_AcceptedByScript_WritesSidecarUnderExpectedPath()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("99999999999", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999999999", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected sidecar at {sidecarPath}");
+    }
+
+    // PR2-TG2 (security): path-traversal / command-injection in PR_NUMBER must be rejected at
+    // parse time so it never reaches the path-construction code. The regex ^[1-9][0-9]*$ is
+    // the gate; this test verifies the gate holds and no files leak under <prefix>/dogfood.
+    [Theory]
+    [InlineData("../etc")]
+    [InlineData("../../tmp")]
+    [InlineData("..")]
+    [InlineData("12345; rm -rf /tmp")]
+    [InlineData("12345 hello")]
+    [InlineData("12345|cat")]
+    [InlineData("12345&true")]
+    [InlineData("12345`whoami`")]
+    [InlineData("$(whoami)")]
+    public async Task SpecialCharsPRNumber_Rejected_AndCreatesNoFiles(string pr)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync(pr, "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+        AssertNoDogfoodInstall(env.MockHome);
+    }
+
+    private static void AssertNoDogfoodInstall(string mockHome)
+    {
+        var dogfoodRoot = Path.Combine(mockHome, ".aspire", "dogfood");
+        if (Directory.Exists(dogfoodRoot))
+        {
+            var leaks = Directory.GetFileSystemEntries(dogfoodRoot, "*", SearchOption.AllDirectories);
+            Assert.True(leaks.Length == 0, $"Unexpected files under {dogfoodRoot}: {string.Join(", ", leaks)}");
+        }
+    }
 }

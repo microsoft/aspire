@@ -455,4 +455,63 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
         Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
     }
+
+    // PR2-TG2: PR_NUMBER input validation — empty string. PowerShell parameter binding
+    // rejects empty strings for [int] parameters before any path construction occurs.
+    [Fact]
+    public async Task EmptyPRNumber_ReturnsError_AndCreatesNoFiles()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+        AssertNoDogfoodInstall(env.MockHome);
+    }
+
+    // PR2-TG2: very large PR number above [int]::MaxValue (2147483647). PowerShell's [int]
+    // parameter binding fails the cast — the script must reject and create no files.
+    [Fact]
+    public async Task VeryLargePRNumber_AboveIntMax_Rejected_AndCreatesNoFiles()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", "99999999999", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+        AssertNoDogfoodInstall(env.MockHome);
+    }
+
+    // PR2-TG2 (security): non-numeric / special-char PR_NUMBER is rejected at parameter
+    // binding ([int] cast or ValidateRange). This guards against path injection / command
+    // injection routes via the PR_NUMBER value.
+    [Theory]
+    [InlineData("../etc")]
+    [InlineData("..")]
+    [InlineData("12345 hello")]
+    [InlineData("12345;rm")]
+    [InlineData("12345|cat")]
+    [InlineData("$(whoami)")]
+    public async Task SpecialCharsPRNumber_Rejected_AndCreatesNoFiles(string pr)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-PRNumber", pr, "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+        AssertNoDogfoodInstall(env.MockHome);
+    }
+
+    private static void AssertNoDogfoodInstall(string mockHome)
+    {
+        var dogfoodRoot = Path.Combine(mockHome, ".aspire", "dogfood");
+        if (Directory.Exists(dogfoodRoot))
+        {
+            var leaks = Directory.GetFileSystemEntries(dogfoodRoot, "*", SearchOption.AllDirectories);
+            Assert.True(leaks.Length == 0, $"Unexpected files under {dogfoodRoot}: {string.Join(", ", leaks)}");
+        }
+    }
 }
