@@ -524,4 +524,40 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(File.Exists(globalConfig), $"Unexpected global config at {globalConfig}");
     }
+
+    // PR2-TG1: install_from_local_dir codepath — gap fix coverage. Local-dir installs land at
+    // <prefix>/bin and must write a script-route sidecar so InstallPathResolver can identify
+    // them. Before the gap fix, this test FAILED (sidecar was never written for local-dir).
+    [Fact]
+    public async Task DryRun_LocalDir_WritesScriptRouteSidecar_AtPrefixRoot()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "local-artifacts");
+        Directory.CreateDirectory(localDir);
+        await FakeArchiveHelper.CreateFakeNupkgAsync(localDir, "Aspire.Cli", "13.3.0-preview.1.12345.1");
+        // The CLI archive isn't unpacked under --dry-run, but install_from_local_dir requires
+        // exactly one matching archive to be discoverable for the configured RID.
+        var rid = OperatingSystem.IsMacOS() ? (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "osx-arm64" : "osx-x64")
+                : OperatingSystem.IsLinux() ? (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "linux-arm64" : "linux-x64")
+                : "win-x64";
+        await FakeArchiveHelper.CreateFakeArchiveAsync(localDir, rid);
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--hive-label", "test-hive",
+            "--skip-path",
+            "--dry-run");
+
+        result.EnsureSuccessful();
+
+        // Local-dir installs go under <prefix>/bin (no PR_NUMBER), so the sidecar lives at
+        // the prefix root — same place as get-aspire-cli.sh writes it.
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", ".aspire-install.json");
+        Assert.True(File.Exists(sidecarPath), $"Expected script-route sidecar at {sidecarPath}");
+
+        var sidecarContent = await File.ReadAllTextAsync(sidecarPath);
+        using var doc = System.Text.Json.JsonDocument.Parse(sidecarContent);
+        Assert.Equal("script", doc.RootElement.GetProperty("route").GetString());
+    }
 }

@@ -1097,6 +1097,25 @@ install_from_local_dir() {
         fi
         save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
+
+    # Write install-route sidecar so Aspire CLI can identify this install. The sidecar path
+    # mirrors the cli_install_dir branch above: PR-route installs land at
+    # $INSTALL_PREFIX/dogfood/pr-<N>/.aspire-install.json; otherwise local-dir installs
+    # use the script-route sidecar location at $INSTALL_PREFIX/.aspire-install.json so
+    # InstallPathResolver Mode A discovery works for the binary at $INSTALL_PREFIX/bin.
+    # Written unconditionally — including under --dry-run — so callers can observe the file.
+    if [[ "$HIVE_ONLY" != true ]]; then
+        local sidecar_dir sidecar_content
+        if [[ -n "$PR_NUMBER" ]]; then
+            sidecar_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER"
+            sidecar_content='{ "route": "pr", "updateCommand": "get-aspire-cli-pr.sh -r '"$PR_NUMBER"'" }'
+        else
+            sidecar_dir="$INSTALL_PREFIX"
+            sidecar_content='{ "route": "script" }'
+        fi
+        mkdir -p "$sidecar_dir"
+        printf '%s\n' "$sidecar_content" > "$sidecar_dir/.aspire-install.json"
+    fi
 }
 
 # Main function to download and install from PR or workflow run ID
