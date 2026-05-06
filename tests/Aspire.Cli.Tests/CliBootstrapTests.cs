@@ -3,29 +3,39 @@
 
 using System.Reflection;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Tests.TestServices;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests;
 
 /// <summary>
-/// Regression tests for PR1 bootstrap wiring: the running CLI's
-/// <see cref="CliExecutionContext.Channel"/> should be sourced from the binary's
-/// <c>[AssemblyMetadata("AspireCliChannel")]</c> via
-/// <see cref="IIdentityChannelReader"/>.
-/// <para>
-/// At PR1's current commit (S4..S10 landed), the reader exists but is not yet wired
-/// into Program.cs / DI — <see cref="CliExecutionContext.Channel"/> still defaults
-/// to <c>"daily"</c> via the constructor default. The integration test below is
-/// expected-failing and serves as a tripwire for whoever lands the bootstrap wiring.
-/// See decision drop: <c>livingston-pr1-bootstrap-wire.md</c>.
-/// </para>
+/// Integration tests for PR1 bootstrap wiring: the running CLI's
+/// <see cref="CliExecutionContext.Channel"/> is sourced from the binary's
+/// <c>[AssemblyMetadata("AspireCliChannel")]</c> value via
+/// <see cref="IIdentityChannelReader"/>, registered in DI by
+/// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/> (PR1-S12).
 /// </summary>
 public class CliBootstrapTests
 {
-    [Fact]
-    public void IIdentityChannelReader_TypeExists_AndProductionImplementationIsRegistered()
+    private static readonly string[] s_validChannels = ["stable", "staging", "daily", "pr"];
+
+    private static async Task<IHost> BuildHostAsync()
     {
-        // Locks the type signatures in place so the bootstrap wiring (when it lands) has
-        // a stable surface to bind to.
+        var loggingOptions = Program.ParseLoggingOptions([]);
+        var errorWriter = new TestStartupErrorWriter();
+        var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, loggerFactory.CreateLogger<Program>());
+        return await Program.BuildApplicationAsync([], startupContext);
+    }
+
+    [Fact]
+    public void IIdentityChannelReader_TypeExists_AndProductionImplementationShape()
+    {
+        // Locks the type signatures in place so the bootstrap wiring stays bound to a stable
+        // contract. If the interface or default implementation shape changes, the production
+        // factory delegate in Program.BuildApplicationAsync needs to change in lockstep.
         var iface = typeof(IIdentityChannelReader);
         Assert.True(iface.IsInterface);
 
@@ -37,7 +47,6 @@ public class CliBootstrapTests
         var impl = typeof(IdentityChannelReader);
         Assert.True(iface.IsAssignableFrom(impl));
 
-        // Production constructor: optional Assembly? (defaults to GetEntryAssembly()).
         var ctor = impl.GetConstructors().Single();
         var parameters = ctor.GetParameters();
         Assert.Single(parameters);
@@ -49,52 +58,76 @@ public class CliBootstrapTests
     [Fact]
     public void IdentityChannelReader_OnRunningCliAssembly_ReturnsKnownChannel()
     {
-        // End-to-end: the actual Aspire.Cli assembly being tested has AspireCliChannel
-        // metadata baked in by the csproj (PR1-S2). The reader must extract it and the
-        // value must be one of the four valid channels.
         var reader = new IdentityChannelReader(typeof(Aspire.Cli.Program).Assembly);
 
         var channel = reader.ReadChannel();
 
-        Assert.Contains(channel, new[] { "stable", "staging", "daily", "pr" });
+        Assert.Contains(channel, s_validChannels);
     }
 
     [Fact]
-    public void IIdentityChannelReader_NotYetRegisteredInProductionDI_BootstrapWiringIsPendingFollowUp()
+    public async Task BuildApplication_RegistersIIdentityChannelReader_AsIdentityChannelReaderInstance()
     {
-        // Snapshot of the current PR1 state: PR1-S4 added IIdentityChannelReader and the
-        // default IdentityChannelReader implementation, but Program.cs does NOT yet register
-        // the interface in its DI container, nor does it call ReadChannel() at process start
-        // to populate CliExecutionContext.Channel. CliExecutionContext.Channel still defaults
-        // to the constructor's "daily" literal.
-        //
-        // This test pins that state. When the bootstrap wiring lands, this test should be
-        // updated (or removed) along with new positive coverage for:
-        //   * AddSingleton<IIdentityChannelReader, IdentityChannelReader>() in Program.cs
-        //   * CliExecutionContext constructed from IIdentityChannelReader.ReadChannel()
-        //     and IdentityChannelReader.ParsePrNumber(InformationalVersion)
-        //
-        // Tracked as a decision drop to Ocean: livingston-pr1-bootstrap-wire-needed.md
-        var startupContextType = typeof(Aspire.Cli.Program).Assembly
-            .GetType("Aspire.Cli.StartupContext", throwOnError: false);
+        // PR1-S12 contract: Program.BuildApplicationAsync registers IIdentityChannelReader
+        // as a singleton, backed by the default IdentityChannelReader (which reads from
+        // Assembly.GetEntryAssembly()).
+        using var host = await BuildHostAsync();
 
-        // Reflection-driven assertion: search any non-public type in the CLI assembly for
-        // an explicit registration of IIdentityChannelReader. As of PR1-S10 there is none.
-        var assembly = typeof(Aspire.Cli.Program).Assembly;
-        var hasIdentityChannelReaderUsageSymbol = assembly
-            .GetTypes()
-            .Where(t => t.Namespace?.StartsWith("Aspire.Cli", StringComparison.Ordinal) == true)
-            .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-            .Any(m => m.Name.Contains("IdentityChannelReader", StringComparison.Ordinal));
+        var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
 
-        // The interface and the impl exist (S4 landed) but no consumer references the symbol
-        // by name in any method (no DI registration, no call site). When this changes, this
-        // assertion will flip and the test should be updated alongside the wiring PR.
-        Assert.False(
-            hasIdentityChannelReaderUsageSymbol,
-            "IIdentityChannelReader appears to have a consumer in the production CLI now. " +
-            "If you just added bootstrap wiring (PR1 follow-up), update CliBootstrapTests to " +
-            "assert the new wiring positively (DI registration + CliExecutionContext.Channel " +
-            "populated from ReadChannel() + ParsePrNumber()) and delete this snapshot test.");
+        Assert.NotNull(reader);
+        Assert.IsType<IdentityChannelReader>(reader);
+    }
+
+    [Fact]
+    public async Task BuildApplication_PopulatesCliExecutionContextChannel_FromIdentityChannelReader()
+    {
+        // PR1-S12 contract: the CliExecutionContext factory delegate must source Channel
+        // from IIdentityChannelReader.ReadChannel() rather than the constructor default.
+        // Without this wiring, the entire PR1-S10 reseed chain would write "daily" for
+        // every CLI build regardless of the baked AspireCliChannel.
+        using var host = await BuildHostAsync();
+
+        var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
+        var context = host.Services.GetRequiredService<CliExecutionContext>();
+
+        Assert.Equal(reader.ReadChannel(), context.Channel);
+    }
+
+    [Fact]
+    public async Task BuildApplication_LocallyBuiltCli_HasDailyChannelAndNullPrNumber()
+    {
+        // The Aspire.Cli.csproj defaults AspireCliChannel to "daily" when not overridden
+        // by CI (no /p:AspireCliChannel=...), so a locally-built CLI assembly must expose
+        // Channel == "daily" and PrNumber == null through the bootstrapped context.
+        using var host = await BuildHostAsync();
+
+        var context = host.Services.GetRequiredService<CliExecutionContext>();
+
+        Assert.Equal("daily", context.Channel);
+        Assert.Null(context.PrNumber);
+    }
+
+    [Fact]
+    public async Task BuildApplication_CliExecutionContextChannel_MatchesAssemblyMetadataAttribute()
+    {
+        // End-to-end coherence: the channel flowing through the DI container must equal the
+        // value baked into the entry assembly by [AssemblyMetadata("AspireCliChannel", "...")].
+        // The bootstrap registers the default IdentityChannelReader, which reads from
+        // Assembly.GetEntryAssembly(); under `dotnet test` that's the test host (which mirrors
+        // the production "daily" via the test csproj's AssemblyMetadata item).
+        var entryAssembly = Assembly.GetEntryAssembly();
+        Assert.NotNull(entryAssembly);
+        var bakedChannel = entryAssembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => string.Equals(a.Key, "AspireCliChannel", StringComparison.Ordinal))
+            .Value;
+        Assert.False(string.IsNullOrEmpty(bakedChannel));
+
+        using var host = await BuildHostAsync();
+
+        var context = host.Services.GetRequiredService<CliExecutionContext>();
+
+        Assert.Equal(bakedChannel, context.Channel);
     }
 }

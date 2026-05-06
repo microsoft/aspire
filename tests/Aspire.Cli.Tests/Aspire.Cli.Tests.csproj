@@ -13,6 +13,15 @@
     <RunOnGithubActionsMacOS>true</RunOnGithubActionsMacOS>
   </PropertyGroup>
 
+  <!-- The CLI bootstrap (Program.BuildApplicationAsync, PR1-S12) reads the AspireCliChannel
+       AssemblyMetadata from Assembly.GetEntryAssembly(), which under `dotnet test` is this
+       test host. In production the entry assembly is Aspire.Cli.dll with the metadata baked
+       in by Aspire.Cli.csproj. Mirror that here so any test resolving CliExecutionContext
+       from a real Program.BuildApplicationAsync host gets a coherent channel value. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="AspireCliChannel" Value="daily" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Cli\Aspire.Cli.csproj" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
