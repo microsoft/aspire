@@ -1,6 +1,6 @@
 # Reusable template for submitting WinGet manifests via wingetcreate.
-# Used by the release flow (release-publish-nuget.yml). v3 ships only the
-# stable channel; the winget prerelease flow is no longer published.
+# Used by the release flow (release-publish-nuget.yml) to publish the stable
+# Aspire package (Microsoft.Aspire) to WinGet.
 
 parameters:
   - name: manifestArtifactPath

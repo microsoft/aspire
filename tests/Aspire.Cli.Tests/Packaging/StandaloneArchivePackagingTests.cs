@@ -6,20 +6,19 @@ using System.Xml.Linq;
 namespace Aspire.Cli.Tests.Packaging;
 
 /// <summary>
-/// Spec-derived assertions that the standalone CLI archives
+/// Assertions that the standalone CLI archives
 /// (<c>aspire-cli-&lt;rid&gt;-&lt;version&gt;.{tar.gz,zip}</c>) ship the route sidecar
 /// (<c>.aspire-install.json</c>) at the archive root, with route metadata that
 /// matches the consumer for that archive shape.
 /// <para>
-/// Per <c>agreed-design-v3.md</c> §2.2 + the PR2 design contract:
+/// Each archive variant carries the appropriate route and update command:
 /// <list type="bullet">
 ///   <item>WinGet zips (<c>win-*</c>) carry route <c>winget</c> with
 ///         <c>updateCommand=winget upgrade Microsoft.Aspire</c>.</item>
 ///   <item>Brew tarballs (<c>osx-*</c>) carry route <c>brew</c> with
 ///         <c>updateCommand=brew upgrade aspire</c>.</item>
-///   <item>Linux tarballs (<c>linux-*</c>) ship NO sidecar — there is no managed-route
-///         consumer at the archive layer; <c>InstallPathResolver</c> returns
-///         <c>(Unknown, binaryDir)</c>.</item>
+///   <item>Linux tarballs (<c>linux-*</c>) ship NO sidecar — the resolver returns
+///         <c>(Unknown, binaryDir)</c> for unmanaged installs.</item>
 /// </list>
 /// </para>
 /// <para>

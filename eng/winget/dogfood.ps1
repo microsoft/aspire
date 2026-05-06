@@ -42,8 +42,7 @@ if ($Uninstall) {
     Write-Host "Uninstalling dogfooded Aspire CLI..."
     Write-Host ""
 
-    # Try to find the package via winget. v3 ships only the stable package
-    # (Microsoft.Aspire); the prerelease channel is no longer published.
+    # Look for the stable Aspire package in the local installation.
     $packages = @("Microsoft.Aspire")
     foreach ($pkg in $packages) {
         Write-Host "Checking for $pkg..."

@@ -47,10 +47,10 @@ public class InstallPathResolverTests
     [Fact]
     public void Resolve_NoSidecar_ReturnsUnknownWithBinaryDir()
     {
-        // Spec §2.4: when neither the Mode B sibling nor Mode A parent sidecar is present,
-        // the resolver returns (Unknown, binaryDir) — not (Unknown, ""). Downstream consumers
-        // (PR3) still need a real prefix so they can locate the binary in the no-sidecar
-        // fallback (an unmanaged install of the standalone archive on linux, for example).
+        // When neither the sibling sidecar (next to the binary) nor the parent-directory
+        // sidecar (one level up) is present, the resolver returns (Unknown, binaryDir).
+        // Downstream consumers need this real prefix so they can locate the binary in the
+        // fallback scenario (e.g., an unmanaged standalone archive extracted on Linux).
         using var temp = new TestTempDirectory();
         var binDir = Path.Combine(temp.Path, "bin");
         Directory.CreateDirectory(binDir);
@@ -67,10 +67,10 @@ public class InstallPathResolverTests
     [Fact]
     public void Resolve_NoSidecar_FollowsSymlink_ThenReturnsRealBinaryDirAsPrefix()
     {
-        // Spec §2.4 + §2.3: even in the no-sidecar fallback, the resolver follows symlinks
-        // first and uses the *real* binary's directory as the prefix — not the launcher's.
-        // This matches the Mode B / Mode A behavior so callers see a consistent prefix
-        // semantic regardless of which branch they end up in.
+        // Even in the no-sidecar fallback, the resolver follows symlinks first and uses
+        // the *real* binary's directory as the prefix — not the launcher's. This ensures
+        // consistent prefix semantics across all branches (sibling sidecar, parent sidecar,
+        // and no-sidecar fallback), so callers see a predictable install location.
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 

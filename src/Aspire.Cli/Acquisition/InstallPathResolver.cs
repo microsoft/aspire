@@ -30,9 +30,9 @@ internal sealed class InstallPathResolver : IInstallPathResolver
         {
             // Pathological case: the resolved binary path has no parent directory
             // (e.g. a bare root path). No useful prefix is recoverable, so return empty.
-            // This is distinct from the no-sidecar fallback below, which returns a
-            // valid binaryDir per agreed-design-v3.md §2.4 so PR3 consumers can still
-            // operate against the binary's directory.
+            // This is distinct from the no-sidecar fallback below, which returns the
+            // binary's directory as the prefix so downstream consumers can still
+            // locate the binary even without a sidecar.
             return (InstallMode.Unknown, string.Empty);
         }
 
@@ -51,9 +51,10 @@ internal sealed class InstallPathResolver : IInstallPathResolver
             return (InstallMode.ModeA, parentDir);
         }
 
-        // No-sidecar fallback: per agreed-design-v3.md §2.4, return the resolved binary's
-        // directory so downstream consumers (PR3) can still locate the binary even when
-        // neither Mode A (parent) nor Mode B (sibling) sidecar is present.
+        // No-sidecar fallback: return the resolved binary's directory as the prefix
+        // so downstream consumers can still locate the binary even when neither the
+        // parent-directory sidecar (script/unmanaged install) nor the sibling sidecar
+        // (next to binary, packager-managed) is present.
         return (InstallMode.Unknown, binaryDir);
     }
 

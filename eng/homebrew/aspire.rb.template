@@ -22,7 +22,6 @@ cask "aspire" do
   # The 'binary' stanza below symlinks the binary into the Homebrew bin/ dir.
   binary "aspire"
 
-  # No 'zap' stanza: the Caskroom version dir is the install prefix, and
-  # 'brew uninstall aspire' removes it end-to-end (binary + sidecar +
-  # bundle + versions/). See acquisition design v3 §3.4.
+  # Cleanup: 'brew uninstall aspire' removes the install prefix and all
+  # installed files (binary, sidecar, bundle, versions) end-to-end.
 end
