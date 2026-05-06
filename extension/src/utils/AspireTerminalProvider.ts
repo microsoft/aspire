@@ -98,17 +98,16 @@ export class AspireTerminalProvider implements vscode.Disposable {
         const aspireTerminal = this.getAspireTerminal();
         extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${command}`);
 
-        // Send Ctrl+C (\x03 / ETX) before the new command. This serves two purposes:
-        //  1. If a previous Aspire command (e.g. `aspire logs ... --follow`) is still
-        //     running in the foreground of the terminal, the new command would otherwise
-        //     be delivered to that process's stdin instead of the shell. Ctrl+C sends
-        //     SIGINT to interrupt it so the shell prompt comes back.
-        //  2. At an idle shell prompt, Ctrl+C cancels any pre-existing typed text on the
-        //     current line (bash/zsh as SIGINT-on-empty-line cancels input; PSReadLine
-        //     treats it as a cancel) — preserving the previous "clear input buffer" intent.
-        aspireTerminal.terminal.sendText('\x03', false);
+        if (aspireTerminal.terminal.shellIntegration) {
+            aspireTerminal.terminal.shellIntegration.executeCommand(command);
+        }
+        else {
+            // Without shell integration, VS Code can't tell whether the terminal is idle or
+            // a foreground process is running, so keep the previous safe interruption behavior.
+            aspireTerminal.terminal.sendText('\x03', false);
+            aspireTerminal.terminal.sendText(command);
+        }
 
-        aspireTerminal.terminal.sendText(command);
         if (showTerminal) {
             aspireTerminal.terminal.show();
         }

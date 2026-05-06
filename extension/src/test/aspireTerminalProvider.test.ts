@@ -56,4 +56,69 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(result, 'C:\\Program Files\\Aspire\\aspire.exe');
         });
     });
+
+    suite('sendAspireCommandToAspireTerminal', () => {
+        test('uses shell integration to execute command when available', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const sentTexts: string[] = [];
+            let executedCommand: string | undefined;
+            let shown = false;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: (text: string) => {
+                    sentTexts.push(text);
+                },
+                show: () => {
+                    shown = true;
+                }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs');
+
+                assert.strictEqual(executedCommand, 'aspire logs');
+                assert.deepStrictEqual(sentTexts, []);
+                assert.strictEqual(shown, true);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
+
+        test('sends Ctrl+C before command when shell integration is unavailable', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const sentTexts: { text: string; shouldExecute?: boolean }[] = [];
+            const terminal = {
+                sendText: (text: string, shouldExecute?: boolean) => {
+                    sentTexts.push({ text, shouldExecute });
+                },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs');
+
+                assert.deepStrictEqual(sentTexts, [
+                    { text: '\x03', shouldExecute: false },
+                    { text: 'aspire logs', shouldExecute: undefined }
+                ]);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
+    });
 });
