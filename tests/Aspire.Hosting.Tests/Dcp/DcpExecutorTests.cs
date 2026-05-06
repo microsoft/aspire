@@ -968,7 +968,8 @@ public class DcpExecutorTests
         var watchSubscribers = resourceLoggerService.WatchAnySubscribersAsync();
         var watchSubscribersEnumerator = watchSubscribers.GetAsyncEnumerator();
         var watchLogs = resourceLoggerService.WatchAsync(exeResource.Metadata.Name);
-        var watchLogsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(watchLogs, targetLogCount: 3);
+        // Wait for all three stdout records plus the certificate authority message, which can arrive first in CI.
+        var watchLogsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(watchLogs, targetLogCount: 4);
 
         await watchSubscribersEnumerator.MoveNextAsync();
         Assert.Equal(exeResource.Metadata.Name, watchSubscribersEnumerator.Current.Name);
