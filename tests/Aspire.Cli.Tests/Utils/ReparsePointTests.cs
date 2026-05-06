@@ -20,9 +20,18 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
         var link = Path.Combine(root, "link");
         ReparsePoint.CreateOrReplace(link, target);
 
-        Assert.True(ReparsePoint.IsReparsePoint(link));
-        Assert.True(Directory.Exists(link));
-        Assert.Equal("hello", File.ReadAllText(Path.Combine(link, "marker")));
+        try
+        {
+            Assert.True(ReparsePoint.IsReparsePoint(link));
+            Assert.True(Directory.Exists(link));
+            Assert.Equal("hello", File.ReadAllText(Path.Combine(link, "marker")));
+        }
+        finally
+        {
+            // Remove the reparse point before workspace disposal — Directory.Delete(recursive: true)
+            // follows through junctions on Windows and would fail with UnauthorizedAccessException.
+            ReparsePoint.RemoveIfExists(link);
+        }
     }
 
     [Fact]
@@ -43,8 +52,18 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
         Assert.Equal("one", File.ReadAllText(Path.Combine(link, "id")));
 
         ReparsePoint.CreateOrReplace(link, target2);
-        Assert.Equal("two", File.ReadAllText(Path.Combine(link, "id")));
-        Assert.True(ReparsePoint.IsReparsePoint(link));
+
+        try
+        {
+            Assert.Equal("two", File.ReadAllText(Path.Combine(link, "id")));
+            Assert.True(ReparsePoint.IsReparsePoint(link));
+        }
+        finally
+        {
+            // Remove the reparse point before workspace disposal — Directory.Delete(recursive: true)
+            // follows through junctions on Windows and would fail with UnauthorizedAccessException.
+            ReparsePoint.RemoveIfExists(link);
+        }
     }
 
     [Fact]
