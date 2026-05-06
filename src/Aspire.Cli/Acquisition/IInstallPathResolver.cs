@@ -15,17 +15,20 @@ internal enum InstallMode
     Unknown,
 
     /// <summary>
-    /// Mode A layout: the binary lives in a child directory (typically <c>bin/</c>) and the
-    /// <c>.aspire-install.json</c> sidecar lives one directory above the binary, at the
-    /// install prefix root. Used by the script and PR-route installs.
+    /// Multi-component prefix layout: the install prefix contains several sibling subdirectories
+    /// (for example <c>cli/</c> for the binary and <c>bundle/</c> for additional payload), and the
+    /// <c>.aspire-install.json</c> sidecar lives at the prefix root, one directory above the
+    /// binary. Used by script-based installs and PR-route installs that stage multiple payload
+    /// components under a shared prefix.
     /// </summary>
-    ModeA,
+    PayloadInSubdirectories,
 
     /// <summary>
-    /// Mode B layout: the binary and the <c>.aspire-install.json</c> sidecar live side-by-side
-    /// in the same directory. Used by packager-managed installs (winget, brew, dotnet-tool).
+    /// Flat single-directory layout: the binary and the <c>.aspire-install.json</c> sidecar share
+    /// a single directory. Used by packager-managed installs (winget, brew, dotnet-tool) where
+    /// the package contents are extracted directly into the install location.
     /// </summary>
-    ModeB,
+    PayloadColocated,
 }
 
 /// <summary>

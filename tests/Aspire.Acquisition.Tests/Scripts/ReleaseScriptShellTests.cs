@@ -172,7 +172,8 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
     // Script-route sidecar written under --dry-run at <prefix>/.aspire-install.json
     // with literal {"route":"script"} content. Sidecar is the source of truth that
-    // InstallPathResolver consumes to identify Mode A (script route).
+    // InstallPathResolver consumes to identify the script route (multi-component
+    // prefix layout, with the sidecar one directory above the binary).
     [Fact]
     public async Task DryRun_WritesScriptRouteSidecar_AtPrefixRoot()
     {

@@ -36,19 +36,23 @@ internal sealed class InstallPathResolver : IInstallPathResolver
             return (InstallMode.Unknown, string.Empty);
         }
 
-        // Mode B: sidecar lives next to the binary (packager-managed: winget, brew, dotnet-tool).
+        // Flat single-directory layout: sidecar lives next to the binary
+        // (packager-managed: winget, brew, dotnet-tool). Checked first so that a
+        // colocated sidecar always wins over a parent-directory sidecar when both
+        // happen to exist.
         if (File.Exists(Path.Combine(binaryDir, SidecarFileName)))
         {
-            return (InstallMode.ModeB, binaryDir);
+            return (InstallMode.PayloadColocated, binaryDir);
         }
 
-        // Mode A: sidecar lives one directory above the binary (script / PR routes where the
-        // binary sits in a `bin/` subdirectory under the install prefix).
+        // Multi-component prefix layout: sidecar lives one directory above the
+        // binary (script / PR routes where the binary sits in a subdirectory such
+        // as `bin/` or `cli/` under the shared install prefix).
         var parentDir = Path.GetDirectoryName(binaryDir);
         if (!string.IsNullOrEmpty(parentDir) &&
             File.Exists(Path.Combine(parentDir, SidecarFileName)))
         {
-            return (InstallMode.ModeA, parentDir);
+            return (InstallMode.PayloadInSubdirectories, parentDir);
         }
 
         // No-sidecar fallback: return the resolved binary's directory as the prefix

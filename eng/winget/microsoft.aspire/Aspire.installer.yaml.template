@@ -6,7 +6,7 @@ InstallerType: zip
 NestedInstallerType: portable
 # The zip ships aspire.exe plus the route sidecar (.aspire-install.json) at the
 # zip root. Both files extract to the same package working directory, giving the
-# Mode B prefix layout: <prefix>/{aspire.exe, .aspire-install.json}.
+# flat single-directory prefix layout: <prefix>/{aspire.exe, .aspire-install.json}.
 NestedInstallerFiles:
 - RelativeFilePath: aspire.exe
   PortableCommandAlias: aspire

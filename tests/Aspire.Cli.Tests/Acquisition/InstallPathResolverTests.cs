@@ -10,7 +10,7 @@ public class InstallPathResolverTests
     private const string SidecarFileName = ".aspire-install.json";
 
     [Fact]
-    public void Resolve_SidecarNextToBinary_ReturnsModeB()
+    public void Resolve_SidecarNextToBinary_ReturnsPayloadColocated()
     {
         using var temp = new TestTempDirectory();
         var installDir = Path.Combine(temp.Path, "install");
@@ -22,12 +22,12 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(binaryPath);
 
-        Assert.Equal(InstallMode.ModeB, mode);
+        Assert.Equal(InstallMode.PayloadColocated, mode);
         Assert.Equal(installDir, prefix);
     }
 
     [Fact]
-    public void Resolve_SidecarOneDirectoryAbove_ReturnsModeA()
+    public void Resolve_SidecarOneDirectoryAbove_ReturnsPayloadInSubdirectories()
     {
         using var temp = new TestTempDirectory();
         var prefixDir = Path.Combine(temp.Path, "aspire");
@@ -40,7 +40,7 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(binaryPath);
 
-        Assert.Equal(InstallMode.ModeA, mode);
+        Assert.Equal(InstallMode.PayloadInSubdirectories, mode);
         Assert.Equal(prefixDir, prefix);
     }
 
@@ -94,7 +94,7 @@ public class InstallPathResolverTests
     }
 
     [Fact]
-    public void Resolve_ModeBWinsOverModeA_WhenBothSidecarsExist()
+    public void Resolve_PayloadColocatedWinsOverPayloadInSubdirectories_WhenBothSidecarsExist()
     {
         using var temp = new TestTempDirectory();
         var prefixDir = Path.Combine(temp.Path, "aspire");
@@ -108,7 +108,7 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(binaryPath);
 
-        Assert.Equal(InstallMode.ModeB, mode);
+        Assert.Equal(InstallMode.PayloadColocated, mode);
         Assert.Equal(binDir, prefix);
     }
 
@@ -133,7 +133,7 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(launcherPath);
 
-        Assert.Equal(InstallMode.ModeB, mode);
+        Assert.Equal(InstallMode.PayloadColocated, mode);
         Assert.Equal(realInstallDir, prefix);
     }
 
@@ -176,7 +176,7 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(hop1Path);
 
-        Assert.Equal(InstallMode.ModeB, mode);
+        Assert.Equal(InstallMode.PayloadColocated, mode);
         Assert.Equal(realInstallDir, prefix);
     }
 
@@ -201,7 +201,7 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(binaryPath);
 
-        Assert.Equal(InstallMode.ModeB, mode);
+        Assert.Equal(InstallMode.PayloadColocated, mode);
         Assert.Equal(installDir, prefix);
     }
 
@@ -221,14 +221,14 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(binaryPath);
 
-        Assert.Equal(InstallMode.ModeB, mode);
+        Assert.Equal(InstallMode.PayloadColocated, mode);
         Assert.Equal(installDir, prefix);
     }
 
-    // Spaces+Unicode under Mode A layout (sidecar one dir above
+    // Spaces+Unicode under the multi-component prefix layout (sidecar one dir above
     // binary). Verifies the parent-dir traversal is path-encoding agnostic.
     [Fact]
-    public void Resolve_ModeA_PathWithSpacesAndUnicode_FindsSidecar()
+    public void Resolve_PayloadInSubdirectories_PathWithSpacesAndUnicode_FindsSidecar()
     {
         using var temp = new TestTempDirectory();
         var prefixDir = Path.Combine(temp.Path, "with spaces", "aspire-tëst-Ω");
@@ -241,7 +241,7 @@ public class InstallPathResolverTests
 
         var (mode, prefix) = new InstallPathResolver().Resolve(binaryPath);
 
-        Assert.Equal(InstallMode.ModeA, mode);
+        Assert.Equal(InstallMode.PayloadInSubdirectories, mode);
         Assert.Equal(prefixDir, prefix);
     }
 

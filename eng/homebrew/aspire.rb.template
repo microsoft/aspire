@@ -17,7 +17,7 @@ cask "aspire" do
 
   # The tarball ships 'aspire' plus the route sidecar '.aspire-install.json'
   # at the cask version dir root. Homebrew expands them into the Caskroom
-  # version dir, which IS the Mode B prefix
+  # version dir, which IS the flat single-directory prefix
   # (<caskroom>/aspire/<version>/{aspire, .aspire-install.json}).
   # The 'binary' stanza below symlinks the binary into the Homebrew bin/ dir.
   binary "aspire"

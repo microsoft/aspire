@@ -47,7 +47,8 @@
     Microsoft.DotNet.Build.Tasks.Archives' _CreateArchive target invokes our PublishToDisk
     target with OutputPath set to the staging directory it will subsequently zip/tar. So a
     file dropped at $(OutputPath)/.aspire-install.json ends up at the archive root next to
-    the `aspire` (or `aspire.exe`) binary — which is the Mode B prefix layout that the
+    the `aspire` (or `aspire.exe`) binary — which is the flat single-directory prefix layout
+    that the
     winget zip and brew tarball templates declare in their comments.
 
     Sidecar route is gated on $(CliRuntime) so each per-RID archive ships the correct

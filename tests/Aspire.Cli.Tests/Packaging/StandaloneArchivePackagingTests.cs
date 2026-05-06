@@ -151,10 +151,11 @@ public class StandaloneArchivePackagingTests
     [Fact]
     public void Projitems_StageArchiveRouteSidecar_StagesSidecarAtArchiveRoot()
     {
-        // The Mode B layout requires the sidecar to live next to the binary inside the
-        // archive (i.e. at the archive root, since the native binary sits there directly).
-        // The path is constructed off $(OutputPath) which Microsoft.DotNet.Build.Tasks.Archives
-        // populates with the staging directory it subsequently zips/tars.
+        // The flat single-directory prefix layout requires the sidecar to live next to the
+        // binary inside the archive (i.e. at the archive root, since the native binary sits
+        // there directly). The path is constructed off $(OutputPath) which
+        // Microsoft.DotNet.Build.Tasks.Archives populates with the staging directory it
+        // subsequently zips/tars.
         var doc = LoadCommonProjitems();
         var target = GetStageArchiveRouteSidecarTarget(doc);
 
