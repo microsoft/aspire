@@ -548,7 +548,7 @@ internal sealed class RunCommand : BaseCommand
         // Logs row
         grid.AddRow(
             new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(logFilePath));
+            new Markup(ConsoleHelpers.FormatPathAsFileLink(logFilePath)));
 
         // PID row (if provided)
         if (pid.HasValue)

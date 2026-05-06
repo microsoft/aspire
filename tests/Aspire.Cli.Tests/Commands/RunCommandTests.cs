@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -20,6 +22,8 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -422,6 +426,54 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout(TestConstants.LongTimeoutDuration);
         Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public void RenderAppHostSummary_RendersLogsPathAsClickableFileLink()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = int.MaxValue;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [run].log");
+        var executionContext = new CliExecutionContext(
+            workingDirectory: workspace.WorkspaceRoot,
+            hivesDirectory: workspace.WorkspaceRoot,
+            cacheDirectory: workspace.WorkspaceRoot,
+            sdksDirectory: workspace.WorkspaceRoot,
+            logsDirectory: workspace.WorkspaceRoot,
+            logFilePath: logFilePath);
+
+        var interactionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLoggerFactory.Instance);
+
+        RunCommand.RenderAppHostSummary(
+            interactionService,
+            "AppHost.csproj",
+            dashboardUrl: "http://localhost:1234",
+            codespacesUrl: null,
+            logFilePath,
+            isExtensionHost: false);
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
+            .Replace("[", "%5B", StringComparison.Ordinal)
+            .Replace("]", "%5D", StringComparison.Ordinal);
+
+        Assert.Contains("Logs", outputString);
+        Assert.Contains($";{fileUri}\u001b\\", outputString);
+        Assert.Contains(logFilePath, outputString);
+        Assert.Contains("\u001b]8;;\u001b\\", outputString);
     }
 
     [Fact]
