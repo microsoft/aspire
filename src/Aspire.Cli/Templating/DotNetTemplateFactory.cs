@@ -569,27 +569,21 @@ internal class DotNetTemplateFactory(
 
     private async Task<string?> GetOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
-        var wasExplicitlyProvided = !string.IsNullOrWhiteSpace(inputs.Output);
-
-        if (inputs.Output is not { } outputPath)
-        {
-            var defaultPath = pathDeriver(executionContext, projectName);
-            outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken);
-        }
-
-        // Validate before calling Path.GetFullPath to avoid exceptions from invalid characters.
-        if (wasExplicitlyProvided)
-        {
-            var earlyError = OutputPathHelper.ValidateOutputPath(outputPath, executionContext.WorkingDirectory.FullName);
-            if (earlyError is not null)
+        var outputPath = await OutputPathHelper.ResolveOutputPathAsync(
+            inputs.Output,
+            executionContext.WorkingDirectory.FullName,
+            async () =>
             {
-                interactionService.DisplayError(earlyError);
-                return null;
-            }
-        }
+                var defaultPath = pathDeriver(executionContext, projectName);
+                var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
+                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken);
+            },
+            interactionService);
 
-        outputPath = Path.GetFullPath(outputPath, executionContext.WorkingDirectory.FullName);
+        if (outputPath is null)
+        {
+            return null;
+        }
 
         // When running in extension mode (VS Code), the folder picker returns the parent
         // directory the user selected. Append the project name as a subdirectory so the
@@ -608,14 +602,9 @@ internal class DotNetTemplateFactory(
             {
                 outputPath = normalizedOutputPath;
             }
-        }
 
-        // Validate the resolved output path when --output was explicitly provided.
-        // When the user interactively accepted the default, the prompt validator already ran.
-        // Note: invalid chars and non-empty directory are already checked before Path.GetFullPath above.
-        // After the VS Code extension path adjustment, re-check the final path for non-empty directory.
-        if (wasExplicitlyProvided)
-        {
+            // Re-validate the adjusted path for non-empty directory since appending the
+            // project name may target a different directory than the one already validated.
             var validationError = OutputPathHelper.ValidateResolvedOutputPath(outputPath);
             if (validationError is not null)
             {

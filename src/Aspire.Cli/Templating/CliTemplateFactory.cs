@@ -229,29 +229,16 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
     private async Task<string?> ResolveOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var outputPath = inputs.Output;
-        var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
-        var wasExplicitlyProvided = !string.IsNullOrWhiteSpace(outputPath);
-        if (string.IsNullOrWhiteSpace(outputPath))
-        {
-            var defaultOutputPath = pathDeriver(_executionContext, projectName);
-            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken);
-        }
-
-        // Validate before calling Path.GetFullPath to avoid exceptions from invalid characters.
-        if (wasExplicitlyProvided)
-        {
-            var earlyError = OutputPathHelper.ValidateOutputPath(outputPath, _executionContext.WorkingDirectory.FullName);
-            if (earlyError is not null)
+        return await OutputPathHelper.ResolveOutputPathAsync(
+            inputs.Output,
+            _executionContext.WorkingDirectory.FullName,
+            async () =>
             {
-                _interactionService.DisplayError(earlyError);
-                return null;
-            }
-        }
-
-        outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
-
-        return outputPath;
+                var defaultOutputPath = pathDeriver(_executionContext, projectName);
+                var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
+                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken);
+            },
+            _interactionService);
     }
 
     private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, AppHostProfilePorts ports, string hostName = "localhost")

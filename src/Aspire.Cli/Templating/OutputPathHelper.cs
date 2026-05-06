@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Spectre.Console;
 
@@ -9,6 +10,33 @@ namespace Aspire.Cli.Templating;
 
 internal static class OutputPathHelper
 {
+    /// <summary>
+    /// Resolves the output path by prompting if not provided, validating if explicit,
+    /// and converting to an absolute path.
+    /// </summary>
+    internal static async Task<string?> ResolveOutputPathAsync(
+        string? outputPath,
+        string workingDirectory,
+        Func<Task<string>> promptCallback,
+        IInteractionService interactionService)
+    {
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            outputPath = await promptCallback();
+        }
+        else
+        {
+            var earlyError = ValidateOutputPath(outputPath, workingDirectory);
+            if (earlyError is not null)
+            {
+                interactionService.DisplayError(earlyError);
+                return null;
+            }
+        }
+
+        return Path.GetFullPath(outputPath, workingDirectory);
+    }
+
     /// <summary>
     /// Returns a unique default output path based on the given base name.
     /// Invalid path characters are stripped from <paramref name="baseName"/>.
@@ -20,15 +48,15 @@ internal static class OutputPathHelper
     {
         baseName = SanitizeBaseName(baseName);
 
-        var candidate = $"./{baseName}";
-        if (!IsNonEmptyDirectory(candidate, workingDirectory))
+        var baseCandidate = $"./{baseName}";
+        if (!IsNonEmptyDirectory(baseCandidate, workingDirectory))
         {
-            return candidate;
+            return baseCandidate;
         }
 
         for (var i = 2; i < 1000; i++)
         {
-            candidate = $"./{baseName}-{i}";
+            var candidate = $"{baseCandidate}-{i}";
             if (!IsNonEmptyDirectory(candidate, workingDirectory))
             {
                 return candidate;
@@ -36,7 +64,7 @@ internal static class OutputPathHelper
         }
 
         // Fallback — extremely unlikely to reach here.
-        throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Unable to find a unique output directory name based on '{0}' after 999 attempts.", baseName));
+        return baseCandidate;
     }
 
     /// <summary>
