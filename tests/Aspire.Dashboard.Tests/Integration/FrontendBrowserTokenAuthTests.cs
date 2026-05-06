@@ -76,6 +76,124 @@ public class FrontendBrowserTokenAuthTests
     }
 
     [Fact]
+    public async Task Get_LoginPage_ValidToken_HttpEndpointAfterHttpsEndpoint_RedirectToApp()
+    {
+        var apiKey = "TestKey123!";
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        var endpoints = app.FrontendEndPointsAccessor
+            .Select(accessor => accessor())
+            .ToList();
+        var httpsEndpoint = endpoints.Single(endpoint => endpoint.IsHttps);
+        var httpEndpoint = endpoints.Single(endpoint => !endpoint.IsHttps);
+
+        var cookieContainer = new CookieContainer();
+        using var handler = new HttpClientHandler
+        {
+            AllowAutoRedirect = true,
+            CookieContainer = cookieContainer,
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+            UseCookies = true
+        };
+        using var client = new HttpClient(handler);
+
+        var httpsBaseAddress = new Uri(httpsEndpoint.GetResolvedAddress());
+        var httpBaseAddress = new Uri(httpEndpoint.GetResolvedAddress());
+
+        client.BaseAddress = httpsBaseAddress;
+        var response1 = await client.GetAsync(DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey)).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response1.StatusCode);
+        Assert.Equal(DashboardUrls.TracesUrl(), response1.RequestMessage!.RequestUri!.PathAndQuery);
+
+        var response2 = await client.GetAsync(new Uri(httpBaseAddress, DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey))).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response2.StatusCode);
+        Assert.Equal(DashboardUrls.TracesUrl(), response2.RequestMessage!.RequestUri!.PathAndQuery);
+
+        var response3 = await client.GetAsync(new Uri(httpBaseAddress, DashboardUrls.StructuredLogsUrl())).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response3.StatusCode);
+        Assert.Equal(DashboardUrls.StructuredLogsUrl(), response3.RequestMessage!.RequestUri!.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task Get_LoginPage_ValidToken_HttpEndpointWithHttpsEndpoint_UsesHttpSpecificCookie()
+    {
+        var apiKey = "TestKey123!";
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        var endpoints = app.FrontendEndPointsAccessor
+            .Select(accessor => accessor())
+            .ToList();
+        var httpsEndpoint = endpoints.Single(endpoint => endpoint.IsHttps);
+        var httpEndpoint = endpoints.Single(endpoint => !endpoint.IsHttps);
+
+        using var handler = new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+            UseCookies = true
+        };
+        using var client = new HttpClient(handler);
+
+        var httpsResponse = await client.GetAsync(new Uri(new Uri(httpsEndpoint.GetResolvedAddress()), DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey))).DefaultTimeout();
+        var httpResponse = await client.GetAsync(new Uri(new Uri(httpEndpoint.GetResolvedAddress()), DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey))).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.Redirect, httpsResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, httpResponse.StatusCode);
+
+        var httpsCookie = Assert.Single(httpsResponse.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".Aspire.Dashboard.Auth=", StringComparison.Ordinal));
+        var httpCookie = Assert.Single(httpResponse.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".Aspire.Dashboard.Auth.Http=", StringComparison.Ordinal));
+        Assert.Contains("; secure", httpsCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("; secure", httpCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Get_LoginPage_ValidToken_HttpEndpointWithHttpsEndpoint_RedirectToApp()
+    {
+        var apiKey = "TestKey123!";
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        var httpEndpoint = app.FrontendEndPointsAccessor
+            .Select(accessor => accessor())
+            .Single(endpoint => !endpoint.IsHttps);
+
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true })
+        {
+            BaseAddress = new Uri(httpEndpoint.GetResolvedAddress())
+        };
+
+        var response1 = await client.GetAsync(DashboardUrls.LoginUrl(returnUrl: DashboardUrls.TracesUrl(), token: apiKey)).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response1.StatusCode);
+        Assert.Equal(DashboardUrls.TracesUrl(), response1.RequestMessage!.RequestUri!.PathAndQuery);
+
+        var response2 = await client.GetAsync(DashboardUrls.StructuredLogsUrl()).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response2.StatusCode);
+        Assert.Equal(DashboardUrls.StructuredLogsUrl(), response2.RequestMessage!.RequestUri!.PathAndQuery);
+    }
+
+    [Fact]
     public async Task Get_LoginPage_ValidToken_OtlpHttpConnection_Denied()
     {
         // Arrange

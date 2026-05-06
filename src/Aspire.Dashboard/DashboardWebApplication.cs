@@ -63,6 +63,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
 
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
+    private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
@@ -839,6 +840,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         return Task.CompletedTask;
                     };
                     options.Cookie.Name = DashboardAuthCookieName;
+                    options.CookieManager = new BrowserTokenCookieManager(DashboardHttpAuthCookieName);
                 });
                 break;
             case FrontendAuthMode.Unsecured:
