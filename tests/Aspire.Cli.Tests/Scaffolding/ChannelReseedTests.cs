@@ -6,7 +6,7 @@ using Aspire.Cli.Configuration;
 namespace Aspire.Cli.Tests.Scaffolding;
 
 /// <summary>
-/// Regression tests for PR1-S10: project-channel reseed sites
+/// Regression tests verifying that the project-channel reseed sites
 /// (<c>ScaffoldingService</c>, <c>CliTemplateFactory.{Python,Go,TypeScript}StarterTemplate</c>,
 /// <c>GuestAppHostProject</c>) seed <c>aspire.config.json#channel</c> from
 /// <see cref="CliExecutionContext.Channel"/> when no explicit channel is supplied,

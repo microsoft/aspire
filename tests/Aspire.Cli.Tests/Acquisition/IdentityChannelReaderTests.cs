@@ -49,13 +49,11 @@ public class IdentityChannelReaderTests
         Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
-    // PR1-TG1: edge cases for AssemblyMetadata semantics.
-
     [Fact]
     public void ReadChannel_ChannelMetadataValueIsUnknownString_ReturnedVerbatim()
     {
         // The reader does not validate the value — invalid values are caught at build time
-        // by AssemblyMetadataChannelTests (the smoke test from PR1-S5). Document the
+        // by AssemblyMetadataChannelTests (the smoke test). Document the
         // intentional "trust the build" behavior here.
         var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Foobar", "foobar");
 

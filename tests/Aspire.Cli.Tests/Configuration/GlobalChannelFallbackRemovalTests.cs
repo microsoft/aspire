@@ -14,12 +14,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Cli.Tests.Configuration;
 
 /// <summary>
-/// Regression tests for PR1-S7: the three readers
+/// Regression tests verifying that the three readers
 /// (<see cref="DotNetBasedAppHostServerProject"/>, <see cref="PrebuiltAppHostServer"/>,
 /// <see cref="Aspire.Cli.Commands.NewCommand"/>) no longer fall back to reading
 /// the global identity-channel via <see cref="IConfigurationService.GetConfigurationAsync(string, CancellationToken)"/>.
-/// With the global writers gone (PR1-S6/S8/S9), any leftover global state must
-/// be ignored — the readers must only honor per-project channel state.
+/// With the global writers gone, any leftover global state must be ignored —
+/// the readers must only honor per-project channel state.
 /// </summary>
 public class GlobalChannelFallbackRemovalTests(ITestOutputHelper outputHelper)
 {
@@ -80,7 +80,7 @@ public class GlobalChannelFallbackRemovalTests(ITestOutputHelper outputHelper)
     [Fact]
     public void PrebuiltAppHostServer_ResolveChannelName_IsSynchronous()
     {
-        // PR1-S7 converted the previously-async ResolveChannelNameAsync to sync
+        // The previously-async ResolveChannelNameAsync was converted to sync
         // ResolveChannelName because the only await (the global config read) is gone.
         // Lock the contract so a future change doesn't quietly reintroduce an await.
         var resolveChannelName = typeof(PrebuiltAppHostServer)
@@ -99,8 +99,8 @@ public class GlobalChannelFallbackRemovalTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DotNetBasedAppHostServerProject_HoldsConfigurationServiceFieldButDoesNotReadChannelFromGlobal()
     {
-        // PR1-S7 dropped the channel-read line but left the IConfigurationService
-        // dependency in place for other (future) consumers. Lock both invariants:
+        // The channel-read line was dropped but the IConfigurationService dependency
+        // is left in place for other (future) consumers. Lock both invariants:
         //   1. The field is still declared (DI wiring shouldn't be broken).
         //   2. No method body calls IConfigurationService.GetConfigurationAsync
         //      (which is what the deleted block used).

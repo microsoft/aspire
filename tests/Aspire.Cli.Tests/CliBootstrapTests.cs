@@ -11,11 +11,11 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Tests;
 
 /// <summary>
-/// Integration tests for PR1 bootstrap wiring: the running CLI's
+/// Integration tests for the bootstrap wiring: the running CLI's
 /// <see cref="CliExecutionContext.Channel"/> is sourced from the binary's
 /// <c>[AssemblyMetadata("AspireCliChannel")]</c> value via
 /// <see cref="IIdentityChannelReader"/>, registered in DI by
-/// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/> (PR1-S12).
+/// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/>.
 /// </summary>
 public class CliBootstrapTests
 {
@@ -68,8 +68,8 @@ public class CliBootstrapTests
     [Fact]
     public async Task BuildApplication_RegistersIIdentityChannelReader_AsIdentityChannelReaderInstance()
     {
-        // PR1-S12 contract: Program.BuildApplicationAsync registers IIdentityChannelReader
-        // as a singleton, backed by the default IdentityChannelReader (which reads from
+        // Program.BuildApplicationAsync registers IIdentityChannelReader as a singleton,
+        // backed by the default IdentityChannelReader (which reads from
         // Assembly.GetEntryAssembly()).
         using var host = await BuildHostAsync();
 
@@ -82,10 +82,10 @@ public class CliBootstrapTests
     [Fact]
     public async Task BuildApplication_PopulatesCliExecutionContextChannel_FromIdentityChannelReader()
     {
-        // PR1-S12 contract: the CliExecutionContext factory delegate must source Channel
-        // from IIdentityChannelReader.ReadChannel() rather than the constructor default.
-        // Without this wiring, the entire PR1-S10 reseed chain would write "daily" for
-        // every CLI build regardless of the baked AspireCliChannel.
+        // The CliExecutionContext factory delegate must source Channel from
+        // IIdentityChannelReader.ReadChannel() rather than the constructor default.
+        // Without this wiring, the entire reseed chain would write "daily" for every
+        // CLI build regardless of the baked AspireCliChannel.
         using var host = await BuildHostAsync();
 
         var reader = host.Services.GetRequiredService<IIdentityChannelReader>();

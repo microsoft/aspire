@@ -1719,10 +1719,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         return OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
     }
 
-    // PR1-S9 regression: `aspire update --self` no longer mutates the global identity
-    // channel via IConfigurationService. The freshly extracted binary already carries
-    // its own channel via [AssemblyMetadata("AspireCliChannel")], so the global write
-    // is dead weight and a contamination source.
+    // `aspire update --self` no longer mutates the global identity channel via
+    // IConfigurationService. The freshly extracted binary already carries its own channel
+    // via [AssemblyMetadata("AspireCliChannel")], so the global write is dead weight and
+    // a contamination source.
 
     [Theory]
     [InlineData("update --self --channel stable")]
