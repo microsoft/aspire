@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/oss/go/microsoft/golang:1.23 AS builder
 WORKDIR /app
 COPY . .
-RUN echo "Built at 20260313162955" > /build-info.txt
+RUN echo "Built at 20260506165245" > /build-info.txt
 RUN go build -o qots .
 
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0

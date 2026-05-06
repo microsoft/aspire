@@ -238,8 +238,8 @@
         "REVERSEPROXY__ROUTES__route1__MATCH__PATH": "/basket/{**catch-all}",
         "REVERSEPROXY__ROUTES__route1__CLUSTERID": "cluster_basketservice",
         "REVERSEPROXY__ROUTES__route1__TRANSFORMS__0__PathRemovePrefix": "/basket",
-        "REVERSEPROXY__CLUSTERS__cluster_catalogservice__DESTINATIONS__destination1__ADDRESS": "http://_http.catalogservice",
-        "REVERSEPROXY__CLUSTERS__cluster_basketservice__DESTINATIONS__destination1__ADDRESS": "http://_http.basketservice",
+        "REVERSEPROXY__CLUSTERS__cluster_catalogservice__DESTINATIONS__destination1__ADDRESS": "http://catalogservice",
+        "REVERSEPROXY__CLUSTERS__cluster_basketservice__DESTINATIONS__destination1__ADDRESS": "http://basketservice",
         "services__catalogservice__http__0": "{catalogservice.bindings.http.url}",
         "BASKETSERVICE_HTTP": "{basketservice.bindings.http.url}",
         "services__basketservice__http__0": "{basketservice.bindings.http.url}"

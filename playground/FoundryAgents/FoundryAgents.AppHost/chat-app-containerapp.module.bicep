@@ -5,36 +5,25 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-param webstory_containerimage string
+param chat_app_containerimage string
 
-param webstory_containerport string
+param chat_app_containerport string
 
-@secure()
-param chat_gh_apikey_value string
+param proj_myproject_outputs_endpoint string
 
 param env_outputs_azure_container_registry_endpoint string
 
 param env_outputs_azure_container_registry_managed_identity_id string
 
-resource webstory 'Microsoft.App/containerApps@2025-10-02-preview' = {
-  name: 'webstory'
+resource chat_app 'Microsoft.App/containerApps@2025-10-02-preview' = {
+  name: 'chat-app'
   location: location
   properties: {
     configuration: {
-      secrets: [
-        {
-          name: 'connectionstrings--chat'
-          value: 'Endpoint=https://models.github.ai/inference;Key=${chat_gh_apikey_value};Model=openai/gpt-4o-mini'
-        }
-        {
-          name: 'chat-key'
-          value: chat_gh_apikey_value
-        }
-      ]
       activeRevisionsMode: 'Single'
       ingress: {
         external: true
-        targetPort: int(webstory_containerport)
+        targetPort: int(chat_app_containerport)
         transport: 'http'
       }
       registries: [
@@ -53,8 +42,8 @@ resource webstory 'Microsoft.App/containerApps@2025-10-02-preview' = {
     template: {
       containers: [
         {
-          image: webstory_containerimage
-          name: 'webstory'
+          image: chat_app_containerimage
+          name: 'chat-app'
           env: [
             {
               name: 'OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY'
@@ -66,23 +55,39 @@ resource webstory 'Microsoft.App/containerApps@2025-10-02-preview' = {
             }
             {
               name: 'HTTP_PORTS'
-              value: webstory_containerport
+              value: chat_app_containerport
             }
             {
-              name: 'ConnectionStrings__chat'
-              secretRef: 'connectionstrings--chat'
+              name: 'ConnectionStrings__joker-agent'
+              value: '${proj_myproject_outputs_endpoint}/agents/joker-agent'
             }
             {
-              name: 'CHAT_URI'
-              value: 'https://models.github.ai/inference'
+              name: 'JOKER_AGENT_AGENTNAME'
+              value: 'joker-agent'
             }
             {
-              name: 'CHAT_KEY'
-              secretRef: 'chat-key'
+              name: 'JOKER_AGENT_PROJECTENDPOINT'
+              value: proj_myproject_outputs_endpoint
             }
             {
-              name: 'CHAT_MODELNAME'
-              value: 'openai/gpt-4o-mini'
+              name: 'JOKER_AGENT_CONNECTIONSTRING'
+              value: '${proj_myproject_outputs_endpoint}/agents/joker-agent'
+            }
+            {
+              name: 'ConnectionStrings__research-agent'
+              value: '${proj_myproject_outputs_endpoint}/agents/research-agent'
+            }
+            {
+              name: 'RESEARCH_AGENT_AGENTNAME'
+              value: 'research-agent'
+            }
+            {
+              name: 'RESEARCH_AGENT_PROJECTENDPOINT'
+              value: proj_myproject_outputs_endpoint
+            }
+            {
+              name: 'RESEARCH_AGENT_CONNECTIONSTRING'
+              value: '${proj_myproject_outputs_endpoint}/agents/research-agent'
             }
           ]
         }
