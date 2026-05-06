@@ -1032,7 +1032,7 @@ public class DcpExecutorTests
         var watchSubscribers = resourceLoggerService.WatchAnySubscribersAsync();
         var watchSubscribersEnumerator = watchSubscribers.GetAsyncEnumerator();
         var watchLogs = resourceLoggerService.WatchAsync(exeResource.Metadata.Name);
-        var watchLogsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(watchLogs, targetLogCount: 2);
+        var watchLogsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(watchLogs, targetLogCount: 2); // 1 DCP system log + 1 certificate authority message
 
         await watchSubscribersEnumerator.MoveNextAsync();
         Assert.Equal(exeResource.Metadata.Name, watchSubscribersEnumerator.Current.Name);
