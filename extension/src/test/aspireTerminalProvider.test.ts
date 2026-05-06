@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
+import { EnvironmentVariables } from '../utils/environment';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
@@ -59,6 +60,25 @@ suite('AspireTerminalProvider tests', () => {
 
     suite('sendAspireCommandToAspireTerminal', () => {
         const expectedCommand = process.platform === 'win32' ? '& "aspire" logs' : 'aspire logs';
+        let originalStopOnEntry: string | undefined;
+        let isCliDebugLoggingEnabledStub: sinon.SinonStub;
+
+        setup(() => {
+            originalStopOnEntry = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY];
+            delete process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY];
+            isCliDebugLoggingEnabledStub = sinon.stub(terminalProvider, 'isCliDebugLoggingEnabled').returns(false);
+        });
+
+        teardown(() => {
+            isCliDebugLoggingEnabledStub.restore();
+
+            if (originalStopOnEntry === undefined) {
+                delete process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY];
+            }
+            else {
+                process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] = originalStopOnEntry;
+            }
+        });
 
         test('uses shell integration to execute command when available', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
