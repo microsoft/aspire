@@ -1239,6 +1239,17 @@ function Install-AspireCli {
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
         }
 
+        # Write install-route sidecar so Aspire CLI can identify this as a script-route install.
+        # The sidecar lives at the install prefix root (parent of the bin directory), not next to
+        # the binary, so it survives prefix layout changes and is route-only metadata.
+        # Written unconditionally — including under -WhatIf — so callers can observe the install route.
+        # .NET I/O is used directly because PowerShell cmdlets that support ShouldProcess
+        # (New-Item, Set-Content) silently no-op when $WhatIfPreference is propagated.
+        $sidecarDir = Split-Path -Parent $InstallPath
+        $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+        [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
+        [System.IO.File]::WriteAllText($sidecarPath, '{ "route": "script" }')
+
         # Save the global channel setting if using quality-based download (not version-specific)
         # This allows 'aspire new' and 'aspire init' to use the same channel by default
         # For release/stable channel, remove the setting to avoid forcing nuget.config creation

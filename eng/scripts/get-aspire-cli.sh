@@ -1130,6 +1130,15 @@ main() {
         exit 1
     fi
 
+    # Write install-route sidecar so Aspire CLI can identify this as a script-route install.
+    # The sidecar lives at the install prefix root (one level above the bin directory),
+    # not next to the binary, so it survives prefix layout changes and is route-only metadata.
+    # Written unconditionally — including under --dry-run — so callers can observe the install route.
+    local sidecar_dir
+    sidecar_dir="$(dirname "$INSTALL_PATH")"
+    mkdir -p "$sidecar_dir"
+    printf '{ "route": "script" }\n' > "$sidecar_dir/.aspire-install.json"
+
     # Skip PATH configuration if --skip-path is set
     if [[ "$SKIP_PATH" != true ]]; then
         # Handle GitHub Actions environment
