@@ -498,9 +498,8 @@ to determine what work is available.
    PR tracker entry (see Step 6d for the schema). If the directory does not
    exist or is empty, no docs PRs have been processed yet.
 5. Check if the file `/tmp/gh-aw/pr-data/feedback-issue.json` exists. If it
-   does, read the issue number and `updatedAt` timestamp from it and then read
-   **all** comments on that issue into memory — these will be processed as
-   editorial instructions in Step 4. If the file does not exist, there is no
+   does, read the issue number and `updatedAt` timestamp from it. The comments
+   on this issue will be read in Step 4 when processing editorial feedback. If the file does not exist, there is no
    feedback to process.
 
 ## Step 2: Review the pre-computed batch
@@ -524,7 +523,9 @@ were merged on or after `${MILESTONE_START}`:
 - All matching docs PRs → `/tmp/gh-aw/pr-data/all-docs-prs.json`
 - Oldest ${BATCH_SIZE} unprocessed docs PRs → `/tmp/gh-aw/pr-data/batch-docs-prs.json`
 
-Each entry in `batch-docs-prs.json` has the same schema as `batch-prs.json`.
+Each entry in `batch-docs-prs.json` has the same schema as `batch-prs.json`,
+except without the `authorAssociation` field (which is only enriched for
+product PRs).
 
 ## Step 3: Process the batch PRs
 
@@ -786,12 +787,18 @@ are needed. Match by:
    product PR number (e.g., "Documents #1234", links to
    `https://github.com/${REPO}/pull/1234`). Match to the changelog entry
    whose `prs` array contains that number.
-2. **Feature name or area match** — the docs PR title, body, or changed file paths
-   clearly correspond to a changelog entry’s name, area, or description
+2. **Feature name match** — the docs PR title, body, or changed file paths
+   clearly correspond to a changelog entry’s name or description
    (e.g., a docs PR titled "Document Redis clustering" matches a changelog
    entry named "Redis clustering support").
-3. **No match** — if the docs PR cannot be confidently matched to any
-   changelog entry with `docsRequired: true`, record it as `"excluded"` in
+3. **Read diff when uncertain** — if the docs PR appears related to the general
+   area of a changelog entry but the title, body, and file paths are not enough
+   to confidently confirm a match, use `pull_request_read` with `get_diff` on
+   the docs PR to inspect its actual content. Use the diff to identify which
+   product feature is being documented.
+4. **No match** — if the docs PR cannot be confidently matched to any
+   changelog entry with `docsRequired: true` (even after reading the diff),
+   record it as `"excluded"` in
    the docs PR tracker (Step 6d) with a comment explaining why (e.g.,
    "No matching changelog entry found").
 
