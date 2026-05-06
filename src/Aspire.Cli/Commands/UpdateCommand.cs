@@ -224,6 +224,9 @@ internal sealed class UpdateCommand : BaseCommand
             }
 
             // Update packages using the appropriate project handler
+            // The validator ensures --yes is required when --non-interactive is specified,
+            // so by this point --yes is always explicitly provided in non-interactive mode.
+            // defaultValue: true means the interactive prompt defaults to "yes" (accept).
             var confirmBinding = PromptBinding.Create(parseResult, s_yesOption, defaultValue: true);
             var nugetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption);
             var updateContext = new UpdatePackagesContext
