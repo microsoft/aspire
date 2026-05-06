@@ -41,18 +41,26 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     private const string ChannelMetadataKey = "AspireCliChannel";
     private const string PrChannelMarker = "-pr";
 
-    private readonly Assembly? _assembly;
+    private readonly Assembly _assembly;
     private readonly Lazy<string> _channel;
 
     /// <summary>
     /// Initializes a new instance that reads metadata from the supplied
-    /// <paramref name="assembly"/>, defaulting to <see cref="Assembly.GetEntryAssembly()"/>
-    /// when <see langword="null"/> (the production case).
+    /// <paramref name="assembly"/>. The assembly is required: defaulting to
+    /// <see cref="Assembly.GetEntryAssembly()"/> is intentionally NOT supported
+    /// because under <c>Microsoft.DotNet.RemoteExecutor</c> and other test
+    /// hosts the entry assembly resolves to the host (not the CLI), which
+    /// silently breaks <c>[AssemblyMetadata]</c> reads. Callers must pin the
+    /// read explicitly: production passes <c>typeof(Program).Assembly</c>;
+    /// tests pass a fake assembly carrying the desired metadata.
     /// </summary>
     /// <param name="assembly">
-    /// The assembly to read metadata from. Production callers (DI) pass
-    /// <see langword="null"/>; tests pass a fake assembly.
+    /// The assembly to read <c>AspireCliChannel</c> metadata from. Must not be
+    /// <see langword="null"/>.
     /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="assembly"/> is <see langword="null"/>.
+    /// </exception>
     /// <remarks>
     /// The constructor does NOT read or validate the metadata; that is deferred
     /// to the first <see cref="ReadChannel"/> call so DI consumers see the
@@ -63,9 +71,10 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     /// avoiding repeated <see cref="AssemblyMetadataAttribute"/> scans under
     /// the singleton DI registration.
     /// </remarks>
-    public IdentityChannelReader(Assembly? assembly = null)
+    public IdentityChannelReader(Assembly assembly)
     {
-        _assembly = assembly ?? Assembly.GetEntryAssembly();
+        ArgumentNullException.ThrowIfNull(assembly);
+        _assembly = assembly;
         _channel = new Lazy<string>(ResolveChannel, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
@@ -74,12 +83,6 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
 
     private string ResolveChannel()
     {
-        if (_assembly is null)
-        {
-            throw new InvalidOperationException(
-                $"Could not determine the entry assembly to read '{ChannelMetadataKey}' metadata from.");
-        }
-
         var metadata = _assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => string.Equals(a.Key, ChannelMetadataKey, StringComparison.Ordinal));
