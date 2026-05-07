@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Globalization;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -98,5 +101,132 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("Resolved.AppHost", "Resolved.AppHost.csproj")),
             displayedMessage.Message);
+    }
+
+    [Fact]
+    public async Task StopCommand_AllIncludesEachAppHostPathInMessages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var statusMessages = new ConcurrentQueue<string>();
+        interactionService.ShowStatusCallback = statusMessages.Enqueue;
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
+        var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost", "App2.AppHost.csproj");
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, int.MaxValue - 1));
+        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, int.MaxValue - 2));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --all");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var expectedPath1 = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath1);
+        var expectedPath2 = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath2);
+        var displayedText = GetDisplayedText(interactionService, statusMessages);
+        Assert.Contains(displayedText, message => message.Contains(expectedPath1, StringComparison.Ordinal));
+        Assert.Contains(displayedText, message => message.Contains(expectedPath2, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StopCommand_AllIncludesProcessIdWhenAppHostPathsCollide()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var statusMessages = new ConcurrentQueue<string>();
+        interactionService.ShowStatusCallback = statusMessages.Enqueue;
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
+        var processId1 = int.MaxValue - 3;
+        var processId2 = int.MaxValue - 4;
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, processId1));
+        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath, processId2));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --all");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var expectedPath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath);
+        var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, expectedPath, processId1);
+        var expectedIdentifier2 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, expectedPath, processId2);
+        var displayedText = GetDisplayedText(interactionService, statusMessages);
+        Assert.Contains(displayedText, message => message.Contains(expectedIdentifier1, StringComparison.Ordinal));
+        Assert.Contains(displayedText, message => message.Contains(expectedIdentifier2, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StopCommand_SingleAppHostIncludesIdentifierInStatusAndSuccessMessages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var statusMessages = new ConcurrentQueue<string>();
+        interactionService.ShowStatusCallback = statusMessages.Enqueue;
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, int.MaxValue - 5));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var expectedPath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath);
+        Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, expectedPath));
+        Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedPath));
+    }
+
+    private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId)
+    {
+        return new TestAppHostAuxiliaryBackchannel
+        {
+            Hash = $"hash-{processId.ToString(CultureInfo.InvariantCulture)}",
+            SocketPath = $"socket.{processId.ToString(CultureInfo.InvariantCulture)}",
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = appHostPath,
+                ProcessId = processId
+            }
+        };
+    }
+
+    private static string[] GetDisplayedText(TestInteractionService interactionService, ConcurrentQueue<string> statusMessages)
+    {
+        return interactionService.DisplayedMessages.Select(message => message.Message)
+            .Concat(interactionService.DisplayedSuccess)
+            .Concat(interactionService.DisplayedErrors)
+            .Concat(statusMessages)
+            .ToArray();
     }
 }
