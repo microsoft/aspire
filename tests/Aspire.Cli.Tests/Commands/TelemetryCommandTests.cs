@@ -146,6 +146,17 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void FormatTraceLink_WithDashboardUrlAndNoLinkSupport_ReturnsFallbackWithUrl()
+    {
+        var interactionService = new TestInteractionService { SupportsLinks = false };
+        var result = TelemetryCommandHelpers.FormatTraceLink(interactionService, "http://localhost:18888", "abc123456789");
+
+        Assert.DoesNotContain("[link=", result);
+        Assert.Contains("abc1234", result); // Shortened ID still present
+        Assert.Contains("http://localhost:18888/traces/detail/abc123456789", result); // URL visible in fallback
+    }
+
+    [Fact]
     public void ToOtlpResources_ConvertsResourceInfoToOtlpResources()
     {
         var resources = new ResourceInfoJson[]

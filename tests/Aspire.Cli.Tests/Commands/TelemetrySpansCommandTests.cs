@@ -79,8 +79,8 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
         // Span output format: "timestamp STATUS shortSpanId resourceName     duration spanName"
         var spanLines = outputWriter.Logs.Where(l => l.Contains("frontend") || l.Contains("backend")).ToList();
         Assert.Equal(2, spanLines.Count);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      50ms frontend: GET /index span001", spanLines[0]);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     20ms backend: SELECT * FROM users span002", spanLines[1]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      50ms frontend: GET /index span001 (http://localhost:18888/traces/detail/trace001?spanId=span001)", spanLines[0]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     20ms backend: SELECT * FROM users span002 (http://localhost:18888/traces/detail/trace001?spanId=span002)", spanLines[1]);
     }
 
     [Fact]
@@ -114,8 +114,8 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
         // Replicas get shortened GUID appended
         var spanLines = outputWriter.Logs.Where(l => l.Contains("apiservice")).ToList();
         Assert.Equal(2, spanLines.Count);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      75ms apiservice-11111111: GET /api/products span001", spanLines[0]);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     50ms apiservice-aaaaaaaa: POST /api/orders span002", spanLines[1]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} OK      75ms apiservice-11111111: GET /api/products span001 (http://localhost:18888/traces/detail/trace001?spanId=span001)", spanLines[0]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddMilliseconds(10))} ERR     50ms apiservice-aaaaaaaa: POST /api/orders span002 (http://localhost:18888/traces/detail/trace001?spanId=span002)", spanLines[1]);
     }
 
     private static string BuildSpansJson(params (string serviceName, string? instanceId, string spanId, string name, DateTime startTime, DateTime endTime, bool hasError)[] entries)

@@ -538,7 +538,10 @@ internal static class TelemetryCommandHelpers
     /// <param name="traceId">The trace ID.</param>
     /// <param name="displayText">The text to display (defaults to shortened trace ID).</param>
     /// <param name="spanId">Optional span ID to highlight in the trace detail view.</param>
-    /// <returns>A Spectre markup string with hyperlink, or plain text if dashboardUrl is null.</returns>
+    /// <returns>
+    /// A Spectre markup string with hyperlink when the console supports links and dashboardUrl is non-null;
+    /// or just the display text if links are unsupported, dashboardUrl is null, or traceId is empty.
+    /// </returns>
     public static string FormatTraceLink(IInteractionService interactionService, string? dashboardUrl, string traceId, string? displayText = null, string? spanId = null)
     {
         var text = displayText ?? OtlpHelpers.ToShortenedId(traceId);

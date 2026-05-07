@@ -314,14 +314,18 @@ internal sealed class DescribeCommand : BaseCommand
             var stateText = ColorState(snapshot.State);
             var healthText = ColorHealth(snapshot.HealthStatus?.EscapeMarkup() ?? "-");
 
-            var nameMarkup = ColorResourceName(displayName, displayName.EscapeMarkup());
+            string nameMarkup;
             if (!string.IsNullOrEmpty(dashboardBaseUrl))
             {
                 var resourceUrl = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: snapshot.Name));
-                nameMarkup = MarkupHelpers.SafeLink(_interactionService, resourceUrl, nameMarkup);
+                nameMarkup = MarkupHelpers.SafeLink(_interactionService, resourceUrl, displayName);
+            }
+            else
+            {
+                nameMarkup = displayName.EscapeMarkup();
             }
 
-            table.AddRow(nameMarkup, type, stateText, healthText, endpoints);
+            table.AddRow(ColorResourceName(displayName, nameMarkup), type, stateText, healthText, endpoints);
         }
 
         _interactionService.DisplayRenderable(table);
