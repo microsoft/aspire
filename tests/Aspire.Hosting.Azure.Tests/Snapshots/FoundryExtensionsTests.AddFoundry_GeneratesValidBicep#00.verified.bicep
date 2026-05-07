@@ -2,7 +2,7 @@
 param location string = resourceGroup().location
 
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-09-01' = {
-  name: take('foundry-${uniqueString(resourceGroup().id)}', 64)
+  name: toLower(take(concat('foundry', uniqueString(resourceGroup().id)), 24))
   location: location
   identity: {
     type: 'SystemAssigned'
