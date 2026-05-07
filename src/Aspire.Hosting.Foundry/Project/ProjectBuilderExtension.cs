@@ -395,7 +395,7 @@ public static class AzureCognitiveServicesProjectExtensions
         infra.Add(new ProvisioningOutput("name", typeof(string)) { Value = BicepFunction.Interpolate($"{account.Name}/{project.Name}") });
         infra.Add(new ProvisioningOutput("endpoint", typeof(string))
         {
-            Value = BicepFunction.Interpolate($"https://{account.Name}.services.ai.azure.com/api/projects/{project.Name}")
+            Value = (BicepValue<string>)new IndexExpression((BicepExpression)project.Properties.Endpoints!, "AI Foundry API")
         });
         infra.Add(new ProvisioningOutput("principalId", typeof(string))
         {

@@ -178,11 +178,6 @@ public class FoundryExtensionsTests
         var roles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "foundry-roles");
         var rolesManifest = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
 
-        Assert.Contains("name: 'foundry-caphost'", manifest.BicepText);
-        Assert.Contains("name: toLower(take(concat('foundry', uniqueString(resourceGroup().id)), 24))", manifest.BicepText);
-        Assert.Contains("customSubDomainName: toLower(take(concat('foundry', uniqueString(resourceGroup().id)), 24))", manifest.BicepText);
-        Assert.DoesNotContain("name: take('foundry-${uniqueString(resourceGroup().id)}', 64)", manifest.BicepText);
-
         await Verify(manifest.BicepText, extension: "bicep")
             .AppendContentAsFile(rolesManifest.BicepText, "bicep");
     }
@@ -247,12 +242,7 @@ public class FoundryExtensionsTests
 
         var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, project.Resource);
 
-        Assert.Contains("param foundry_outputs_name string", bicepText);
-        Assert.Contains("services.ai.azure.com", bicepText);
-        Assert.Contains("api/projects/project", bicepText);
-        Assert.DoesNotContain("foundry.properties.endpoints", bicepText);
-        Assert.DoesNotContain("foundry.properties.customSubDomainName", bicepText);
-        Assert.DoesNotContain("project.properties.endpoints", bicepText);
+        await Verify(bicepText, extension: "bicep");
     }
 
     [Fact]

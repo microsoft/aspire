@@ -3,20 +3,20 @@
 
 using System.Globalization;
 using System.IO.Hashing;
-using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
-using Azure.Core;
+using Azure;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
-using Azure.Identity;
+using Azure.Core;
+using Azure.ResourceManager.Authorization.Models;
 using Microsoft.Extensions.Logging;
+using RoleManagementPrincipalType = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -25,8 +25,7 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
-    private const string CognitiveServicesUserRoleDefinitionId = "a97b65f3-24c7-4388-baec-2e87135dc908";
-    private static readonly HttpClient s_roleAssignmentHttpClient = new();
+    private const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
 
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.
@@ -143,25 +142,36 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(project);
 
+        var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault() ??
+            throw new InvalidOperationException("AzureEnvironmentResource must be present in the application model.");
+
+        var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
+        var credential = provisioningContext.Credential;
+
         var projectEndpoint = await project.Endpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(projectEndpoint))
         {
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
-        var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
+        var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
             def.ToProjectsAgentVersionCreationOptions(),
             cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
 
-        await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value).ConfigureAwait(false);
+        // Foundry should do this automatically in the future.
+        await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
 
         return result.Value;
     }
 
-    private async Task AssignFoundryRoleToAgentIdentityAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project, ProjectsAgentVersion version)
+    private async Task AssignFoundryRoleToAgentIdentityAsync(
+        PipelineStepContext context,
+        AzureCognitiveServicesProjectResource project,
+        ProjectsAgentVersion version,
+        ProvisioningContext provisioningContext)
     {
         var principalId = version.InstanceIdentity?.PrincipalId;
         if (string.IsNullOrEmpty(principalId))
@@ -177,66 +187,47 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             return;
         }
 
-        var subscriptionResourceId = GetSubscriptionResourceId(foundryResourceId);
-        if (string.IsNullOrEmpty(subscriptionResourceId))
+        var subscriptionResourceId = provisioningContext.Subscription.Id.ToString();
+        var roleDefinitionId = new ResourceIdentifier(
+            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{AzureAIUserRoleDefinitionId}");
+
+        var assignmentName = StableGuid(principalId, roleDefinitionId.ToString(), foundryResourceId);
+
+        var content = new RoleAssignmentCreateOrUpdateContent(roleDefinitionId, Guid.Parse(principalId))
         {
-            context.Logger.LogWarning("Could not determine the subscription scope from Microsoft Foundry resource ID '{ResourceId}'. The agent identity '{PrincipalId}' may need the Cognitive Services User role assigned manually.", foundryResourceId, principalId);
-            return;
-        }
+            PrincipalType = RoleManagementPrincipalType.ServicePrincipal
+        };
 
-        var roleAssignmentId = CreateRoleAssignmentGuid(foundryResourceId, principalId, CognitiveServicesUserRoleDefinitionId);
-        var roleDefinitionId = $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{CognitiveServicesUserRoleDefinitionId}";
-        var roleAssignmentUri = new Uri($"https://management.azure.com{foundryResourceId}/providers/Microsoft.Authorization/roleAssignments/{roleAssignmentId}?api-version=2022-04-01");
+        var resourceScope = new ResourceIdentifier(foundryResourceId);
+        var assignments = provisioningContext.ArmClient.GetRoleAssignments(resourceScope);
 
-        var credential = new DefaultAzureCredential();
-        var token = await credential.GetTokenAsync(
-            new TokenRequestContext(["https://management.azure.com/.default"]),
-            context.CancellationToken).ConfigureAwait(false);
-
-        using var request = new HttpRequestMessage(HttpMethod.Put, roleAssignmentUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
-        request.Content = new StringContent(JsonSerializer.Serialize(new
+        try
         {
-            properties = new
-            {
-                roleDefinitionId,
-                principalId,
-                principalType = "ServicePrincipal"
-            }
-        }), Encoding.UTF8, "application/json");
+            await assignments.CreateOrUpdateAsync(
+                WaitUntil.Completed,
+                assignmentName,
+                content,
+                context.CancellationToken).ConfigureAwait(false);
 
-        using var response = await s_roleAssignmentHttpClient.SendAsync(request, context.CancellationToken).ConfigureAwait(false);
-        if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.Conflict)
-        {
             context.Logger.LogInformation("Assigned Cognitive Services User role to hosted agent '{Name}' identity '{PrincipalId}'.", Name, principalId);
-            return;
+        }
+        catch (RequestFailedException ex)
+        {
+            context.Logger.LogWarning(
+                ex,
+                "Could not create Cognitive Services User role assignment for hosted agent '{Name}' identity '{PrincipalId}' on Foundry resource '{FoundryResourceId}'. Create the role assignment manually.",
+                Name,
+                principalId,
+                foundryResourceId);
         }
 
-        var responseBody = await response.Content.ReadAsStringAsync(context.CancellationToken).ConfigureAwait(false);
-        throw new InvalidOperationException($"Failed to assign Cognitive Services User role to hosted agent '{Name}' identity '{principalId}'. Azure returned {(int)response.StatusCode} {response.ReasonPhrase}: {responseBody}");
-    }
+        static string StableGuid(params string[] values)
+        {
+            byte[] hash = XxHash128.Hash(
+                Encoding.UTF8.GetBytes(string.Join("|", values)));
 
-    private static string? GetSubscriptionResourceId(string resourceId)
-    {
-        var resourceGroupIndex = resourceId.IndexOf("/resourceGroups/", StringComparison.OrdinalIgnoreCase);
-        return resourceGroupIndex > 0 ? resourceId[..resourceGroupIndex] : null;
-    }
-
-    private static Guid CreateRoleAssignmentGuid(string scope, string principalId, string roleDefinitionId)
-    {
-        var value = Encoding.UTF8.GetBytes($"{scope}\0{principalId}\0{roleDefinitionId}");
-        var alternateValue = Encoding.UTF8.GetBytes($"{roleDefinitionId}\0{principalId}\0{scope}");
-        var firstHash = XxHash3.Hash(value);
-        var secondHash = XxHash3.Hash(alternateValue);
-
-        Span<byte> guidBytes = stackalloc byte[16];
-        firstHash.CopyTo(guidBytes);
-        secondHash.CopyTo(guidBytes[8..]);
-
-        guidBytes[7] = (byte)((guidBytes[7] & 0x0F) | 0x40);
-        guidBytes[8] = (byte)((guidBytes[8] & 0x3F) | 0x80);
-
-        return new Guid(guidBytes);
+            return new Guid(hash).ToString();
+        }
     }
 
     internal static async Task<Dictionary<string, string>> GetResolvedEnvironmentVariablesAsync(
