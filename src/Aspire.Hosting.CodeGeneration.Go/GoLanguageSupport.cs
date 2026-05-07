@@ -45,7 +45,7 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             )
 
             func main() {
-            	builder, err := aspire.CreateBuilder()
+            	builder, err := aspire.CreateBuilder(nil)
             	if err != nil {
             		log.Fatal(aspire.FormatError(err))
             	}
@@ -61,7 +61,7 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             	if err != nil {
             		log.Fatal(aspire.FormatError(err))
             	}
-            	if err := app.Run(); err != nil {
+            	if err := app.Run(nil); err != nil {
             		log.Fatal(aspire.FormatError(err))
             	}
             }

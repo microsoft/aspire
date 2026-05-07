@@ -345,4 +345,150 @@ public class AtsGoCodeGeneratorTests
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         return (testAssembly, hostingAssembly);
     }
+
+    // ---- Aspire.Hosting.Go capability scanning ----------------------------
+
+    [Fact]
+    public void GoHostingAssembly_ExposesAddGoAppCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/addGoApp");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithAppArgsCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withAppArgs");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithBuildTagsCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withBuildTags");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithLdFlagsCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withLdFlags");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithDelveServerCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withDelveServer");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithRaceDetectorCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withRaceDetector");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithGcFlagsCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withGcFlags");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithTidyCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withTidy");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithVendorCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withVendor");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_ExposesWithVetCapability()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withVet");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_AddGoApp_ReturnsBuilder()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+        var addGoApp = capabilities.First(c => c.CapabilityId == "Aspire.Hosting.Go/addGoApp");
+
+        Assert.True(addGoApp.ReturnsBuilder, "addGoApp should return IResourceBuilder for fluent chaining");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_AddGoApp_HasCorrectParameters()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+        var addGoApp = capabilities.First(c => c.CapabilityId == "Aspire.Hosting.Go/addGoApp");
+
+        Assert.Contains(addGoApp.Parameters, p => p.Name == "name");
+        Assert.Contains(addGoApp.Parameters, p => p.Name == "appDirectory");
+    }
+
+    [Fact]
+    public void GoHostingAssembly_WithDelveServer_PortParamIsOptional()
+    {
+        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
+        var withDelveServer = capabilities.First(c => c.CapabilityId == "Aspire.Hosting.Go/withDelveServer");
+
+        var portParam = withDelveServer.Parameters.FirstOrDefault(p => p.Name == "port");
+        Assert.NotNull(portParam);
+        Assert.True(portParam.IsOptional, "port should be optional (defaults to 2345)");
+    }
+
+    [Fact]
+    public async Task GoHostingAssembly_GeneratesGoSdkWithGoAppMethods()
+    {
+        var goHostingAssembly = typeof(GoHostingExtensions).Assembly;
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, goHostingAssembly]);
+        var atsContext = result.ToAtsContext();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("AddGoApp", aspireGo);
+        Assert.Contains("WithAppArgs", aspireGo);
+        Assert.Contains("WithBuildTags", aspireGo);
+        Assert.Contains("WithGcFlags", aspireGo);
+        Assert.Contains("WithLdFlags", aspireGo);
+        Assert.Contains("WithDelveServer", aspireGo);
+        Assert.Contains("WithRaceDetector", aspireGo);
+        Assert.Contains("WithTidy", aspireGo);
+        Assert.Contains("WithVendor", aspireGo);
+        Assert.Contains("WithVet", aspireGo);
+
+        await Verify(aspireGo, extension: "go")
+            .UseFileName("GoHostingGeneratedAspire");
+    }
+
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromGoHostingAssembly()
+    {
+        var goHostingAssembly = typeof(GoHostingExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(goHostingAssembly);
+        return result.Capabilities;
+    }
 }
