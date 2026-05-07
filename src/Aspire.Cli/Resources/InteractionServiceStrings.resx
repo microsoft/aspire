@@ -234,8 +234,8 @@
     <comment>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</comment>
   </data>
   <data name="MoreInfoNewCliVersion" xml:space="preserve">
-    <value>[dim]For more information, see: [link]{0}[/][/]</value>
-    <comment>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</comment>
+    <value>[dim]For more information, see: {0}[/]</value>
+    <comment>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</comment>
   </data>
   <data name="ToUpdateRunCommand" xml:space="preserve">
     <value>[dim]To update, run: {0}[/]</value>

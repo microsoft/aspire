@@ -345,7 +345,7 @@ internal sealed class RunCommand : BaseCommand
                                 i == 0
                                     ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
                                     : Text.Empty,
-                                new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] [link={endpoint.EscapeMarkup()}]{endpoint.EscapeMarkup()}[/]")
+                                new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(_interactionService, endpoint)}")
                             );
                         }
 
@@ -541,12 +541,12 @@ internal sealed class RunCommand : BaseCommand
             {
                 grid.AddRow(
                     LabelMarkup(dashboardLabel),
-                    new Markup($"[link={dashboardUrl}]{dashboardUrl}[/]"));
+                    new Markup(MarkupHelpers.SafeLink(console, dashboardUrl)));
 
                 // Codespaces URL (if available)
                 if (!string.IsNullOrEmpty(codespacesUrl))
                 {
-                    grid.AddRow(Text.Empty, new Markup($"[link={codespacesUrl}]{codespacesUrl}[/]"));
+                    grid.AddRow(Text.Empty, new Markup(MarkupHelpers.SafeLink(console, codespacesUrl)));
                 }
             }
             else

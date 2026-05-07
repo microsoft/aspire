@@ -642,11 +642,12 @@ public class Program
             {
                 // Write to stderr to avoid interfering with tools that parse stdout
                 var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
+                var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
 
                 const string telemetryUrl = "https://aka.ms/aspire/cli-telemetry";
 
                 consoleEnvironment.Error.WriteLine();
-                consoleEnvironment.Error.MarkupLine(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.FirstTimeUseTelemetryNotice, $"[link]{telemetryUrl}[/]"));
+                consoleEnvironment.Error.MarkupLine(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.FirstTimeUseTelemetryNotice, MarkupHelpers.SafeLink(interactionService, telemetryUrl)));
                 consoleEnvironment.Error.WriteLine();
             }
 

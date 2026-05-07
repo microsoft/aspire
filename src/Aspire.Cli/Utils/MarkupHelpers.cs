@@ -17,11 +17,24 @@ internal static class MarkupHelpers
     /// </summary>
     public static string SafeLink(IInteractionService interactionService, string link, string? title = null)
     {
-        if (interactionService.SupportsLinks)
+        return SafeLink(interactionService.SupportsLinks, link, title);
+    }
+
+    /// <summary>
+    /// Builds a clickable link markup string when the console supports links,
+    /// otherwise returns a plain-text fallback.
+    /// </summary>
+    public static string SafeLink(bool supportsLinks, string link, string? title = null)
+    {
+        var noTitle = title is null || title == link;
+        link = link.EscapeMarkup();
+        title = title?.EscapeMarkup();
+
+        if (supportsLinks)
         {
-            return $"[link={link}]{(title ?? link).EscapeMarkup()}[/]";
+            return noTitle ? $"[link]{link}[/]" : $"[link={link}]{title}[/]";
         }
 
-        return title is null ? link : $"{title} ({link})";
+        return noTitle ? link : $"{title} ({link})";
     }
 }

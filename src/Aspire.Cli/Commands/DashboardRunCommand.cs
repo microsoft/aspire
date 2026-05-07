@@ -324,10 +324,9 @@ internal sealed class DashboardRunCommand : BaseCommand
         grid.Columns[0].Width = longestLabelLength;
 
         // Dashboard row
-        var escapedDashboardUrl = Markup.Escape(info.DashboardUrl);
         grid.AddRow(
             new Align(new Markup($"[bold green]{dashboardLabel}[/]:"), HorizontalAlignment.Right),
-            new Markup($"[link={escapedDashboardUrl}]{escapedDashboardUrl}[/]"));
+            new Markup(MarkupHelpers.SafeLink(_interactionService, info.DashboardUrl)));
         grid.AddRow(Text.Empty, Text.Empty);
 
         // OTLP gRPC row
