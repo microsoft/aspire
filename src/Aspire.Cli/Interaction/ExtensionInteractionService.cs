@@ -438,6 +438,8 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         set => _consoleInteractionService.Console = value;
     }
 
+    public bool SupportsLinks => _consoleInteractionService.SupportsLinks;
+
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayPlainTextAsync(text, _cancellationToken));

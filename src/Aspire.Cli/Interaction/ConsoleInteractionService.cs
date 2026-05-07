@@ -42,6 +42,8 @@ internal class ConsoleInteractionService : IInteractionService
 
     public ConsoleOutput Console { get; set; }
 
+    public bool SupportsLinks => MessageConsole.Profile.Capabilities.Links;
+
     public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);

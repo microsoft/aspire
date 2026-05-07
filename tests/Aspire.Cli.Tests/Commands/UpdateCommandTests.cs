@@ -1731,6 +1731,8 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
         set => _innerService.Console = value;
     }
 
+    public bool SupportsLinks => _innerService.SupportsLinks;
+
     public Action? OnCancellationMessageDisplayed { get; set; }
 
     public CancellationTrackingInteractionService(IInteractionService innerService)

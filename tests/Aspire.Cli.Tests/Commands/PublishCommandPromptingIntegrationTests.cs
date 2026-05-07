@@ -855,6 +855,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     private bool _shouldCancel;
 
     public ConsoleOutput Console { get; set; }
+    public bool SupportsLinks { get; set; }
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<object> SelectionPromptCalls { get; } = []; // Using object to handle generic types
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
