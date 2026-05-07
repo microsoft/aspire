@@ -567,6 +567,7 @@ public class InputsDialogInteractionOptions : InteractionOptions
 /// Represents the context for validating inputs in an inputs dialog interaction.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class InputsDialogValidationContext
 {
     internal bool HasErrors { get; private set; }
@@ -584,6 +585,7 @@ public sealed class InputsDialogValidationContext
     /// <summary>
     /// Gets the service provider for resolving services during validation.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>
@@ -602,6 +604,17 @@ public sealed class InputsDialogValidationContext
 
         input.ValidationErrors.Add(errorMessage);
         HasErrors = true;
+    }
+
+    /// <summary>
+    /// Adds a validation error for the input with the specified name.
+    /// </summary>
+    /// <param name="inputName">The name of the input to add a validation error for.</param>
+    /// <param name="errorMessage">The error message to add.</param>
+    [AspireExport("InputsDialogValidationContext.addValidationError", MethodName = "addValidationError")]
+    public void AddValidationError(string inputName, string errorMessage)
+    {
+        AddValidationError(Inputs[inputName], errorMessage);
     }
 }
 

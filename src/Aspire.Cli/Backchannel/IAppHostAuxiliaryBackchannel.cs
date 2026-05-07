@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Backchannel;
@@ -123,7 +124,7 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
-        JsonElement? arguments = null,
+        JsonNode? arguments = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
@@ -295,16 +296,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
     private static (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(ResourceCommandService resourceCommandService, ExecuteResourceCommandRequest request)
     {
-        if (request.Arguments is null)
+        var arguments = request.Arguments;
+        if (arguments is null)
         {
             return (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, argumentValues: null), null);
         }
 
-        var arguments = request.Arguments.Value;
-        return arguments.ValueKind switch
+        return arguments.GetValueKind() switch
         {
-            JsonValueKind.Object => (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertObjectArgumentValues(arguments)), null),
-            JsonValueKind.Array => resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertOrderedArgumentValues(arguments)),
+            JsonValueKind.Object => (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertObjectArgumentValues(arguments.AsObject())), null),
+            JsonValueKind.Array => resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertOrderedArgumentValues(arguments.AsArray())),
             _ => throw new InvalidOperationException("Resource command arguments must be a JSON object or array.")
         };
     }
@@ -338,7 +339,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 .ToArray();
     }
 
-    private static IReadOnlyDictionary<string, string?> ConvertObjectArgumentValues(JsonElement arguments)
+    private static IReadOnlyDictionary<string, string?> ConvertObjectArgumentValues(JsonObject arguments)
     {
         // ExecuteResourceCommandRequest arguments are encoded as a JSON object in the auxiliary backchannel protocol:
         // {
@@ -347,15 +348,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         //   "arguments": { "selector": "#submit" }
         // }
         var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
-        foreach (var property in arguments.EnumerateObject())
+        foreach (var property in arguments)
         {
-            values[property.Name] = ConvertArgumentValue(property.Name, property.Value);
+            values[property.Key] = ConvertArgumentValue(property.Key, property.Value);
         }
 
         return values;
     }
 
-    private static string?[] ConvertOrderedArgumentValues(JsonElement arguments)
+    private static string?[] ConvertOrderedArgumentValues(JsonArray arguments)
     {
         // ExecuteResourceCommandRequest arguments can be encoded as a JSON array in the auxiliary backchannel protocol:
         // {
@@ -363,20 +364,24 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         //   "commandName": "click",
         //   "arguments": [ "#submit" ]
         // }
-        return arguments.EnumerateArray()
+        return arguments
             .Select((value, index) => ConvertArgumentValue($"[{index}]", value))
             .ToArray();
     }
 
-    private static string? ConvertArgumentValue(string name, JsonElement value)
+    private static string? ConvertArgumentValue(string name, JsonNode? value)
     {
-        return value.ValueKind switch
+        if (value is null)
         {
-            JsonValueKind.String => value.GetString(),
-            JsonValueKind.Number => value.GetRawText(),
+            return null;
+        }
+
+        return value.GetValueKind() switch
+        {
+            JsonValueKind.String => value.GetValue<string>(),
+            JsonValueKind.Number => value.ToJsonString(),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
-            JsonValueKind.Null => null,
             _ => throw new InvalidOperationException($"Resource command argument '{name}' must be a string, number, boolean, or null.")
         };
     }
@@ -854,7 +859,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                     Required = i.Required,
                     Placeholder = i.Placeholder,
                     Value = i.Value,
-                    Options = i.Options?.ToDictionary(),
+                    Options = i.Options?.ToDictionary(static option => option.Key, static option => (string?)option.Value),
                     AllowCustomChoice = i.AllowCustomChoice,
                     Disabled = i.Disabled,
                     MaxLength = i.MaxLength

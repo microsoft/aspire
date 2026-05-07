@@ -737,7 +737,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                     ],
                     ValidateArguments = context =>
                     {
-                        var target = context.Arguments.Single(argument => argument.Name == "target");
+                        var target = context.Inputs.Single(argument => argument.Name == "target");
                         context.AddValidationError(target, "Target must not be prod.");
 
                         return Task.CompletedTask;

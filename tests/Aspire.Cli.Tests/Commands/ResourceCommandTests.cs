@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
@@ -314,17 +315,18 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         AssertJsonStringArray(backchannel.ExecuteResourceCommandArguments, "--selector", "#submit", "--count", "2");
     }
 
-    private static void AssertJsonStringArray(JsonElement? actual, params string[] expected)
+    private static void AssertJsonStringArray(JsonNode? actual, params string[] expected)
     {
         Assert.NotNull(actual);
-        Assert.Equal(JsonValueKind.Array, actual.Value.ValueKind);
-        var actualElements = actual.Value.EnumerateArray().ToArray();
+        var actualArray = Assert.IsType<JsonArray>(actual);
+        var actualElements = actualArray.ToArray();
         Assert.Equal(expected.Length, actualElements.Length);
 
         for (var i = 0; i < expected.Length; i++)
         {
-            Assert.Equal(JsonValueKind.String, actualElements[i].ValueKind);
-            Assert.Equal(expected[i], actualElements[i].GetString());
+            var actualElement = Assert.IsAssignableFrom<JsonValue>(actualElements[i]);
+            Assert.Equal(JsonValueKind.String, actualElement.GetValueKind());
+            Assert.Equal(expected[i], actualElement.GetValue<string>());
         }
     }
 }

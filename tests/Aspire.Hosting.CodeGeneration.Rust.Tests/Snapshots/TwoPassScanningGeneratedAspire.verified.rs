@@ -349,8 +349,8 @@ pub enum ResourceCommandVisibility {
     #[default]
     #[serde(rename = "None")]
     None,
-    #[serde(rename = "Dashboard")]
-    Dashboard,
+    #[serde(rename = "UI")]
+    UI,
     #[serde(rename = "Api")]
     Api,
 }
@@ -359,7 +359,7 @@ impl std::fmt::Display for ResourceCommandVisibility {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, "None"),
-            Self::Dashboard => write!(f, "Dashboard"),
+            Self::UI => write!(f, "UI"),
             Self::Api => write!(f, "Api"),
         }
     }
@@ -2357,60 +2357,6 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMergeRouteMiddleware", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
-    }
-}
-
-/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext
-pub struct CommandArgumentsValidationContext {
-    handle: Handle,
-    client: Arc<AspireClient>,
-}
-
-impl HasHandle for CommandArgumentsValidationContext {
-    fn handle(&self) -> &Handle {
-        &self.handle
-    }
-}
-
-impl CommandArgumentsValidationContext {
-    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
-        Self { handle, client }
-    }
-
-    pub fn handle(&self) -> &Handle {
-        &self.handle
-    }
-
-    pub fn client(&self) -> &Arc<AspireClient> {
-        &self.client
-    }
-
-    /// Gets the Arguments property
-    pub fn arguments(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(InteractionInputCollection::new(handle, self.client.clone()))
-    }
-
-    /// Gets the CancellationToken property
-    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(CancellationToken::new(handle, self.client.clone()))
-    }
-
-    /// Invokes the AddValidationError method
-    pub fn add_validation_error(&self, argument_name: &str, error_message: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        args.insert("argumentName".to_string(), serde_json::to_value(&argument_name).unwrap_or(Value::Null));
-        args.insert("errorMessage".to_string(), serde_json::to_value(&error_message).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError", args)?;
-        Ok(())
     }
 }
 
@@ -10143,6 +10089,60 @@ impl InitializeResourceEvent {
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.services", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext
+pub struct InputsDialogValidationContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for InputsDialogValidationContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl InputsDialogValidationContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the Inputs property
+    pub fn inputs(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/InputsDialogValidationContext.inputs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(InteractionInputCollection::new(handle, self.client.clone()))
+    }
+
+    /// Gets the CancellationToken property
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/InputsDialogValidationContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Invokes the AddValidationError method
+    pub fn add_validation_error(&self, input_name: &str, error_message: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("inputName".to_string(), serde_json::to_value(&input_name).unwrap_or(Value::Null));
+        args.insert("errorMessage".to_string(), serde_json::to_value(&error_message).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/InputsDialogValidationContext.addValidationError", args)?;
+        Ok(())
     }
 }
 

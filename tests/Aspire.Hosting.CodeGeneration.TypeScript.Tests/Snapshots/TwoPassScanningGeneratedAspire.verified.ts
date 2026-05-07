@@ -85,9 +85,6 @@ type BeforeResourceStartedEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ap
 /** Handle to BeforeStartEvent */
 type BeforeStartEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent'>;
 
-/** Handle to CommandArgumentsValidationContext */
-type CommandArgumentsValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext'>;
-
 /** Handle to CommandLineArgsCallbackContext */
 type CommandLineArgsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext'>;
 
@@ -246,6 +243,9 @@ type ExternalServiceResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Exter
 
 /** Handle to IDistributedApplicationBuilder */
 type IDistributedApplicationBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder'>;
+
+/** Handle to InputsDialogValidationContext */
+type InputsDialogValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext'>;
 
 /** Handle to InteractionInputCollection */
 type InteractionInputCollectionHandle = Handle<'Aspire.Hosting/Aspire.Hosting.InteractionInputCollection'>;
@@ -425,7 +425,7 @@ export enum ResourceCommandState {
 /** Enum type for ResourceCommandVisibility */
 export enum ResourceCommandVisibility {
     None = "None",
-    Dashboard = "Dashboard",
+    UI = "UI",
     Api = "Api",
 }
 
@@ -486,7 +486,7 @@ export interface CommandOptions {
     description?: string;
     parameter?: any;
     arguments?: InteractionInput[];
-    validateArguments?: (arg: CommandArgumentsValidationContext) => Promise<void>;
+    validateArguments?: (arg: InputsDialogValidationContext) => Promise<void>;
     visibility?: ResourceCommandVisibility;
     confirmationMessage?: string;
     iconName?: string;
@@ -1196,102 +1196,6 @@ class BeforeStartEventImpl implements BeforeStartEvent {
             return new DistributedApplicationModelImpl(handle, this._client);
         })();
         return new DistributedApplicationModelPromiseImpl(promise, this._client, false);
-    }
-
-}
-
-// ============================================================================
-// CommandArgumentsValidationContext
-// ============================================================================
-
-export interface CommandArgumentsValidationContext {
-    toJSON(): MarshalledHandle;
-    /** Gets the Arguments property */
-    arguments(): Promise<InteractionInputCollection>;
-    /** Gets the CancellationToken property */
-    cancellationToken(): Promise<CancellationToken>;
-    /** Invokes the AddValidationError method */
-    addValidationError(argumentName: string, errorMessage: string): CommandArgumentsValidationContextPromise;
-}
-
-export interface CommandArgumentsValidationContextPromise extends PromiseLike<CommandArgumentsValidationContext> {
-    /** Gets the Arguments property */
-    arguments(): Promise<InteractionInputCollection>;
-    /** Gets the CancellationToken property */
-    cancellationToken(): Promise<CancellationToken>;
-    /** Invokes the AddValidationError method */
-    addValidationError(argumentName: string, errorMessage: string): CommandArgumentsValidationContextPromise;
-}
-
-// ============================================================================
-// CommandArgumentsValidationContextImpl
-// ============================================================================
-
-/**
- * Type class for CommandArgumentsValidationContext.
- */
-class CommandArgumentsValidationContextImpl implements CommandArgumentsValidationContext {
-    constructor(private _handle: CommandArgumentsValidationContextHandle, private _client: AspireClientRpc) {}
-
-    /** Serialize for JSON-RPC transport */
-    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
-
-    async arguments(): Promise<InteractionInputCollection> {
-        return await this._client.invokeCapability<InteractionInputCollection>(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments',
-            { context: this._handle }
-        );
-    }
-
-    async cancellationToken(): Promise<CancellationToken> {
-        const result = await this._client.invokeCapability<string | null>(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken',
-            { context: this._handle }
-        );
-        return CancellationToken.fromValue(result);
-    }
-
-    /** @internal */
-    async _addValidationErrorInternal(argumentName: string, errorMessage: string): Promise<CommandArgumentsValidationContext> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, argumentName, errorMessage };
-        await this._client.invokeCapability<void>(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError',
-            rpcArgs
-        );
-        return this;
-    }
-
-    addValidationError(argumentName: string, errorMessage: string): CommandArgumentsValidationContextPromise {
-        return new CommandArgumentsValidationContextPromiseImpl(this._addValidationErrorInternal(argumentName, errorMessage), this._client);
-    }
-
-}
-
-/**
- * Thenable wrapper for CommandArgumentsValidationContext that enables fluent chaining.
- */
-class CommandArgumentsValidationContextPromiseImpl implements CommandArgumentsValidationContextPromise {
-    constructor(private _promise: Promise<CommandArgumentsValidationContext>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = CommandArgumentsValidationContext, TResult2 = never>(
-        onfulfilled?: ((value: CommandArgumentsValidationContext) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    arguments(): Promise<InteractionInputCollection> {
-        return this._promise.then(obj => obj.arguments());
-    }
-
-    cancellationToken(): Promise<CancellationToken> {
-        return this._promise.then(obj => obj.cancellationToken());
-    }
-
-    addValidationError(argumentName: string, errorMessage: string): CommandArgumentsValidationContextPromise {
-        return new CommandArgumentsValidationContextPromiseImpl(this._promise.then(obj => obj.addValidationError(argumentName, errorMessage)), this._client);
     }
 
 }
@@ -3407,6 +3311,102 @@ class InitializeResourceEventImpl implements InitializeResourceEvent {
             return new ServiceProviderImpl(handle, this._client);
         })();
         return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+// ============================================================================
+// InputsDialogValidationContext
+// ============================================================================
+
+export interface InputsDialogValidationContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the Inputs property */
+    inputs(): Promise<InteractionInputCollection>;
+    /** Gets the CancellationToken property */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Invokes the AddValidationError method */
+    addValidationError(inputName: string, errorMessage: string): InputsDialogValidationContextPromise;
+}
+
+export interface InputsDialogValidationContextPromise extends PromiseLike<InputsDialogValidationContext> {
+    /** Gets the Inputs property */
+    inputs(): Promise<InteractionInputCollection>;
+    /** Gets the CancellationToken property */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Invokes the AddValidationError method */
+    addValidationError(inputName: string, errorMessage: string): InputsDialogValidationContextPromise;
+}
+
+// ============================================================================
+// InputsDialogValidationContextImpl
+// ============================================================================
+
+/**
+ * Type class for InputsDialogValidationContext.
+ */
+class InputsDialogValidationContextImpl implements InputsDialogValidationContext {
+    constructor(private _handle: InputsDialogValidationContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async inputs(): Promise<InteractionInputCollection> {
+        return await this._client.invokeCapability<InteractionInputCollection>(
+            'Aspire.Hosting/InputsDialogValidationContext.inputs',
+            { context: this._handle }
+        );
+    }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting/InputsDialogValidationContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+    /** @internal */
+    async _addValidationErrorInternal(inputName: string, errorMessage: string): Promise<InputsDialogValidationContext> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, inputName, errorMessage };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/InputsDialogValidationContext.addValidationError',
+            rpcArgs
+        );
+        return this;
+    }
+
+    addValidationError(inputName: string, errorMessage: string): InputsDialogValidationContextPromise {
+        return new InputsDialogValidationContextPromiseImpl(this._addValidationErrorInternal(inputName, errorMessage), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InputsDialogValidationContext that enables fluent chaining.
+ */
+class InputsDialogValidationContextPromiseImpl implements InputsDialogValidationContextPromise {
+    constructor(private _promise: Promise<InputsDialogValidationContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InputsDialogValidationContext, TResult2 = never>(
+        onfulfilled?: ((value: InputsDialogValidationContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    inputs(): Promise<InteractionInputCollection> {
+        return this._promise.then(obj => obj.inputs());
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    addValidationError(inputName: string, errorMessage: string): InputsDialogValidationContextPromise {
+        return new InputsDialogValidationContextPromiseImpl(this._promise.then(obj => obj.addValidationError(inputName, errorMessage)), this._client);
     }
 
 }
@@ -32262,7 +32262,6 @@ process.on('uncaughtException', (error: Error) => {
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent', (handle, client) => new AfterResourcesCreatedEventImpl(handle as AfterResourcesCreatedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent', (handle, client) => new BeforeResourceStartedEventImpl(handle as BeforeResourceStartedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent', (handle, client) => new BeforeStartEventImpl(handle as BeforeStartEventHandle, client));
-registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext', (handle, client) => new CommandArgumentsValidationContextImpl(handle as CommandArgumentsValidationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext', (handle, client) => new CommandLineArgsCallbackContextImpl(handle as CommandLineArgsCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor', (handle, client) => new CommandLineArgsEditorImpl(handle as CommandLineArgsEditorHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent', (handle, client) => new ConnectionStringAvailableEventImpl(handle as ConnectionStringAvailableEventHandle, client));
@@ -32282,6 +32281,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environmen
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext', (handle, client) => new EventingSubscriberRegistrationContextImpl(handle as EventingSubscriberRegistrationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext', (handle, client) => new ExecuteCommandContextImpl(handle as ExecuteCommandContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent', (handle, client) => new InitializeResourceEventImpl(handle as InitializeResourceEventHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext', (handle, client) => new InputsDialogValidationContextImpl(handle as InputsDialogValidationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade', (handle, client) => new LogFacadeImpl(handle as LogFacadeHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext', (handle, client) => new PipelineConfigurationContextImpl(handle as PipelineConfigurationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext', (handle, client) => new PipelineContextImpl(handle as PipelineContextHandle, client));

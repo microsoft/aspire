@@ -849,7 +849,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         {
             ResourceName = "myresource",
             CommandName = "click",
-            Arguments = JsonSerializer.SerializeToElement(new
+            Arguments = JsonSerializer.SerializeToNode(new
             {
                 selector = "#submit",
                 clickCount = 2,
@@ -912,7 +912,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         {
             ResourceName = "myresource",
             CommandName = "click",
-            Arguments = JsonSerializer.SerializeToElement(new object[] { "#submit", 2, true })
+            Arguments = JsonSerializer.SerializeToNode(new object[] { "#submit", 2, true })
         }).DefaultTimeout();
 
         Assert.True(response.Success);
@@ -962,7 +962,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         {
             ResourceName = "myresource",
             CommandName = "click",
-            Arguments = JsonSerializer.SerializeToElement(new[] { "#submit", "extra" })
+            Arguments = JsonSerializer.SerializeToNode(new[] { "#submit", "extra" })
         }).DefaultTimeout();
 
         Assert.False(response.Success);
@@ -997,7 +997,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                 ],
                 ValidateArguments = context =>
                 {
-                    var target = context.Arguments.Single(argument => argument.Name == "target");
+                    var target = context.Inputs.Single(argument => argument.Name == "target");
                     context.AddValidationError(target, "Target must not be prod.");
 
                     return Task.CompletedTask;
@@ -1016,7 +1016,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             ResourceName = "myresource",
             CommandName = "validate",
             ValidateOnly = true,
-            Arguments = JsonSerializer.SerializeToElement(new
+            Arguments = JsonSerializer.SerializeToNode(new
             {
                 target = "prod"
             })

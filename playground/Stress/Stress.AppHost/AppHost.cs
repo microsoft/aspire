@@ -263,6 +263,16 @@ serviceBuilder.WithCommand(
     {
         Description = "Less common validation command with failure results, required inputs, defaults, and choice validation.",
         IconName = "CheckmarkCircle",
+        ValidateArguments = context =>
+        {
+            var arguments = ReadValidateCommandArguments(context.Inputs);
+            if (arguments.TimeoutSeconds <= 0)
+            {
+                context.AddValidationError("timeoutSeconds", "The timeoutSeconds argument must be positive.");
+            }
+
+            return Task.CompletedTask;
+        },
         Arguments =
         [
             new InteractionInput
@@ -331,7 +341,7 @@ serviceBuilder.WithCommand(
     {
         Description = "Minor dashboard/API stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
         IconName = "TableLightning",
-        Visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api,
+        Visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
         Arguments = CreateArgumentStressInputs(fieldCount: 20)
     });
 

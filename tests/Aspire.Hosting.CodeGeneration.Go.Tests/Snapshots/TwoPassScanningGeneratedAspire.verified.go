@@ -154,7 +154,7 @@ type ResourceCommandVisibility string
 
 const (
 	ResourceCommandVisibilityNone ResourceCommandVisibility = "None"
-	ResourceCommandVisibilityDashboard ResourceCommandVisibility = "Dashboard"
+	ResourceCommandVisibilityUI ResourceCommandVisibility = "UI"
 	ResourceCommandVisibilityApi ResourceCommandVisibility = "Api"
 )
 
@@ -4183,72 +4183,6 @@ func (s *cSharpAppResource) WithoutHttpsCertificate() CSharpAppResource {
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withoutHttpsCertificate", reqArgs); err != nil { s.setErr(err) }
 	return s
-}
-
-// CommandArgumentsValidationContext is the public interface for handle type CommandArgumentsValidationContext.
-type CommandArgumentsValidationContext interface {
-	handleReference
-	AddValidationError(argumentName string, errorMessage string) error
-	Arguments() InteractionInputCollection
-	CancellationToken() (*CancellationToken, error)
-	Err() error
-}
-
-// commandArgumentsValidationContext is the unexported impl of CommandArgumentsValidationContext.
-type commandArgumentsValidationContext struct {
-	*resourceBuilderBase
-}
-
-// newCommandArgumentsValidationContextFromHandle wraps an existing handle as CommandArgumentsValidationContext.
-func newCommandArgumentsValidationContextFromHandle(h *handle, c *client) CommandArgumentsValidationContext {
-	return &commandArgumentsValidationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
-}
-
-// AddValidationError invokes the AddValidationError method
-func (s *commandArgumentsValidationContext) AddValidationError(argumentName string, errorMessage string) error {
-	if s.err != nil { return s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["argumentName"] = serializeValue(argumentName)
-	reqArgs["errorMessage"] = serializeValue(errorMessage)
-	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError", reqArgs)
-	return err
-}
-
-// Arguments gets the Arguments property
-func (s *commandArgumentsValidationContext) Arguments() InteractionInputCollection {
-	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments", reqArgs)
-	if err != nil {
-		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments returned unexpected type %T", result)
-		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// CancellationToken gets the CancellationToken property
-func (s *commandArgumentsValidationContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken", reqArgs)
-	if err != nil {
-		var zero *CancellationToken
-		return zero, err
-	}
-	return decodeAs[*CancellationToken](result)
 }
 
 // CommandLineArgsCallbackContext is the public interface for handle type CommandLineArgsCallbackContext.
@@ -13961,6 +13895,72 @@ func (s *initializeResourceEvent) Services() ServiceProvider {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// InputsDialogValidationContext is the public interface for handle type InputsDialogValidationContext.
+type InputsDialogValidationContext interface {
+	handleReference
+	AddValidationError(inputName string, errorMessage string) error
+	CancellationToken() (*CancellationToken, error)
+	Inputs() InteractionInputCollection
+	Err() error
+}
+
+// inputsDialogValidationContext is the unexported impl of InputsDialogValidationContext.
+type inputsDialogValidationContext struct {
+	*resourceBuilderBase
+}
+
+// newInputsDialogValidationContextFromHandle wraps an existing handle as InputsDialogValidationContext.
+func newInputsDialogValidationContextFromHandle(h *handle, c *client) InputsDialogValidationContext {
+	return &inputsDialogValidationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AddValidationError invokes the AddValidationError method
+func (s *inputsDialogValidationContext) AddValidationError(inputName string, errorMessage string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["inputName"] = serializeValue(inputName)
+	reqArgs["errorMessage"] = serializeValue(errorMessage)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/InputsDialogValidationContext.addValidationError", reqArgs)
+	return err
+}
+
+// CancellationToken gets the CancellationToken property
+func (s *inputsDialogValidationContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/InputsDialogValidationContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
+}
+
+// Inputs gets the Inputs property
+func (s *inputsDialogValidationContext) Inputs() InteractionInputCollection {
+	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/InputsDialogValidationContext.inputs", reqArgs)
+	if err != nil {
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/InputsDialogValidationContext.inputs returned unexpected type %T", result)
+		return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // InteractionInputCollection is the public interface for handle type InteractionInputCollection.
@@ -23693,9 +23693,6 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource", func(h *handle, c *client) any {
 		return newCSharpAppResourceFromHandle(h, c)
 	})
-	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext", func(h *handle, c *client) any {
-		return newCommandArgumentsValidationContextFromHandle(h, c)
-	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", func(h *handle, c *client) any {
 		return newCommandLineArgsCallbackContextFromHandle(h, c)
 	})
@@ -23812,6 +23809,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", func(h *handle, c *client) any {
 		return newInitializeResourceEventFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", func(h *handle, c *client) any {
+		return newInputsDialogValidationContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", func(h *handle, c *client) any {
 		return newInteractionInputCollectionFromHandle(h, c)

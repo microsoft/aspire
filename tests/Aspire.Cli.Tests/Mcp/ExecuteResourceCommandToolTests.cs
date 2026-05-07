@@ -89,7 +89,7 @@ public class ExecuteResourceCommandToolTests
 
         Assert.True(result.IsError is null or false);
         Assert.NotNull(connection.ExecuteResourceCommandArguments);
-        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments.Value.GetProperty("selector").GetString());
+        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments["selector"]!.GetValue<string>());
     }
 
     [Fact]
@@ -107,6 +107,23 @@ public class ExecuteResourceCommandToolTests
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "click", """[]""")), CancellationToken.None).AsTask()).DefaultTimeout();
 
         Assert.Contains("must be a JSON object", exception.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandTool_ThrowsException_WhenArgumentValueIsNotStringOrNull()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
+            () => tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "click", """{ "count": 1 }""")), CancellationToken.None).AsTask()).DefaultTimeout();
+
+        Assert.Contains("must be a string or null", exception.Message);
     }
 
     [Fact]

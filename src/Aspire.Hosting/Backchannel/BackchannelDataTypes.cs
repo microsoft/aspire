@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Backchannel;
 
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -44,6 +45,18 @@ internal static class AuxiliaryBackchannelCapabilities
     /// </summary>
     public const string V2 = "aux.v2";
 
+}
+
+/// <summary>
+/// Constants for resource command visibility values in the auxiliary backchannel contract.
+/// </summary>
+internal static class KnownCommandVisibility
+{
+    public const string UI = "UI";
+    public const string Dashboard = "Dashboard";
+    public const string Api = "Api";
+    public const string Default = $"{UI}, {Api}";
+    public const string LegacyDefault = $"{Dashboard}, {Api}";
 }
 
 #endregion
@@ -271,7 +284,7 @@ internal sealed class ExecuteResourceCommandRequest
     /// Gets optional invocation arguments to pass to the resource command.
     /// Arrays are matched to declared command arguments by order. Objects are matched by argument name.
     /// </summary>
-    public JsonElement? Arguments { get; init; }
+    public JsonNode? Arguments { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether the request should validate arguments without executing the command.
@@ -935,7 +948,7 @@ internal sealed class ResourceSnapshotCommand
     /// <summary>
     /// Gets where the command is visible to users and clients.
     /// </summary>
-    public string Visibility { get; init; } = "Dashboard, Api";
+    public string Visibility { get; init; } = KnownCommandVisibility.Default;
 
     /// <summary>
     /// Gets the state of the command (e.g., "Enabled", "Disabled", "Hidden").
@@ -991,7 +1004,7 @@ internal sealed class ResourceSnapshotCommandArgument
     /// <summary>
     /// Gets choice options keyed by submitted value.
     /// </summary>
-    public Dictionary<string, string>? Options { get; init; }
+    public Dictionary<string, string?>? Options { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether custom choices are allowed.

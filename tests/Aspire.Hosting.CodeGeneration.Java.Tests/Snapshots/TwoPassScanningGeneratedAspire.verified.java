@@ -1266,6 +1266,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext", (h, c) -> new DistributedApplicationExecutionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContextOptions", (h, c) -> new DistributedApplicationExecutionContextOptions(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", (h, c) -> new InteractionInputCollection(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", (h, c) -> new InputsDialogValidationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", (h, c) -> new ProjectResourceOptions(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", (h, c) -> new IUserSecretsManager(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", (h, c) -> new PipelineConfigurationContext(h, c));
@@ -1300,7 +1301,6 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", (h, c) -> new ReferenceExpressionBuilder(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", (h, c) -> new UpdateCommandStateContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", (h, c) -> new ExecuteCommandContext(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext", (h, c) -> new CommandArgumentsValidationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", (h, c) -> new ResourceEndpointsAllocatedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", (h, c) -> new ResourceReadyEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", (h, c) -> new ResourceStoppedEvent(h, c));
@@ -3092,45 +3092,6 @@ public enum CertificateTrustScope implements WireValueEnum {
         }
         throw new IllegalArgumentException("Unknown value: " + value);
     }
-}
-
-// ===== CommandArgumentsValidationContext.java =====
-// CommandArgumentsValidationContext.java - GENERATED CODE - DO NOT EDIT
-
-package aspire;
-
-import java.util.*;
-import java.util.function.*;
-
-/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext. */
-public class CommandArgumentsValidationContext extends HandleWrapperBase {
-    CommandArgumentsValidationContext(Handle handle, AspireClient client) {
-        super(handle, client);
-    }
-
-    /** Gets the Arguments property */
-    public InteractionInputCollection arguments() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (InteractionInputCollection) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments", reqArgs);
-    }
-
-    /** Gets the CancellationToken property */
-    public CancellationToken cancellationToken() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken", reqArgs);
-    }
-
-    /** Invokes the AddValidationError method */
-    public void addValidationError(String argumentName, String errorMessage) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("argumentName", AspireClient.serializeValue(argumentName));
-        reqArgs.put("errorMessage", AspireClient.serializeValue(errorMessage));
-        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError", reqArgs);
-    }
-
 }
 
 // ===== CommandLineArgsCallbackContext.java =====
@@ -12715,6 +12676,45 @@ public enum InputType implements WireValueEnum {
     }
 }
 
+// ===== InputsDialogValidationContext.java =====
+// InputsDialogValidationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext. */
+public class InputsDialogValidationContext extends HandleWrapperBase {
+    InputsDialogValidationContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Inputs property */
+    public InteractionInputCollection inputs() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (InteractionInputCollection) getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.inputs", reqArgs);
+    }
+
+    /** Gets the CancellationToken property */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.cancellationToken", reqArgs);
+    }
+
+    /** Invokes the AddValidationError method */
+    public void addValidationError(String inputName, String errorMessage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("inputName", AspireClient.serializeValue(inputName));
+        reqArgs.put("errorMessage", AspireClient.serializeValue(errorMessage));
+        getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.addValidationError", reqArgs);
+    }
+
+}
+
 // ===== InteractionInput.java =====
 // InteractionInput.java - GENERATED CODE - DO NOT EDIT
 
@@ -15821,7 +15821,7 @@ import java.util.function.*;
 /** ResourceCommandVisibility enum. */
 public enum ResourceCommandVisibility implements WireValueEnum {
     NONE("None"),
-    DASHBOARD("Dashboard"),
+    UI("UI"),
     API("Api");
 
     private final String value;
@@ -22754,7 +22754,6 @@ public final class WithVolumeOptions {
 .modules/CertificateTrustExecutionConfigurationContext.java
 .modules/CertificateTrustExecutionConfigurationExportData.java
 .modules/CertificateTrustScope.java
-.modules/CommandArgumentsValidationContext.java
 .modules/CommandLineArgsCallbackContext.java
 .modules/CommandLineArgsEditor.java
 .modules/CommandOptions.java
@@ -22837,6 +22836,7 @@ public final class WithVolumeOptions {
 .modules/ImagePullPolicy.java
 .modules/InitializeResourceEvent.java
 .modules/InputType.java
+.modules/InputsDialogValidationContext.java
 .modules/InteractionInput.java
 .modules/InteractionInputCollection.java
 .modules/JsonSerializable.java

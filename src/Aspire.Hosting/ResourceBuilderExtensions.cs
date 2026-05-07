@@ -2646,7 +2646,9 @@ public static class ResourceBuilderExtensions
             builder.Resource.Annotations.Remove(existingAnnotation);
         }
 
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, arguments: null, confirmationMessage, iconName, iconVariant, isHighlighted));
+#pragma warning disable ASPIREINTERACTION001 // The obsolete overload still flows the obsolete parameter for compatibility.
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, updateState ?? (c => ResourceCommandState.Enabled), executeCommand, displayDescription, parameter, confirmationMessage, iconName, iconVariant, isHighlighted));
+#pragma warning restore ASPIREINTERACTION001
     }
 
 #pragma warning disable ASPIREINTERACTION001 // Command arguments reuse interaction input metadata.

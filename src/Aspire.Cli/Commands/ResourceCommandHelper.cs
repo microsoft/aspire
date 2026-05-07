@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Microsoft.Extensions.Logging;
@@ -37,7 +37,7 @@ internal static class ResourceCommandHelper
         string progressVerb,
         string baseVerb,
         string pastTenseVerb,
-        JsonElement? arguments,
+        JsonNode? arguments,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("{Verb} resource '{ResourceName}'", progressVerb, resourceName);
@@ -58,7 +58,7 @@ internal static class ResourceCommandHelper
         ILogger logger,
         string resourceName,
         string commandName,
-        JsonElement? arguments,
+        JsonNode? arguments,
         CancellationToken cancellationToken)
     {
         logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);

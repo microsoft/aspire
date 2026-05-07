@@ -338,9 +338,9 @@ public class ResourceCommandService
             argument.ValidationErrors.Clear();
         }
 
-        var context = new CommandArgumentsValidationContext
+        var context = new InputsDialogValidationContext
         {
-            Arguments = arguments,
+            Inputs = arguments,
             CancellationToken = cancellationToken,
             Services = _serviceProvider
         };

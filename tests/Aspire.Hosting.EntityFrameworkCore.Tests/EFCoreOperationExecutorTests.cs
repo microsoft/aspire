@@ -187,7 +187,6 @@ public class EFCoreOperationExecutorTests
             _ => ResourceCommandState.Enabled,
             executeCommand,
             displayDescription: null,
-            parameter: null,
             arguments: null,
             confirmationMessage: null,
             iconName: null,

@@ -318,7 +318,7 @@ public sealed class DashboardCommandExecutor(
 
                 var arguments = CreateCommandArguments(submittedInteraction.InputsDialog.InputItems);
                 var validationResponse = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, validateOnly: true, CancellationToken.None).ConfigureAwait(true);
-                if (validationResponse.Kind == ResourceCommandResponseKind.ValidationFailed)
+                if (validationResponse.Kind == ResourceCommandResponseKind.InvalidArguments)
                 {
                     submittedInteraction.InputsDialog.InputItems.Clear();
                     submittedInteraction.InputsDialog.InputItems.AddRange(validationResponse.ArgumentInputs);

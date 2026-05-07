@@ -16,7 +16,6 @@ namespace Aspire.Cli.Mcp.Tools;
 [JsonSerializable(typeof(ResourceUrlJson))]
 [JsonSerializable(typeof(ResourceVolumeJson))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
-[JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(ResourceRelationshipJson))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]

@@ -28,7 +28,7 @@ public class ResourceSnapshotMapperTests
                     Name = "stop",
                     State = "Enabled",
                     Description = "Stop",
-                    Visibility = "Api",
+                    Visibility = KnownCommandVisibility.Api,
                     ArgumentInputs =
                     [
                         new ResourceSnapshotCommandArgument
@@ -40,7 +40,7 @@ public class ResourceSnapshotMapperTests
                             InputType = "Text",
                             Required = true,
                             Placeholder = "#submit",
-                            Options = new Dictionary<string, string> { ["primary"] = "Primary" },
+                            Options = new Dictionary<string, string?> { ["primary"] = "Primary" },
                             AllowCustomChoice = true,
                             Disabled = true,
                             MaxLength = 128
@@ -48,7 +48,7 @@ public class ResourceSnapshotMapperTests
                     ]
                 },
                 new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" },
-                new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "Dashboard only", Visibility = "Dashboard" }
+                new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "UI only", Visibility = KnownCommandVisibility.UI }
             ],
             EnvironmentVariables =
             [
@@ -70,7 +70,7 @@ public class ResourceSnapshotMapperTests
         // Only enabled commands should be included
         var command = Assert.Single(result.Commands!);
         Assert.Equal("stop", command.Key);
-        Assert.Equal("Api", command.Value.Visibility);
+        Assert.Equal(KnownCommandVisibility.Api, command.Value.Visibility);
         var argumentInput = Assert.Single(command.Value.ArgumentInputs!);
         Assert.Equal("selector", argumentInput.Name);
         Assert.Equal("Selector", argumentInput.Label);

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -24,7 +25,7 @@ internal sealed class ExecuteResourceCommandTool(
     public override JsonElement GetInputSchema()
     {
         // MCP input schema JSON accepts optional nested command arguments:
-        // { "resourceName": "web", "commandName": "click", "arguments": { "selector": "#submit" } }
+        // { "resourceName": "web", "commandName": "click", "arguments": { "selector": "#submit", "optional": null } }
         using var document = JsonDocument.Parse("""
             {
               "type": "object",
@@ -40,7 +41,10 @@ internal sealed class ExecuteResourceCommandTool(
                 "arguments": {
                   "type": "object",
                   "description": "Optional invocation arguments to pass to the resource command",
-                  "additionalProperties": true
+                  "additionalProperties": {
+                    "type": ["string", "null"],
+                    "description": "Argument values must be strings or null."
+                  }
                 }
               },
               "required": ["resourceName", "commandName"]
@@ -67,7 +71,7 @@ internal sealed class ExecuteResourceCommandTool(
             throw new McpProtocolException("Arguments 'resourceName' and 'commandName' cannot be empty.", McpErrorCode.InvalidParams);
         }
 
-        JsonElement? commandArguments = null;
+        JsonNode? commandArguments = null;
         if (toolArguments.TryGetValue("arguments", out var commandArgumentsElement))
         {
             if (commandArgumentsElement.ValueKind != JsonValueKind.Object)
@@ -75,7 +79,7 @@ internal sealed class ExecuteResourceCommandTool(
                 throw new McpProtocolException("Argument 'arguments' must be a JSON object.", McpErrorCode.InvalidParams);
             }
 
-            commandArguments = commandArgumentsElement.Clone();
+            commandArguments = CreateCommandArguments(commandArgumentsElement);
         }
 
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
@@ -148,5 +152,21 @@ internal sealed class ExecuteResourceCommandTool(
             logger.LogError(ex, "Error executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
             throw new McpProtocolException($"Error executing command '{commandName}' for resource '{resourceName}': {ex.Message}", McpErrorCode.InternalError);
         }
+    }
+
+    private static JsonObject CreateCommandArguments(JsonElement commandArgumentsElement)
+    {
+        var arguments = new JsonObject();
+        foreach (var property in commandArgumentsElement.EnumerateObject())
+        {
+            arguments[property.Name] = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => JsonValue.Create(property.Value.GetString()),
+                JsonValueKind.Null => null,
+                _ => throw new McpProtocolException($"Argument 'arguments.{property.Name}' must be a string or null.", McpErrorCode.InvalidParams)
+            };
+        }
+
+        return arguments;
     }
 }

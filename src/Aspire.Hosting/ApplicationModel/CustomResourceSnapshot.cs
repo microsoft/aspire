@@ -305,7 +305,7 @@ public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState S
     /// <summary>
     /// Gets where the command is visible to users and clients.
     /// </summary>
-    public ResourceCommandVisibility Visibility { get; init; } = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api;
+    public ResourceCommandVisibility Visibility { get; init; } = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api;
 }
 
 /// <summary>
@@ -355,9 +355,9 @@ public enum ResourceCommandVisibility
     None = 0,
 
     /// <summary>
-    /// The command is displayed in the dashboard.
+    /// The command is displayed in UI clients.
     /// </summary>
-    Dashboard = 1 << 0,
+    UI = 1 << 0,
 
     /// <summary>
     /// The command is exposed through resource command API discovery.

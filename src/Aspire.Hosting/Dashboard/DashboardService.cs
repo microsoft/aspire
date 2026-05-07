@@ -369,7 +369,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
             ExecuteCommandResultType.Canceled => ResourceCommandResponseKind.Cancelled,
-            ExecuteCommandResultType.Failure when invalidArguments is not null => ResourceCommandResponseKind.ValidationFailed,
+            ExecuteCommandResultType.Failure when invalidArguments is not null => ResourceCommandResponseKind.InvalidArguments,
             ExecuteCommandResultType.Failure => ResourceCommandResponseKind.Failed,
             _ => ResourceCommandResponseKind.Undefined
         };

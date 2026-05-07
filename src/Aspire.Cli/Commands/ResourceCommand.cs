@@ -3,7 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -88,8 +88,8 @@ internal sealed class ResourceCommand : BaseCommand
 
         var connection = result.Connection!;
         var commandArguments = capturedArguments.Length > 0
-            ? JsonSerializer.SerializeToElement(capturedArguments, JsonSourceGenerationContext.Default.StringArray)
-            : (JsonElement?)null;
+            ? new JsonArray(capturedArguments.Select(static argument => (JsonNode?)JsonValue.Create(argument)).ToArray())
+            : null;
 
         // Map well-known friendly names (start/stop/restart) to their display metadata
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))

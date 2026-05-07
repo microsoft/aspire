@@ -52,25 +52,25 @@ public class CommandOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// When validation errors are added to the <see cref="CommandArgumentsValidationContext"/>, the command callback is not
+    /// When validation errors are added to the <see cref="InputsDialogValidationContext"/>, the command callback is not
     /// executed. Dashboard clients can display the errors next to the matching inputs, while API clients can report the same
     /// errors to callers.
     /// </para>
     /// </remarks>
     [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public Func<CommandArgumentsValidationContext, Task>? ValidateArguments { get; set; }
+    public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; set; }
 
     /// <summary>
     /// Gets or sets where the command is visible to users and clients.
     /// </summary>
     /// <remarks>
-    /// Dashboard clients use the <see cref="ResourceCommandVisibility.Dashboard"/> flag when displaying commands, and API
+    /// UI clients use the <see cref="ResourceCommandVisibility.UI"/> flag when displaying commands, and API
     /// clients use the <see cref="ResourceCommandVisibility.Api"/> flag when discovering commands. Visibility controls
     /// discovery and display, not authorization. Use <see cref="ResourceCommandVisibility.Api"/> without
-    /// <see cref="ResourceCommandVisibility.Dashboard"/> for headless or agent-oriented commands that should not be displayed
+    /// <see cref="ResourceCommandVisibility.UI"/> for headless or agent-oriented commands that should not be displayed
     /// in the dashboard UI.
     /// </remarks>
-    public ResourceCommandVisibility Visibility { get; set; } = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api;
+    public ResourceCommandVisibility Visibility { get; set; } = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api;
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog

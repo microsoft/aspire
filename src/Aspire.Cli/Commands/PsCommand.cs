@@ -42,7 +42,6 @@ internal sealed class AppHostDisplayInfo
 [JsonSerializable(typeof(ResourceCommandJson))]
 [JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
-[JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]

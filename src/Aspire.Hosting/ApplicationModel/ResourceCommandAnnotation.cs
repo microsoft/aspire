@@ -30,7 +30,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         string? iconName,
         IconVariant? iconVariant,
         bool isHighlighted)
-        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, arguments: null, confirmationMessage, iconName, iconVariant, isHighlighted)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, arguments: null, confirmationMessage: confirmationMessage, iconName: iconName, iconVariant: iconVariant, isHighlighted: isHighlighted, visibility: ResourceCommandVisibility.UI | ResourceCommandVisibility.Api, validateArguments: null)
     {
     }
 
@@ -43,14 +43,31 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         Func<UpdateCommandStateContext, ResourceCommandState> updateState,
         Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
         string? displayDescription,
+        IReadOnlyList<InteractionInput>? arguments,
+        string? confirmationMessage,
+        string? iconName,
+        IconVariant? iconVariant,
+        bool isHighlighted,
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+        Func<InputsDialogValidationContext, Task>? validateArguments = null)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter: null, arguments: arguments, confirmationMessage: confirmationMessage, iconName: iconName, iconVariant: iconVariant, isHighlighted: isHighlighted, visibility: visibility, validateArguments: validateArguments)
+    {
+    }
+
+    internal ResourceCommandAnnotation(
+        string name,
+        string displayName,
+        Func<UpdateCommandStateContext, ResourceCommandState> updateState,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        string? displayDescription,
         object? parameter,
         IReadOnlyList<InteractionInput>? arguments,
         string? confirmationMessage,
         string? iconName,
         IconVariant? iconVariant,
         bool isHighlighted,
-        ResourceCommandVisibility visibility = ResourceCommandVisibility.Dashboard | ResourceCommandVisibility.Api,
-        Func<CommandArgumentsValidationContext, Task>? validateArguments = null)
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+        Func<InputsDialogValidationContext, Task>? validateArguments = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -126,7 +143,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// Gets the callback that validates invocation arguments before the command callback is executed.
     /// </summary>
     [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public Func<CommandArgumentsValidationContext, Task>? ValidateArguments { get; }
+    public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -371,61 +388,6 @@ public sealed class ExecuteCommandContext
     /// </remarks>
     public required InteractionInputCollection Arguments { get; init; }
 
-}
-
-/// <summary>
-/// Context for validating resource command invocation arguments.
-/// </summary>
-[AspireExport(ExposeProperties = true)]
-[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class CommandArgumentsValidationContext
-{
-    internal bool HasErrors { get; private set; }
-
-    /// <summary>
-    /// Gets the invocation arguments being validated.
-    /// </summary>
-    public required InteractionInputCollection Arguments { get; init; }
-
-    /// <summary>
-    /// Gets the service provider for resolving services during validation.
-    /// </summary>
-    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
-    public required IServiceProvider Services { get; init; }
-
-    /// <summary>
-    /// Gets the cancellation token.
-    /// </summary>
-    public required CancellationToken CancellationToken { get; init; }
-
-    /// <summary>
-    /// Adds a validation error for the specified argument.
-    /// </summary>
-    /// <param name="argument">The argument to add a validation error for.</param>
-    /// <param name="errorMessage">The error message to add.</param>
-    public void AddValidationError(InteractionInput argument, string errorMessage)
-    {
-        ArgumentNullException.ThrowIfNull(argument);
-
-        if (string.IsNullOrEmpty(errorMessage))
-        {
-            throw new ArgumentException("Error message cannot be null or empty.", nameof(errorMessage));
-        }
-
-        argument.ValidationErrors.Add(errorMessage);
-        HasErrors = true;
-    }
-
-    /// <summary>
-    /// Adds a validation error for the argument with the specified name.
-    /// </summary>
-    /// <param name="argumentName">The name of the argument to add a validation error for.</param>
-    /// <param name="errorMessage">The error message to add.</param>
-    [AspireExport("CommandArgumentsValidationContext.addValidationError", MethodName = "addValidationError")]
-    public void AddValidationError(string argumentName, string errorMessage)
-    {
-        AddValidationError(Arguments[argumentName], errorMessage);
-    }
 }
 
 #pragma warning restore ASPIREINTERACTION001

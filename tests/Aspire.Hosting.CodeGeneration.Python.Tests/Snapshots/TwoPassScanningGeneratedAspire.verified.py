@@ -1521,7 +1521,7 @@ ProtocolType = typing.Literal["IP", "IPv6HopByHopOptions", "Unspecified", "Icmp"
 
 ResourceCommandState = typing.Literal["Enabled", "Disabled", "Hidden"]
 
-ResourceCommandVisibility = typing.Literal["None", "Dashboard", "Api"]
+ResourceCommandVisibility = typing.Literal["None", "UI", "Api"]
 
 TestPersistenceMode = typing.Literal["None", "Volume", "Bind"]
 
@@ -3102,49 +3102,6 @@ class BeforeStartEvent:
         return typing.cast(DistributedApplicationModel, result)
 
 
-class CommandArgumentsValidationContext:
-    """Type class for CommandArgumentsValidationContext."""
-
-    def __init__(self, handle: Handle, client: AspireClient) -> None:
-        self._handle = handle
-        self._client = client
-
-    def __repr__(self) -> str:
-        return f"CommandArgumentsValidationContext(handle={self._handle.handle_id})"
-
-    @_uncached_property
-    def handle(self) -> Handle:
-        """The underlying object reference handle."""
-        return self._handle
-
-    @_cached_property
-    def arguments(self) -> InteractionInputCollection:
-        """Gets the Arguments property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.arguments',
-            {'context': self._handle}
-        )
-        return typing.cast(InteractionInputCollection, result)
-
-    def cancel(self) -> None:
-        """Cancel the operation."""
-        token: CancellationToken = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.cancellationToken',
-            {'context': self._handle}
-        )
-        token.cancel()
-
-    def add_validation_error(self, argument_name: str, error_message: str) -> None:
-        """Invokes the AddValidationError method"""
-        rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['argumentName'] = argument_name
-        rpc_args['errorMessage'] = error_message
-        self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandArgumentsValidationContext.addValidationError',
-            rpc_args
-        )
-
-
 class CommandLineArgsCallbackContext:
     """Type class for CommandLineArgsCallbackContext."""
 
@@ -4437,6 +4394,49 @@ class InitializeResourceEvent:
             {'context': self._handle}
         )
         return typing.cast(AbstractServiceProvider, result)
+
+
+class InputsDialogValidationContext:
+    """Type class for InputsDialogValidationContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"InputsDialogValidationContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def inputs(self) -> InteractionInputCollection:
+        """Gets the Inputs property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/InputsDialogValidationContext.inputs',
+            {'context': self._handle}
+        )
+        return typing.cast(InteractionInputCollection, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting/InputsDialogValidationContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    def add_validation_error(self, input_name: str, error_message: str) -> None:
+        """Invokes the AddValidationError method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['inputName'] = input_name
+        rpc_args['errorMessage'] = error_message
+        self._client.invoke_capability(
+            'Aspire.Hosting/InputsDialogValidationContext.addValidationError',
+            rpc_args
+        )
 
 
 class InteractionInputCollection:
@@ -10596,7 +10596,6 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", Ab
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", AfterResourcesCreatedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", BeforeResourceStartedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", BeforeStartEvent)
-_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandArgumentsValidationContext", CommandArgumentsValidationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", CommandLineArgsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor", CommandLineArgsEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", ConnectionStringAvailableEvent)
@@ -10617,6 +10616,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Environ
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", EventingSubscriberRegistrationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", InputsDialogValidationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", InteractionInputCollection)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", LogFacade)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", PipelineConfigurationContext)

@@ -9,7 +9,7 @@ import {
     EnvironmentCallbackContext,
     ContainerLifetime,
     ExecuteCommandContext,
-    CommandArgumentsValidationContext,
+    InputsDialogValidationContext,
     InputType
 } from './.modules/aspire.js';
 
@@ -81,8 +81,8 @@ await cache.withCommand(
                     required: true
                 }
             ],
-            validateArguments: async (context: CommandArgumentsValidationContext) => {
-                const args = await context.arguments();
+            validateArguments: async (context: InputsDialogValidationContext) => {
+                const args = await context.inputs();
                 const prefix = await args.requiredValue("prefix");
                 const countValue = await args.requiredValue("count");
                 const count = Number(countValue);

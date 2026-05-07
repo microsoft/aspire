@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -708,7 +709,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     public async Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
-        JsonElement? arguments = null,
+        JsonNode? arguments = null,
         CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();

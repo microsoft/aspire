@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -160,8 +160,10 @@ public class ResourceCommandHelperTests
         var interactionService = new TestInteractionService();
 
         // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
-        using var document = JsonDocument.Parse("""{ "selector": "#submit" }""");
-        var arguments = document.RootElement.Clone();
+        var arguments = new JsonObject
+        {
+            ["selector"] = "#submit"
+        };
 
         var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
@@ -174,7 +176,7 @@ public class ResourceCommandHelperTests
 
         Assert.Equal(0, exitCode);
         Assert.NotNull(connection.ExecuteResourceCommandArguments);
-        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments.Value.GetProperty("selector").GetString());
+        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments["selector"]!.GetValue<string>());
     }
 
     [Fact]
