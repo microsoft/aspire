@@ -33,6 +33,7 @@ using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
@@ -353,6 +354,7 @@ public class Program
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
+        builder.Services.AddTransient<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         builder.Services.AddTransient<LayoutProcessRunner>();
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)

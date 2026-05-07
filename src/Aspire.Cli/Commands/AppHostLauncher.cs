@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
@@ -27,6 +26,7 @@ internal sealed class AppHostLauncher(
     CliExecutionContext executionContext,
     IInteractionService interactionService,
     IAuxiliaryBackchannelMonitor backchannelMonitor,
+    IDetachedProcessLauncher detachedProcessLauncher,
     ICliHostEnvironment hostEnvironment,
     AspireCliTelemetry telemetry,
     ILogger<AppHostLauncher> logger,
@@ -55,8 +55,8 @@ internal sealed class AppHostLauncher(
     };
 
     /// <summary>
-    /// Adds the detached launch options to a command so they appear in --help.
-    /// Called by both RunCommand and StartCommand to keep options in sync.
+    /// Adds the shared AppHost launch options to a command so they appear in --help.
+    /// Called by both RunCommand and StartCommand to keep shared options in sync.
     /// </summary>
     internal static void AddLaunchOptions(Command command)
     {
@@ -73,6 +73,7 @@ internal sealed class AppHostLauncher(
     /// <param name="isolated">Whether to run in isolated mode.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
+    /// <param name="timeoutSeconds">The maximum number of seconds to wait for the AppHost backchannel.</param>
     /// <param name="globalArgs">Global CLI args to forward to child process.</param>
     /// <param name="additionalArgs">Additional unmatched args to forward.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -83,6 +84,7 @@ internal sealed class AppHostLauncher(
         bool isolated,
         bool isExtensionHost,
         bool waitForDebugger,
+        int timeoutSeconds,
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs,
         CancellationToken cancellationToken)
@@ -149,12 +151,12 @@ internal sealed class AppHostLauncher(
         // Start the child process and wait for the backchannel
         var launchResult = await interactionService.ShowStatusAsync(
             RunCommandStrings.StartingAppHostInBackground,
-            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, cancellationToken));
+            () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken));
 
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
         {
-            return HandleLaunchFailure(launchResult, childLogFile);
+            return HandleLaunchFailure(launchResult, childLogFile, timeoutSeconds);
         }
 
         // Display results
@@ -245,20 +247,21 @@ internal sealed class AppHostLauncher(
     internal static bool IsExtensionEnvironmentVariable(string name) =>
         name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
 
-    private record LaunchResult(Process? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode);
+    private record LaunchResult(IDetachedProcess? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode);
 
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
         List<string> childArgs,
         string expectedHash,
         string? legacyHash,
+        TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        Process childProcess;
+        IDetachedProcess childProcess;
 
         try
         {
-            childProcess = DetachedProcessLauncher.Start(
+            childProcess = detachedProcessLauncher.Start(
                 executablePath,
                 childArgs,
                 executionContext.WorkingDirectory.FullName,
@@ -274,7 +277,6 @@ internal sealed class AppHostLauncher(
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
 
         var startTime = timeProvider.GetUtcNow();
-        var timeout = TimeSpan.FromSeconds(120);
 
         while (timeProvider.GetUtcNow() - startTime < timeout)
         {
@@ -319,7 +321,7 @@ internal sealed class AppHostLauncher(
         return new LaunchResult(childProcess, null, null, false, 0);
     }
 
-    private int HandleLaunchFailure(LaunchResult result, string childLogFile)
+    private int HandleLaunchFailure(LaunchResult result, string childLogFile, int timeoutSeconds)
     {
         if (result.ChildProcess is null)
         {
@@ -333,13 +335,13 @@ internal sealed class AppHostLauncher(
         }
         else
         {
-            interactionService.DisplayError(RunCommandStrings.TimeoutWaitingForAppHost);
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
 
             if (!result.ChildProcess.HasExited)
             {
                 try
                 {
-                    result.ChildProcess.Kill();
+                    result.ChildProcess.Kill(entireProcessTree: true);
                 }
                 catch
                 {

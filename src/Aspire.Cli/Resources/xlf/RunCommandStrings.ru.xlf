@@ -107,6 +107,11 @@
         <target state="translated">Работоспособность ресурса, например "Работоспособен"</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidAppHostStartupTimeoutEnvironmentVariable">
+        <source>The {0} environment variable must be a positive number of seconds.</source>
+        <target state="new">The {0} environment variable must be a positive number of seconds.</target>
+        <note>Do not localize the {0} placeholder. It is an environment variable name.</note>
+      </trans-unit>
       <trans-unit id="IsCompatibleAppHostIsNull">
         <source>IsCompatibleAppHost is null</source>
         <target state="translated">Значение параметра IsCompatibleAppHost равно null</target>
@@ -203,9 +208,9 @@
         <note>The state of the resource, eg Running</note>
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
-        <source>Timeout waiting for AppHost to start.</source>
-        <target state="needs-review-translation">Превышено время ожидания запуска AppHost.</target>
-        <note />
+        <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
+        <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</target>
+        <note>Do not localize the {1} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="Type">
         <source>Type</source>
