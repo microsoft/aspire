@@ -212,6 +212,8 @@ internal static class ProfilingTelemetry
         DateTime? finishedTimestamp,
         IDictionary<string, string>? annotations)
     {
+        // Resource observations arrive from DCP watch notifications after the create-object span has ended,
+        // so use a short child activity from the annotated trace context instead of an event on Activity.Current.
         var activity = StartActivityFromTraceAnnotations(configuration, Activities.DcpResourceObserved, annotations);
         activity.SetResource(appModelResource);
         activity.SetDcpResource(resourceKind, resourceName);
