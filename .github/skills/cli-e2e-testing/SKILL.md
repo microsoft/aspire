@@ -145,6 +145,26 @@ ASPIRE_E2E_ARCHIVE=/tmp/aspire-e2e.tar.gz \
 # 5. Fix and repeat from step 1 or 2
 ```
 
+### Manual Command Smoke Checks
+
+For command-surface changes, run a manual smoke check against the built CLI before deciding whether a full Hex1b E2E test is needed. This is useful for validating command routing, exit codes, output formats, and help text with the real executable.
+
+PowerShell:
+
+```powershell
+dotnet build src\Aspire.Cli\Aspire.Cli.csproj /p:SkipNativeBuild=true
+
+$dotnet = Join-Path (Get-Location) ".dotnet\dotnet.exe"
+$aspire = Join-Path (Get-Location) "artifacts\bin\Aspire.Cli\Debug\net10.0\aspire.dll"
+
+& $dotnet $aspire --version --nologo
+& $dotnet $aspire integration search redis --format json --nologo
+& $dotnet $aspire integration search redis --nologo
+& $dotnet $aspire integration add --help --nologo
+```
+
+Use assertions around the command results when validating a PR: check that structured output parses as JSON, human-readable output contains the expected table/help text, and intentionally invalid command shapes return a non-zero exit code. Prefer a full Hex1b E2E test when the scenario depends on terminal interaction, Docker/Linux-only behavior, `aspire new`, `aspire run`, generated project state, or prompts that cannot be covered by command tests plus manual smoke checks.
+
 ### Install Modes
 
 The `CliInstallStrategy` class auto-detects how to install the CLI in the test container. You can override via environment variables:
