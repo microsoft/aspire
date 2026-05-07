@@ -112,8 +112,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         interactionService.ShowStatusCallback = statusMessages.Enqueue;
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
-        var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost", "App2.AppHost.csproj");
+        var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "AppHost.cs");
+        var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "AppHost.cs");
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, int.MaxValue - 1));
         monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, int.MaxValue - 2));
 
@@ -131,8 +131,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        var expectedPath1 = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath1);
-        var expectedPath2 = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath2);
+        var expectedPath1 = Path.Combine("App1", "AppHost.cs");
+        var expectedPath2 = Path.Combine("App2", "AppHost.cs");
         var displayedText = GetDisplayedText(interactionService, statusMessages);
         Assert.Contains(displayedText, message => message.Contains(expectedPath1, StringComparison.Ordinal));
         Assert.Contains(displayedText, message => message.Contains(expectedPath2, StringComparison.Ordinal));
@@ -167,7 +167,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        var expectedPath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath);
+        var expectedPath = "App1.AppHost.csproj";
         var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, expectedPath, processId1);
         var expectedIdentifier2 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, expectedPath, processId2);
         var displayedText = GetDisplayedText(interactionService, statusMessages);
@@ -201,7 +201,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        var expectedPath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, appHostPath);
+        var expectedPath = "App1.AppHost.csproj";
         Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, expectedPath));
         Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedPath));
     }

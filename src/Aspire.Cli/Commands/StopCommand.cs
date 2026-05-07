@@ -158,16 +158,19 @@ internal sealed class StopCommand : BaseCommand
         _logger.LogDebug("Found {Count} running AppHost(s) to stop", allConnections.Length);
 
         var connections = allConnections.Select(connectionResult => connectionResult.Connection!).ToArray();
-        var displayPathCounts = connections
-            .GroupBy(GetAppHostDisplayPath, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        var appHostPaths = connections.Select(GetAppHostPath).ToArray();
+        var appHostPathComparer = GetAppHostPathComparer();
+        var displayPaths = FileSystemHelper.ShortenPaths(appHostPaths);
+        var appHostPathCounts = appHostPaths
+            .GroupBy(path => path, appHostPathComparer)
+            .ToDictionary(group => group.Key, group => group.Count(), appHostPathComparer);
 
         // Stop all AppHosts in parallel
         var stopTasks = connections.Select(connection =>
         {
-            var appHostPath = connection.AppHostInfo?.AppHostPath ?? "Unknown";
-            var displayPath = GetAppHostDisplayPath(connection);
-            var appHostIdentifier = GetAppHostIdentifier(connection, displayPath, displayPathCounts[displayPath] > 1);
+            var appHostPath = GetAppHostPath(connection);
+            var displayPath = displayPaths[appHostPath];
+            var appHostIdentifier = GetAppHostIdentifier(connection, displayPath, appHostPathCounts[appHostPath] > 1);
             _logger.LogDebug("Queuing stop for AppHost: {AppHostPath}", appHostPath);
             return StopAppHostAsync(connection, appHostIdentifier, cancellationToken);
         }).ToArray();
@@ -298,17 +301,24 @@ internal sealed class StopCommand : BaseCommand
         }
     }
 
-    private string GetAppHostDisplayPath(IAppHostAuxiliaryBackchannel connection)
+    private static string GetAppHostDisplayPath(IAppHostAuxiliaryBackchannel connection)
     {
-        var appHostPath = connection.AppHostInfo?.AppHostPath;
-        if (string.IsNullOrEmpty(appHostPath))
-        {
-            return "Unknown";
-        }
+        var appHostPath = GetAppHostPath(connection);
+        return FileSystemHelper.ShortenPaths([appHostPath])[appHostPath];
+    }
 
-        return connection.IsInScope
-            ? Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostPath)
-            : appHostPath;
+    private static string GetAppHostPath(IAppHostAuxiliaryBackchannel connection)
+    {
+        return string.IsNullOrEmpty(connection.AppHostInfo?.AppHostPath)
+            ? "Unknown"
+            : connection.AppHostInfo.AppHostPath;
+    }
+
+    private static StringComparer GetAppHostPathComparer()
+    {
+        return OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
     }
 
     private static string GetAppHostIdentifier(IAppHostAuxiliaryBackchannel connection, string displayPath, bool includeProcessId)
