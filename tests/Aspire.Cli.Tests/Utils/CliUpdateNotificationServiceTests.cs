@@ -438,6 +438,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var cancellationTokenSource = new CancellationTokenSource();
+        var callbackInvoked = false;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache
@@ -452,7 +453,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
             configure.InteractionServiceFactory = _ =>
             {
                 var interactionService = new TestInteractionService();
-                interactionService.DisplayVersionUpdateNotificationCallback = _ => Assert.Fail("Update notification should not be displayed when the wait times out.");
+                interactionService.DisplayVersionUpdateNotificationCallback = _ => callbackInvoked = true;
                 return interactionService;
             };
 
@@ -474,6 +475,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
 
         cancellationTokenSource.Cancel();
         await Assert.ThrowsAsync<TaskCanceledException>(() => checkForUpdatesTask).DefaultTimeout();
+        Assert.False(callbackInvoked);
     }
 
     private static string CreateCustomToolPathInstall(string toolPath)

@@ -32,7 +32,7 @@ internal class CliUpdateNotifier(
             prerelease: true,
             nugetConfigFile: null,
             cancellationToken: cancellationToken);
-        _updateCheckTask = updateCheckTask;
+        Volatile.Write(ref _updateCheckTask, updateCheckTask);
         _availablePackages = await updateCheckTask;
     }
 
@@ -62,7 +62,7 @@ internal class CliUpdateNotifier(
 
     public async Task NotifyIfUpdateAvailableAsync(TimeSpan waitTimeout, CancellationToken cancellationToken)
     {
-        var updateCheckTask = _updateCheckTask;
+        var updateCheckTask = Volatile.Read(ref _updateCheckTask);
 
         if (updateCheckTask is not null && !updateCheckTask.IsCompleted)
         {

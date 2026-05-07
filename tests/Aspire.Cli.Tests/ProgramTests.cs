@@ -124,7 +124,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         var executionContext = provider.GetRequiredService<CliExecutionContext>();
         var parseResult = rootCommand.Parse(["--version"]);
 
-        Program.CaptureParsedCommand(rootCommand, parseResult, executionContext);
+        Program.CaptureParsedCommand(parseResult, executionContext);
 
         Assert.Same(rootCommand, executionContext.Command);
         Assert.True(Program.IsVersionOptionRequested(rootCommand, parseResult));

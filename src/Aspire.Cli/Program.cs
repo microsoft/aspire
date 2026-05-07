@@ -785,7 +785,7 @@ public class Program
 
             logger.LogDebug("Parsing arguments: {Args}", string.Join(" ", args));
             var parseResult = rootCommand.Parse(args);
-            CaptureParsedCommand(rootCommand, parseResult, app.Services.GetRequiredService<CliExecutionContext>());
+            CaptureParsedCommand(parseResult, app.Services.GetRequiredService<CliExecutionContext>());
             var versionUpdateNotificationTask = IsVersionOptionRequested(rootCommand, parseResult)
                 ? TryNotifyVersionUpdateAsync(app.Services, cts.Token)
                 : Task.CompletedTask;
@@ -844,9 +844,8 @@ public class Program
         }
     }
 
-    internal static void CaptureParsedCommand(RootCommand rootCommand, ParseResult parseResult, CliExecutionContext executionContext)
+    internal static void CaptureParsedCommand(ParseResult parseResult, CliExecutionContext executionContext)
     {
-        ArgumentNullException.ThrowIfNull(rootCommand);
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(executionContext);
 
