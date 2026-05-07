@@ -17,7 +17,7 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
 
-internal class AddCommand : BaseCommand
+internal sealed class AddCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
@@ -44,12 +44,7 @@ internal class AddCommand : BaseCommand
     };
 
     public AddCommand(IInteractionService interactionService, IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
-        : this("add", AddCommandStrings.Description, interactionService, projectLocator, integrationPackageSearchService, prompter, telemetry, sdkInstaller, features, updateNotifier, executionContext, hostEnvironment, projectFactory)
-    {
-    }
-
-    protected AddCommand(string name, string description, IInteractionService interactionService, IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
-        : base(name, description, features, updateNotifier, executionContext, interactionService, telemetry)
+        : base("add", AddCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _projectLocator = projectLocator;
         _integrationPackageSearchService = integrationPackageSearchService;
@@ -354,14 +349,6 @@ internal class AddCommand : BaseCommand
         return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken);
     }
 
-}
-
-internal sealed class IntegrationAddCommand : AddCommand
-{
-    public IntegrationAddCommand(IInteractionService interactionService, IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
-        : base("add", AddCommandStrings.Description, interactionService, projectLocator, integrationPackageSearchService, prompter, telemetry, sdkInstaller, features, updateNotifier, executionContext, hostEnvironment, projectFactory)
-    {
-    }
 }
 
 internal interface IAddCommandPrompter

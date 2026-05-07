@@ -483,7 +483,6 @@ public class Program
         builder.Services.AddTransient<LogsCommand>();
         builder.Services.AddTransient<IntegrationPackageSearchService>();
         builder.Services.AddTransient<IntegrationCommand>();
-        builder.Services.AddTransient<IntegrationAddCommand>();
         builder.Services.AddTransient<IntegrationListCommand>();
         builder.Services.AddTransient<IntegrationSearchCommand>();
         builder.Services.AddTransient<AddCommand>();

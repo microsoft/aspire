@@ -16,7 +16,7 @@ internal sealed class IntegrationCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     public IntegrationCommand(
-        IntegrationAddCommand addCommand,
+        AddCommand addCommand,
         IntegrationListCommand listCommand,
         IntegrationSearchCommand searchCommand,
         IInteractionService interactionService,
