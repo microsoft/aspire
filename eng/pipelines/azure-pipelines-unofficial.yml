@@ -334,7 +334,11 @@ extends:
           enableMicrobuild: false
           enablePublishUsingPipelines: false
           enablePublishBuildAssets: false
-          enablePublishBuildArtifacts: true
+          # WinGet and Homebrew jobs only consume previously-built CLI archives;
+          # they don't run the repo build, so artifacts/log/$(_BuildConfig) is
+          # never created. Leaving this 'true' makes the 1ES Publish Logs output
+          # fail because its targetPath doesn't exist.
+          enablePublishBuildArtifacts: false
           enableTelemetry: true
           workspace:
             clean: all
