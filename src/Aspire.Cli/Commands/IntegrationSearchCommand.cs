@@ -16,40 +16,35 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class IntegrationSearchCommand : BaseCommand
+internal abstract class IntegrationDiscoveryCommand : BaseCommand
 {
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
-
-    private static readonly Argument<string?> s_queryArgument = new("query")
-    {
-        Description = AddCommandStrings.IntegrationSearchQueryArgumentDescription,
-        Arity = ArgumentArity.ZeroOrOne
-    };
-
-    private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", AddCommandStrings.IntegrationSearchAppHostOptionDescription);
-
-    private static readonly Option<OutputFormat> s_formatOption = new("--format")
+    private readonly OptionWithLegacy<FileInfo?> _appHostOption = new("--apphost", "--project", AddCommandStrings.IntegrationSearchAppHostOptionDescription);
+    private readonly Option<OutputFormat> _formatOption = new("--format")
     {
         Description = AddCommandStrings.FormatOptionDescription
     };
 
-    public IntegrationSearchCommand(
+    protected IntegrationDiscoveryCommand(
+        string name,
+        string description,
         IntegrationPackageSearchService integrationPackageSearchService,
         IInteractionService interactionService,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry)
-        : base("search", AddCommandStrings.IntegrationSearchDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        : base(name, description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _integrationPackageSearchService = integrationPackageSearchService;
 
-        Arguments.Add(s_queryArgument);
-        Options.Add(s_appHostOption);
-        Options.Add(s_formatOption);
+        Options.Add(_appHostOption);
+        Options.Add(_formatOption);
     }
 
     protected override bool UpdateNotificationsEnabled => false;
+
+    protected abstract string? GetSearchTerm(ParseResult parseResult);
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -57,9 +52,9 @@ internal sealed class IntegrationSearchCommand : BaseCommand
 
         try
         {
-            var searchTerm = parseResult.GetValue(s_queryArgument);
-            var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
-            var format = parseResult.GetValue(s_formatOption);
+            var searchTerm = GetSearchTerm(parseResult);
+            var passedAppHostProjectFile = parseResult.GetValue(_appHostOption);
+            var format = parseResult.GetValue(_formatOption);
 
             var (workingDirectory, configuredChannel, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
             if (contextExitCode is { } exitCode)
@@ -88,7 +83,7 @@ internal sealed class IntegrationSearchCommand : BaseCommand
                 return ExitCodeConstants.FailedToAddPackage;
             }
 
-            return DisplayIntegrationSearchResults(packagesWithShortName, searchTerm, format);
+            return DisplayIntegrationResults(packagesWithShortName, searchTerm, format);
         }
         catch (ProjectLocatorException ex)
         {
@@ -114,7 +109,7 @@ internal sealed class IntegrationSearchCommand : BaseCommand
         }
     }
 
-    private int DisplayIntegrationSearchResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format)
+    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format)
     {
         var matches = (searchTerm is null
             ? packages.Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: 0.0))
@@ -181,6 +176,45 @@ internal sealed class IntegrationSearchCommand : BaseCommand
         InteractionService.DisplayRenderable(table);
         return ExitCodeConstants.Success;
     }
+}
+
+internal sealed class IntegrationListCommand : IntegrationDiscoveryCommand
+{
+    public IntegrationListCommand(
+        IntegrationPackageSearchService integrationPackageSearchService,
+        IInteractionService interactionService,
+        IFeatures features,
+        ICliUpdateNotifier updateNotifier,
+        CliExecutionContext executionContext,
+        AspireCliTelemetry telemetry)
+        : base("list", AddCommandStrings.IntegrationListDescription, integrationPackageSearchService, interactionService, features, updateNotifier, executionContext, telemetry)
+    {
+    }
+
+    protected override string? GetSearchTerm(ParseResult parseResult) => null;
+}
+
+internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
+{
+    private readonly Argument<string> _queryArgument = new("query")
+    {
+        Description = AddCommandStrings.IntegrationSearchQueryArgumentDescription,
+        Arity = ArgumentArity.ExactlyOne
+    };
+
+    public IntegrationSearchCommand(
+        IntegrationPackageSearchService integrationPackageSearchService,
+        IInteractionService interactionService,
+        IFeatures features,
+        ICliUpdateNotifier updateNotifier,
+        CliExecutionContext executionContext,
+        AspireCliTelemetry telemetry)
+        : base("search", AddCommandStrings.IntegrationSearchDescription, integrationPackageSearchService, interactionService, features, updateNotifier, executionContext, telemetry)
+    {
+        Arguments.Add(_queryArgument);
+    }
+
+    protected override string? GetSearchTerm(ParseResult parseResult) => parseResult.GetValue(_queryArgument);
 }
 
 internal sealed class IntegrationSearchResult

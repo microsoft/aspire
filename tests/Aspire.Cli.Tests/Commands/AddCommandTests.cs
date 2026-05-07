@@ -79,7 +79,38 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonReturnsAvailableIntegrationsWithoutPromptingOrAddingPackage()
+    public async Task IntegrationSearchCommandRequiresQuery()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("Should not search packages when the required search query is missing.");
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Empty(rawJson);
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandFormatJsonReturnsAvailableIntegrationsWithoutPromptingOrAddingPackage()
     {
         var addPackageWasCalled = false;
         var projectLocatorWasCalled = false;
@@ -146,7 +177,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("integration search --format json");
+        var result = command.Parse("integration list --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -318,7 +349,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonPrefersImplicitChannelWhenMultipleChannelsContainSameIntegration()
+    public async Task IntegrationListCommandFormatJsonPrefersImplicitChannelWhenMultipleChannelsContainSameIntegration()
     {
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
@@ -353,7 +384,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("integration search --format json");
+        var result = command.Parse("integration list --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 

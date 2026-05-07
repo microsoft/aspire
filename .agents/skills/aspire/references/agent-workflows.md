@@ -57,7 +57,7 @@ aspire docs api search WithCommand --language csharp
 Keep these points in mind:
 
 - Read the docs before editing the AppHost so the implementation follows a documented Aspire pattern instead of guessing the workflow.
-- Use `aspire integration search <query>` when the package ID is unknown or the user asks to discover available integrations before changing the AppHost.
+- Use `aspire integration list` when the user asks to discover available integrations before changing the AppHost, or `aspire integration search <query>` when the package ID is unknown.
 - Use `aspire docs api` when you need the C# or TypeScript reference entry for the exact API you are about to call.
 - If the AppHost is C# and you need to understand local overloads or builder chains, use the `dotnet-inspect` skill if it is available after checking the Aspire API reference.
 - After adding an integration, restart with `aspire start` so the updated AppHost takes effect.

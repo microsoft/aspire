@@ -69,6 +69,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string IntegrationListDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationListDescription", resourceCulture);
+            }
+        }
+
         public static string IntegrationSearchDescription
         {
             get

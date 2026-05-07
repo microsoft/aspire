@@ -123,11 +123,14 @@
   <data name="IntegrationCommandDescription" xml:space="preserve">
     <value>Manage Aspire hosting integrations</value>
   </data>
+  <data name="IntegrationListDescription" xml:space="preserve">
+    <value>List available Aspire hosting integrations</value>
+  </data>
   <data name="IntegrationSearchDescription" xml:space="preserve">
     <value>Search available Aspire hosting integrations</value>
   </data>
   <data name="IntegrationSearchQueryArgumentDescription" xml:space="preserve">
-    <value>The integration search query. Omit to list all integrations.</value>
+    <value>The integration search query.</value>
   </data>
   <data name="IntegrationArgumentDescription" xml:space="preserve">
     <value>The name of the integration to add (e.g. redis, postgres)</value>

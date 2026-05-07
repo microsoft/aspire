@@ -62,6 +62,11 @@
         <target state="new">Manage Aspire hosting integrations</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationListDescription">
+        <source>List available Aspire hosting integrations</source>
+        <target state="new">List available Aspire hosting integrations</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IntegrationSearchAppHostOptionDescription">
         <source>The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</source>
         <target state="new">The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</target>
@@ -73,8 +78,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationSearchQueryArgumentDescription">
-        <source>The integration search query. Omit to list all integrations.</source>
-        <target state="new">The integration search query. Omit to list all integrations.</target>
+        <source>The integration search query.</source>
+        <target state="new">The integration search query.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">

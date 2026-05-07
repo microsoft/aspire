@@ -14,7 +14,7 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 - Starting, restarting, and stopping AppHosts with `aspire start` and `aspire stop`
 - Initializing Aspire in an existing app with `aspire init` (drops skeleton files; use the `aspireify` skill to complete wiring)
 - Inspecting resources, logs, traces, and docs
-- Discovering integrations with `aspire integration search` and adding them with `aspire add`
+- Discovering integrations with `aspire integration list` or `aspire integration search`, and adding them with `aspire add`
 - Recovering missing TypeScript AppHost support files with `aspire restore`
 - Discovering the correct frontend URL before a Playwright handoff
 - Understanding unfamiliar Aspire AppHost APIs before editing C# or TypeScript AppHosts
@@ -61,7 +61,7 @@ When the AppHost is `apphost.ts`, the `.modules/` folder at the project root con
 - Re-running `aspire start` is the restart path. In git worktrees, `aspire start --isolated` is both the start and restart command. Do not combine `aspire stop` and `aspire run`.
 - Use `--apphost <path>` when the workspace has multiple AppHosts or discovery is ambiguous.
 - Use `--format Json` when another tool or script needs machine-readable output.
-- Use `aspire integration search [query] --format Json` for read-only, scriptable integration discovery. Use `aspire add <package>` only when you are ready to mutate the AppHost.
+- Use `aspire integration list --format Json` for read-only, scriptable integration listing. Use `aspire integration search <query> --format Json` for read-only, scriptable integration filtering. Use `aspire add <package>` only when you are ready to mutate the AppHost.
 - Do not guess the integration or command shape for unfamiliar AppHost changes. Use `aspire docs search` and `aspire docs get` for the documented pattern, then use `aspire docs api search` and `aspire docs api get` when you need the specific reference entry.
 - For unfamiliar C# AppHost APIs, use Aspire API docs as the primary reference and, if available, use `dotnet-inspect` only to inspect local symbols, overloads, and builder chains.
 - Never install the obsolete Aspire workload.
@@ -71,7 +71,7 @@ When the AppHost is `apphost.ts`, the `.modules/` folder at the project root con
 ## Common capabilities
 
 - Use `aspire ps` when you need to discover running AppHosts before targeting one.
-- Use `aspire integration search [query]` when you need to discover available hosting integrations or filter by a friendly name before adding one.
+- Use `aspire integration list` when you need to discover available hosting integrations, or `aspire integration search <query>` to filter by a friendly name before adding one.
 - Use `aspire update` when the task is to refresh AppHost package references through the supported CLI workflow.
 - Use `aspire doctor` as an early diagnostics step when the local Aspire environment looks unhealthy.
 - Use `aspire resource`, `aspire secret`, `aspire config`, `aspire publish`, `aspire deploy`, and `aspire do` when the objective is resource operations, secrets/config management, or deployment.

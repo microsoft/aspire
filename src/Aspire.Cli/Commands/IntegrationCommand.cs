@@ -17,6 +17,7 @@ internal sealed class IntegrationCommand : BaseCommand
 
     public IntegrationCommand(
         IntegrationAddCommand addCommand,
+        IntegrationListCommand listCommand,
         IntegrationSearchCommand searchCommand,
         IInteractionService interactionService,
         IFeatures features,
@@ -26,6 +27,7 @@ internal sealed class IntegrationCommand : BaseCommand
         : base("integration", AddCommandStrings.IntegrationCommandDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         Subcommands.Add(addCommand);
+        Subcommands.Add(listCommand);
         Subcommands.Add(searchCommand);
     }
 
