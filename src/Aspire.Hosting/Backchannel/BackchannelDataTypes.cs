@@ -294,7 +294,7 @@ internal sealed class ExecuteResourceCommandRequest
     /// <summary>
     /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
     /// </summary>
-    public bool NonInteractive { get; init; }
+    public bool NonInteractive { get; init; } = true;
 }
 
 /// <summary>
@@ -316,7 +316,7 @@ internal sealed class ExecuteResourceCommandOptions
     /// <summary>
     /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
     /// </summary>
-    public bool NonInteractive { get; init; }
+    public bool NonInteractive { get; init; } = true;
 }
 
 /// <summary>

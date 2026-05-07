@@ -654,6 +654,111 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_InteractiveWithoutArguments_PromptsForArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Description = "Command description",
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal("My command", interaction.Title);
+        Assert.Equal("Command description", interaction.Message);
+        var input = Assert.Single(interaction.Inputs);
+        Assert.Equal("selector", input.Name);
+        input.Value = "#submit";
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await resultTask;
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NonInteractiveWithoutArguments_DoesNotPrompt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = true },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
+        Assert.NotNull(result.InvalidArguments);
+        var invalidArgument = Assert.Single(result.InvalidArguments);
+        Assert.Equal("selector", invalidArgument.Name);
+        Assert.Equal("Value is required.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_PartialArgumentCollection_ValidatesMissingDeclaredArguments()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

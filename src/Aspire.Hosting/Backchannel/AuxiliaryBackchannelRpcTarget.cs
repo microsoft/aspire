@@ -265,7 +265,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         var result = request.ValidateOnly
             ? await ValidateResourceCommandAsync(resourceCommandService, request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false)
-            : await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false);
+            : await resourceCommandService.ExecuteCommandAsync(
+                request.ResourceName,
+                request.CommandName,
+                new ResourceCommandExecutionOptions
+                {
+                    Arguments = arguments,
+                    ArgumentsProvided = request.Arguments is not null,
+                    NonInteractive = request.NonInteractive
+                },
+                cancellationToken).ConfigureAwait(false);
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var resolvedMessage = result.Message ?? result.ErrorMessage;

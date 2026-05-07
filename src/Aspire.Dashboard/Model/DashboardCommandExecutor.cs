@@ -2,17 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
-using Aspire.DashboardService.Proto.V1;
-using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
-using DialogResources = Aspire.Dashboard.Resources.Dialogs;
 using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageIntent;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -23,7 +18,6 @@ public sealed class DashboardCommandExecutor(
     DashboardDialogService dialogService,
     IToastService toastService,
     IStringLocalizer<Dashboard.Resources.Resources> loc,
-    IStringLocalizer<DialogResources> dialogsLoc,
     NavigationManager navigationManager,
     DashboardTelemetryService telemetryService,
     INotificationService notificationService)
@@ -103,12 +97,6 @@ public sealed class DashboardCommandExecutor(
             }
         }
 
-        var (argumentsCanceled, arguments) = await GetCommandArgumentsAsync(resource, command).ConfigureAwait(false);
-        if (argumentsCanceled)
-        {
-            return;
-        }
-
         var messageBarStartingTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandStarting)], command.GetDisplayName());
         var toastStartingTitle = $"{getResourceName(resource)} {messageBarStartingTitle}";
 
@@ -164,11 +152,7 @@ public sealed class DashboardCommandExecutor(
                 resource.Name,
                 resource.ResourceType,
                 command,
-                new ExecuteResourceCommandOptions
-                {
-                    Arguments = arguments,
-                    NonInteractive = true
-                },
+                new ExecuteResourceCommandOptions(),
                 CancellationToken.None).ConfigureAwait(false);
         }
         finally
@@ -289,123 +273,6 @@ public sealed class DashboardCommandExecutor(
         {
             Text = loc[nameof(Dashboard.Resources.Resources.ResourceCommandViewResponse)],
             OnClick = () => OpenViewResponseDialogAsync(command, response)
-        };
-    }
-
-    private async Task<(bool Canceled, Value? Arguments)> GetCommandArgumentsAsync(ResourceViewModel resource, CommandViewModel command)
-    {
-        if (command.ArgumentInputs.IsDefaultOrEmpty)
-        {
-            return (false, null);
-        }
-
-        var interaction = new WatchInteractionsResponseUpdate
-        {
-            Title = command.GetDisplayName(),
-            Message = command.GetDisplayDescription() ?? string.Empty,
-            PrimaryButtonText = command.GetDisplayName(),
-            SecondaryButtonText = dialogsLoc[nameof(DialogResources.InteractionButtonCancel)],
-            ShowDismiss = true,
-            ShowSecondaryButton = true,
-            InputsDialog = new InteractionInputsDialog()
-        };
-        interaction.InputsDialog.InputItems.AddRange(command.ArgumentInputs.Select(input => input.Clone()));
-
-        var completion = new TaskCompletionSource<IReadOnlyList<InteractionInput>?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        IDialogReference? dialogReference = null;
-        InteractionsInputsDialogViewModel? viewModel = null;
-        viewModel = new InteractionsInputsDialogViewModel
-        {
-            Interaction = interaction,
-            Message = WebUtility.HtmlEncode(interaction.Message),
-            OnSubmitCallback = async (submittedInteraction, update) =>
-            {
-                if (update)
-                {
-                    return;
-                }
-
-                var arguments = CreateCommandArguments(submittedInteraction.InputsDialog.InputItems);
-                var validationResponse = await dashboardClient.ExecuteResourceCommandAsync(
-                    resource.Name,
-                    resource.ResourceType,
-                    command,
-                    new ExecuteResourceCommandOptions
-                    {
-                        Arguments = arguments,
-                        ValidateOnly = true,
-                        NonInteractive = true
-                    },
-                    CancellationToken.None).ConfigureAwait(true);
-                if (validationResponse.Kind == ResourceCommandResponseKind.InvalidArguments)
-                {
-                    submittedInteraction.InputsDialog.InputItems.Clear();
-                    submittedInteraction.InputsDialog.InputItems.AddRange(validationResponse.ArgumentInputs);
-                    await viewModel!.UpdateInteractionAsync(submittedInteraction).ConfigureAwait(true);
-                    return;
-                }
-
-                completion.TrySetResult(submittedInteraction.InputsDialog.InputItems.ToList());
-                if (dialogReference is not null)
-                {
-                    await dialogReference.CloseAsync().ConfigureAwait(true);
-                }
-            }
-        };
-
-        var width = dialogService.IsDesktop ? "75vw" : "100vw";
-        var parameters = new DialogParameters
-        {
-            ShowDismiss = true,
-            PrimaryAction = command.GetDisplayName(),
-            SecondaryAction = dialogsLoc[nameof(DialogResources.InteractionButtonCancel)],
-            PreventDismissOnOverlayClick = true,
-            Title = command.GetDisplayName(),
-            Width = $"min(650px, {width})",
-            OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, result =>
-            {
-                if (result.Cancelled)
-                {
-                    completion.TrySetResult(null);
-                }
-
-                return Task.CompletedTask;
-            })
-        };
-
-        dialogReference = await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, parameters).ConfigureAwait(false);
-        var inputs = await completion.Task.ConfigureAwait(false);
-
-        return inputs is null
-            ? (true, null)
-            : (false, CreateCommandArguments(inputs));
-    }
-
-    internal static Value CreateCommandArguments(IReadOnlyList<InteractionInput> inputs)
-    {
-        var arguments = new Struct();
-        foreach (var input in inputs)
-        {
-            var value = CreateCommandArgumentValue(input);
-            if (value is not null)
-            {
-                arguments.Fields.Add(input.Name, value);
-            }
-        }
-
-        return Value.ForStruct(arguments);
-    }
-
-    private static Value? CreateCommandArgumentValue(InteractionInput input)
-    {
-        var value = input.Value;
-        return input.InputType switch
-        {
-            InputType.Boolean => Value.ForBool(bool.TryParse(value, out var result) && result),
-            InputType.Number when string.IsNullOrWhiteSpace(value) => null,
-            InputType.Number when double.TryParse(value, CultureInfo.InvariantCulture, out var result) => Value.ForNumber(result),
-            InputType.Text or InputType.SecretText or InputType.Choice when !string.IsNullOrEmpty(value) => Value.ForString(value),
-            _ => null
         };
     }
 

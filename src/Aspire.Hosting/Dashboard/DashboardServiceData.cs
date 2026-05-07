@@ -100,10 +100,18 @@ internal sealed class DashboardServiceData : IDisposable
 
         try
         {
-            var arguments = _resourceCommandService.CreateCommandArguments(resourceId, type, options.ArgumentValues);
             var result = options.ValidateOnly
-                ? await ValidateCommandArgumentsAsync(_resourceCommandService, resourceId, type, arguments, cancellationToken).ConfigureAwait(false)
-                : await _resourceCommandService.ExecuteCommandAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
+                ? await ValidateCommandArgumentsAsync(_resourceCommandService, resourceId, type, options.ArgumentValues, cancellationToken).ConfigureAwait(false)
+                : await _resourceCommandService.ExecuteCommandAsync(
+                    resourceId,
+                    type,
+                    new ResourceCommandExecutionOptions
+                    {
+                        ArgumentValues = options.ArgumentValues,
+                        ArgumentsProvided = options.ArgumentValues is not null,
+                        NonInteractive = options.NonInteractive
+                    },
+                    cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
                 return (ExecuteCommandResultType.Canceled, result.Message, null, null);
@@ -116,8 +124,9 @@ internal sealed class DashboardServiceData : IDisposable
             return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null, null);
         }
 
-        static async Task<ExecuteCommandResult> ValidateCommandArgumentsAsync(ResourceCommandService resourceCommandService, string resourceId, string type, InteractionInputCollection arguments, CancellationToken cancellationToken)
+        static async Task<ExecuteCommandResult> ValidateCommandArgumentsAsync(ResourceCommandService resourceCommandService, string resourceId, string type, IReadOnlyDictionary<string, string?>? argumentValues, CancellationToken cancellationToken)
         {
+            var arguments = resourceCommandService.CreateCommandArguments(resourceId, type, argumentValues);
             var invalidArguments = await resourceCommandService.ValidateCommandArgumentsAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
             if (invalidArguments is null)
             {

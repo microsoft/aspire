@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -57,7 +58,11 @@ public class ResourceCommandService
     /// <returns>The <see cref="ExecuteCommandResult" /> indicates command success or failure.</returns>
     public async Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, CancellationToken cancellationToken = default)
     {
-        return await ExecuteCommandCoreAsync(resourceId, commandName, arguments: null, cancellationToken).ConfigureAwait(false);
+        return await ExecuteCommandCoreAsync(
+            resourceId,
+            commandName,
+            new ResourceCommandExecutionOptions { NonInteractive = true },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -85,7 +90,16 @@ public class ResourceCommandService
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
-        return await ExecuteCommandCoreAsync(resourceId, commandName, arguments, cancellationToken).ConfigureAwait(false);
+        return await ExecuteCommandCoreAsync(
+            resourceId,
+            commandName,
+            new ResourceCommandExecutionOptions
+            {
+                Arguments = arguments,
+                ArgumentsProvided = true,
+                NonInteractive = true
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -118,14 +132,28 @@ public class ResourceCommandService
         // Single resource for IResource. Return its result directly.
         if (names.Length == 1)
         {
-            return await ExecuteCommandCoreAsync(names[0], resource, commandName, arguments, cancellationToken).ConfigureAwait(false);
+            return await ExecuteCommandCoreAsync(
+                names[0],
+                resource,
+                commandName,
+                arguments,
+                argumentsProvided: true,
+                nonInteractive: true,
+                cancellationToken).ConfigureAwait(false);
         }
 
         // Run commands for multiple resources in parallel.
         var tasks = new List<Task<ExecuteCommandResult>>();
         foreach (var name in names)
         {
-            tasks.Add(ExecuteCommandCoreAsync(name, resource, commandName, CloneArguments(arguments), cancellationToken));
+            tasks.Add(ExecuteCommandCoreAsync(
+                name,
+                resource,
+                commandName,
+                CloneArguments(arguments),
+                argumentsProvided: true,
+                nonInteractive: true,
+                cancellationToken));
         }
 
         // Check for failures and cancellations.
@@ -210,7 +238,14 @@ public class ResourceCommandService
         return (CreateArguments(annotation.Arguments, orderedArgumentValues), null);
     }
 
-    internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    internal async Task<ExecuteCommandResult> ExecuteCommandAsync(string resourceId, string commandName, ResourceCommandExecutionOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        return await ExecuteCommandCoreAsync(resourceId, commandName, options, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, bool argumentsProvided, bool nonInteractive, CancellationToken cancellationToken)
     {
         var logger = _resourceLoggerService.GetLogger(resourceId);
 
@@ -223,6 +258,17 @@ public class ResourceCommandService
             try
             {
                 arguments = NormalizeCommandArguments(annotation, arguments);
+
+                if (!nonInteractive && !argumentsProvided && annotation.Arguments.Count > 0)
+                {
+                    var (promptedArguments, promptResult) = await PromptForCommandArgumentsAsync(annotation, arguments, cancellationToken).ConfigureAwait(false);
+                    if (promptResult is not null)
+                    {
+                        return promptResult;
+                    }
+
+                    arguments = promptedArguments!;
+                }
 
                 if (!await ValidateArgumentsAsync(annotation, arguments, cancellationToken).ConfigureAwait(false))
                 {
@@ -299,16 +345,23 @@ public class ResourceCommandService
             : normalizedArguments;
     }
 
-    private async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, string commandName, InteractionInputCollection? arguments, CancellationToken cancellationToken)
+    private async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, string commandName, ResourceCommandExecutionOptions options, CancellationToken cancellationToken)
     {
         if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
         {
             return new ExecuteCommandResult { Success = false, Message = $"Resource '{resourceId}' not found." };
         }
 
-        arguments ??= CreateCommandArguments(resourceEvent.ResourceId, commandName, argumentValues: null);
+        var arguments = options.Arguments ?? CreateCommandArguments(resourceEvent.ResourceId, commandName, options.ArgumentValues);
 
-        return await ExecuteCommandCoreAsync(resourceEvent.ResourceId, resourceEvent.Resource, commandName, arguments, cancellationToken).ConfigureAwait(false);
+        return await ExecuteCommandCoreAsync(
+            resourceEvent.ResourceId,
+            resourceEvent.Resource,
+            commandName,
+            arguments,
+            options.ArgumentsProvided,
+            options.NonInteractive,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static ResourceCommandAnnotation? ResolveCommandAnnotation(IResource resource, ref string commandName, ILogger? logger = null)
@@ -399,6 +452,36 @@ public class ResourceCommandService
         }
 
         return !context.HasErrors;
+    }
+
+    private async Task<(InteractionInputCollection? Arguments, ExecuteCommandResult? Result)> PromptForCommandArgumentsAsync(ResourceCommandAnnotation annotation, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    {
+        var interactionService = _serviceProvider.GetRequiredService<IInteractionService>();
+        if (!interactionService.IsAvailable)
+        {
+            return (null, new ExecuteCommandResult
+            {
+                Success = false,
+                Message = "Command requires input, but interactive prompting is not available."
+            });
+        }
+
+        var result = await interactionService.PromptInputsAsync(
+            annotation.DisplayName,
+            annotation.DisplayDescription,
+            CloneArguments(arguments),
+            new InputsDialogInteractionOptions
+            {
+                PrimaryButtonText = annotation.DisplayName,
+                ShowDismiss = true,
+                ShowSecondaryButton = true,
+                ValidationCallback = annotation.ValidateArguments
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return result.Canceled
+            ? (null, CommandResults.Canceled())
+            : (result.Data, null);
     }
 
     private static InteractionInputCollection CreateArguments(IReadOnlyList<InteractionInput> commandArguments, IReadOnlyDictionary<string, string?>? argumentValues)
@@ -503,6 +586,17 @@ public class ResourceCommandService
         return new InteractionInputCollection(inputs);
     }
 
+}
+
+internal sealed class ResourceCommandExecutionOptions
+{
+    public InteractionInputCollection? Arguments { get; init; }
+
+    public IReadOnlyDictionary<string, string?>? ArgumentValues { get; init; }
+
+    public bool ArgumentsProvided { get; init; }
+
+    public bool NonInteractive { get; init; }
 }
 
 #pragma warning restore ASPIREINTERACTION001
