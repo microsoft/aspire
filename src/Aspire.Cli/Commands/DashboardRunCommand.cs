@@ -306,9 +306,9 @@ internal sealed class DashboardRunCommand : BaseCommand
         };
     }
 
-    private void RenderDashboardSummary(DashboardInfo info, string logFilePath)
+    internal static void RenderDashboardSummary(IInteractionService interactionService, DashboardInfo info, string logFilePath)
     {
-        _interactionService.DisplayEmptyLine();
+        interactionService.DisplayEmptyLine();
         var grid = new Grid();
         grid.AddColumn();
         grid.AddColumn();
@@ -344,10 +344,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Logs row
         grid.AddRow(
             new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(logFilePath));
+            new Markup(ConsoleHelpers.FormatPathAsFileLink(logFilePath)));
 
         var padder = new Padder(grid, new Padding(3, 0));
-        _interactionService.DisplayRenderable(padder);
+        interactionService.DisplayRenderable(padder);
     }
 
     private async Task<int> ExecuteForegroundAsync(string managedPath, List<string> dashboardArgs, DashboardInfo dashboardInfo, IDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
@@ -457,7 +457,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
 
         // Dashboard is ready.
-        RenderDashboardSummary(dashboardInfo, ExecutionContext.LogFilePath);
+        RenderDashboardSummary(_interactionService, dashboardInfo, ExecutionContext.LogFilePath);
         _interactionService.DisplayEmptyLine();
 
         try
