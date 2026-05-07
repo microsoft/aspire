@@ -26,7 +26,7 @@ The image build workflow has an `includePolyglotImages` input. It defaults to `t
 
 Consumer workflows download image artifacts into `${{ github.workspace }}/cli-e2e-image` and call `eng/scripts/load-cli-e2e-images.sh` to load the images and export the matching environment variables. Regular split CLI E2E jobs always require DotNet and Polyglot images. Java image download and loading is conditional on Java test jobs to avoid transferring the larger Java tarball to every split job.
 
-The reusable image build workflow also has an `uploadArtifacts` input. It defaults to `true` for test workflows because each isolated test job needs the image tarballs. Cache-warming workflows set it to `false` so they only build the images and export BuildKit cache layers.
+The reusable image build workflow also has an `uploadImageArtifacts` input. It defaults to `true` for test workflows because each isolated test job needs the image tarballs. Cache-warming workflows set it to `false` so they only build the images and export BuildKit cache layers.
 
 ## Cross-PR BuildKit cache
 

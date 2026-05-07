@@ -13,6 +13,7 @@ on:
     paths:
       - '.github/workflows/build-cli-e2e-image.yml'
       - '.github/workflows/warm-cli-e2e-image-cache.yml'
+      - '.dockerignore'
       - 'eng/scripts/get-aspire-cli.sh'
       - 'eng/scripts/get-aspire-cli-pr.sh'
       - 'tests/Shared/Docker/Dockerfile.e2e'
@@ -32,4 +33,8 @@ jobs:
     uses: ./.github/workflows/build-cli-e2e-image.yml
     with:
       includePolyglotImages: true
-      uploadArtifacts: false
+      # Cache-warmer mode: this run only needs to seed the GHA BuildKit cache
+      # scopes that sibling PR builds restore from. The cache export happens
+      # during `docker buildx build` itself, so no tarball is needed. No test
+      # job consumes artifacts from this workflow, so skip the upload steps.
+      uploadImageArtifacts: false
