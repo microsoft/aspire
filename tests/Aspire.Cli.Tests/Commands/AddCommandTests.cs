@@ -34,7 +34,21 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandWithJsonOptionDoesNotEmitDiscoveryJson()
+    public async Task IntegrationAddCommandWithHelpArgumentReturnsZero()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration add --help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandWithJsonOptionDoesNotEmitDiscoveryJson()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var rawJson = string.Empty;
@@ -55,18 +69,17 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add --list --json");
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search redis --json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.MissingRequiredArgument, exitCode);
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
         Assert.Empty(rawJson);
-        Assert.Contains(AddCommandStrings.DiscoveryOptionsCannotBeCombinedWithAddOptions, testInteractionService.DisplayedErrors);
     }
 
     [Fact]
-    public async Task AddCommandListFormatJsonReturnsAvailableIntegrationsWithoutPromptingOrAddingPackage()
+    public async Task IntegrationSearchCommandFormatJsonReturnsAvailableIntegrationsWithoutPromptingOrAddingPackage()
     {
         var addPackageWasCalled = false;
         var projectLocatorWasCalled = false;
@@ -132,8 +145,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add --list --format json");
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -151,7 +164,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandSearchFormatJsonFiltersAvailableIntegrationsWithoutAddingPackage()
+    public async Task IntegrationSearchCommandFormatJsonFiltersAvailableIntegrationsWithoutAddingPackage()
     {
         var addPackageWasCalled = false;
         var rawJson = string.Empty;
@@ -192,8 +205,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add --search redis --format json");
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search redis --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -208,7 +221,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandSearchFormatJsonUsesFuzzyIntegrationMatching()
+    public async Task IntegrationSearchCommandFormatJsonUsesFuzzyIntegrationMatching()
     {
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
@@ -238,8 +251,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add --search rdis --format json");
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search rdis --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -252,7 +265,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandSearchFormatJsonWithAppHostUsesConfiguredChannel()
+    public async Task IntegrationSearchCommandFormatJsonWithAppHostUsesConfiguredChannel()
     {
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
@@ -292,8 +305,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\" --search redis --format json");
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -305,7 +318,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandListFormatJsonPrefersImplicitChannelWhenMultipleChannelsContainSameIntegration()
+    public async Task IntegrationSearchCommandFormatJsonPrefersImplicitChannelWhenMultipleChannelsContainSameIntegration()
     {
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
@@ -339,8 +352,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add --list --format json");
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -352,7 +365,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandSearchFormatJsonReturnsEmptyArrayWhenNoIntegrationsMatch()
+    public async Task IntegrationSearchCommandFormatJsonReturnsEmptyArrayWhenNoIntegrationsMatch()
     {
         var addPackageWasCalled = false;
         var rawJson = string.Empty;
@@ -392,8 +405,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add --search azure --format json");
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search azure --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1514,7 +1527,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackage { Id = packageId, Version = "1.0.0", Source = "test" };
 
         // Act
-        var result = AddCommand.GenerateFriendlyName((package, null!)); // Null is OK for this test.
+        var result = IntegrationPackageSearchService.GenerateFriendlyName((package, null!)); // Null is OK for this test.
 
         // Assert
         Assert.Equal(expectedFriendlyName, result.FriendlyName);

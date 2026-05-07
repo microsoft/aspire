@@ -38,7 +38,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BaseCommand_AddDiscoveryFormatJson_SetsConsoleOutputCorrectly()
+    public async Task BaseCommand_IntegrationSearchFormatJson_SetsConsoleOutputCorrectly()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var testInteractionService = new TestInteractionService();
@@ -55,7 +55,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("add --list --format json");
+        var result = command.Parse("integration search --format json");
 
         await result.InvokeAsync().DefaultTimeout();
 

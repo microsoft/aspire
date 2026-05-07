@@ -12,14 +12,14 @@
         <target state="needs-review-translation">Aspire AppHost에 호스팅 통합을 추가하세요.</target>
         <note />
       </trans-unit>
-      <trans-unit id="DiscoveryOptionsCannotBeCombinedWithAddOptions">
-        <source>The --list and --search options cannot be combined with an integration name, --version, or --source.</source>
-        <target state="new">The --list and --search options cannot be combined with an integration name, --version, or --source.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
         <source>An error occurred while adding the package: {0}</source>
         <target state="translated">패키지를 추가하는 동안 오류가 발생했습니다({0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ErrorOccurredWhileSearchingIntegrations">
+        <source>An error occurred while searching integrations: {0}</source>
+        <target state="new">An error occurred while searching integrations: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
@@ -57,14 +57,24 @@
         <target state="needs-review-translation">추가할 통합의 이름(예: redis, postgres)입니다.</target>
         <note />
       </trans-unit>
-      <trans-unit id="JsonRequiresListOrSearch">
-        <source>JSON output must be used with --list or --search.</source>
-        <target state="new">JSON output must be used with --list or --search.</target>
+      <trans-unit id="IntegrationCommandDescription">
+        <source>Manage Aspire hosting integrations</source>
+        <target state="new">Manage Aspire hosting integrations</target>
         <note />
       </trans-unit>
-      <trans-unit id="ListOptionDescription">
-        <source>List available integrations without adding one</source>
-        <target state="new">List available integrations without adding one</target>
+      <trans-unit id="IntegrationSearchAppHostOptionDescription">
+        <source>The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</source>
+        <target state="new">The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationSearchDescription">
+        <source>Search available Aspire hosting integrations</source>
+        <target state="new">Search available Aspire hosting integrations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationSearchQueryArgumentDescription">
+        <source>The integration search query. Omit to list all integrations.</source>
+        <target state="new">The integration search query. Omit to list all integrations.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
@@ -100,11 +110,6 @@
       <trans-unit id="ProjectArgumentDescription">
         <source>The Aspire AppHost project file, or a directory to search, to add the integration to</source>
         <target state="needs-review-translation">통합을 추가할 프로젝트 파일의 경로입니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchOptionDescription">
-        <source>Search available integrations without adding one</source>
-        <target state="new">Search available integrations without adding one</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingForAspirePackages">

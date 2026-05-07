@@ -117,6 +117,7 @@ internal sealed class RootCommand : BaseRootCommand
         PsCommand psCommand,
         DescribeCommand describeCommand,
         LogsCommand logsCommand,
+        IntegrationCommand integrationCommand,
         AddCommand addCommand,
         PublishCommand publishCommand,
         DeployCommand deployCommand,
@@ -209,6 +210,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(psCommand);
         Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
+        Subcommands.Add(integrationCommand);
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);

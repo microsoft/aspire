@@ -61,6 +61,30 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string IntegrationCommandDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationCommandDescription", resourceCulture);
+            }
+        }
+
+        public static string IntegrationSearchDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationSearchDescription", resourceCulture);
+            }
+        }
+
+        public static string IntegrationSearchQueryArgumentDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationSearchQueryArgumentDescription", resourceCulture);
+            }
+        }
+
         public static string IntegrationArgumentDescription
         {
             get
@@ -77,6 +101,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string IntegrationSearchAppHostOptionDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationSearchAppHostOptionDescription", resourceCulture);
+            }
+        }
+
         public static string VersionArgumentDescription
         {
             get
@@ -90,22 +122,6 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
-            }
-        }
-
-        public static string ListOptionDescription
-        {
-            get
-            {
-                return ResourceManager.GetString("ListOptionDescription", resourceCulture);
-            }
-        }
-
-        public static string SearchOptionDescription
-        {
-            get
-            {
-                return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
             }
         }
 
@@ -189,6 +205,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string ErrorOccurredWhileSearchingIntegrations
+        {
+            get
+            {
+                return ResourceManager.GetString("ErrorOccurredWhileSearchingIntegrations", resourceCulture);
+            }
+        }
+
         public static string SelectAVersionOfPackage
         {
             get
@@ -258,22 +282,6 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("HeaderVersion", resourceCulture);
-            }
-        }
-
-        public static string JsonRequiresListOrSearch
-        {
-            get
-            {
-                return ResourceManager.GetString("JsonRequiresListOrSearch", resourceCulture);
-            }
-        }
-
-        public static string DiscoveryOptionsCannotBeCombinedWithAddOptions
-        {
-            get
-            {
-                return ResourceManager.GetString("DiscoveryOptionsCannotBeCombinedWithAddOptions", resourceCulture);
             }
         }
 
