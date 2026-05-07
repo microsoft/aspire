@@ -5,6 +5,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The dashboard AI feature is now disabled by default when Dashboard:AI:Disabled is not explicitly configured. Previously the default was to enable AI. Explicitly setting the value to true or false still works as before.",
+  "docsPrs": [
+    808
+  ],
   "docsRequired": false,
   "emoji": "🤖",
   "firstMergedAt": "2026-04-29T07:58:22Z",

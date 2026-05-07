@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents removal of in-dashboard GitHub Copilot UI; matched to dashboard-ai-disabled-by-default entry",
+  "mergedAt": "2026-05-06T23:56:53Z",
+  "number": 808,
+  "runDate": "2026-05-07T18:59:11Z",
+  "status": "included",
+  "title": "docs: update dashboard docs to reflect removal of in-dashboard GitHub Copilot"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Kubernetes WithHelm consolidation (aspire#16802)",
+  "mergedAt": "2026-05-06T22:41:51Z",
+  "number": 858,
+  "runDate": "2026-05-07T18:59:11Z",
+  "status": "included",
+  "title": "[docs] Update Kubernetes docs to use WithHelm for Helm chart configuration"
+}

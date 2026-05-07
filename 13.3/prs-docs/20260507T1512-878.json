@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Password suppression config only; no changelog entry match",
+  "mergedAt": "2026-05-07T15:12:42Z",
+  "number": 878,
+  "runDate": "2026-05-07T18:59:11Z",
+  "status": "excluded",
+  "title": "Add password suppression"
+}

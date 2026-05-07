@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "gh-aw tooling upgrade; no changelog entry match",
+  "mergedAt": "2026-05-07T16:46:30Z",
+  "number": 879,
+  "runDate": "2026-05-07T18:59:11Z",
+  "status": "excluded",
+  "title": "chore: Upgrade gh-aw to v0.71.5"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Documents appHost.path config setting; ports docs to release/13.3 branch",
+  "mergedAt": "2026-05-06T22:31:59Z",
+  "number": 870,
+  "runDate": "2026-05-07T18:59:11Z",
+  "status": "included",
+  "title": "Port AppHost path config docs to release/13.3"
+}

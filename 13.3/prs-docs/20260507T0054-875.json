@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Removes installation images from Japanese extension docs; no matching changelog entry",
+  "mergedAt": "2026-05-07T00:54:10Z",
+  "number": 875,
+  "runDate": "2026-05-07T18:59:11Z",
+  "status": "excluded",
+  "title": "Remove installation images for Aspire extension"
+}
