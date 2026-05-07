@@ -223,6 +223,11 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                             InputType = InputType.Text,
                             Required = true,
                             Placeholder = "#submit",
+                            Options =
+                            [
+                                new("mode", "Primary"),
+                                new("mode", "Secondary")
+                            ],
                             Disabled = true,
                             MaxLength = 128
                         }
@@ -302,6 +307,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal(nameof(InputType.Text), argumentInput.InputType);
         Assert.True(argumentInput.Required);
         Assert.Equal("#submit", argumentInput.Placeholder);
+        Assert.Equal("Secondary", argumentInput.Options!["mode"]);
         Assert.True(argumentInput.Disabled);
         Assert.Equal(128, argumentInput.MaxLength);
         Assert.Equal(nameof(ResourceCommandVisibility.Api), startCommand.Visibility);
@@ -1027,6 +1033,54 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var validationError = Assert.Single(response.ValidationErrors);
         Assert.Equal("target", validationError.ArgumentName);
         Assert.Equal("Target must not be prod.", validationError.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnlyWithMissingResource_ReturnsNotFound()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "missing-resource",
+            CommandName = "validate",
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.Equal("Resource 'missing-resource' not found.", response.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnlyWithMissingCommand_ReturnsNotFound()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "missing-command",
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.Equal("Command 'missing-command' not available for resource 'myresource'.", response.Message);
     }
 
     [Fact]

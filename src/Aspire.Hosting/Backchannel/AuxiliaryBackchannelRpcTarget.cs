@@ -321,18 +321,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
     private static async Task<ExecuteCommandResult> ValidateResourceCommandAsync(ResourceCommandService resourceCommandService, string resourceName, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
     {
-        var invalidArguments = await resourceCommandService.ValidateCommandArgumentsAsync(resourceName, commandName, arguments, cancellationToken).ConfigureAwait(false);
-        if (invalidArguments is null)
-        {
-            return CommandResults.Success();
-        }
-
-        return new ExecuteCommandResult
-        {
-            Success = false,
-            Message = "Command argument validation failed.",
-            InvalidArguments = invalidArguments
-        };
+        return await resourceCommandService.ValidateCommandArgumentsAsync(resourceName, commandName, arguments, cancellationToken).ConfigureAwait(false);
     }
 
     private static ResourceCommandArgumentValidationError[] CreateValidationErrors(InteractionInputCollection? invalidArguments)
@@ -868,7 +857,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                     Required = i.Required,
                     Placeholder = i.Placeholder,
                     Value = i.Value,
-                    Options = i.Options?.ToDictionary(static option => option.Key, static option => (string?)option.Value),
+                    Options = CreateOptionsDictionary(i.Options),
                     AllowCustomChoice = i.AllowCustomChoice,
                     Disabled = i.Disabled,
                     MaxLength = i.MaxLength
@@ -900,6 +889,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             McpServer = mcpServer,
             Commands = commands
         };
+    }
+
+    private static Dictionary<string, string?>? CreateOptionsDictionary(IReadOnlyList<KeyValuePair<string, string>>? options)
+    {
+        if (options is null)
+        {
+            return null;
+        }
+
+        var result = new Dictionary<string, string?>();
+        foreach (var option in options)
+        {
+            result[option.Key] = option.Value;
+        }
+
+        return result;
     }
 
     /// <summary>

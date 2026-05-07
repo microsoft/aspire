@@ -153,8 +153,7 @@ internal static class ResourceSnapshotMapper
 
         static bool IsDefaultCommandVisibility(string visibility)
         {
-            return string.Equals(visibility, KnownCommandVisibility.Default, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(visibility, KnownCommandVisibility.LegacyDefault, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(visibility, KnownCommandVisibility.Default, StringComparison.OrdinalIgnoreCase);
         }
 
         static bool IsCommandVisibleToApi(string visibility)

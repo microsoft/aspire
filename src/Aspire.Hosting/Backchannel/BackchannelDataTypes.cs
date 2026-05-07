@@ -53,10 +53,8 @@ internal static class AuxiliaryBackchannelCapabilities
 internal static class KnownCommandVisibility
 {
     public const string UI = "UI";
-    public const string Dashboard = "Dashboard";
     public const string Api = "Api";
     public const string Default = $"{UI}, {Api}";
-    public const string LegacyDefault = $"{Dashboard}, {Api}";
 }
 
 #endregion

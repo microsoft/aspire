@@ -25,7 +25,7 @@ internal sealed class ExecuteResourceCommandTool(
     public override JsonElement GetInputSchema()
     {
         // MCP input schema JSON accepts optional nested command arguments:
-        // { "resourceName": "web", "commandName": "click", "arguments": { "selector": "#submit", "optional": null } }
+        // { "resourceName": "web", "commandName": "click", "arguments": { "selector": "#submit", "urgent": true, "optional": null } }
         using var document = JsonDocument.Parse("""
             {
               "type": "object",
@@ -42,8 +42,8 @@ internal sealed class ExecuteResourceCommandTool(
                   "type": "object",
                   "description": "Optional invocation arguments to pass to the resource command",
                   "additionalProperties": {
-                    "type": ["string", "null"],
-                    "description": "Argument values must be strings or null."
+                    "type": ["string", "number", "boolean", "null"],
+                    "description": "Argument values must be strings, numbers, booleans, or null."
                   }
                 }
               },
@@ -170,8 +170,11 @@ internal sealed class ExecuteResourceCommandTool(
             arguments[property.Name] = property.Value.ValueKind switch
             {
                 JsonValueKind.String => JsonValue.Create(property.Value.GetString()),
+                JsonValueKind.Number => JsonValue.Create(property.Value.GetRawText()),
+                JsonValueKind.True => JsonValue.Create("true"),
+                JsonValueKind.False => JsonValue.Create("false"),
                 JsonValueKind.Null => null,
-                _ => throw new McpProtocolException($"Argument 'arguments.{property.Name}' must be a string or null.", McpErrorCode.InvalidParams)
+                _ => throw new McpProtocolException($"Argument 'arguments.{property.Name}' must be a string, number, boolean, or null.", McpErrorCode.InvalidParams)
             };
         }
 

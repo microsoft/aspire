@@ -94,6 +94,29 @@ public class ExecuteResourceCommandToolTests
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandTool_WithPrimitiveArguments_ConvertsArgumentsToStrings()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
+        var result = await tool.CallToolAsync(
+            CallToolContextTestHelper.Create(CreateArguments("api-service", "click", """{ "count": 3, "urgent": true, "ratio": 1.5, "optional": null }""")),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(connection.ExecuteResourceCommandArguments);
+        Assert.Equal("3", connection.ExecuteResourceCommandArguments["count"]!.GetValue<string>());
+        Assert.Equal("true", connection.ExecuteResourceCommandArguments["urgent"]!.GetValue<string>());
+        Assert.Equal("1.5", connection.ExecuteResourceCommandArguments["ratio"]!.GetValue<string>());
+        Assert.Null(connection.ExecuteResourceCommandArguments["optional"]);
+    }
+
+    [Fact]
     public async Task ExecuteResourceCommandTool_ThrowsException_WhenArgumentsIsNotObject()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -110,8 +133,10 @@ public class ExecuteResourceCommandToolTests
         Assert.Contains("must be a JSON object", exception.Message);
     }
 
-    [Fact]
-    public async Task ExecuteResourceCommandTool_ThrowsException_WhenArgumentValueIsNotStringOrNull()
+    [Theory]
+    [InlineData("""{ "settings": {} }""")]
+    [InlineData("""{ "items": [] }""")]
+    public async Task ExecuteResourceCommandTool_ThrowsException_WhenArgumentValueIsObjectOrArray(string argumentsJson)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -122,9 +147,9 @@ public class ExecuteResourceCommandToolTests
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
-            () => tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "click", """{ "count": 1 }""")), CancellationToken.None).AsTask()).DefaultTimeout();
+            () => tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "click", argumentsJson)), CancellationToken.None).AsTask()).DefaultTimeout();
 
-        Assert.Contains("must be a string or null", exception.Message);
+        Assert.Contains("must be a string, number, boolean, or null", exception.Message);
     }
 
     [Fact]

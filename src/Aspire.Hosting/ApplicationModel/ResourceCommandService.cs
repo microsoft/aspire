@@ -322,13 +322,13 @@ public class ResourceCommandService
         return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
     }
 
-    internal async Task<InteractionInputCollection?> ValidateCommandArgumentsAsync(string resourceId, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    internal async Task<ExecuteCommandResult> ValidateCommandArgumentsAsync(string resourceId, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
         if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
         {
-            return null;
+            return new ExecuteCommandResult { Success = false, Message = $"Resource '{resourceId}' not found." };
         }
 
         var resolvedCommandName = commandName;
@@ -336,13 +336,18 @@ public class ResourceCommandService
 
         if (annotation is null)
         {
-            return null;
+            return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resourceEvent.Resource.GetResolvedDisplayResourceName(resourceId)}'." };
         }
 
         var normalizedArguments = NormalizeCommandArguments(annotation, arguments);
         return await ValidateArgumentsAsync(annotation, normalizedArguments, cancellationToken).ConfigureAwait(false)
-            ? null
-            : normalizedArguments;
+            ? CommandResults.Success()
+            : new ExecuteCommandResult
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                InvalidArguments = normalizedArguments
+            };
     }
 
     private async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, string commandName, ResourceCommandExecutionOptions options, CancellationToken cancellationToken)
@@ -400,7 +405,9 @@ public class ResourceCommandService
 
         foreach (var argument in arguments)
         {
-            var value = argument.Value = argument.Value?.Trim();
+            var value = argument.Value = argument.InputType == InputType.SecretText
+                ? argument.Value
+                : argument.Value?.Trim();
 
             if (string.IsNullOrEmpty(value))
             {

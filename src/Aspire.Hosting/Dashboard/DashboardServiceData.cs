@@ -127,18 +127,7 @@ internal sealed class DashboardServiceData : IDisposable
         static async Task<ExecuteCommandResult> ValidateCommandArgumentsAsync(ResourceCommandService resourceCommandService, string resourceId, string type, IReadOnlyDictionary<string, string?>? argumentValues, CancellationToken cancellationToken)
         {
             var arguments = resourceCommandService.CreateCommandArguments(resourceId, type, argumentValues);
-            var invalidArguments = await resourceCommandService.ValidateCommandArgumentsAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
-            if (invalidArguments is null)
-            {
-                return CommandResults.Success();
-            }
-
-            return new ExecuteCommandResult
-            {
-                Success = false,
-                Message = "Command argument validation failed.",
-                InvalidArguments = invalidArguments
-            };
+            return await resourceCommandService.ValidateCommandArgumentsAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
         }
     }
 

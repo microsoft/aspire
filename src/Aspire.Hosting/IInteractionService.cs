@@ -456,6 +456,10 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     /// <summary>
     /// Gets the value of the input with the specified name as a <see cref="int"/>.
     /// </summary>
+    /// <remarks>
+    /// <see cref="InputType.Number"/> accepts floating point values. Use <see cref="GetDouble(string)"/> for decimal values,
+    /// or validate that the input is an integer before calling this method.
+    /// </remarks>
     /// <param name="name">The name of the input.</param>
     /// <returns>The value of the input parsed as a <see cref="int"/>.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>

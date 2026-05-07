@@ -511,6 +511,53 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_SecretTextArgument_PreservesWhitespace()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "password",
+                            InputType = InputType.SecretText,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "password",
+                InputType = InputType.SecretText,
+                Value = "  secret  "
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand", arguments);
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("  secret  ", capturedArguments.GetString("password"));
+    }
+
+    [Fact]
     public async Task CreateCommandArguments_WithOrderedArgumentValues_MapsArgumentsByOrder()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
