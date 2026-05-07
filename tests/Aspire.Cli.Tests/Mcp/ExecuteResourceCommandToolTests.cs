@@ -90,6 +90,7 @@ public class ExecuteResourceCommandToolTests
         Assert.True(result.IsError is null or false);
         Assert.NotNull(connection.ExecuteResourceCommandArguments);
         Assert.Equal("#submit", connection.ExecuteResourceCommandArguments["selector"]!.GetValue<string>());
+        Assert.True(connection.ExecuteResourceCommandOptions?.NonInteractive == true);
     }
 
     [Fact]

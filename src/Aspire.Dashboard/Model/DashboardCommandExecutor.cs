@@ -160,7 +160,16 @@ public sealed class DashboardCommandExecutor(
             });
             closeToastCts.CancelAfter(DashboardUIHelpers.ToastTimeout);
 
-            response = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, validateOnly: false, CancellationToken.None).ConfigureAwait(false);
+            response = await dashboardClient.ExecuteResourceCommandAsync(
+                resource.Name,
+                resource.ResourceType,
+                command,
+                new ExecuteResourceCommandOptions
+                {
+                    Arguments = arguments,
+                    NonInteractive = true
+                },
+                CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
@@ -317,7 +326,17 @@ public sealed class DashboardCommandExecutor(
                 }
 
                 var arguments = CreateCommandArguments(submittedInteraction.InputsDialog.InputItems);
-                var validationResponse = await dashboardClient.ExecuteResourceCommandAsync(resource.Name, resource.ResourceType, command, arguments, validateOnly: true, CancellationToken.None).ConfigureAwait(true);
+                var validationResponse = await dashboardClient.ExecuteResourceCommandAsync(
+                    resource.Name,
+                    resource.ResourceType,
+                    command,
+                    new ExecuteResourceCommandOptions
+                    {
+                        Arguments = arguments,
+                        ValidateOnly = true,
+                        NonInteractive = true
+                    },
+                    CancellationToken.None).ConfigureAwait(true);
                 if (validationResponse.Kind == ResourceCommandResponseKind.InvalidArguments)
                 {
                     submittedInteraction.InputsDialog.InputItems.Clear();

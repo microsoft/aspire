@@ -290,6 +290,33 @@ internal sealed class ExecuteResourceCommandRequest
     /// Gets a value indicating whether the request should validate arguments without executing the command.
     /// </summary>
     public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; }
+}
+
+/// <summary>
+/// Options for executing a resource command through the auxiliary backchannel.
+/// </summary>
+internal sealed class ExecuteResourceCommandOptions
+{
+    /// <summary>
+    /// Gets optional invocation arguments to pass to the resource command.
+    /// Arrays are matched to declared command arguments by order. Objects are matched by argument name.
+    /// </summary>
+    public JsonNode? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request should validate arguments without executing the command.
+    /// </summary>
+    public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; }
 }
 
 /// <summary>

@@ -177,6 +177,7 @@ public class ResourceCommandHelperTests
         Assert.Equal(0, exitCode);
         Assert.NotNull(connection.ExecuteResourceCommandArguments);
         Assert.Equal("#submit", connection.ExecuteResourceCommandArguments["selector"]!.GetValue<string>());
+        Assert.True(connection.ExecuteResourceCommandOptions?.NonInteractive == true);
     }
 
     [Fact]

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Backchannel;
@@ -118,13 +117,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// </summary>
     /// <param name="resourceName">The name of the resource.</param>
     /// <param name="commandName">The name of the command (e.g., "start", "stop", "restart").</param>
-    /// <param name="arguments">Optional invocation arguments to pass to the command.</param>
+    /// <param name="options">Options for command execution.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the command execution.</returns>
     Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
-        JsonNode? arguments = null,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

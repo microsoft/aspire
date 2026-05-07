@@ -83,6 +83,8 @@ message ResourceCommandRequest {
     optional google.protobuf.Value arguments = 5;
     // When true, validate the supplied arguments without executing the command.
     bool validate_only = 6;
+    // When true, command execution should fail instead of prompting for missing input.
+    bool non_interactive = 7;
 }
 
 enum ResourceCommandState {

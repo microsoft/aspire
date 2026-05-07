@@ -71,7 +71,28 @@ public interface IDashboardClient : IAsyncDisposable
 
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
-    Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, Value? arguments, bool validateOnly, CancellationToken cancellationToken);
+    Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Options for executing a resource command through the dashboard client.
+/// </summary>
+public sealed class ExecuteResourceCommandOptions
+{
+    /// <summary>
+    /// Gets the invocation arguments supplied to the command.
+    /// </summary>
+    public Value? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request should validate arguments without executing the command.
+    /// </summary>
+    public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; }
 }
 
 public sealed record ResourceViewModelSubscription(

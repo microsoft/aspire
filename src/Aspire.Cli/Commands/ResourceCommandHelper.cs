@@ -44,7 +44,15 @@ internal static class ResourceCommandHelper
 
         var response = await interactionService.ShowStatusAsync(
             $"{progressVerb} resource '{resourceName}'...",
-            async () => await connection.ExecuteResourceCommandAsync(resourceName, commandName, arguments, cancellationToken));
+            async () => await connection.ExecuteResourceCommandAsync(
+                resourceName,
+                commandName,
+                new ExecuteResourceCommandOptions
+                {
+                    Arguments = arguments,
+                    NonInteractive = true
+                },
+                cancellationToken));
 
         return HandleResponse(response, interactionService, resourceName, progressVerb, baseVerb, pastTenseVerb);
     }
@@ -68,7 +76,15 @@ internal static class ResourceCommandHelper
 
         var response = await interactionService.ShowStatusAsync(
             $"Executing command '{commandName}' on resource '{resourceName}'...",
-            async () => await connection.ExecuteResourceCommandAsync(resourceName, commandName, arguments, cancellationToken));
+            async () => await connection.ExecuteResourceCommandAsync(
+                resourceName,
+                commandName,
+                new ExecuteResourceCommandOptions
+                {
+                    Arguments = arguments,
+                    NonInteractive = true
+                },
+                cancellationToken));
 
         if (response.Success)
         {

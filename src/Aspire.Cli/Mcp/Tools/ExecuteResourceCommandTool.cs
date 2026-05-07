@@ -93,7 +93,15 @@ internal sealed class ExecuteResourceCommandTool(
         {
             logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}' via backchannel", commandName, resourceName);
 
-            var response = await connection.ExecuteResourceCommandAsync(resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
+            var response = await connection.ExecuteResourceCommandAsync(
+                resourceName,
+                commandName,
+                new ExecuteResourceCommandOptions
+                {
+                    Arguments = commandArguments,
+                    NonInteractive = true
+                },
+                cancellationToken).ConfigureAwait(false);
 
             if (response.Success)
             {

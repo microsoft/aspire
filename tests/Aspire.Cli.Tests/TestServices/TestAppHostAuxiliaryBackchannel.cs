@@ -172,16 +172,19 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public JsonNode? ExecuteResourceCommandArguments { get; private set; }
 
+    public ExecuteResourceCommandOptions? ExecuteResourceCommandOptions { get; private set; }
+
     public int ExecuteResourceCommandCallCount { get; private set; }
 
     public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
-        JsonNode? arguments = null,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         ExecuteResourceCommandCallCount++;
-        ExecuteResourceCommandArguments = arguments;
+        ExecuteResourceCommandOptions = options;
+        ExecuteResourceCommandArguments = options?.Arguments;
         return Task.FromResult(ExecuteResourceCommandResult);
     }
 

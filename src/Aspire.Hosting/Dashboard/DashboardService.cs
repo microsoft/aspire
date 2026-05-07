@@ -364,7 +364,16 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, message, value, invalidArguments) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, ConvertArgumentValues(request.Arguments), request.ValidateOnly, context.CancellationToken).ConfigureAwait(false);
+        var (result, message, value, invalidArguments) = await serviceData.ExecuteCommandAsync(
+            request.ResourceName,
+            request.CommandName,
+            new ExecuteResourceCommandOptions
+            {
+                ArgumentValues = ConvertArgumentValues(request.Arguments),
+                ValidateOnly = request.ValidateOnly,
+                NonInteractive = request.NonInteractive
+            },
+            context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,

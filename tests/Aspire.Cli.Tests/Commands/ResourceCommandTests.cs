@@ -151,6 +151,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         AssertJsonStringArray(backchannel.ExecuteResourceCommandArguments, "#name", "Aspire");
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.NonInteractive == true);
     }
 
     [Fact]
@@ -178,6 +179,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Null(backchannel.ExecuteResourceCommandArguments);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.NonInteractive == true);
     }
 
     [Fact]

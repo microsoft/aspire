@@ -94,12 +94,14 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, IReadOnlyDictionary<string, string?>? argumentValues, bool validateOnly, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         try
         {
-            var arguments = _resourceCommandService.CreateCommandArguments(resourceId, type, argumentValues);
-            var result = validateOnly
+            var arguments = _resourceCommandService.CreateCommandArguments(resourceId, type, options.ArgumentValues);
+            var result = options.ValidateOnly
                 ? await ValidateCommandArgumentsAsync(_resourceCommandService, resourceId, type, arguments, cancellationToken).ConfigureAwait(false)
                 : await _resourceCommandService.ExecuteCommandAsync(resourceId, type, arguments, cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
@@ -256,6 +258,15 @@ internal sealed class DashboardServiceData : IDisposable
             inputToUpdate.DynamicLoadingState!.QueueLoad(options);
         }
     }
+}
+
+internal sealed class ExecuteResourceCommandOptions
+{
+    public IReadOnlyDictionary<string, string?>? ArgumentValues { get; init; }
+
+    public bool ValidateOnly { get; init; }
+
+    public bool NonInteractive { get; init; }
 }
 
 internal enum ExecuteCommandResultType
