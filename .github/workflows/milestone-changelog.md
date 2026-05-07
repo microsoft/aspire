@@ -38,6 +38,8 @@ description: |
 env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
+  DOCS_REPO: "microsoft/aspire.dev"
+  MILESTONE_START: "2026-03-01"
   MILESTONE: "13.3"
   BATCH_SIZE: "20"
 
@@ -75,6 +77,7 @@ jobs:
           MEMORY_REF="memory/milestone-changelog"
           MEMORY_DIR="$DATA_DIR/memory/$MILESTONE"
           PROCESSED_NUMBERS="[]"
+          PROCESSED_DOCS_NUMBERS="[]"
           FEEDBACK_FROM_MEMORY=""
           MEMORY_TMP=$(mktemp -d)
           CLONE_ERR=$(mktemp)
@@ -111,6 +114,17 @@ jobs:
               echo "Extracted $(echo "$PROCESSED_NUMBERS" | jq length) processed PR numbers from filenames"
             fi
 
+            DOCS_PRS_DIR="$MEMORY_DIR/prs-docs"
+            if [ -d "$DOCS_PRS_DIR" ]; then
+              DOCS_PRS_LISTING=$(ls "$DOCS_PRS_DIR" 2>/dev/null \
+                | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
+                | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
+              if echo "$DOCS_PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
+                PROCESSED_DOCS_NUMBERS="$DOCS_PRS_LISTING"
+              fi
+              echo "Extracted $(echo "$PROCESSED_DOCS_NUMBERS" | jq length) processed docs PR numbers from filenames"
+            fi
+
             # Also grab the feedback issue number from memory
             FEEDBACK_FILE="$MEMORY_DIR/feedback-issue.json"
             if [ -f "$FEEDBACK_FILE" ]; then
@@ -127,7 +141,7 @@ jobs:
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-milestone-prs.json"
 
@@ -149,10 +163,54 @@ jobs:
           echo "Already processed: $PROCESSED_COUNT"
           echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
 
-          # 3. Check if there is work to do (unprocessed PRs or updated feedback)
+          # 2a. Enrich batch PRs with author_association (not available via gh pr list)
+          if [ "$BATCH_COUNT" -gt 0 ]; then
+            echo "Enriching batch PRs with author_association..."
+            # Build a JSON lookup object {"number": "association", ...} in one pass
+            ASSOC_JSON="{}"
+            for NUM in $(jq -r '.[].number' "$DATA_DIR/batch-prs.json"); do
+              ASSOC=$(gh api "repos/$REPO/pulls/$NUM" --jq '.author_association' 2>/dev/null || echo "UNKNOWN")
+              ASSOC_JSON=$(echo "$ASSOC_JSON" | jq --arg n "$NUM" --arg a "$ASSOC" '. + {($n): $a}')
+            done
+            # Merge all associations into batch-prs.json in a single rewrite
+            echo "$ASSOC_JSON" | jq --slurpfile prs "$DATA_DIR/batch-prs.json" \
+              '. as $lookup | $prs[0] | map(. + {authorAssociation: ($lookup[(.number | tostring)] // "UNKNOWN")})' \
+              > "$DATA_DIR/batch-prs-tmp.json" \
+              && mv "$DATA_DIR/batch-prs-tmp.json" "$DATA_DIR/batch-prs.json"
+            echo "Enriched $BATCH_COUNT batch PRs with author_association"
+          fi
+
+          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date
+          DOCS_REPO="${{ env.DOCS_REPO }}"
+          MILESTONE_START="${{ env.MILESTONE_START }}"
+          gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
+            --search "merged:>=${MILESTONE_START}" \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
+            | jq 'sort_by(.mergedAt)' \
+            > "$DATA_DIR/all-docs-prs.json"
+
+          DOCS_TOTAL=$(jq length "$DATA_DIR/all-docs-prs.json")
+          echo "Total docs PRs merged since $MILESTONE_START: $DOCS_TOTAL"
+
+          jq --argjson processed "$PROCESSED_DOCS_NUMBERS" \
+             --argjson batch_size "$BATCH_SIZE" \
+             '($processed | map({(tostring): true}) | add // {}) as $set | [.[] | select($set[.number | tostring] | not)] | .[0:$batch_size]' \
+             "$DATA_DIR/all-docs-prs.json" \
+             > "$DATA_DIR/batch-docs-prs.json"
+
+          DOCS_BATCH_COUNT=$(jq length "$DATA_DIR/batch-docs-prs.json")
+          DOCS_PROCESSED_COUNT=$(echo "$PROCESSED_DOCS_NUMBERS" | jq length)
+          echo "Docs PRs already processed: $DOCS_PROCESSED_COUNT"
+          echo "Docs PRs batch (oldest $BATCH_SIZE unprocessed): $DOCS_BATCH_COUNT"
+
+          # 3. Check if there is work to do (unprocessed PRs, unprocessed docs PRs, or updated feedback)
           HAS_WORK="false"
           if [ "$BATCH_COUNT" -gt 0 ]; then
             echo "Has $BATCH_COUNT unprocessed PRs"
+            HAS_WORK="true"
+          fi
+          if [ "$DOCS_BATCH_COUNT" -gt 0 ]; then
+            echo "Has $DOCS_BATCH_COUNT unprocessed docs PRs"
             HAS_WORK="true"
           fi
 
@@ -364,9 +422,9 @@ Generate and maintain a changelog for the **${PRODUCT} ${MILESTONE} milestone** 
 Each run appends newly merged changes to the existing content while preserving
 previous entries. A companion feedback issue collects editorial comments.
 
-> **Note:** `${PRODUCT}`, `${REPO}`, `${MILESTONE}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`13.3`**, and **`20`**). All file names, titles, and
-> references below derive from those values.
+> **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, and `${BATCH_SIZE}` refer to values set in the workflow's
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-03-01`**, **`13.3`**, and **`20`**). All file names,
+> titles, and references below derive from those values.
 
 ## Important: available tools
 
@@ -400,16 +458,26 @@ use one of these patterns:
 | Batch file | `/tmp/gh-aw/pr-data/batch-prs.json` (computed from all PRs minus processed) |
 | Existing body file | `/tmp/gh-aw/pr-data/existing-body.md` (fetched from wiki) |
 | PR tracker directory | `prs/` (under memory directories; one JSON file per PR) |
+| Docs repo | `${DOCS_REPO}` (repository containing documentation PRs) |
+| Docs milestone start | `${MILESTONE_START}` (fetch docs PRs merged on or after this date) |
+| Docs batch file | `/tmp/gh-aw/pr-data/batch-docs-prs.json` (unprocessed docs PRs) |
+| Docs PR tracker directory | `prs-docs/` (under memory directories; one JSON file per docs PR) |
 
 ## Step 1: Load existing changelog and feedback
 
-First, read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`
-to determine whether there are unprocessed PRs or only feedback to apply.
-If the batch is empty (zero unprocessed PRs), the feedback issue has new
-comments to apply (the `fetch-data` job already confirmed there is work).
-**Skip Steps 3 and 5** but continue through Steps 1, 2, 4, 6, 7, and 8 to
-apply editorial feedback, persist any feedback-modified change files, refresh
-the "What's New" section, and update the footer counts.
+First, read `/tmp/gh-aw/pr-data/batch-prs.json` and
+`/tmp/gh-aw/pr-data/batch-docs-prs.json` using the `bash` tool with `jq`
+to determine what work is available.
+
+- If `batch-prs.json` is **non-empty**, proceed through all steps (1–8).
+- If `batch-prs.json` is **empty** but `batch-docs-prs.json` is non-empty,
+  **skip Steps 3 and 5a–5e** (no product PRs to process) but continue through
+  Steps 1, 2, 4, 5f, 6, 7, and 8 to process docs PRs, apply editorial
+  feedback, and update the wiki.
+- If **both** batches are empty, the `fetch-data` job detected updated feedback.
+  **Skip Steps 3, 5a–5e, and 5f** but continue through Steps 1, 2, 4, 6, 7,
+  and 8 to apply editorial feedback, refresh the “What’s New” section, and
+  update the footer counts.
 
 1. Check if the file `/tmp/gh-aw/pr-data/existing-body.md` exists (fetched from the
    wiki page during the pre-computation step). If it does, read its contents as the
@@ -422,13 +490,16 @@ the "What's New" section, and update the footer counts.
    empty, no PRs have been processed yet.
 3. List the files in `/tmp/gh-aw/agent/memory/${MILESTONE}/changes/`.
    Each file is named `{first-pr-merge-date}-{slug}.json` and contains a changelog
-   entry (see Step 6 for the change file schema). Load these as the existing set of
+   entry (see Step 6a for the change file schema). Load these as the existing set of
    changelog entries. If the directory does not exist or is empty, there are no
    existing entries.
-4. Check if the file `/tmp/gh-aw/pr-data/feedback-issue.json` exists. If it
-   does, read the issue number and `updatedAt` timestamp from it and then read
-   **all** comments on that issue into memory — these will be processed as
-   editorial instructions in Step 4. If the file does not exist, there is no
+4. List the files in `/tmp/gh-aw/agent/memory/${MILESTONE}/prs-docs/`.
+   Each file is named `{merge-date}-{number}.json` and contains a single docs
+   PR tracker entry (see Step 6d for the schema). If the directory does not
+   exist or is empty, no docs PRs have been processed yet.
+5. Check if the file `/tmp/gh-aw/pr-data/feedback-issue.json` exists. If it
+   does, read the issue number and `updatedAt` timestamp from it. The comments
+   on this issue will be read in Step 4 when processing editorial feedback. If the file does not exist, there is no
    feedback to process.
 
 ## Step 2: Review the pre-computed batch
@@ -442,15 +513,29 @@ The pre-computation step (in the frontmatter) has already:
 - Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
 
 Each entry in `batch-prs.json` contains: `number`, `title`, `body`, `author` (object
-with `login` and `is_bot`), `mergedAt`, `labels` (array of objects with `name`),
-`additions`, `deletions`, `changedFiles`.
+with `login` and `is_bot`), `authorAssociation` (string, e.g. `"MEMBER"`, `"OWNER"`,
+`"CONTRIBUTOR"`, `"NONE"`), `mergedAt`, `labels` (array of objects with `name`),
+`additions`, `deletions`, `changedFiles`, and `files` (array of objects with
+`path`, `additions`, `deletions`, `changeType`) listing the changed file paths.
+
+The pre-computation step has also fetched merged PRs from `${DOCS_REPO}` that
+were merged on or after `${MILESTONE_START}`:
+- All matching docs PRs → `/tmp/gh-aw/pr-data/all-docs-prs.json`
+- Oldest ${BATCH_SIZE} unprocessed docs PRs → `/tmp/gh-aw/pr-data/batch-docs-prs.json`
+
+Each entry in `batch-docs-prs.json` has the same schema as `batch-prs.json`,
+except without the `authorAssociation` field (which is only enriched for
+product PRs).
 
 ## Step 3: Process the batch PRs
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
 unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
 `number`, `title`, `body`, `author` (object with `login` and `is_bot`), `mergedAt`,
-`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`.
+`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`,
+and `files` (array of objects with `path`, `additions`, `deletions`, `changeType`).
+The batch is also enriched with `authorAssociation` (fetched via REST API in the
+pre-computation step).
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
@@ -465,10 +550,10 @@ unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry conta
 2. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
    processing it, the backlog will be fully caught up.
 
-For each remaining (non-bot) PR, use the `pull_request_read` tool to fetch its
-full body/description and changed file paths. Collect: number, title, author,
-`author_association`, body/description, labels, the list of changed files, and the
-total number of changed lines (additions + deletions).
+For each remaining (non-bot) PR, collect all data from the batch: number, title,
+author, `authorAssociation`, body, labels, changed file paths (`files` array), and
+total changed lines (additions + deletions). No additional API calls are needed —
+the batch data contains everything required.
 
 ### 3a. Processing backport PRs
 
@@ -602,20 +687,19 @@ Then determine whether either of these optional flags applies:
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
 | **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
-| **Community contribution** | 🌍 | PR author's `author_association` is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `author_association` and ignore the backport bot's `is_bot` flag. |
+| **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
-> **Important — verifying `author_association`:** The `pull_request_read` MCP tool
-> may omit the `author_association` field from its response. If the field is missing
-> or you cannot confirm its value from the tool response, you **must** fetch it
-> explicitly using the `bash` tool:
->
-> ```bash
-> gh api "repos/${REPO}/pulls/<NUMBER>" --jq '.author_association'
-> ```
->
+The `authorAssociation` field is pre-populated in the batch data by the fetch-data
+job. Use it directly — no additional API calls are needed. For **backport PRs**,
+the original PR's `author_association` is not in the batch; fetch it via:
+```bash
+gh api "repos/${REPO}/pulls/<ORIGINAL_NUMBER>" --jq '.author_association'
+```
+
 > **Never infer community-contributor status from fork origin, username, or any
-> other heuristic.** Only the `author_association` field from the GitHub API is
-> authoritative. Team members frequently submit PRs from personal forks.
+> other heuristic.** Only the `author_association` / `authorAssociation` field
+> from the GitHub API is authoritative. Team members frequently submit PRs from
+> personal forks.
 
 A change can have zero or more flags. When present, show each flag on its own
 indented line below the Changes line:
@@ -633,6 +717,15 @@ the label as a link to their profile (e.g.,
 This gives visibility and recognition to external contributors.
 
 Omit flag lines entirely when a flag does not apply.
+
+When documentation PRs have been matched to an entry (the `docsPrs` array is
+non-empty after Step 5f), add a `Docs:` line linking to the docs PRs:
+```
+  Docs: [${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)  
+```
+When multiple docs PRs are linked, separate them with commas. The `Docs:` line
+appears immediately after the `Changes:` line. Keep the
+`📝 **Documentation required**` flag line as well.
 
 ### 5c. Write name and description
 
@@ -671,6 +764,49 @@ rather than creating a new one:
 - When in doubt about whether a change is notable, include it — it can always be
   removed via a comment later.
 
+### 5f. Match documentation PRs
+
+Read `/tmp/gh-aw/pr-data/batch-docs-prs.json`. This is a JSON array of up to
+${BATCH_SIZE} unprocessed docs PRs from `${DOCS_REPO}`, sorted by `mergedAt`
+ascending. Each entry has the same schema as the product PR batch.
+
+Unlike product PRs (Step 3), **do not exclude bot-authored docs PRs** —
+automated docs PRs from bots often contain meaningful documentation updates.
+Process them the same as human-authored docs PRs.
+
+If a docs PR is clearly unrelated to the milestone (e.g., it matched the date
+filter but documents an unrelated product or version), record it as
+`"excluded"` in the docs PR tracker (Step 6d) with a comment explaining why.
+
+For each remaining docs PR, determine whether it documents a changelog entry.
+The batch data already contains each docs PR's `title`, `body`, and `files`
+(changed file paths) — no additional API calls are needed. Match by:
+
+1. **Explicit product PR reference** — the docs PR body or title mentions a
+   product PR number (e.g., "Documents #1234", links to
+   `https://github.com/${REPO}/pull/1234`). Match to the changelog entry
+   whose `prs` array contains that number.
+2. **Feature name match** — the docs PR title, body, or changed file paths
+   clearly correspond to a changelog entry’s name or description
+   (e.g., a docs PR titled "Document Redis clustering" matches a changelog
+   entry named "Redis clustering support").
+3. **Read diff when uncertain** — if the docs PR appears related to the general
+   area of a changelog entry but the title, body, and file paths are not enough
+   to confidently confirm a match, use `pull_request_read` with `get_diff` on
+   the docs PR to inspect its actual content. Use the diff to identify which
+   product feature is being documented.
+4. **No match** — if the docs PR cannot be confidently matched to any
+   changelog entry (even after reading the diff), record it as `"excluded"` in
+   the docs PR tracker (Step 6d) with a comment explaining why (e.g.,
+   "No matching changelog entry found").
+
+When a match is found:
+- Add the docs PR number to the matched change file’s `docsPrs` array.
+- Record the docs PR as `"included"` in the docs PR tracker (Step 6d).
+
+A single docs PR may match multiple changelog entries if it documents several
+features. Add its number to each matched entry’s `docsPrs` array.
+
 ## Step 6: Write state to disk
 
 The write directory `/tmp/gh-aw/agent/memory/${MILESTONE}/` is **pre-seeded**
@@ -684,7 +820,7 @@ after the wiki page is successfully published. The changelog body is **not**
 stored here — it is rendered from the change files in Step 7 and published to
 the wiki in Step 8.
 
-**Important:** All three sub-steps (6a, 6b, 6c) must be completed.
+**Important:** All four sub-steps (6a, 6b, 6c, 6d) must be completed.
 
 ### 6a. Write change files
 
@@ -713,6 +849,7 @@ Schema:
   "changeType": "New features",
   "communityContributors": ["@contributor"],
   "description": "Added a new command for scaffolding resources",
+  "docsPrs": [456],
   "docsRequired": true,
   "emoji": "🆕",
   "firstMergedAt": "2026-04-20T14:15:00Z",
@@ -731,6 +868,7 @@ Field definitions:
 - **communityContributors**: Array of GitHub usernames (prefixed with `@`) of
   external community contributors. Empty array if none.
 - **description**: User-facing description (one to two sentences)
+- **docsPrs**: Array of PR numbers from `${DOCS_REPO}` that document this change. Empty array if none.
 - **docsRequired**: `true` if documentation is needed, `false` otherwise
 - **emoji**: A single emoji representing the change
 - **firstMergedAt**: ISO 8601 UTC timestamp of the earliest PR's merge date
@@ -798,8 +936,7 @@ To build/update:
 2. For each PR in the current batch, create or update its tracker file: set
    `status` to `"included"` or `"excluded"`, set `comment` to a brief
    explanation, and set `runDate` to the current ISO 8601 UTC timestamp.
-   For bot-excluded PRs (which skip the `pull_request_read` call in Step 3),
-   populate `author` from `author.login` and `title` from the batch data
+   Populate `author` from `author.login` and `title` from the batch data
    (`batch-prs.json`).
 
 Do **not** create tracker files for unprocessed PRs. PRs without a tracker file
@@ -817,6 +954,52 @@ jq --sort-keys '.' "<filepath>" > /tmp/pr-fmt.json \
 Copy `/tmp/gh-aw/pr-data/feedback-issue.json` to
 `/tmp/gh-aw/agent/memory/${MILESTONE}/feedback-issue.json` if the data file exists.
 This updates both the issue number and the `updatedAt` timestamp for the next run.
+
+### 6d. Update the docs PR tracker
+
+Write or update individual docs PR tracker files in:
+`/tmp/gh-aw/agent/memory/${MILESTONE}/prs-docs/`
+
+This directory tracks which docs PRs from `${DOCS_REPO}` have been processed.
+Each processed docs PR gets its own JSON file. Create the `prs-docs/` directory
+(via `mkdir -p`) if it does not exist.
+
+Filename format: `{merge-date-time}-{number}.json`
+
+Where:
+- `{merge-date-time}` is the docs PR’s merge date in `YYYYMMDDTHHmm` format
+- `{number}` is the docs PR number
+
+Example: `20260425T1000-456.json`
+
+Schema:
+
+```json
+{
+  "author": "username",
+  "comment": "Documents new CLI scaffolding command",
+  "mergedAt": "2026-04-25T10:00:00Z",
+  "number": 456,
+  "runDate": "2026-04-27T03:49:58Z",
+  "status": "included",
+  "title": "Document scaffolding command"
+}
+```
+
+Field definitions:
+- **author**: GitHub username of the docs PR author
+- **comment**: Brief explanation of why the docs PR was included or excluded
+- **mergedAt**: ISO 8601 UTC merge timestamp
+- **number**: Docs PR number (in `${DOCS_REPO}`)
+- **runDate**: ISO 8601 UTC timestamp of the workflow run that processed this docs PR
+- **status**: One of `"included"` (matched to at least one changelog entry) or `"excluded"` (not relevant to the milestone)
+- **title**: Original docs PR title
+
+After writing each file, **normalize formatting** by running:
+```bash
+jq --sort-keys '.' "<filepath>" > /tmp/docs-pr-fmt.json \
+  && mv /tmp/docs-pr-fmt.json "<filepath>"
+```
 
 ## Step 7: Build the wiki page body
 
@@ -864,9 +1047,15 @@ Under each area heading, add a one-line **summary** counting the entries per cha
 type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
 for counts of 1 (`1 new feature`, `1 bug fix`, `1 improvement`).
 
-**Every line** within a changelog entry (name, description, Changes, and each flag
+**Every line** within a changelog entry (name, description, Changes, Docs, and each flag
 line) must end with **two trailing spaces** (`  `) to produce a markdown line break.
 This includes the last line of each entry, even when there are no flags.
+
+When a changelog entry has a non-empty `docsPrs` array, add a **Docs:** line immediately
+after the `Changes:` line. Each docs PR is linked using the format
+`[${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)`. Separate multiple
+docs PRs with commas. The `📝 **Documentation required**` flag line is kept
+regardless of whether docs PRs are linked.
 
 Use this exact format:
 
@@ -900,6 +1089,7 @@ Use this exact format:
 1. **🚀 Another feature**  
   What this means for users  
   Changes: [#1236](https://github.com/${REPO}/pull/1236)  
+  Docs: [${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)  
   📝 **Documentation required**  
 
 #### Improvements
@@ -944,16 +1134,21 @@ Use this exact format:
 
 **PRs processed:** ✅ 6 included · ❌ 1 excluded · ⏳ 93 unprocessed · 100 total merged in milestone
 ([View full PR tracker](https://github.com/${REPO}/blob/memory/milestone-changelog/${MILESTONE}/prs/))
+**Docs PRs:** ✅ 3 included · ❌ 1 excluded · ⏳ 5 unprocessed · 9 total from [${DOCS_REPO}](https://github.com/${DOCS_REPO})
+([View docs PR tracker](https://github.com/${REPO}/blob/memory/milestone-changelog/${MILESTONE}/prs-docs/))
 **PRs analyzed through:** [#<number>](https://github.com/${REPO}/pull/<number>) merged <YYYY-MM-DD HH:mm> UTC
 ```
 
 At the bottom of the page (after the footer), include a **PRs processed** summary
-line, a link to the PR tracker directory on the memory branch, and a **PRs analyzed
-through** line showing the newest PR processed in this run:
+line, a link to the PR tracker directory on the memory branch, a **Docs PRs** summary
+line with a link to the docs PR tracker, and a **PRs analyzed through** line showing
+the newest PR processed in this run:
 
 ```
 **PRs processed:** ✅ <N> included · ❌ <N> excluded · ⏳ <N> unprocessed · <N> total merged in milestone
 ([View full PR tracker](https://github.com/${REPO}/blob/memory/milestone-changelog/${MILESTONE}/prs/))
+**Docs PRs:** ✅ <N> included · ❌ <N> excluded · ⏳ <N> unprocessed · <N> total from [${DOCS_REPO}](https://github.com/${DOCS_REPO})
+([View docs PR tracker](https://github.com/${REPO}/blob/memory/milestone-changelog/${MILESTONE}/prs-docs/))
 **PRs analyzed through:** [#<number>](https://github.com/${REPO}/pull/<number>) merged <YYYY-MM-DD HH:mm> UTC
 ```
 
@@ -962,6 +1157,12 @@ Compute the counts:
 - **excluded** = number of tracker files in `prs/` with `status: "excluded"`
 - **unprocessed** = total merged PRs in milestone (from `/tmp/gh-aw/pr-data/all-milestone-prs.json`) minus included minus excluded
 - **total** = total merged PRs in milestone
+
+Also compute docs PR counts for the footer:
+- **included** = number of tracker files in `prs-docs/` with `status: "included"`
+- **excluded** = number of tracker files in `prs-docs/` with `status: "excluded"`
+- **unprocessed** = total docs PRs (from `/tmp/gh-aw/pr-data/all-docs-prs.json`) minus included minus excluded
+- **total** = total docs PRs from `${DOCS_REPO}`
 
 Write the final markdown to `/tmp/gh-aw/agent/new-body.md`.
 
@@ -986,8 +1187,10 @@ if it exists) and check that:
    in `/tmp/gh-aw/pr-data/batch-prs.json`, unless the entry was added via editorial
    feedback from Step 4 (e.g., "Add entry" instructions).
 4. **Footer and metadata updates are expected** — changes to "PRs analyzed
-   through", "PRs processed" counts, "What's New" section, and Table of Contents
-   summaries are normal and should not be flagged.
+   through", "PRs processed" counts, "Docs PRs" counts, "What's New" section,
+   and Table of Contents summaries are normal and should not be flagged.
+5. **Docs PR links are expected additions** — new `Docs:` lines on entries when
+   corresponding docs PRs exist in `/tmp/gh-aw/pr-data/batch-docs-prs.json`.
 
 If any violation is found:
 - Log the specific violation (which entry was removed/modified, which PR number is

@@ -196,6 +196,10 @@ internal static class CliTestHelper
         services.AddTransient<DescribeCommand>();
         services.AddTransient<LogsCommand>();
         services.AddTransient<ExecCommand>();
+        services.AddTransient<IntegrationPackageSearchService>();
+        services.AddTransient<IntegrationCommand>();
+        services.AddTransient<IntegrationListCommand>();
+        services.AddTransient<IntegrationSearchCommand>();
         services.AddTransient<AddCommand>();
         services.AddTransient<DeployCommand>();
         services.AddTransient<DestroyCommand>();

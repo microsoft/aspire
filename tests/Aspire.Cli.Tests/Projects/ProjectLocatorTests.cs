@@ -1029,6 +1029,11 @@ builder.Build().Run();");
             return Task.FromResult<string?>(null);
         }
 
+        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         public string GetSettingsFilePath(bool isGlobal)
         {
             return isGlobal

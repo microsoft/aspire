@@ -481,6 +481,10 @@ public class Program
         builder.Services.AddTransient<PsCommand>();
         builder.Services.AddTransient<DescribeCommand>();
         builder.Services.AddTransient<LogsCommand>();
+        builder.Services.AddTransient<IntegrationPackageSearchService>();
+        builder.Services.AddTransient<IntegrationCommand>();
+        builder.Services.AddTransient<IntegrationListCommand>();
+        builder.Services.AddTransient<IntegrationSearchCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();

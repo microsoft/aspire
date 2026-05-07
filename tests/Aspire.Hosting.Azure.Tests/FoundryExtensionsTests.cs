@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Utils;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -261,6 +263,167 @@ public class FoundryExtensionsTests
 
         // Assert - Both calls should return the same resource instance, not duplicates
         Assert.Same(firstResult, secondResult);
+    }
+
+    [Fact]
+    public async Task PublishAsHostedAgent_ResolvesExternalContainerAppReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+            .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .WithReference(weatherAgent)
+            .WaitFor(weatherAgent)
+            .PublishAsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+        environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        environment.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.Equal("https://weather-agent.example.azurecontainerapps.io", environmentVariables["services__weather-agent__http__0"]);
+    }
+
+    [Fact]
+    public async Task PublishAsHostedAgent_ResolvesReferenceExpressionEnvironmentVariable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+            .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["WEATHER_HEALTH_URL"] = ReferenceExpression.Create($"{weatherAgent.GetEndpoint("http")}/health");
+            })
+            .PublishAsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+        environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        environment.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.Equal("https://weather-agent.example.azurecontainerapps.io/health", environmentVariables["WEATHER_HEALTH_URL"]);
+    }
+
+    [Fact]
+    public async Task PublishAsHostedAgent_ResolvesEndpointReferenceExpressionEnvironmentVariable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+            .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["WEATHER_HOST_AND_PORT"] = weatherAgent.GetEndpoint("http").Property(EndpointProperty.HostAndPort);
+            })
+            .PublishAsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+        environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
+        environment.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.Equal("weather-agent.example.azurecontainerapps.io:443", environmentVariables["WEATHER_HOST_AND_PORT"]);
+    }
+
+    [Fact]
+    public async Task PublishAsHostedAgent_ThrowsForInternalContainerAppReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 9000)
+            .WithComputeEnvironment(env);
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .WithReference(weatherAgent)
+            .WaitFor(weatherAgent);
+
+        advisorAgent.PublishAsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+                builder.ExecutionContext,
+                hostedAgent,
+                advisorAgent.Resource,
+                NullLogger<FoundryExtensionsTests>.Instance,
+                default));
+
+        Assert.Contains("Foundry hosted agent 'advisor-agent-ha'", ex.Message);
+        Assert.Contains("Endpoint 'http' on resource 'weather-agent' cannot be used", ex.Message);
+        Assert.Contains("internal", ex.Message);
+    }
+
+    private sealed class Project : IProjectMetadata
+    {
+        public string ProjectPath => "project";
     }
 
 }

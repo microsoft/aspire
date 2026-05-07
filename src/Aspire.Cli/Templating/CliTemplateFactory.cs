@@ -107,7 +107,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.TypeScriptStarter,
                 "Starter App (Express/React, TypeScript AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyTypeScriptStarterTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -116,7 +116,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.CSharpEmptyAppHost,
                 "Empty AppHost (Choose language...)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -127,7 +127,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.TypeScriptEmptyAppHost,
                 "Empty (TypeScript AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -138,7 +138,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.PythonEmptyAppHost,
                 "Empty (Python AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -149,7 +149,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.JavaEmptyAppHost,
                 "Empty (Java AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -160,7 +160,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.GoEmptyAppHost,
                 "Empty (Go AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -171,7 +171,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.RustEmptyAppHost,
                 "Empty (Rust AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -182,7 +182,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.PythonStarter,
                 "Starter App (FastAPI/React, TypeScript AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd =>
                 {
                     AddOptionIfMissing(cmd, _localhostTldOption);
@@ -195,7 +195,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             new CallbackTemplate(
                 KnownTemplateId.GoStarter,
                 "Starter App (Go API + Redis, Go AppHost)",
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd => AddOptionIfMissing(cmd, _localhostTldOption),
                 ApplyGoStarterTemplateAsync,
                 runtime: TemplateRuntime.Cli,
@@ -225,6 +225,20 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         }
 
         return _languageDiscovery.GetLanguageById(new LanguageId(template.LanguageId)) is not null;
+    }
+
+    private async Task<string?> ResolveOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        return await OutputPathHelper.ResolveOutputPathAsync(
+            inputs.Output,
+            _executionContext.WorkingDirectory.FullName,
+            async () =>
+            {
+                var defaultOutputPath = pathDeriver(_executionContext, projectName);
+                var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
+                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken);
+            },
+            _interactionService);
     }
 
     private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, AppHostProfilePorts ports, string hostName = "localhost")

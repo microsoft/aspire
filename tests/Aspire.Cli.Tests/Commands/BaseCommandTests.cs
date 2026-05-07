@@ -38,6 +38,31 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BaseCommand_IntegrationListFormatJson_SetsConsoleOutputCorrectly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) => (0, []);
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list --format json");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ConsoleOutput.Error, testInteractionService.Console);
+    }
+
+    [Fact]
     public async Task BaseCommand_WithNoUpdateNotification_DoesNotDisplayTrailingBlankLine()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

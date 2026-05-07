@@ -35,9 +35,10 @@ Inspect the live app before editing code:
 
 ## Scenario: I Need To Add An Integration, Understand An API, Or Add A Custom Command Safely
 
-Use the docs commands first for the workflow, then use the API reference commands if you need the concrete API entry:
+Use integration search to find the package when needed, then use the docs commands for the workflow and the API reference commands if you need the concrete API entry:
 
 ```bash
+aspire integration search postgres
 aspire docs search postgres
 aspire docs get <slug>
 aspire docs api search postgres --language csharp
@@ -56,6 +57,7 @@ aspire docs api search WithCommand --language csharp
 Keep these points in mind:
 
 - Read the docs before editing the AppHost so the implementation follows a documented Aspire pattern instead of guessing the workflow.
+- Use `aspire integration list` when the user asks to discover available integrations before changing the AppHost, or `aspire integration search <query>` when the package ID is unknown.
 - Use `aspire docs api` when you need the C# or TypeScript reference entry for the exact API you are about to call.
 - If the AppHost is C# and you need to understand local overloads or builder chains, use the `dotnet-inspect` skill if it is available after checking the Aspire API reference.
 - After adding an integration, restart with `aspire start` so the updated AppHost takes effect.

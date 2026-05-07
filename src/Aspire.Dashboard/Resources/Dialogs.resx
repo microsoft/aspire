@@ -164,7 +164,7 @@
     <value>Condition</value>
   </data>
   <data name="HelpDialogGetHelpLinkText" xml:space="preserve">
-    <value>Go to Microsoft Learn documentation</value>
+    <value>Go to aspire.dev documentation</value>
   </data>
   <data name="HelpDialogCategoryPanels" xml:space="preserve">
     <value>Panels</value>

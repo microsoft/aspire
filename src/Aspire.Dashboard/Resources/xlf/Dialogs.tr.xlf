@@ -318,8 +318,8 @@
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
-        <source>Go to Microsoft Learn documentation</source>
-        <target state="translated">Microsoft Learn belgelerine git</target>
+        <source>Go to aspire.dev documentation</source>
+        <target state="translated">aspire.dev belgelerine git</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">

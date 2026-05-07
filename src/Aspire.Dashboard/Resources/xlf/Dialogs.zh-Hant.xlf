@@ -318,8 +318,8 @@
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
-        <source>Go to Microsoft Learn documentation</source>
-        <target state="translated">前往 Microsoft Learn 文件</target>
+        <source>Go to aspire.dev documentation</source>
+        <target state="translated">前往 aspire.dev 文件</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">

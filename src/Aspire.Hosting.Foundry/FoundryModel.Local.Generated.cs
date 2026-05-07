@@ -286,7 +286,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">nemotron-speech-streaming-en-0.6b</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "3", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Phi-3-Mini-128K-Instruct to enable local inference. This model uses RTN quantization.</para>

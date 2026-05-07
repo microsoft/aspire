@@ -182,7 +182,7 @@
     <value>Connecting to AppHost...</value>
   </data>
   <data name="DashboardFailedToStart" xml:space="preserve">
-    <value>Aspire Dashboard failed to start.</value>
+    <value>Aspire Dashboard failed to start or is disabled.</value>
   </data>
   <data name="AppHost" xml:space="preserve">
     <value>AppHost</value>

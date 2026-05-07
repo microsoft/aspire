@@ -18,6 +18,12 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    internal const string DotNetImageEnvironmentVariableName = "ASPIRE_E2E_DOTNET_IMAGE";
+    internal const string RequireDotNetImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_DOTNET_IMAGE";
+    internal const string PolyglotImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_IMAGE";
+    internal const string RequirePolyglotImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_IMAGE";
+    internal const string PolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_POLYGLOT_JAVA_IMAGE";
+    internal const string RequirePolyglotJavaImageEnvironmentVariableName = "ASPIRE_E2E_REQUIRE_POLYGLOT_JAVA_IMAGE";
     internal const string CliVersionOutputDirEnvironmentVariableName = "ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR";
     internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
@@ -158,16 +164,10 @@ internal static class CliE2ETestHelpers
     {
         var recordingPath = GetTestResultsRecordingPath(testName);
         RegisterCaptureFile("recording.cast", recordingPath);
-        var dockerfileName = variant switch
-        {
-            DockerfileVariant.DotNet => "Dockerfile.e2e",
-            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
-            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
-            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
-        };
-        var dockerfilePath = Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+        var dockerfilePath = GetDockerfilePath(repoRoot, variant);
+        var prebuiltImageName = GetPrebuiltImageName(variant);
 
-        if (variant is DockerfileVariant.PolyglotJava)
+        if (variant is DockerfileVariant.PolyglotJava && prebuiltImageName is null)
         {
             EnsurePolyglotBaseImage(repoRoot, output);
         }
@@ -177,7 +177,8 @@ internal static class CliE2ETestHelpers
         output.WriteLine($"  Strategy:       {strategy}");
         output.WriteLine($"  Expected ver:   {strategy.ExpectedVersion ?? "(not available)"}");
         output.WriteLine($"  Variant:        {variant}");
-        output.WriteLine($"  Dockerfile:     {dockerfilePath}");
+        output.WriteLine($"  Dockerfile:     {(prebuiltImageName is null ? dockerfilePath : "(prebuilt image)")}");
+        output.WriteLine($"  Image:          {prebuiltImageName ?? "(build from Dockerfile)"}");
         output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");
         output.WriteLine($"  Docker socket:  {mountDockerSocket}");
         output.WriteLine($"  Dimensions:     {width}x{height}");
@@ -189,8 +190,7 @@ internal static class CliE2ETestHelpers
             .WithAsciinemaRecording(recordingPath)
             .WithDockerContainer(c =>
             {
-                c.DockerfilePath = dockerfilePath;
-                c.BuildContext = repoRoot;
+                ConfigureDockerContainerSource(c, repoRoot, variant);
 
                 if (mountDockerSocket)
                 {
@@ -218,11 +218,103 @@ internal static class CliE2ETestHelpers
                     }
                 }
 
-                // Delegate all mode-specific Docker config to the strategy
-                strategy.ConfigureContainer(c);
+                ConfigureDockerContainerStrategy(c, strategy, prebuiltImageSelected: prebuiltImageName is not null);
             });
 
         return builder.Build();
+    }
+
+    internal static void ConfigureDockerContainerStrategy(DockerContainerOptions options, CliInstallStrategy strategy, bool prebuiltImageSelected = false)
+    {
+        // Delegate all mode-specific Docker config to the strategy.
+        strategy.ConfigureContainer(options);
+
+        if (prebuiltImageSelected)
+        {
+            if (!string.IsNullOrEmpty(options.DockerfilePath) || !string.IsNullOrEmpty(options.BuildContext))
+            {
+                throw new InvalidOperationException("A prebuilt CLI E2E image was selected, but Dockerfile configuration was also set. Prebuilt-image runs must not fall back to Dockerfile builds.");
+            }
+
+            options.BuildArgs.Clear();
+        }
+    }
+
+    internal static void ConfigureDockerContainerSource(DockerContainerOptions options, string repoRoot, DockerfileVariant variant)
+    {
+        var prebuiltImageName = GetPrebuiltImageName(variant);
+        if (prebuiltImageName is not null)
+        {
+            options.Image = prebuiltImageName;
+            return;
+        }
+
+        if (variant is DockerfileVariant.DotNet && IsDotNetImageRequired())
+        {
+            throw new InvalidOperationException($"{DotNetImageEnvironmentVariableName} must be set when the prebuilt CLI E2E .NET image is required.");
+        }
+
+        if (variant is DockerfileVariant.Polyglot && IsPolyglotImageRequired())
+        {
+            throw new InvalidOperationException($"{PolyglotImageEnvironmentVariableName} must be set when the prebuilt CLI E2E polyglot image is required.");
+        }
+
+        if (variant is DockerfileVariant.PolyglotJava && IsPolyglotJavaImageRequired())
+        {
+            throw new InvalidOperationException($"{PolyglotJavaImageEnvironmentVariableName} must be set when the prebuilt CLI E2E Java image is required.");
+        }
+
+        options.DockerfilePath = GetDockerfilePath(repoRoot, variant);
+        options.BuildContext = repoRoot;
+    }
+
+    private static string? GetPrebuiltImageName(DockerfileVariant variant)
+    {
+        var environmentVariableName = variant switch
+        {
+            DockerfileVariant.DotNet => DotNetImageEnvironmentVariableName,
+            DockerfileVariant.Polyglot => PolyglotImageEnvironmentVariableName,
+            DockerfileVariant.PolyglotJava => PolyglotJavaImageEnvironmentVariableName,
+            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
+        };
+
+        var imageName = Environment.GetEnvironmentVariable(environmentVariableName);
+        return string.IsNullOrWhiteSpace(imageName) ? null : imageName.Trim();
+    }
+
+    private static string GetDockerfilePath(string repoRoot, DockerfileVariant variant)
+    {
+        var dockerfileName = variant switch
+        {
+            DockerfileVariant.DotNet => "Dockerfile.e2e",
+            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
+            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
+            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
+        };
+
+        return Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+    }
+
+    private static bool IsDotNetImageRequired()
+    {
+        return IsImageRequired(RequireDotNetImageEnvironmentVariableName);
+    }
+
+    private static bool IsPolyglotImageRequired()
+    {
+        return IsImageRequired(RequirePolyglotImageEnvironmentVariableName);
+    }
+
+    private static bool IsPolyglotJavaImageRequired()
+    {
+        return IsImageRequired(RequirePolyglotJavaImageEnvironmentVariableName);
+    }
+
+    private static bool IsImageRequired(string environmentVariableName)
+    {
+        var value = Environment.GetEnvironmentVariable(environmentVariableName);
+        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "1", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

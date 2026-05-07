@@ -3,7 +3,6 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -22,8 +21,8 @@ internal sealed class AddCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
-    private readonly IPackagingService _packagingService;
     private readonly IProjectLocator _projectLocator;
+    private readonly IntegrationPackageSearchService _integrationPackageSearchService;
     private readonly IAddCommandPrompter _prompter;
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -44,11 +43,11 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.SourceArgumentDescription
     };
 
-    public AddCommand(IPackagingService packagingService, IInteractionService interactionService, IProjectLocator projectLocator, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
+    public AddCommand(IInteractionService interactionService, IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
         : base("add", AddCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        _packagingService = packagingService;
         _projectLocator = projectLocator;
+        _integrationPackageSearchService = integrationPackageSearchService;
         _prompter = prompter;
         _sdkInstaller = sdkInstaller;
         _hostEnvironment = hostEnvironment;
@@ -69,8 +68,10 @@ internal sealed class AddCommand : BaseCommand
         try
         {
             var integrationName = parseResult.GetValue(s_integrationArgument);
-
             var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+            var version = parseResult.GetValue(s_versionOption);
+            var source = parseResult.GetValue(s_sourceOption);
+
             var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
             var effectiveAppHostProjectFile = searchResult.SelectedProjectFile;
 
@@ -91,78 +92,22 @@ internal sealed class AddCommand : BaseCommand
                 }
             }
 
-            var source = parseResult.GetValue(s_sourceOption);
-
-            // For non-.NET projects, read the channel from the local Aspire configuration if available.
-            // Unlike .NET projects which have a nuget.config, polyglot apphosts persist the channel
-            // in aspire.config.json (or the legacy settings.json during migration).
-            string? configuredChannel = null;
-            if (project.LanguageId != KnownLanguageId.CSharp)
+            var (configuredChannel, configuredChannelExitCode) = _integrationPackageSearchService.GetConfiguredChannel(effectiveAppHostProjectFile, project);
+            if (configuredChannelExitCode is { } exitCode)
             {
-                var appHostDirectory = effectiveAppHostProjectFile.Directory!.FullName;
-                var isProjectReferenceMode = AspireRepositoryDetector.DetectRepositoryRoot(appHostDirectory) is not null;
-                if (!isProjectReferenceMode)
-                {
-                    // TODO: Remove legacy AspireJsonConfiguration fallback once confident most users
-                    // have migrated. Tracked by https://github.com/microsoft/aspire/issues/15239
-                    try
-                    {
-                        configuredChannel = AspireConfigFile.Load(appHostDirectory)?.Channel
-                            ?? AspireJsonConfiguration.Load(appHostDirectory)?.Channel;
-                    }
-                    catch (JsonException ex)
-                    {
-                        InteractionService.DisplayError(ex.Message);
-                        return ExitCodeConstants.FailedToLoadConfiguration;
-                    }
-                }
+                return exitCode;
             }
 
             var packagesWithChannels = await InteractionService.ShowStatusAsync(
                 AddCommandStrings.SearchingForAspirePackages,
-                async () =>
-                {
-                    // Get channels and find the implicit channel, similar to how templates are handled
-                    var allChannels = await _packagingService.GetChannelsAsync(cancellationToken);
-
-                    // If a channel is configured in settings.json, use that specific channel
-                    if (!string.IsNullOrEmpty(configuredChannel))
-                    {
-                        allChannels = allChannels.Where(c => string.Equals(c.Name, configuredChannel, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    // If there are hives (PR build directories), include all channels.
-                    // If a channel is configured in settings.json, use that (already filtered above).
-                    // Otherwise, only use the implicit/default channel to avoid prompting.
-                    var hasHives = ExecutionContext.GetPrHiveCount() > 0;
-                    var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
-                        ? allChannels
-                        : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
-
-                    var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
-                    var packagesLock = new object();
-
-                    await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
-                    {
-                        var integrationPackages = await channel.GetIntegrationPackagesAsync(
-                            workingDirectory: effectiveAppHostProjectFile.Directory!,
-                            cancellationToken: ct);
-                        lock (packagesLock)
-                        {
-                            packages.AddRange(integrationPackages.Select(p => (p, channel)));
-                        }
-                    });
-
-                    return packages;
-
-                });
+                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
 
             if (!packagesWithChannels.Any())
             {
                 throw new EmptyChoicesException(AddCommandStrings.NoIntegrationPackagesFound);
             }
 
-            var packagesWithShortName = packagesWithChannels.Select(GenerateFriendlyName).OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer());
+            var packagesWithShortName = packagesWithChannels.Select(IntegrationPackageSearchService.GenerateFriendlyName).OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer());
 
             if (!packagesWithShortName.Any())
             {
@@ -172,8 +117,6 @@ internal sealed class AddCommand : BaseCommand
 
             var filteredPackagesWithShortName = packagesWithShortName
                 .Where(p => p.FriendlyName == integrationName || p.Package.Id == integrationName);
-
-            var version = parseResult.GetValue(s_versionOption);
 
             if (!filteredPackagesWithShortName.Any() && integrationName is not null && version is not null && !_hostEnvironment.SupportsInteractiveInput)
             {
@@ -186,18 +129,9 @@ internal sealed class AddCommand : BaseCommand
                 // then try a fuzzy search to create a broader filtered list.
                 // Materialize the query with ToList() to avoid multiple enumerations
                 // (which would recalculate fuzzy scores on each Count()/First() call).
-                filteredPackagesWithShortName = packagesWithShortName
-                        .Select(p => new
-                        {
-                            Package = p,
-                            FriendlyNameScore = StringUtils.CalculateFuzzyScore(integrationName, p.FriendlyName),
-                            PackageIdScore = StringUtils.CalculateFuzzyScore(integrationName, p.Package.Id)
-                        })
-                        .Where(x => x.FriendlyNameScore > 0.3 || x.PackageIdScore > 0.3)
-                        .OrderByDescending(x => Math.Max(x.FriendlyNameScore, x.PackageIdScore))
-                        .ThenByDescending(x => x.Package.FriendlyName, new CommunityToolkitFirstComparer())
-                        .Select(x => x.Package)
-                        .ToList();
+                filteredPackagesWithShortName = IntegrationPackageSearchService.GetIntegrationSearchMatches(packagesWithShortName, integrationName)
+                    .Select(x => (x.FriendlyName, x.Package, x.Channel))
+                    .ToList();
             }
 
             // If we didn't match any, show a complete list. If we matched one, and its
@@ -415,14 +349,6 @@ internal sealed class AddCommand : BaseCommand
         return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken);
     }
 
-    internal static (string FriendlyName, NuGetPackage Package, PackageChannel Channel) GenerateFriendlyName((NuGetPackage Package, PackageChannel Channel) packageWithChannel)
-    {
-        // Remove 'Aspire.Hosting' segment from anywhere in the package name
-        var packageId = packageWithChannel.Package.Id.Replace("Aspire.Hosting.", "", StringComparison.OrdinalIgnoreCase);
-        var friendlyName = packageId.Replace('.', '-').ToLowerInvariant();
-
-        return (friendlyName, packageWithChannel.Package, packageWithChannel.Channel);
-    }
 }
 
 internal interface IAddCommandPrompter
