@@ -72,7 +72,7 @@ internal sealed class AddCommand : BaseCommand
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
 
-            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
+            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: false, cancellationToken);
             var effectiveAppHostProjectFile = searchResult.SelectedProjectFile;
 
             if (effectiveAppHostProjectFile is null)
@@ -170,68 +170,20 @@ internal sealed class AddCommand : BaseCommand
             // the version. If there is more than one match then we prompt.
             var selectedNuGetPackage = filteredPackagesWithShortName.Count() switch
             {
+                0 when integrationName is null => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, packagesWithShortName, version, cancellationToken, forcePackageSelection: true),
                 0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(effectiveAppHostProjectFile.Directory!, packagesWithShortName, integrationName, version, cancellationToken),
                 1 when filteredPackagesWithShortName.First().Package.Version == version
                     => filteredPackagesWithShortName.First(),
                 _ => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, filteredPackagesWithShortName, version, cancellationToken)
             };
 
-            // When installing from a PR channel, ensure the project has access to
-            // the PR hive as a NuGet source so `dotnet add package` can resolve the
-            // PR-version package. We add the hive source to the project's nuget.config
-            // WITHOUT package source mapping restrictions, so that transitive deps
-            // (including RID-specific and stable-versioned packages) can still resolve
-            // from NuGet.org via the normal NuGet source hierarchy.
-            if (string.IsNullOrEmpty(source) && VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name))
-            {
-                var mappings = selectedNuGetPackage.Channel.Mappings;
-                if (mappings is { Length: > 0 })
-                {
-                    var hiveSources = mappings
-                        .Select(m => m.Source)
-                        .Where(s => !s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                        .Distinct(StringComparer.OrdinalIgnoreCase);
-
-                    var projectDir = effectiveAppHostProjectFile.Directory!;
-                    var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
-                    if (!File.Exists(nugetConfigPath))
-                    {
-                        projectDir.Create(); // ensure directory exists
-                        var configXml = new System.Xml.Linq.XDocument(
-                            new System.Xml.Linq.XElement("configuration",
-                                new System.Xml.Linq.XElement("packageSources",
-                                    hiveSources.Select(s =>
-                                        new System.Xml.Linq.XElement("add",
-                                            new System.Xml.Linq.XAttribute("key", s),
-                                            new System.Xml.Linq.XAttribute("value", s))))));
-                        configXml.Save(nugetConfigPath);
-                        InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
-                    }
-                }
-            }
-
             context = new AddPackageContext
             {
                 AppHostFile = effectiveAppHostProjectFile,
                 PackageId = selectedNuGetPackage.Package.Id,
                 PackageVersion = selectedNuGetPackage.Package.Version,
-                Source = source
+                Source = GetPackageSourceForInstall(source, selectedNuGetPackage.Package, selectedNuGetPackage.Channel)
             };
-
-            if (project.LanguageId == KnownLanguageId.CSharp)
-            {
-                if (string.IsNullOrWhiteSpace(source))
-                {
-                    await AddSelectedChannelSourcesAsync(effectiveAppHostProjectFile.Directory!, selectedNuGetPackage.Channel, cancellationToken);
-                }
-                else
-                {
-                    await NuGetConfigMerger.AddPackageSourceMappingAsync(
-                        effectiveAppHostProjectFile.Directory!,
-                        new PackageMapping(PackageMapping.AllPackages, source),
-                        cancellationToken);
-                }
-            }
 
             // Stop any running AppHost instance before adding the package.
             // A running AppHost (especially in detach mode) locks project files,
@@ -292,17 +244,24 @@ internal sealed class AddCommand : BaseCommand
         }
     }
 
-    private static async Task AddSelectedChannelSourcesAsync(DirectoryInfo projectDirectory, PackageChannel channel, CancellationToken cancellationToken)
+    private static string? GetPackageSourceForInstall(string? requestedSource, NuGetPackage package, PackageChannel channel)
     {
-        if (channel.Mappings is not { Length: > 0 } mappings)
+        if (!string.IsNullOrWhiteSpace(requestedSource))
         {
-            return;
+            return requestedSource;
         }
 
-        foreach (var mapping in mappings)
+        if (channel.Type is PackageChannelType.Implicit)
         {
-            await NuGetConfigMerger.AddPackageSourceMappingAsync(projectDirectory, mapping, cancellationToken);
+            return null;
         }
+
+        if (!string.IsNullOrWhiteSpace(package.Source))
+        {
+            return package.Source;
+        }
+
+        return channel.Mappings?.Select(mapping => mapping.Source).FirstOrDefault(source => !string.IsNullOrWhiteSpace(source));
     }
 
     private static bool TryGetMissingLocalNuGetSource(string? source, DirectoryInfo workingDirectory, out string missingSource)
@@ -377,17 +336,17 @@ internal sealed class AddCommand : BaseCommand
         return versions;
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken, bool forcePackageSelection = false)
     {
         var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id);
 
-        // If there is only one package, we can skip the prompt and just use it.
-        // In non-interactive mode, auto-select the first package.
+        // If there is only one package for a named integration, we can skip the package prompt and just use it.
+        // Without a named integration, still prompt so nothing is added without an explicit selection.
         var selectedPackage = distinctPackages.Count() switch
         {
-            1 => distinctPackages.First(),
+            1 when !forcePackageSelection => distinctPackages.First(),
             > 1 when !_hostEnvironment.SupportsInteractiveInput => distinctPackages.First(),
-            > 1 => await _prompter.PromptForIntegrationAsync(distinctPackages, cancellationToken),
+            >= 1 => await _prompter.PromptForIntegrationAsync(distinctPackages, cancellationToken),
             _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
         };
 

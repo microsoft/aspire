@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -1055,6 +1054,72 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task AddCommandWithoutIntegrationNamePromptsEvenWhenSinglePackageFound()
+    {
+        var promptedForIntegration = false;
+        var promptedPackageCount = 0;
+        string? addedPackage = null;
+        string? addUsedSource = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService)
+                {
+                    PromptForIntegrationCallback = packages =>
+                    {
+                        var packageArray = packages.ToArray();
+                        promptedForIntegration = true;
+                        promptedPackageCount = packageArray.Length;
+
+                        return packageArray.Single();
+                    }
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, new[] { CreatePackage("AspireQuartz.Hosting", "1.0.1") });
+                };
+
+                runner.AddPackageAsyncCallback = (_, packageName, _, nugetSource, _, _, _) =>
+                {
+                    addedPackage = packageName;
+                    addUsedSource = nugetSource;
+
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.True(promptedForIntegration);
+        Assert.Equal(1, promptedPackageCount);
+        Assert.Equal("AspireQuartz.Hosting", addedPackage);
+        Assert.Null(addUsedSource);
     }
 
     [Fact]
@@ -2230,19 +2295,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedSource, addUsedSource);
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        Assert.True(File.Exists(nugetConfigPath));
-
-        var nugetConfig = XDocument.Load(nugetConfigPath);
-        var packageSources = nugetConfig.Root!.Element("packageSources")!;
-        Assert.Contains(packageSources.Elements("add"), add =>
-            string.Equals((string?)add.Attribute("key"), expectedSource, StringComparison.Ordinal) &&
-            string.Equals((string?)add.Attribute("value"), expectedSource, StringComparison.Ordinal));
-
-        var packageSourceMapping = nugetConfig.Root!.Element("packageSourceMapping")!;
-        var sourceMapping = packageSourceMapping.Elements("packageSource")
-            .Single(packageSource => string.Equals((string?)packageSource.Attribute("key"), expectedSource, StringComparison.Ordinal));
-        Assert.Contains(sourceMapping.Elements("package"), package =>
-            string.Equals((string?)package.Attribute("pattern"), PackageMapping.AllPackages, StringComparison.Ordinal));
+        Assert.False(File.Exists(nugetConfigPath));
     }
 
     [Fact]
@@ -2360,7 +2413,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandWithoutSourceAddsSelectedExplicitChannelSourceMapping()
+    public async Task AddCommandWithoutSourceUsesSelectedExplicitChannelSourceWithoutCreatingNuGetConfig()
     {
         const string packageId = "AspireQuartz.Hosting";
         const string packageVersion = "1.0.1";
@@ -2422,22 +2475,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
-        Assert.Null(addUsedSource);
+        Assert.Equal(nugetOrgSource, addUsedSource);
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        Assert.True(File.Exists(nugetConfigPath));
-
-        var nugetConfig = XDocument.Load(nugetConfigPath);
-        var packageSources = nugetConfig.Root!.Element("packageSources")!;
-        Assert.Contains(packageSources.Elements("add"), add =>
-            string.Equals((string?)add.Attribute("key"), nugetOrgSource, StringComparison.Ordinal) &&
-            string.Equals((string?)add.Attribute("value"), nugetOrgSource, StringComparison.Ordinal));
-
-        var packageSourceMapping = nugetConfig.Root!.Element("packageSourceMapping")!;
-        var sourceMapping = packageSourceMapping.Elements("packageSource")
-            .Single(packageSource => string.Equals((string?)packageSource.Attribute("key"), nugetOrgSource, StringComparison.Ordinal));
-        Assert.Contains(sourceMapping.Elements("package"), package =>
-            string.Equals((string?)package.Attribute("pattern"), PackageMapping.AllPackages, StringComparison.Ordinal));
+        Assert.False(File.Exists(nugetConfigPath));
     }
 
     [Fact]
