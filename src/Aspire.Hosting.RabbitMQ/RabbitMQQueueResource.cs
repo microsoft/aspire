@@ -11,32 +11,27 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, QueueName = {QueueName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQBindableDestination, IRabbitMQProvisionable
+public class RabbitMQQueueResource : RabbitMQDestination, IResourceWithConnectionString, IRabbitMQProvisionable, IResourceWithQueueArguments
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQQueueResource"/> class.
     /// </summary>
     /// <param name="name">The name of the resource.</param>
     /// <param name="queueName">The name of the queue.</param>
-    /// <param name="parent">The RabbitMQ virtual host resource associated with this queue.</param>
-    public RabbitMQQueueResource(string name, string queueName, RabbitMQVirtualHostResource parent) : base(name)
+    /// <param name="virtualHost">The RabbitMQ virtual host resource associated with this queue.</param>
+    /// <param name="queueType">The type of the queue. Defaults to <see cref="RabbitMQQueueType.Classic"/>.</param>
+    public RabbitMQQueueResource(string name, string queueName, RabbitMQVirtualHostResource virtualHost, RabbitMQQueueType queueType = RabbitMQQueueType.Classic) : base(name, virtualHost)
     {
         ArgumentNullException.ThrowIfNull(queueName);
-        ArgumentNullException.ThrowIfNull(parent);
 
         QueueName = queueName;
-        Parent = parent;
+        QueueType = queueType;
     }
 
     /// <summary>
     /// Gets the name of the queue.
     /// </summary>
     public string QueueName { get; }
-
-    /// <summary>
-    /// Gets the parent RabbitMQ virtual host resource.
-    /// </summary>
-    public RabbitMQVirtualHostResource Parent { get; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the queue is durable.
@@ -54,43 +49,55 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
     public bool AutoDelete { get; set; }
 
     /// <summary>
-    /// Gets or sets the type of the queue.
+    /// Gets the type of the queue. Set via the <c>type</c> parameter of <c>AddQueue</c>.
     /// </summary>
-    public RabbitMQQueueType QueueType { get; set; } = RabbitMQQueueType.Classic;
+    public RabbitMQQueueType QueueType { get; }
 
     /// <summary>
-    /// Gets the arguments for the queue declaration.
-    /// These are the AMQP x-arguments passed to the broker when the queue is declared.
-    /// Use this for per-queue settings such as <c>x-message-ttl</c>, <c>x-max-length</c>,
-    /// or <c>x-dead-letter-exchange</c>. For settings that should apply to multiple queues,
-    /// prefer <c>AddPolicy</c> on the virtual host instead.
+    /// Gets the queue arguments for this queue declaration.
+    /// Use <see cref="RabbitMQBuilderExtensions.WithQueueArguments{T}"/> to configure TTL, length limits, dead-lettering, and more.
+    /// For settings that should apply to multiple queues, use <c>AddPolicy</c> on the virtual host instead.
     /// </summary>
-    public IDictionary<string, object?> Arguments { get; } = new Dictionary<string, object?>();
+    public RabbitMQQueueArguments QueueArguments { get; } = new();
 
-    string IRabbitMQDestination.ProvisionedName => QueueName;
-    RabbitMQVirtualHostResource IRabbitMQDestination.VirtualHost => Parent;
-    RabbitMQDestinationKind IRabbitMQDestination.Kind => RabbitMQDestinationKind.Queue;
+    /// <inheritdoc/>
+    public override string ProvisionedName => QueueName;
+
+    /// <inheritdoc/>
+    public override RabbitMQDestinationKind Kind => RabbitMQDestinationKind.Queue;
 
     /// <summary>
-    /// Gets the connection string expression for the RabbitMQ queue.
+    /// Gets the connection string properties for the RabbitMQ queue.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression => Parent.ConnectionStringExpression;
-
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
-        Parent.CombineProperties([
+        VirtualHost.CombineProperties([
             new("QueueName", ReferenceExpression.Create($"{QueueName}")),
         ]);
 
     /// <summary>
-    /// Gets the policies that apply to this queue (populated by <c>BeforeStartEvent</c> handlers registered by <c>AddPolicy</c>).
+    /// Gets the policies that apply to this queue, resolved at startup from matching <c>AddPolicy</c> calls.
     /// </summary>
     internal List<RabbitMQPolicyResource> AppliedPolicies { get; } = [];
 
-    IEnumerable<IRabbitMQProvisionable> IRabbitMQProvisionable.HealthDependencies => AppliedPolicies;
+    IEnumerable<IRabbitMQProvisionable> IRabbitMQProvisionable.HealthDependencies
+    {
+        get
+        {
+            foreach (var policy in AppliedPolicies)
+            {
+                yield return policy;
+            }
+
+            // The dead-letter exchange must be provisioned before this queue's health is meaningful.
+            if (QueueArguments.DeadLetterExchange is { } dlx)
+            {
+                yield return dlx;
+            }
+        }
+    }
 
     /// <summary>
-    /// Completed when this queue has been declared on the broker.
-    /// Faulted if declaration failed.
+    /// Completed when this queue has been declared on the broker; faulted if declaration failed.
     /// </summary>
     internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -98,14 +105,17 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
 
     async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var args = new Dictionary<string, object?>(Arguments);
+        var args = new Dictionary<string, object?>();
+
         if (QueueType != RabbitMQQueueType.Classic)
         {
             args["x-queue-type"] = QueueType.ToString().ToLowerInvariant();
         }
 
+        QueueArguments.FlattenInto(args, $"Queue '{QueueName}'");
+
         await client.DeclareQueueAsync(
-            Parent.VirtualHostName,
+            VirtualHost.VirtualHostName,
             QueueName,
             Durable,
             Exclusive,
@@ -116,12 +126,12 @@ public class RabbitMQQueueResource : Resource, IResourceWithParent<RabbitMQVirtu
 
     async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var exists = await client.QueueExistsAsync(Parent.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
+        var exists = await client.QueueExistsAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
         return exists
             ? RabbitMQProbeResult.Healthy
-            : RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
+            : RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
     }
 
-    Task IRabbitMQBindableDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
+    internal override Task BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, Dictionary<string, object?>? args, CancellationToken ct)
         => client.BindQueueAsync(vhost, sourceExchange, QueueName, routingKey, args, ct);
 }

@@ -11,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, VirtualHostName = {VirtualHostName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitMQServerResource>, IResourceWithConnectionString, IRabbitMQProvisionable
+public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitMQServerResource>, IResourceWithConnectionString, IRabbitMQProvisionable, IRabbitMQServerChild
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQVirtualHostResource"/> class.
@@ -31,6 +31,11 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     /// <summary>
     /// Gets the name of the virtual host.
     /// </summary>
+    /// <remarks>
+    /// This is always a compile-time literal string. Virtual host names are plain
+    /// <see langword="string"/> constructor parameters and cannot be driven by a
+    /// <see cref="ParameterResource"/>.
+    /// </remarks>
     public string VirtualHostName { get; }
 
     /// <summary>
@@ -68,8 +73,7 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     internal List<RabbitMQPolicyResource> Policies { get; } = [];
 
     /// <summary>
-    /// Enumerates all child provisionable resources in this virtual host
-    /// (policies, queues, exchanges, shovels).
+    /// Enumerates all child provisionable resources in this virtual host (policies, queues, exchanges, shovels).
     /// </summary>
     internal IEnumerable<IRabbitMQProvisionable> EnumerateChildren()
         => Policies.Cast<IRabbitMQProvisionable>()
@@ -78,8 +82,7 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
             .Concat(Shovels);
 
     /// <summary>
-    /// Completed when this virtual host (and its full topology) has been provisioned.
-    /// Faulted if provisioning failed for this vhost.
+    /// Completed when this virtual host and its full topology have been provisioned; faulted if provisioning failed.
     /// </summary>
     internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -100,4 +103,6 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
             ? RabbitMQProbeResult.Healthy
             : RabbitMQProbeResult.Unhealthy($"Cannot connect to virtual host '{VirtualHostName}'.");
     }
+
+    RabbitMQVirtualHostResource IRabbitMQServerChild.VirtualHost => this;
 }

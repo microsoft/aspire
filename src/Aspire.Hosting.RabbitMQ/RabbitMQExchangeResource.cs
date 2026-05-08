@@ -11,21 +11,21 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ExchangeName = {ExchangeName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithConnectionString, IRabbitMQBindableDestination, IRabbitMQProvisionable
+public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnectionString, IRabbitMQProvisionable, IResourceWithExchangeArguments
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQExchangeResource"/> class.
     /// </summary>
     /// <param name="name">The name of the resource.</param>
     /// <param name="exchangeName">The name of the exchange.</param>
-    /// <param name="parent">The RabbitMQ virtual host resource associated with this exchange.</param>
-    public RabbitMQExchangeResource(string name, string exchangeName, RabbitMQVirtualHostResource parent) : base(name)
+    /// <param name="virtualHost">The RabbitMQ virtual host resource associated with this exchange.</param>
+    /// <param name="exchangeType">The type of the exchange. Defaults to <see cref="RabbitMQExchangeType.Direct"/>.</param>
+    public RabbitMQExchangeResource(string name, string exchangeName, RabbitMQVirtualHostResource virtualHost, RabbitMQExchangeType exchangeType = RabbitMQExchangeType.Direct) : base(name, virtualHost)
     {
         ArgumentNullException.ThrowIfNull(exchangeName);
-        ArgumentNullException.ThrowIfNull(parent);
 
         ExchangeName = exchangeName;
-        Parent = parent;
+        ExchangeType = exchangeType;
     }
 
     /// <summary>
@@ -34,14 +34,9 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
     public string ExchangeName { get; }
 
     /// <summary>
-    /// Gets the parent RabbitMQ virtual host resource.
+    /// Gets the type of the exchange. Set via the <c>type</c> parameter of <c>AddExchange</c>.
     /// </summary>
-    public RabbitMQVirtualHostResource Parent { get; }
-
-    /// <summary>
-    /// Gets or sets the type of the exchange.
-    /// </summary>
-    public RabbitMQExchangeType ExchangeType { get; set; } = RabbitMQExchangeType.Direct;
+    public RabbitMQExchangeType ExchangeType { get; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the exchange is durable.
@@ -54,36 +49,51 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
     public bool AutoDelete { get; set; }
 
     /// <summary>
-    /// Gets the arguments for the exchange.
+    /// Gets the exchange arguments for this exchange declaration.
+    /// Use <see cref="RabbitMQBuilderExtensions.WithExchangeArguments{T}"/> to configure the alternate exchange and more.
     /// </summary>
-    public IDictionary<string, object?> Arguments { get; } = new Dictionary<string, object?>();
+    public RabbitMQExchangeArguments ExchangeArguments { get; } = new();
 
     internal List<RabbitMQBinding> Bindings { get; } = [];
 
     /// <summary>
-    /// Gets the policies that apply to this exchange (populated by <c>BeforeStartEvent</c> handlers registered by <c>AddPolicy</c>).
+    /// Gets the policies that apply to this exchange, resolved at startup from matching <c>AddPolicy</c> calls.
     /// </summary>
     internal List<RabbitMQPolicyResource> AppliedPolicies { get; } = [];
 
-    IEnumerable<IRabbitMQProvisionable> IRabbitMQProvisionable.HealthDependencies => AppliedPolicies;
+    IEnumerable<IRabbitMQProvisionable> IRabbitMQProvisionable.HealthDependencies
+    {
+        get
+        {
+            foreach (var policy in AppliedPolicies)
+            {
+                yield return policy;
+            }
 
-    string IRabbitMQDestination.ProvisionedName => ExchangeName;
-    RabbitMQVirtualHostResource IRabbitMQDestination.VirtualHost => Parent;
-    RabbitMQDestinationKind IRabbitMQDestination.Kind => RabbitMQDestinationKind.Exchange;
+            // The alternate exchange must be provisioned before this exchange's health is meaningful.
+            if (ExchangeArguments.AlternateExchange is { } ae)
+            {
+                yield return ae;
+            }
+        }
+    }
+
+    /// <inheritdoc/>
+    public override string ProvisionedName => ExchangeName;
+
+    /// <inheritdoc/>
+    public override RabbitMQDestinationKind Kind => RabbitMQDestinationKind.Exchange;
 
     /// <summary>
-    /// Gets the connection string expression for the RabbitMQ exchange.
+    /// Gets the connection string properties for the RabbitMQ exchange.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression => Parent.ConnectionStringExpression;
-
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
-        Parent.CombineProperties([
+        VirtualHost.CombineProperties([
             new("ExchangeName", ReferenceExpression.Create($"{ExchangeName}")),
         ]);
 
     /// <summary>
-    /// Completed when this exchange has been declared AND all its bindings applied.
-    /// Faulted if declaration or any binding failed.
+    /// Completed when this exchange has been declared and all its bindings applied; faulted if declaration or any binding failed.
     /// </summary>
     internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -92,14 +102,17 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
     async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
         var typeString = ExchangeType.ToString().ToLowerInvariant();
+        var args = new Dictionary<string, object?>();
+
+        ExchangeArguments.FlattenInto(args, $"Exchange '{ExchangeName}'");
 
         await client.DeclareExchangeAsync(
-            Parent.VirtualHostName,
+            VirtualHost.VirtualHostName,
             ExchangeName,
             typeString,
             Durable,
             AutoDelete,
-            Arguments.Count > 0 ? Arguments : null,
+            args.Count > 0 ? args : null,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -107,24 +120,24 @@ public class RabbitMQExchangeResource : Resource, IResourceWithParent<RabbitMQVi
     {
         foreach (var binding in Bindings)
         {
-            await ((IRabbitMQBindableDestination)binding.Destination).BindAsync(
+            await binding.Destination.BindAsync(
                 client,
-                Parent.VirtualHostName,
+                VirtualHost.VirtualHostName,
                 ExchangeName,
                 binding.RoutingKey,
-                binding.Arguments,
+                binding.MatchHeaders,
                 cancellationToken).ConfigureAwait(false);
         }
     }
 
     async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var exists = await client.ExchangeExistsAsync(Parent.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+        var exists = await client.ExchangeExistsAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
         return exists
             ? RabbitMQProbeResult.Healthy
-            : RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
+            : RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
     }
 
-    Task IRabbitMQBindableDestination.BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, IDictionary<string, object?>? args, CancellationToken ct)
+    internal override Task BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, Dictionary<string, object?>? args, CancellationToken ct)
         => client.BindExchangeAsync(vhost, sourceExchange, ExchangeName, routingKey, args, ct);
 }

@@ -70,6 +70,10 @@ public static class RabbitMQBuilderExtensions
         {
             // NOTE: Ensure that execution of this setup callback is deferred until after
             //       the container is built & started.
+            // The cast to RabbitMQProvisioningClient is intentional: AddRabbitMQ (the AspNetCore health-check
+            // extension) requires an IConnection, which is a RabbitMQ.Client type. Exposing IConnection on
+            // IRabbitMQProvisioningClient would leak the client library into the internal facade, so we keep
+            // the cast here — the concrete type is internal and registered by us.
             var client = (RabbitMQProvisioningClient)sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(rabbitMq.Name);
             return await client.GetOrCreateConnectionAsync("/", default).ConfigureAwait(false);
         }, healthCheckKey);
@@ -176,7 +180,7 @@ public static class RabbitMQBuilderExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(vhost)
-            .WithProvisionableHealthCheck(builder.Resource.Name);
+            .WithProvisionableHealthCheck();
     }
 
     internal static IResourceBuilder<RabbitMQVirtualHostResource> GetOrAddDefaultVirtualHost(this IResourceBuilder<RabbitMQServerResource> server)
@@ -193,10 +197,10 @@ public static class RabbitMQBuilderExtensions
     /// <summary>
     /// Adds a queue to a RabbitMQ virtual host.
     /// </summary>
-    /// <param name="builder"></param>
+    /// <param name="builder">The RabbitMQ virtual host resource builder.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="queueName">The name of the queue. If not provided, defaults to the resource name.</param>
-    /// <param name="type">The type of the queue.</param>
+    /// <param name="queueName">The name of the queue. Defaults to the resource name when not provided.</param>
+    /// <param name="type">The type of the queue. Defaults to <see cref="RabbitMQQueueType.Classic"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport(Description = "Adds a queue to a RabbitMQ virtual host")]
     public static IResourceBuilder<RabbitMQQueueResource> AddQueue(
@@ -218,22 +222,21 @@ public static class RabbitMQBuilderExtensions
             throw new DistributedApplicationException($"A queue with the name '{qName}' already exists in virtual host '{builder.Resource.VirtualHostName}'.");
         }
 
-        var queue = new RabbitMQQueueResource(name, qName, builder.Resource) { QueueType = type };
+        var queue = new RabbitMQQueueResource(name, qName, builder.Resource, type);
 
         builder.Resource.Queues.Add(queue);
 
-        var queueBuilder = builder.ApplicationBuilder.AddResource(queue);
-
-        return queueBuilder.WithProvisionableHealthCheck(builder.Resource.Parent.Name);
+        return builder.ApplicationBuilder.AddResource(queue)
+                .WithProvisionableHealthCheck();
     }
 
     /// <summary>
-    /// Adds a queue to the default '/' virtual host of a RabbitMQ server.
+    /// Adds a queue to the default <c>/</c> virtual host of a RabbitMQ server.
     /// </summary>
     /// <param name="builder">The RabbitMQ server resource builder.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="queueName">The name of the queue. If not provided, defaults to the resource name.</param>
-    /// <param name="type">The type of the queue.</param>
+    /// <param name="queueName">The name of the queue. Defaults to the resource name when not provided.</param>
+    /// <param name="type">The type of the queue. Defaults to <see cref="RabbitMQQueueType.Classic"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("addQueueOnServer", MethodName = "addQueue", Description = "Adds a queue to the default '/' virtual host")]
     public static IResourceBuilder<RabbitMQQueueResource> AddQueue(
@@ -251,8 +254,8 @@ public static class RabbitMQBuilderExtensions
     /// </summary>
     /// <param name="builder">The RabbitMQ virtual host resource builder.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="type">The type of the exchange.</param>
-    /// <param name="exchangeName">The name of the exchange. If not provided, defaults to the resource name.</param>
+    /// <param name="type">The type of the exchange. Defaults to <see cref="RabbitMQExchangeType.Direct"/>.</param>
+    /// <param name="exchangeName">The name of the exchange. Defaults to the resource name when not provided.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport(Description = "Adds an exchange to a RabbitMQ virtual host")]
     public static IResourceBuilder<RabbitMQExchangeResource> AddExchange(
@@ -274,22 +277,21 @@ public static class RabbitMQBuilderExtensions
             throw new DistributedApplicationException($"An exchange with the name '{exName}' already exists in virtual host '{builder.Resource.VirtualHostName}'.");
         }
 
-        var exchange = new RabbitMQExchangeResource(name, exName, builder.Resource) { ExchangeType = type };
+        var exchange = new RabbitMQExchangeResource(name, exName, builder.Resource, type);
 
         builder.Resource.Exchanges.Add(exchange);
 
-        var exchangeBuilder = builder.ApplicationBuilder.AddResource(exchange);
-
-        return exchangeBuilder.WithProvisionableHealthCheck(builder.Resource.Parent.Name);
+        return builder.ApplicationBuilder.AddResource(exchange)
+                .WithProvisionableHealthCheck();
     }
 
     /// <summary>
-    /// Adds an exchange to the default '/' virtual host of a RabbitMQ server.
+    /// Adds an exchange to the default <c>/</c> virtual host of a RabbitMQ server.
     /// </summary>
     /// <param name="builder">The RabbitMQ server resource builder.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="type">The type of the exchange.</param>
-    /// <param name="exchangeName">The name of the exchange. If not provided, defaults to the resource name.</param>
+    /// <param name="type">The type of the exchange. Defaults to <see cref="RabbitMQExchangeType.Direct"/>.</param>
+    /// <param name="exchangeName">The name of the exchange. Defaults to the resource name when not provided.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("addExchangeOnServer", MethodName = "addExchange", Description = "Adds an exchange to the default '/' virtual host")]
     public static IResourceBuilder<RabbitMQExchangeResource> AddExchange(
@@ -339,27 +341,175 @@ public static class RabbitMQBuilderExtensions
     /// <param name="exchange">The exchange resource builder.</param>
     /// <param name="destination">The destination resource builder.</param>
     /// <param name="routingKey">The routing key for the binding.</param>
-    /// <param name="arguments">The arguments for the binding.</param>
+    /// <param name="matchHeaders">
+    /// The headers-exchange match arguments for the binding.
+    /// Used when the source exchange is of type <see cref="RabbitMQExchangeType.Headers"/> to specify
+    /// which message headers must match for the binding to be selected.
+    /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport(Description = "Adds a binding from an exchange to a queue or another exchange")]
     public static IResourceBuilder<RabbitMQExchangeResource> WithBinding<TDestination>(
         this IResourceBuilder<RabbitMQExchangeResource> exchange,
         IResourceBuilder<TDestination> destination,
         string routingKey = "",
-        IDictionary<string, object?>? arguments = null)
-        where TDestination : Resource, IRabbitMQDestination
+        Dictionary<string, object?>? matchHeaders = null)
+        where TDestination : RabbitMQDestination
     {
         ArgumentNullException.ThrowIfNull(exchange);
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(routingKey);
 
-        if (exchange.Resource.Parent != destination.Resource.VirtualHost)
+        if (exchange.Resource.VirtualHost != destination.Resource.VirtualHost)
         {
             throw new DistributedApplicationException($"Cannot bind exchange '{exchange.Resource.Name}' to destination '{destination.Resource.Name}' because they are in different virtual hosts.");
         }
 
-        exchange.Resource.Bindings.Add(new RabbitMQBinding(destination.Resource, routingKey, arguments));
+        exchange.Resource.Bindings.Add(new RabbitMQBinding(destination.Resource, routingKey, matchHeaders));
         return exchange.WithRelationship(destination.Resource, "Binding");
+    }
+
+    /// <summary>
+    /// Configures queue settings such as message TTL, length limits, and dead-letter routing.
+    /// </summary>
+    /// <typeparam name="T">
+    /// The resource type. Accepts <see cref="RabbitMQQueueResource"/> (to set per-queue arguments)
+    /// and <see cref="RabbitMQPolicyResource"/> (to apply the same settings via a broker policy).
+    /// </typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="configure">An action that sets properties on the <see cref="RabbitMQQueueArguments"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <example>
+    /// Set a TTL and a maximum queue length on a queue:
+    /// <code>
+    /// vhost.AddQueue("orders")
+    ///      .WithQueueArguments(a =>
+    ///      {
+    ///          a.MessageTtl = TimeSpan.FromMinutes(5);
+    ///          a.MaxLength  = 10_000;
+    ///      });
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Configures typed queue x-arguments", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<T> WithQueueArguments<T>(
+        this IResourceBuilder<T> builder,
+        Action<RabbitMQQueueArguments> configure)
+        where T : IResourceWithQueueArguments
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(builder.Resource.QueueArguments);
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures exchange settings such as the alternate exchange for unroutable messages.
+    /// </summary>
+    /// <typeparam name="T">
+    /// The resource type. Accepts <see cref="RabbitMQExchangeResource"/> (to set per-exchange arguments)
+    /// and <see cref="RabbitMQPolicyResource"/> (to apply the same settings via a broker policy).
+    /// </typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="configure">An action that sets properties on the <see cref="RabbitMQExchangeArguments"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <example>
+    /// Route unroutable messages to a dedicated exchange via a policy:
+    /// <code>
+    /// vhost.AddPolicy("ae-policy", ".*", RabbitMQPolicyApplyTo.Exchanges)
+    ///      .WithExchangeArguments(a => a.AlternateExchange = unroutable.Resource);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Configures typed exchange x-arguments", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<T> WithExchangeArguments<T>(
+        this IResourceBuilder<T> builder,
+        Action<RabbitMQExchangeArguments> configure)
+        where T : IResourceWithExchangeArguments
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(builder.Resource.ExchangeArguments);
+        return builder;
+    }
+
+    /// <summary>
+    /// Routes dead-lettered messages from this queue to the specified exchange.
+    /// </summary>
+    /// <typeparam name="T">The resource type. Accepts <see cref="RabbitMQQueueResource"/> and <see cref="RabbitMQPolicyResource"/>.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="dlx">The exchange that will receive dead-lettered messages.</param>
+    /// <param name="routingKey">
+    /// The routing key to use when republishing dead-lettered messages.
+    /// When <see langword="null"/>, the original routing key of the message is preserved.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="DistributedApplicationException">
+    /// Thrown when <paramref name="dlx"/> is in a different virtual host than the queue.
+    /// </exception>
+    /// <example>
+    /// Send expired or rejected messages to a dedicated dead-letter exchange:
+    /// <code>
+    /// var dlx = vhost.AddExchange("dead-letters");
+    ///
+    /// vhost.AddQueue("orders")
+    ///      .WithQueueArguments(a => a.MessageTtl = TimeSpan.FromMinutes(5))
+    ///      .WithDeadLetterExchange(dlx);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Generic constraint uses IResourceWithParent<RabbitMQVirtualHostResource> which is not ATS-compatible. Use WithQueueArguments to set DeadLetterExchange directly in polyglot app hosts.")]
+    public static IResourceBuilder<T> WithDeadLetterExchange<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<RabbitMQExchangeResource> dlx,
+        string? routingKey = null)
+        where T : Resource, IResourceWithQueueArguments, IResourceWithParent<RabbitMQVirtualHostResource>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(dlx);
+
+        if (dlx.Resource.VirtualHost != ((IResourceWithParent<RabbitMQVirtualHostResource>)builder.Resource).Parent)
+        {
+            throw new DistributedApplicationException(
+                $"Dead-letter exchange '{dlx.Resource.Name}' must be in the same virtual host as '{builder.Resource.Name}'.");
+        }
+
+        builder.Resource.QueueArguments.SetDeadLetterExchange(dlx.Resource, routingKey);
+        return builder.WithRelationship(dlx.Resource, "DeadLetter");
+    }
+
+    /// <summary>
+    /// Routes messages that cannot be delivered by this exchange to the specified alternate exchange.
+    /// </summary>
+    /// <typeparam name="T">The resource type. Accepts <see cref="RabbitMQExchangeResource"/> and <see cref="RabbitMQPolicyResource"/>.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="ae">The exchange that will receive unroutable messages.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="DistributedApplicationException">
+    /// Thrown when <paramref name="ae"/> is in a different virtual host than the exchange.
+    /// </exception>
+    /// <example>
+    /// Capture unroutable messages in a dedicated exchange:
+    /// <code>
+    /// var unroutable = vhost.AddExchange("unroutable");
+    ///
+    /// vhost.AddExchange("orders")
+    ///      .WithAlternateExchange(unroutable);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Generic constraint uses IResourceWithParent<RabbitMQVirtualHostResource> which is not ATS-compatible. Use WithExchangeArguments to set AlternateExchange directly in polyglot app hosts.")]
+    public static IResourceBuilder<T> WithAlternateExchange<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<RabbitMQExchangeResource> ae)
+        where T : Resource, IResourceWithExchangeArguments, IResourceWithParent<RabbitMQVirtualHostResource>
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(ae);
+
+        if (ae.Resource.VirtualHost != ((IResourceWithParent<RabbitMQVirtualHostResource>)builder.Resource).Parent)
+        {
+            throw new DistributedApplicationException(
+                $"Alternate exchange '{ae.Resource.Name}' must be in the same virtual host as '{builder.Resource.Name}'.");
+        }
+
+        builder.Resource.ExchangeArguments.SetAlternateExchange(ae.Resource);
+        return builder.WithRelationship(ae.Resource, "AlternateExchange");
     }
 
     /// <summary>
@@ -380,8 +530,8 @@ public static class RabbitMQBuilderExtensions
         IResourceBuilder<TSrc> source,
         IResourceBuilder<TDest> destination,
         string? shovelName = null)
-        where TSrc : Resource, IRabbitMQDestination
-        where TDest : Resource, IRabbitMQDestination
+        where TSrc : RabbitMQDestination
+        where TDest : RabbitMQDestination
     {
         ArgumentNullException.ThrowIfNull(vhost);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -408,7 +558,7 @@ public static class RabbitMQBuilderExtensions
             throw new DistributedApplicationException($"Cannot add shovel '{name}' because the destination '{destination.Resource.Name}' is on a different RabbitMQ server.");
         }
 
-        var shovel = new RabbitMQShovelResource(name, wireName, vhost.Resource, new RabbitMQShovelEndpoint(source.Resource), new RabbitMQShovelEndpoint(destination.Resource));
+        var shovel = new RabbitMQShovelResource(name, wireName, vhost.Resource, source.Resource, destination.Resource);
         vhost.Resource.Shovels.Add(shovel);
 
         var server = vhost.ApplicationBuilder.CreateResourceBuilder(vhost.Resource.Parent);
@@ -419,7 +569,7 @@ public static class RabbitMQBuilderExtensions
         return vhost.ApplicationBuilder.AddResource(shovel)
             .WithRelationship(source.Resource, "Source")
             .WithRelationship(destination.Resource, "Destination")
-            .WithProvisionableHealthCheck(vhost.Resource.Parent.Name);
+            .WithProvisionableHealthCheck();
     }
 
     /// <summary>
@@ -440,8 +590,8 @@ public static class RabbitMQBuilderExtensions
         IResourceBuilder<TSrc> source,
         IResourceBuilder<TDest> destination,
         string? shovelName = null)
-        where TSrc : Resource, IRabbitMQDestination
-        where TDest : Resource, IRabbitMQDestination
+        where TSrc : RabbitMQDestination
+        where TDest : RabbitMQDestination
     {
         ArgumentNullException.ThrowIfNull(server);
         return server.GetOrAddDefaultVirtualHost().AddShovel(name, source, destination, shovelName);
@@ -451,20 +601,16 @@ public static class RabbitMQBuilderExtensions
     /// Adds a policy to a RabbitMQ virtual host.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Policies are applied to queues and/or exchanges whose names match <paramref name="pattern"/>.
-    /// They configure runtime behaviour such as message TTL, dead-letter routing, and queue length limits.
-    /// </para>
-    /// <para>
-    /// Policies require the management plugin. Call <see cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource})"/>
-    /// on the server, or add a non-default virtual host (which enables it automatically).
-    /// </para>
+    /// Policies are applied to queues and/or exchanges whose names match <paramref name="pattern"/> (a regex)
+    /// and configure runtime behaviour such as message TTL, dead-letter routing, and queue length limits.
+    /// Policies require the management plugin, which is enabled automatically when a non-default virtual host is added.
     /// </remarks>
     /// <param name="builder">The RabbitMQ virtual host resource builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="pattern">The regex pattern that determines which queues and/or exchanges the policy applies to.</param>
     /// <param name="applyTo">Which entity types the policy applies to. Defaults to <see cref="RabbitMQPolicyApplyTo.All"/>.</param>
-    /// <param name="policyName">The name of the policy in RabbitMQ. If not provided, defaults to the resource name.</param>
+    /// <param name="priority">The policy priority. Higher values take precedence when multiple policies match the same entity. Defaults to <c>0</c>.</param>
+    /// <param name="policyName">The name of the policy in RabbitMQ. Defaults to the resource name when not provided.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport(Description = "Adds a policy to a RabbitMQ virtual host")]
     public static IResourceBuilder<RabbitMQPolicyResource> AddPolicy(
@@ -472,6 +618,7 @@ public static class RabbitMQBuilderExtensions
         [ResourceName] string name,
         string pattern,
         RabbitMQPolicyApplyTo applyTo = RabbitMQPolicyApplyTo.All,
+        int priority = 0,
         string? policyName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -488,7 +635,7 @@ public static class RabbitMQBuilderExtensions
             throw new DistributedApplicationException($"A policy with the name '{wireName}' already exists in virtual host '{builder.Resource.VirtualHostName}'.");
         }
 
-        var policy = new RabbitMQPolicyResource(name, wireName, pattern, builder.Resource) { ApplyTo = applyTo };
+        var policy = new RabbitMQPolicyResource(name, wireName, pattern, builder.Resource, applyTo, priority);
         builder.Resource.Policies.Add(policy);
 
         var policyBuilder = builder.ApplicationBuilder.AddResource(policy);
@@ -501,14 +648,13 @@ public static class RabbitMQBuilderExtensions
             return Task.CompletedTask;
         });
 
-        return policyBuilder.WithProvisionableHealthCheck(builder.Resource.Parent.Name);
+        return policyBuilder.WithProvisionableHealthCheck();
     }
 
     /// <summary>
     /// Resolves which queues and exchanges in <paramref name="vhost"/> match <paramref name="policy"/>
-    /// and wires up the <see cref="RabbitMQQueueResource.AppliedPolicies"/> /
-    /// <see cref="RabbitMQExchangeResource.AppliedPolicies"/> lists and dashboard relationships.
-    /// Called from the <c>BeforeStartEvent</c> handler and exposed internally for testing.
+    /// and wires up the applied-policies lists and dashboard relationships.
+    /// Exposed internally for testing.
     /// </summary>
     internal static void ResolveAndApplyPolicyMatches(
         RabbitMQPolicyResource policy,
@@ -535,13 +681,14 @@ public static class RabbitMQBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a policy to the default '/' virtual host of a RabbitMQ server.
+    /// Adds a policy to the default <c>/</c> virtual host of a RabbitMQ server.
     /// </summary>
     /// <param name="server">The RabbitMQ server resource builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="pattern">The regex pattern that determines which queues and/or exchanges the policy applies to.</param>
     /// <param name="applyTo">Which entity types the policy applies to. Defaults to <see cref="RabbitMQPolicyApplyTo.All"/>.</param>
-    /// <param name="policyName">The name of the policy in RabbitMQ. If not provided, defaults to the resource name.</param>
+    /// <param name="priority">The policy priority. Higher values take precedence when multiple policies match the same entity. Defaults to <c>0</c>.</param>
+    /// <param name="policyName">The name of the policy in RabbitMQ. Defaults to the resource name when not provided.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("addPolicyOnServer", MethodName = "addPolicy", Description = "Adds a policy to the default '/' virtual host")]
     public static IResourceBuilder<RabbitMQPolicyResource> AddPolicy(
@@ -549,14 +696,16 @@ public static class RabbitMQBuilderExtensions
         [ResourceName] string name,
         string pattern,
         RabbitMQPolicyApplyTo applyTo = RabbitMQPolicyApplyTo.All,
+        int priority = 0,
         string? policyName = null)
     {
         ArgumentNullException.ThrowIfNull(server);
-        return server.GetOrAddDefaultVirtualHost().AddPolicy(name, pattern, applyTo, policyName);
+        return server.GetOrAddDefaultVirtualHost().AddPolicy(name, pattern, applyTo, priority, policyName);
     }
 
     /// <summary>
-    /// Configures properties of a RabbitMQ policy.
+    /// Configures additional policy settings such as <see cref="RabbitMQPolicyResource.AdditionalArguments"/>.
+    /// To configure typed queue or exchange arguments, use <see cref="WithQueueArguments{T}"/> or <see cref="WithExchangeArguments{T}"/> instead.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
     /// <param name="configure">The configuration action.</param>
@@ -649,17 +798,7 @@ public static class RabbitMQBuilderExtensions
 
     /// <inheritdoc cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource})" />
     /// <param name="builder">The resource builder.</param>
-    /// <param name="port">The host port that can be used to access the management UI page when running locally.</param>
-    /// <remarks>
-    /// <example>
-    /// Use <see cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource}, int?)"/> to specify a port to access the RabbitMQ management UI page.
-    /// <code>
-    /// var rabbitmq = builder.AddRabbitMQ("rabbitmq")
-    ///                       .WithDataVolume()
-    ///                       .WithManagementPlugin(port: 15672);
-    /// </code>
-    /// </example>
-    /// </remarks>
+    /// <param name="port">The host port used to access the management UI when running locally.</param>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder, int? port)
     {
@@ -734,16 +873,16 @@ public static class RabbitMQBuilderExtensions
     }
 
     /// <summary>
-    /// Registers a <see cref="RabbitMQProvisionableHealthCheck"/> for the given resource and wires it
-    /// up via <see cref="ResourceBuilderExtensions.WithHealthCheck{T}"/>.
-    /// All RabbitMQ child resources (vhost, queue, exchange, shovel) use this single helper.
+    /// Registers a provisioning health check for the given resource and wires it up.
+    /// The server name is derived from <see cref="IRabbitMQServerChild.VirtualHost"/> so it
+    /// does not need to be passed explicitly at every call site.
     /// </summary>
     private static IResourceBuilder<T> WithProvisionableHealthCheck<T>(
-        this IResourceBuilder<T> builder,
-        string serverName)
-        where T : Resource, IRabbitMQProvisionable
+        this IResourceBuilder<T> builder)
+        where T : Resource, IRabbitMQProvisionable, IRabbitMQServerChild
     {
         var resource = builder.Resource;
+        var serverName = resource.VirtualHost.Parent.Name;
         var healthCheckKey = $"{resource.Name}_check";
 
         builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
@@ -828,3 +967,4 @@ public static class RabbitMQBuilderExtensions
         return builder;
     }
 }
+

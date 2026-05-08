@@ -11,15 +11,15 @@ namespace Aspire.Hosting.ApplicationModel;
 /// A resource that represents a RabbitMQ policy.
 /// </summary>
 /// <remarks>
-/// Policies are applied to queues and/or exchanges whose names match the <see cref="Pattern"/> regex.
-/// They configure runtime behaviour such as message TTL, dead-letter routing, and queue length limits.
-/// A policy does not expose a connection string — it is a configuration artifact that affects the
-/// entities it matches. The health of a matching queue or exchange includes waiting for this policy
-/// to be applied successfully.
+/// Policies are applied to queues and/or exchanges whose names match the <see cref="Pattern"/> regex
+/// and configure runtime behaviour such as message TTL, dead-letter routing, and queue length limits.
+/// Setting <see cref="QueueArguments"/> on a policy whose <see cref="ApplyTo"/> is
+/// <see cref="RabbitMQPolicyApplyTo.Exchanges"/>, or <see cref="ExchangeArguments"/> on a policy
+/// whose <see cref="ApplyTo"/> is <see cref="RabbitMQPolicyApplyTo.Queues"/>, will throw at startup.
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, PolicyName = {PolicyName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IRabbitMQProvisionable
+public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IRabbitMQProvisionable, IResourceWithQueueArguments, IResourceWithExchangeArguments, IRabbitMQServerChild
 {
     private Regex? _compiledPattern;
 
@@ -30,7 +30,10 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
     /// <param name="policyName">The name of the policy in RabbitMQ.</param>
     /// <param name="pattern">The regex pattern that determines which queues and/or exchanges the policy applies to.</param>
     /// <param name="parent">The RabbitMQ virtual host resource associated with this policy.</param>
-    public RabbitMQPolicyResource(string name, string policyName, string pattern, RabbitMQVirtualHostResource parent) : base(name)
+    /// <param name="applyTo">Which entity types the policy applies to.</param>
+    /// <param name="priority">The policy priority. Higher values take precedence when multiple policies match.</param>
+    public RabbitMQPolicyResource(string name, string policyName, string pattern, RabbitMQVirtualHostResource parent,
+        RabbitMQPolicyApplyTo applyTo = RabbitMQPolicyApplyTo.All, int priority = 0) : base(name)
     {
         ArgumentNullException.ThrowIfNull(policyName);
         ArgumentNullException.ThrowIfNull(pattern);
@@ -39,6 +42,8 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
         PolicyName = policyName;
         Pattern = pattern;
         Parent = parent;
+        ApplyTo = applyTo;
+        Priority = priority;
     }
 
     /// <summary>
@@ -57,19 +62,36 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
     public RabbitMQVirtualHostResource Parent { get; }
 
     /// <summary>
-    /// Gets or sets which entity types the policy applies to.
+    /// Gets which entity types the policy applies to. Set via the <c>applyTo</c> parameter of <c>AddPolicy</c>.
     /// </summary>
-    public RabbitMQPolicyApplyTo ApplyTo { get; set; } = RabbitMQPolicyApplyTo.All;
+    public RabbitMQPolicyApplyTo ApplyTo { get; }
 
     /// <summary>
-    /// Gets the policy definition key-value pairs (e.g. <c>message-ttl</c>, <c>dead-letter-exchange</c>).
+    /// Gets the policy priority. Higher values take precedence when multiple policies match.
+    /// Set via the <c>priority</c> parameter of <c>AddPolicy</c>.
     /// </summary>
-    public IDictionary<string, object?> Definition { get; } = new Dictionary<string, object?>();
+    public int Priority { get; }
 
     /// <summary>
-    /// Gets or sets the policy priority. Higher values take precedence when multiple policies match.
+    /// Gets the queue arguments applied by this policy.
+    /// Only used when <see cref="ApplyTo"/> is <see cref="RabbitMQPolicyApplyTo.Queues"/> or <see cref="RabbitMQPolicyApplyTo.All"/>.
     /// </summary>
-    public int Priority { get; set; }
+    public RabbitMQQueueArguments QueueArguments { get; } = new();
+
+    /// <summary>
+    /// Gets the exchange arguments applied by this policy.
+    /// Only used when <see cref="ApplyTo"/> is <see cref="RabbitMQPolicyApplyTo.Exchanges"/> or <see cref="RabbitMQPolicyApplyTo.All"/>.
+    /// </summary>
+    public RabbitMQExchangeArguments ExchangeArguments { get; } = new();
+
+    /// <summary>
+    /// Gets additional policy definition keys not covered by <see cref="QueueArguments"/> or <see cref="ExchangeArguments"/>.
+    /// Use this for policy-only keys such as <c>ha-mode</c>, <c>federation-upstream</c>, or <c>ha-sync-mode</c>.
+    /// </summary>
+    /// <remarks>
+    /// Entries may be added until the application starts. Mutations after <see cref="BeforeStartEvent"/> are ignored.
+    /// </remarks>
+    public Dictionary<string, object?> AdditionalArguments { get; } = [];
 
     /// <summary>
     /// Returns <see langword="true"/> if this policy applies to the entity with the given name and kind.
@@ -96,8 +118,7 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
     }
 
     /// <summary>
-    /// Completed when this policy has been applied to the broker.
-    /// Faulted if the PUT request failed.
+    /// Completed when this policy has been applied to the broker; faulted if the request failed.
     /// </summary>
     internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -105,10 +126,35 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
 
     Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
+        if (ApplyTo == RabbitMQPolicyApplyTo.Exchanges && QueueArguments.HasAnyValue())
+        {
+            throw new DistributedApplicationException(
+                $"Policy '{PolicyName}' has QueueArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Exchanges)}'. " +
+                $"Queue arguments are ignored when a policy only targets exchanges. " +
+                $"Set ApplyTo to '{nameof(RabbitMQPolicyApplyTo.Queues)}' or '{nameof(RabbitMQPolicyApplyTo.All)}', or clear QueueArguments.");
+        }
+
+        if (ApplyTo == RabbitMQPolicyApplyTo.Queues && ExchangeArguments.HasAnyValue())
+        {
+            throw new DistributedApplicationException(
+                $"Policy '{PolicyName}' has ExchangeArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Queues)}'. " +
+                $"Exchange arguments are ignored when a policy only targets queues. " +
+                $"Set ApplyTo to '{nameof(RabbitMQPolicyApplyTo.Exchanges)}' or '{nameof(RabbitMQPolicyApplyTo.All)}', or clear ExchangeArguments.");
+        }
+
+        var definition = new Dictionary<string, object?>();
+        QueueArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
+        ExchangeArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
+
+        foreach (var (k, v) in AdditionalArguments)
+        {
+            definition[k] = v;
+        }
+
         var def = new RabbitMQPolicyDefinition(
             Pattern,
             ApplyTo.ToString().ToLowerInvariant(),
-            Definition,
+            definition,
             Priority);
 
         return client.PutPolicyAsync(Parent.VirtualHostName, PolicyName, def, cancellationToken);
@@ -121,4 +167,6 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
             ? RabbitMQProbeResult.Healthy
             : RabbitMQProbeResult.Unhealthy($"Policy '{PolicyName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
     }
+
+    RabbitMQVirtualHostResource IRabbitMQServerChild.VirtualHost => Parent;
 }

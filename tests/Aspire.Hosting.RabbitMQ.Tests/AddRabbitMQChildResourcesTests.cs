@@ -88,7 +88,7 @@ public class AddRabbitMQChildResourcesTests
         Assert.Equal(queue.Resource, vhost.Resource.Queues[0]);
         Assert.Equal("myqueue", queue.Resource.Name);
         Assert.Equal("myqueue", queue.Resource.QueueName);
-        Assert.Equal(vhost.Resource, queue.Resource.Parent);
+        Assert.Equal(vhost.Resource, queue.Resource.VirtualHost);
         Assert.Equal(RabbitMQQueueType.Classic, queue.Resource.QueueType);
     }
 
@@ -121,7 +121,7 @@ public class AddRabbitMQChildResourcesTests
         Assert.Equal(exchange.Resource, vhost.Resource.Exchanges[0]);
         Assert.Equal("myexchange", exchange.Resource.Name);
         Assert.Equal("myexchange", exchange.Resource.ExchangeName);
-        Assert.Equal(vhost.Resource, exchange.Resource.Parent);
+        Assert.Equal(vhost.Resource, exchange.Resource.VirtualHost);
         Assert.Equal(RabbitMQExchangeType.Direct, exchange.Resource.ExchangeType);
     }
 
@@ -189,8 +189,8 @@ public class AddRabbitMQChildResourcesTests
         Assert.Equal("myshovel", shovel.Resource.Name);
         Assert.Equal("myshovel", shovel.Resource.ShovelName);
         Assert.Equal(vhost1.Resource, shovel.Resource.Parent);
-        Assert.Equal(queue1.Resource, shovel.Resource.Source.Target);
-        Assert.Equal(queue2.Resource, shovel.Resource.Destination.Target);
+        Assert.Equal(queue1.Resource, shovel.Resource.Source);
+        Assert.Equal(queue2.Resource, shovel.Resource.Destination);
     }
 
     [Fact]
@@ -324,13 +324,13 @@ public class AddRabbitMQChildResourcesTests
         var vhost = server.AddVirtualHost("myvhost");
 
         var queue = vhost.AddQueue("myqueue")
-            .WithProperties(q =>
+            .WithQueueArguments(a =>
             {
-                q.Arguments["x-message-ttl"] = 60_000;
-                q.Arguments["x-max-length"] = 1000;
+                a.MessageTtl = TimeSpan.FromMilliseconds(60_000);
+                a.MaxLength = 1000;
             });
 
-        Assert.Equal(60_000, queue.Resource.Arguments["x-message-ttl"]);
-        Assert.Equal(1000, queue.Resource.Arguments["x-max-length"]);
+        Assert.Equal(TimeSpan.FromMilliseconds(60_000), queue.Resource.QueueArguments.MessageTtl);
+        Assert.Equal(1000, queue.Resource.QueueArguments.MaxLength);
     }
 }

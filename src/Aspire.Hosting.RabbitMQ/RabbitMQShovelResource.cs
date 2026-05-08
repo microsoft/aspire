@@ -12,7 +12,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ShovelName = {ShovelName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IRabbitMQProvisionable
+public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirtualHostResource>, IRabbitMQProvisionable, IRabbitMQServerChild
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RabbitMQShovelResource"/> class.
@@ -20,9 +20,9 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
     /// <param name="name">The name of the resource.</param>
     /// <param name="shovelName">The name of the shovel.</param>
     /// <param name="parent">The RabbitMQ virtual host resource associated with this shovel.</param>
-    /// <param name="source">The source endpoint for the shovel.</param>
-    /// <param name="destination">The destination endpoint for the shovel.</param>
-    public RabbitMQShovelResource(string name, string shovelName, RabbitMQVirtualHostResource parent, RabbitMQShovelEndpoint source, RabbitMQShovelEndpoint destination) : base(name)
+    /// <param name="source">The source destination for the shovel.</param>
+    /// <param name="destination">The destination for the shovel.</param>
+    public RabbitMQShovelResource(string name, string shovelName, RabbitMQVirtualHostResource parent, RabbitMQDestination source, RabbitMQDestination destination) : base(name)
     {
         ArgumentNullException.ThrowIfNull(shovelName);
         ArgumentNullException.ThrowIfNull(parent);
@@ -46,14 +46,14 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
     public RabbitMQVirtualHostResource Parent { get; }
 
     /// <summary>
-    /// Gets the source endpoint for the shovel.
+    /// Gets the source destination for the shovel.
     /// </summary>
-    public RabbitMQShovelEndpoint Source { get; }
+    public RabbitMQDestination Source { get; }
 
     /// <summary>
-    /// Gets the destination endpoint for the shovel.
+    /// Gets the destination for the shovel.
     /// </summary>
-    public RabbitMQShovelEndpoint Destination { get; }
+    public RabbitMQDestination Destination { get; }
 
     /// <summary>
     /// Gets or sets the acknowledgment mode for the shovel.
@@ -71,8 +71,7 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
     public int? SrcDeleteAfter { get; set; }
 
     /// <summary>
-    /// Completed when this shovel has been created on the broker.
-    /// Faulted if creation failed.
+    /// Completed when this shovel has been created on the broker; faulted if creation failed.
     /// </summary>
     internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -88,9 +87,9 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
 
     async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var srcUri = await Source.GetUri().GetValueAsync(cancellationToken).ConfigureAwait(false)
+        var srcUri = await Source.ConnectionStringExpression.GetValueAsync(cancellationToken).ConfigureAwait(false)
             ?? throw new DistributedApplicationException($"Could not resolve source URI for shovel '{ShovelName}'.");
-        var destUri = await Destination.GetUri().GetValueAsync(cancellationToken).ConfigureAwait(false)
+        var destUri = await Destination.ConnectionStringExpression.GetValueAsync(cancellationToken).ConfigureAwait(false)
             ?? throw new DistributedApplicationException($"Could not resolve destination URI for shovel '{ShovelName}'.");
 
         var ackModeString = AckMode switch
@@ -104,11 +103,11 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
         var def = new RabbitMQShovelDefinitionValue
         {
             SrcUri = srcUri,
-            SrcQueue = Source.Kind == RabbitMQDestinationKind.Queue ? Source.Target.ProvisionedName : null,
-            SrcExchange = Source.Kind == RabbitMQDestinationKind.Exchange ? Source.Target.ProvisionedName : null,
+            SrcQueue = Source.Kind == RabbitMQDestinationKind.Queue ? Source.ProvisionedName : null,
+            SrcExchange = Source.Kind == RabbitMQDestinationKind.Exchange ? Source.ProvisionedName : null,
             DestUri = destUri,
-            DestQueue = Destination.Kind == RabbitMQDestinationKind.Queue ? Destination.Target.ProvisionedName : null,
-            DestExchange = Destination.Kind == RabbitMQDestinationKind.Exchange ? Destination.Target.ProvisionedName : null,
+            DestQueue = Destination.Kind == RabbitMQDestinationKind.Queue ? Destination.ProvisionedName : null,
+            DestExchange = Destination.Kind == RabbitMQDestinationKind.Exchange ? Destination.ProvisionedName : null,
             AckMode = ackModeString,
             ReconnectDelay = ReconnectDelay.HasValue ? (int)ReconnectDelay.Value.TotalSeconds : null,
             SrcDeleteAfter = SrcDeleteAfter?.ToString(CultureInfo.InvariantCulture)
@@ -120,4 +119,6 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
             new RabbitMQShovelDefinition { Value = def },
             cancellationToken).ConfigureAwait(false);
     }
+
+    RabbitMQVirtualHostResource IRabbitMQServerChild.VirtualHost => Parent;
 }

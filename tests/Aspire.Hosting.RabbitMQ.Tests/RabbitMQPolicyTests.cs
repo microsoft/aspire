@@ -68,23 +68,22 @@ public class RabbitMQPolicyTests
     }
 
     [Fact]
-    public void AddPolicy_WithProperties_SetsDefinition()
+    public void AddPolicy_WithProperties_SetsArguments()
     {
         var builder = DistributedApplication.CreateBuilder();
         var server = builder.AddRabbitMQ("rabbit");
         var vhost = server.AddVirtualHost("myvhost");
 
-        vhost.AddPolicy("ttl-policy", "^orders\\.")
-             .WithProperties(p =>
+        vhost.AddPolicy("ttl-policy", "^orders\\.", priority: 10)
+             .WithQueueArguments(a =>
              {
-                 p.Definition["message-ttl"] = 60_000;
-                 p.Definition["dead-letter-exchange"] = "dlx";
-                 p.Priority = 10;
+                 a.MessageTtl = TimeSpan.FromMilliseconds(60_000);
+                 a.AdditionalArguments["ha-mode"] = "all";
              });
 
         var policy = vhost.Resource.Policies[0];
-        Assert.Equal(60_000, policy.Definition["message-ttl"]);
-        Assert.Equal("dlx", policy.Definition["dead-letter-exchange"]);
+        Assert.Equal(TimeSpan.FromMilliseconds(60_000), policy.QueueArguments.MessageTtl);
+        Assert.Equal("all", policy.QueueArguments.AdditionalArguments["ha-mode"]);
         Assert.Equal(10, policy.Priority);
     }
 
@@ -369,7 +368,7 @@ public class RabbitMQPolicyTests
         var server = new RabbitMQServerResource("rabbit", userName: null,
             password: new ParameterResource("pw", _ => "pw", secret: true));
         var vhost = new RabbitMQVirtualHostResource("myvhost", "myvhost", server);
-        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost) { ApplyTo = RabbitMQPolicyApplyTo.Queues };
+        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost, RabbitMQPolicyApplyTo.Queues);
 
         Assert.False(policy.AppliesTo("orders", RabbitMQDestinationKind.Exchange));
     }
@@ -380,7 +379,7 @@ public class RabbitMQPolicyTests
         var server = new RabbitMQServerResource("rabbit", userName: null,
             password: new ParameterResource("pw", _ => "pw", secret: true));
         var vhost = new RabbitMQVirtualHostResource("myvhost", "myvhost", server);
-        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost) { ApplyTo = RabbitMQPolicyApplyTo.Exchanges };
+        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost, RabbitMQPolicyApplyTo.Exchanges);
 
         Assert.False(policy.AppliesTo("orders", RabbitMQDestinationKind.Queue));
     }

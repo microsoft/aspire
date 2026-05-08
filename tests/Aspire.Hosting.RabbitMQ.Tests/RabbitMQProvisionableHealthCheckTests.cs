@@ -174,8 +174,7 @@ public class RabbitMQProvisionableHealthCheckTests
         var (_, vhost) = BuildVhost();
         var queue = new RabbitMQQueueResource("q", "q", vhost);
         var exchange = new RabbitMQExchangeResource("e", "e", vhost);
-        var shovel = new RabbitMQShovelResource("s", "myshovel", vhost,
-            new RabbitMQShovelEndpoint(queue), new RabbitMQShovelEndpoint(exchange));
+        var shovel = new RabbitMQShovelResource("s", "myshovel", vhost, queue, exchange);
         var client = new FakeRabbitMQProvisioningClient();
 
         var result = await ((IRabbitMQProvisionable)shovel).ProbeAsync(client, default);
@@ -189,8 +188,7 @@ public class RabbitMQProvisionableHealthCheckTests
         var (_, vhost) = BuildVhost();
         var queue = new RabbitMQQueueResource("q", "q", vhost);
         var exchange = new RabbitMQExchangeResource("e", "e", vhost);
-        var shovel = new RabbitMQShovelResource("s", "myshovel", vhost,
-            new RabbitMQShovelEndpoint(queue), new RabbitMQShovelEndpoint(exchange));
+        var shovel = new RabbitMQShovelResource("s", "myshovel", vhost, queue, exchange);
 
         var client = new FixedShovelStateClient("starting");
 

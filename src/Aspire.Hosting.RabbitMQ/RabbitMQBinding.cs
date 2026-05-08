@@ -14,21 +14,25 @@ public sealed class RabbitMQBinding
     /// </summary>
     /// <param name="destination">The destination of the binding.</param>
     /// <param name="routingKey">The routing key for the binding.</param>
-    /// <param name="arguments">The arguments for the binding.</param>
-    public RabbitMQBinding(IRabbitMQDestination destination, string routingKey, IDictionary<string, object?>? arguments = null)
+    /// <param name="matchHeaders">
+    /// The headers-exchange match arguments for the binding.
+    /// Used when the source exchange is of type <see cref="RabbitMQExchangeType.Headers"/> to specify
+    /// which message headers must match for the binding to be selected.
+    /// </param>
+    public RabbitMQBinding(RabbitMQDestination destination, string routingKey, Dictionary<string, object?>? matchHeaders = null)
     {
         ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(routingKey);
 
         Destination = destination;
         RoutingKey = routingKey;
-        Arguments = arguments;
+        MatchHeaders = matchHeaders;
     }
 
     /// <summary>
     /// Gets the destination of the binding.
     /// </summary>
-    public IRabbitMQDestination Destination { get; }
+    public RabbitMQDestination Destination { get; }
 
     /// <summary>
     /// Gets the routing key for the binding.
@@ -36,7 +40,11 @@ public sealed class RabbitMQBinding
     public string RoutingKey { get; }
 
     /// <summary>
-    /// Gets the arguments for the binding.
+    /// Gets the headers-exchange match arguments for the binding.
     /// </summary>
-    public IDictionary<string, object?>? Arguments { get; }
+    /// <remarks>
+    /// Used when the source exchange is of type <see cref="RabbitMQExchangeType.Headers"/> to specify
+    /// which message headers must match for the binding to be selected.
+    /// </remarks>
+    public Dictionary<string, object?>? MatchHeaders { get; }
 }
