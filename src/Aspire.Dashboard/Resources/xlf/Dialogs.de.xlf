@@ -13,7 +13,7 @@ Get started by running this command in your project:
 aspire agent init
 ```
 
-This configures skill files for your AI assistant. The skill files tell the agent how to use Aspire CLI commands such as [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel/).
+This configures skill files for your AI assistant. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
 
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
@@ -28,7 +28,7 @@ Get started by running this command in your project:
 aspire agent init
 ```
 
-This configures skill files for your AI assistant. The skill files tell the agent how to use Aspire CLI commands such as [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel/).
+This configures skill files for your AI assistant. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
 
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
@@ -46,9 +46,9 @@ Use Aspire CLI commands to get telemetry data in your terminal:
 aspire otel logs --dashboard-url {0}
 ```
 
-- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel/) — View structured logs
-- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel/) — View distributed traces
-- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel/) — View trace spans
+- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel-logs/) — View structured logs
+- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/) — View distributed traces
+- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel-spans/) — View trace spans
 - [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
 
 For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</source>
@@ -62,9 +62,9 @@ Use Aspire CLI commands to get telemetry data in your terminal:
 aspire otel logs --dashboard-url {0}
 ```
 
-- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel/) — View structured logs
-- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel/) — View distributed traces
-- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel/) — View trace spans
+- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel-logs/) — View structured logs
+- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/) — View distributed traces
+- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel-spans/) — View trace spans
 - [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
 
 For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
