@@ -202,7 +202,7 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 // If there are hives (PR build directories), prompt for channel selection.
                 // Otherwise, use the implicit/default channel automatically.
-                var hasHives = ExecutionContext.GetPrHiveCount() > 0;
+                var hasHives = ExecutionContext.GetHiveCount() > 0;
 
                 if (hasHives)
                 {

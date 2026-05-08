@@ -346,7 +346,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
                     .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
                     .ToArray();
-                var hasPrHives = ExecutionContext.GetPrHiveCount() > 0;
+                var hasPrHives = ExecutionContext.GetHiveCount() > 0;
 
                 NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
                     packages,
