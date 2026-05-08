@@ -17,6 +17,11 @@
         <target state="translated">Repositório do Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutLaunchAIAgents">
+        <source>AI Agents</source>
+        <target state="new">AI Agents</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutLaunchNotifications">
         <source>Notifications</source>
         <target state="new">Notifications</target>

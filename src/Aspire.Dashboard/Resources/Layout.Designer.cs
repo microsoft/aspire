@@ -275,5 +275,14 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ReconnectRetryButtonText", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to AI Agents.
+        /// </summary>
+        public static string MainLayoutLaunchAIAgents {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
+            }
+        }
     }
 }
