@@ -361,12 +361,12 @@ public static class GoHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (builder.Resource.TryGetLastAnnotation<GoLintAnnotation>(out _))
+        if (builder.Resource.TryGetLastAnnotation<GoVetToolAnnotation>(out _))
         {
             return builder;
         }
 
-        builder.WithAnnotation(new GoLintAnnotation());
+        builder.WithAnnotation(new GoVetToolAnnotation());
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {

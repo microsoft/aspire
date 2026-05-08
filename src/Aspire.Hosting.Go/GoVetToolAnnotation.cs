@@ -5,4 +5,4 @@ using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Go;
 
-internal sealed class GoLintAnnotation : IResourceAnnotation { }
+internal sealed class GoVetToolAnnotation : IResourceAnnotation { }
