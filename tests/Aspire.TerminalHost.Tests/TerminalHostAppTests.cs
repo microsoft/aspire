@@ -290,6 +290,99 @@ public class TerminalHostAppTests
         }
     }
 
+    [Fact]
+    public async Task DownstreamPrimaryResizeIsForwardedUpstreamAsRawResizeFrame()
+    {
+        // Regression: the consumer-side multi-head server fires its OnResized
+        // event whenever the current primary peer changes the producer dims
+        // (RequestPrimary or explicit Resize from primary). The terminal host
+        // bridges that event to a raw HMP1 FrameResize (0x05) on the upstream
+        // (DCP-facing) connection — bypassing Hex1b's stock Hmp1WorkloadAdapter
+        // IsPrimary gate, which would silently drop every resize because DCP's
+        // minimal HMP1 server never sends Hello.PrimaryPeerId or RoleChange.
+        // Without this bridge, the underlying PTY stayed at its DCP-initial
+        // dims forever.
+        var (args, tmp, control) = BuildArgs(1);
+        using var disp = tmp;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+
+            // Stand up the upstream "DCP" first. Send Hello so the host's
+            // upstream-side adapter handshakes successfully and ProducerConnected
+            // flips before we attempt the consumer-side connect — otherwise the
+            // resize broadcast would race the upstream stream's existence.
+            await using var producer = await ConnectProducerAsync(args.ProducerUdsPaths[0], TimeSpan.FromSeconds(5));
+            await producer.SendHelloAsync(80, 24, default);
+
+            await WaitForAsync(
+                () => app.SnapshotReplicas()[0].ProducerConnected,
+                TimeSpan.FromSeconds(5),
+                "ProducerConnected should flip to true after producer dials in.");
+
+            // Wait for the consumer-side UDS server to bind so the dial below
+            // doesn't race a not-yet-listening socket.
+            await WaitForFileAsync(args.ConsumerUdsPaths[0], TimeSpan.FromSeconds(5));
+
+            // Now connect a minimal raw-frame HMP1 client to the consumer UDS:
+            // ClientHello + RequestPrimary, then keep the stream open. We don't
+            // need a full Hex1bTerminal because all we're verifying is that the
+            // server-side OnResized event (which fires when RequestPrimary
+            // promotes us and applies the requested dims) is bridged upstream.
+            const int requestedWidth = 123;
+            const int requestedHeight = 45;
+
+            await using var consumer = await TestHmp1Consumer.ConnectAsync(
+                args.ConsumerUdsPaths[0], TimeSpan.FromSeconds(5));
+            await consumer.SendClientHelloAsync("test-consumer", "primary", default);
+            await consumer.SendRequestPrimaryAsync(requestedWidth, requestedHeight, default);
+
+            // The frame the test producer should observe upstream:
+            // [type=0x05 Resize][length=8 LE][width:4B LE][height:4B LE]
+            //
+            // Use the predicate variant because the host's Hex1bTerminal may
+            // emit additional resize frames upstream during startup or in
+            // response to incoming Hello dims (the consumer-side server's
+            // Resized event also triggers Hex1bTerminal's own
+            // workload.ResizeAsync). We only care that SOME FrameResize lands
+            // upstream with the dims the consumer requested via RequestPrimary.
+            const byte FrameResize = 0x05;
+            var payload = await producer.WaitForMatchingFrameAsync(
+                FrameResize,
+                p =>
+                {
+                    if (p.Length != 8)
+                    {
+                        return false;
+                    }
+                    var w = p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
+                    var h = p[4] | (p[5] << 8) | (p[6] << 16) | (p[7] << 24);
+                    return w == requestedWidth && h == requestedHeight;
+                },
+                TimeSpan.FromSeconds(10));
+
+            // Sanity: payload encodes exactly the requested dims (defensive
+            // — the predicate already filtered, but keeps the assertion intent
+            // explicit on the test surface).
+            Assert.Equal(8, payload.Length);
+            var observedWidth = payload[0] | (payload[1] << 8) | (payload[2] << 16) | (payload[3] << 24);
+            var observedHeight = payload[4] | (payload[5] << 8) | (payload[6] << 16) | (payload[7] << 24);
+            Assert.Equal(requestedWidth, observedWidth);
+            Assert.Equal(requestedHeight, observedHeight);
+        }
+        finally
+        {
+            app.RequestShutdown();
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
     /// <summary>
     /// A minimal HMP1 server-role producer for tests. Connects to the UDS path
     /// the terminal host is listening on (producer side) and writes the bare
@@ -320,6 +413,84 @@ public class TerminalHostAppTests
 
         public Task SendOutputAsync(byte[] payload, CancellationToken ct) =>
             SendFrameAsync(FrameOutput, payload, ct);
+
+        /// <summary>
+        /// Reads HMP1 frames inbound from the terminal host (i.e. from the
+        /// upstream side of <see cref="DcpUpstreamAdapter"/>) until one matching
+        /// <paramref name="expectedType"/> is observed, then returns its payload.
+        /// Other frame types are skipped (logged as debug). Throws on EOF or
+        /// malformed length.
+        /// </summary>
+        public async Task<byte[]> WaitForFrameAsync(byte expectedType, TimeSpan timeout)
+        {
+            using var cts = new CancellationTokenSource(timeout);
+            while (true)
+            {
+                var (type, payload) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
+                if (type == expectedType)
+                {
+                    return payload;
+                }
+                // Otherwise ignore and read the next frame.
+            }
+        }
+
+        /// <summary>
+        /// Drains HMP1 frames until a frame of the requested type whose
+        /// payload passes the <paramref name="match"/> predicate is found.
+        /// Useful when upstream may receive multiple frames of the same type
+        /// from different sources (e.g., terminal startup resize vs explicit
+        /// user resize).
+        /// </summary>
+        public async Task<byte[]> WaitForMatchingFrameAsync(
+            byte expectedType, Func<byte[], bool> match, TimeSpan timeout)
+        {
+            using var cts = new CancellationTokenSource(timeout);
+            while (true)
+            {
+                var (type, payload) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
+                if (type == expectedType && match(payload))
+                {
+                    return payload;
+                }
+            }
+        }
+
+        /// <summary>Reads exactly one HMP1 frame and returns its (type, payload).</summary>
+        public async Task<(byte Type, byte[] Payload)> ReadFrameAsync(CancellationToken ct)
+        {
+            var header = new byte[5];
+            await ReadExactlyAsync(header, ct).ConfigureAwait(false);
+
+            var type = header[0];
+            var length = (uint)(header[1] | (header[2] << 8) | (header[3] << 16) | (header[4] << 24));
+            if (length > 16 * 1024 * 1024)
+            {
+                throw new InvalidOperationException($"Producer-side reader: frame length {length} exceeds 16MB cap.");
+            }
+
+            var payload = new byte[length];
+            if (length > 0)
+            {
+                await ReadExactlyAsync(payload, ct).ConfigureAwait(false);
+            }
+            return (type, payload);
+        }
+
+        private async Task ReadExactlyAsync(byte[] buffer, CancellationToken ct)
+        {
+            var offset = 0;
+            while (offset < buffer.Length)
+            {
+                var read = await _stream.ReadAsync(buffer.AsMemory(offset, buffer.Length - offset), ct).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    throw new EndOfStreamException(
+                        $"Producer-side reader: stream EOF after {offset} of {buffer.Length} bytes.");
+                }
+                offset += read;
+            }
+        }
 
         private async Task SendFrameAsync(byte type, byte[] payload, CancellationToken ct)
         {
@@ -373,6 +544,93 @@ public class TerminalHostAppTests
         }
         throw new TimeoutException(
             $"Timed out connecting to producer UDS '{socketPath}' after {timeout.TotalSeconds:F1}s.", last);
+    }
+
+    /// <summary>
+    /// A minimal HMP1 client-role consumer for tests. Connects to the consumer
+    /// UDS the terminal host is listening on, then writes raw HMP1 frames
+    /// (ClientHello, RequestPrimary). Avoids spinning up a full
+    /// <c>Hex1bTerminal</c> in a test process where no interactive console is
+    /// attached.
+    /// </summary>
+    private sealed class TestHmp1Consumer : IAsyncDisposable
+    {
+        private const byte FrameRequestPrimary = 0x07;
+        private const byte FrameClientHello = 0x0B;
+
+        private readonly Socket _socket;
+        private readonly NetworkStream _stream;
+        private bool _disposed;
+
+        private TestHmp1Consumer(Socket socket)
+        {
+            _socket = socket;
+            _stream = new NetworkStream(socket, ownsSocket: true);
+        }
+
+        public static async Task<TestHmp1Consumer> ConnectAsync(string socketPath, TimeSpan timeout)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Exception? last = null;
+            while (sw.Elapsed < timeout)
+            {
+                var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                try
+                {
+                    await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath)).ConfigureAwait(false);
+                    return new TestHmp1Consumer(socket);
+                }
+                catch (Exception ex)
+                {
+                    socket.Dispose();
+                    last = ex;
+                    await Task.Delay(50).ConfigureAwait(false);
+                }
+            }
+            throw new TimeoutException(
+                $"Timed out connecting to consumer UDS '{socketPath}' after {timeout.TotalSeconds:F1}s.", last);
+        }
+
+        public async Task SendClientHelloAsync(string displayName, string defaultRole, CancellationToken ct)
+        {
+            // JSON keys are camelCase per Hmp1JsonContext.PropertyNamingPolicy.
+            // Roles on the wire are "primary" / "secondary" since Phase 15.
+            var json = $"{{\"displayName\":\"{displayName}\",\"defaultRole\":\"{defaultRole}\"}}";
+            await SendFrameAsync(FrameClientHello, System.Text.Encoding.UTF8.GetBytes(json), ct).ConfigureAwait(false);
+        }
+
+        public async Task SendRequestPrimaryAsync(int cols, int rows, CancellationToken ct)
+        {
+            var json = $"{{\"cols\":{cols},\"rows\":{rows}}}";
+            await SendFrameAsync(FrameRequestPrimary, System.Text.Encoding.UTF8.GetBytes(json), ct).ConfigureAwait(false);
+        }
+
+        private async Task SendFrameAsync(byte type, byte[] payload, CancellationToken ct)
+        {
+            var header = new byte[5];
+            header[0] = type;
+            header[1] = (byte)(payload.Length & 0xFF);
+            header[2] = (byte)((payload.Length >> 8) & 0xFF);
+            header[3] = (byte)((payload.Length >> 16) & 0xFF);
+            header[4] = (byte)((payload.Length >> 24) & 0xFF);
+            await _stream.WriteAsync(header, ct).ConfigureAwait(false);
+            if (payload.Length > 0)
+            {
+                await _stream.WriteAsync(payload, ct).ConfigureAwait(false);
+            }
+            await _stream.FlushAsync(ct).ConfigureAwait(false);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            _disposed = true;
+            try { _socket.Shutdown(SocketShutdown.Both); } catch { /* ignore */ }
+            await _stream.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     private static async Task WaitForAsync(Func<bool> predicate, TimeSpan timeout, string failureMessage)
