@@ -304,7 +304,8 @@ internal sealed class StopCommand : BaseCommand
     private static string GetAppHostDisplayPath(IAppHostAuxiliaryBackchannel connection)
     {
         var appHostPath = GetAppHostPath(connection);
-        return FileSystemHelper.ShortenPaths([appHostPath])[appHostPath];
+        var displayPaths = FileSystemHelper.ShortenPaths([appHostPath]);
+        return displayPaths.TryGetValue(appHostPath, out var displayPath) ? displayPath : appHostPath;
     }
 
     private static string GetAppHostPath(IAppHostAuxiliaryBackchannel connection)
