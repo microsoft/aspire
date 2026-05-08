@@ -176,6 +176,54 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
+    public async Task PublishAsync_CustomManifestResource()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                serviceResource.AddManifest("keda.sh/v1alpha1", "ScaledObject", "myapp-scaler", manifest =>
+                {
+                    manifest.WithNamespace("autoscaling")
+                        .WithLabel("example.com/custom", "true")
+                        .WithAnnotation("example.com/source", "polyglot")
+                        .WithField("spec.scaleTargetRef.kind", "Deployment")
+                        .WithField("spec.scaleTargetRef.name", "myapp")
+                        .WithField("spec.minReplicaCount", 1)
+                        .WithField("spec.maxReplicaCount", 3)
+                        .WithField("data.enabled", true);
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var manifestPath = Path.Combine(tempDir.Path, "templates/myapp/scaler.yaml");
+        Assert.True(File.Exists(manifestPath), $"Manifest should exist at {manifestPath}");
+
+        var content = await File.ReadAllTextAsync(manifestPath);
+
+        Assert.Contains("apiVersion: keda.sh/v1alpha1", content);
+        Assert.Contains("kind: ScaledObject", content);
+        Assert.Contains("myapp-scaler", content);
+        Assert.Contains("namespace: \"autoscaling\"", content);
+        Assert.Contains("example.com/custom: \"true\"", content);
+        Assert.Contains("app.kubernetes.io/name:", content);
+        Assert.Contains("example.com/source: \"polyglot\"", content);
+        Assert.Contains("scaleTargetRef:", content);
+        Assert.Contains("kind: \"Deployment\"", content);
+        Assert.Contains("name: \"myapp\"", content);
+        Assert.Contains("minReplicaCount: 1", content);
+        Assert.Contains("maxReplicaCount: 3", content);
+        Assert.Contains("enabled: true", content);
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesSpecialResourceName()
     {
         using var tempDir = new TestTempDirectory();

@@ -65,6 +65,15 @@ func main() {
 	_ = serviceContainer.PublishAsKubernetesService(func(service aspire.KubernetesResource) {
 		_, _ = service.Name()
 		_ = service.Parent()
+		_ = service.AddManifest("keda.sh/v1alpha1", "ScaledObject", "kube-service-scaler", &aspire.AddManifestOptions{
+			Configure: func(manifest aspire.KubernetesManifestResource) {
+				manifest.WithLabel("example.com/custom", "true")
+				manifest.WithAnnotation("example.com/source", "go")
+				manifest.WithField("spec.scaleTargetRef.kind", "Deployment")
+				manifest.WithField("spec.scaleTargetRef.name", "kube-service")
+				manifest.WithField("spec.maxReplicaCount", 3)
+			},
+		})
 	})
 	if err = serviceContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
