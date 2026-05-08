@@ -78,7 +78,7 @@ builder.AddGoApp("api", "../go-api")
 ```
 
 This launches:
-```
+```sh
 dlv --headless=true --listen=:2345 --api-version=2 debug .
 ```
 
