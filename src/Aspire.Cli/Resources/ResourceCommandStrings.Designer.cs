@@ -69,5 +69,11 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string NonInteractiveOptionDescription {
+            get {
+                return ResourceManager.GetString("NonInteractiveOptionDescription", resourceCulture);
+            }
+        }
+
     }
 }

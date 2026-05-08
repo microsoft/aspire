@@ -17,6 +17,11 @@
         <target state="needs-review-translation">Nome della risorsa di destinazione rispetto al quale eseguire il comando.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveOptionDescription">
+        <source>Execute without prompting for command confirmation</source>
+        <target state="new">Execute without prompting for command confirmation</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
         <target state="translated">connettersi a</target>

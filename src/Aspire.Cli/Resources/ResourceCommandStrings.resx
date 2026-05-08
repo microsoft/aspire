@@ -70,4 +70,7 @@
   <data name="CommandNameArgumentDescription" xml:space="preserve">
     <value>The name of the command to execute (e.g. start, stop, restart)</value>
   </data>
+  <data name="NonInteractiveOptionDescription" xml:space="preserve">
+    <value>Execute without prompting for command confirmation</value>
+  </data>
 </root>

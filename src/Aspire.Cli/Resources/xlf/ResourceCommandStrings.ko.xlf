@@ -17,6 +17,11 @@
         <target state="needs-review-translation">명령을 실행할 대상 리소스의 이름입니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveOptionDescription">
+        <source>Execute without prompting for command confirmation</source>
+        <target state="new">Execute without prompting for command confirmation</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
         <target state="translated">연결 대상</target>
