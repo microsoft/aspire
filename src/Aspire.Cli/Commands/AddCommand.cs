@@ -206,6 +206,14 @@ internal sealed class AddCommand : BaseCommand
                 Source = source
             };
 
+            if (!string.IsNullOrWhiteSpace(source) && project.LanguageId == KnownLanguageId.CSharp)
+            {
+                await NuGetConfigMerger.AddPackageSourceMappingAsync(
+                    effectiveAppHostProjectFile.Directory!,
+                    new PackageMapping(PackageMapping.AllPackages, source),
+                    cancellationToken);
+            }
+
             // Stop any running AppHost instance before adding the package.
             // A running AppHost (especially in detach mode) locks project files,
             // which prevents 'dotnet add package' from modifying the project.
@@ -486,23 +494,37 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             .ToArray();
 
         var selectedIntegration = await interactionService.PromptForSelectionAsync(
-            AddCommandStrings.SelectAnIntegrationToAdd,
+            CreateIntegrationSelectionPromptTitle(),
             filteredPackages,
-            PackageNameWithFriendlyNameIfAvailable,
+            FormatIntegrationSelectionLabel,
             cancellationToken: cancellationToken);
         return selectedIntegration;
     }
 
-    private static string PackageNameWithFriendlyNameIfAvailable((string FriendlyName, NuGetPackage Package, PackageChannel Channel) packageWithFriendlyName)
+    private static string CreateIntegrationSelectionPromptTitle()
     {
-        if (packageWithFriendlyName.FriendlyName is { } friendlyName)
-        {
-            return $"[bold]{friendlyName.EscapeMarkup()}[/] ({packageWithFriendlyName.Package.Id.EscapeMarkup()})";
-        }
-        else
-        {
-            return packageWithFriendlyName.Package.Id.EscapeMarkup();
-        }
+        return string.Create(CultureInfo.CurrentCulture, $"{AddCommandStrings.SelectAnIntegrationToAdd}{Environment.NewLine}[dim]{FormatPromptColumn(AddCommandStrings.HeaderGroup, 17)}  {FormatPromptColumn(AddCommandStrings.HeaderName, 30)}  {FormatPromptColumn(AddCommandStrings.HeaderPackage, 44)}  {AddCommandStrings.HeaderVersion}[/]");
+    }
+
+    private static string FormatIntegrationSelectionLabel((string FriendlyName, NuGetPackage Package, PackageChannel Channel) packageWithFriendlyName)
+    {
+        var group = IntegrationDisplayHelpers.GetIntegrationGroup(packageWithFriendlyName.Package.Id);
+        var groupName = IntegrationDisplayHelpers.GetIntegrationGroupTitle(group);
+
+        return string.Create(
+            CultureInfo.CurrentCulture,
+            $"[dim]{FormatPromptColumn(groupName, 17).EscapeMarkup()}[/]  [bold]{FormatPromptColumn(packageWithFriendlyName.FriendlyName, 30).EscapeMarkup()}[/]  [dim]{FormatPromptColumn(packageWithFriendlyName.Package.Id, 44).EscapeMarkup()}[/]  {packageWithFriendlyName.Package.Version.EscapeMarkup()}");
+    }
+
+    private static string FormatPromptColumn(string value, int width)
+    {
+        const string ellipsis = "...";
+
+        var formattedValue = value.Length > width
+            ? string.Concat(value.AsSpan(0, width - ellipsis.Length), ellipsis)
+            : value;
+
+        return formattedValue.PadRight(width);
     }
 }
 

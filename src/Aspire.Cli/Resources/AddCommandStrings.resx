@@ -215,6 +215,18 @@
   <data name="HeaderVersion" xml:space="preserve">
     <value>Version</value>
   </data>
+  <data name="HeaderGroup" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="IntegrationGroupMicrosoft" xml:space="preserve">
+    <value>Microsoft Aspire</value>
+  </data>
+  <data name="IntegrationGroupCommunityToolkit" xml:space="preserve">
+    <value>Community Toolkit</value>
+  </data>
+  <data name="IntegrationGroupThirdParty" xml:space="preserve">
+    <value>Third-party</value>
+  </data>
   <data name="SpecifiedVersionNotFoundForPackage" xml:space="preserve">
     <value>The requested version '{1}' was not found for package '{0}'.</value>
     <comment>{0} is the package name, {1} is the requested version.</comment>

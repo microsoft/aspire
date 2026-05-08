@@ -3,6 +3,7 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -673,6 +674,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     {
                         CreatePackage("Contoso.Hosting.MongoDb", "1.2.3"),
                         CreatePackage("Aspire.StackExchange.Redis", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.Dapr", "9.1.0"),
                         CreatePackage("Aspire.Hosting.Redis", "9.2.0")
                     },
                     _ => Array.Empty<NuGetPackage>()
@@ -759,6 +761,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(integrations, i => i.Package == "Aspire.Hosting.Redis");
         Assert.Contains(integrations, i => i.Package == "Contoso.Hosting.MongoDb" && i.Version == "1.2.3");
         Assert.DoesNotContain(integrations, i => i.Package == "Aspire.StackExchange.Redis");
+        Assert.DoesNotContain(integrations, i => i.Package == "Aspire.Hosting.Dapr");
     }
 
     [Fact]
@@ -2161,6 +2164,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         const string expectedSource = "https://custom-nuget-source.test/v3/index.json";
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
 
@@ -2174,7 +2180,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return new TestAddCommandPrompter(interactionService);
             };
 
-            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
 
             options.DotNetCliRunnerFactory = (sp) =>
             {
@@ -2217,6 +2226,21 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.Equal(0, exitCode);
         Assert.Equal(expectedSource, addUsedSource);
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath));
+
+        var nugetConfig = XDocument.Load(nugetConfigPath);
+        var packageSources = nugetConfig.Root!.Element("packageSources")!;
+        Assert.Contains(packageSources.Elements("add"), add =>
+            string.Equals((string?)add.Attribute("key"), expectedSource, StringComparison.Ordinal) &&
+            string.Equals((string?)add.Attribute("value"), expectedSource, StringComparison.Ordinal));
+
+        var packageSourceMapping = nugetConfig.Root!.Element("packageSourceMapping")!;
+        var sourceMapping = packageSourceMapping.Elements("packageSource")
+            .Single(packageSource => string.Equals((string?)packageSource.Attribute("key"), expectedSource, StringComparison.Ordinal));
+        Assert.Contains(sourceMapping.Elements("package"), package =>
+            string.Equals((string?)package.Attribute("pattern"), PackageMapping.AllPackages, StringComparison.Ordinal));
     }
 
     [Fact]

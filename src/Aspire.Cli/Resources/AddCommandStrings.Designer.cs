@@ -293,6 +293,38 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string HeaderGroup
+        {
+            get
+            {
+                return ResourceManager.GetString("HeaderGroup", resourceCulture);
+            }
+        }
+
+        public static string IntegrationGroupMicrosoft
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationGroupMicrosoft", resourceCulture);
+            }
+        }
+
+        public static string IntegrationGroupCommunityToolkit
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationGroupCommunityToolkit", resourceCulture);
+            }
+        }
+
+        public static string IntegrationGroupThirdParty
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationGroupThirdParty", resourceCulture);
+            }
+        }
+
         public static string SpecifiedVersionNotFoundForPackage
         {
             get

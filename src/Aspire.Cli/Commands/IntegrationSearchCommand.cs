@@ -6,12 +6,14 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
@@ -103,17 +105,25 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             : matches;
 
         var results = orderedMatches
-            .Select(p => new IntegrationSearchResult
+            .Select(p => new IntegrationSearchDisplayResult
             {
                 Name = p.FriendlyName,
                 Package = p.Package.Id,
-                Version = p.Package.Version
+                Version = p.Package.Version,
+                Group = IntegrationDisplayHelpers.GetIntegrationGroup(p.Package.Id)
             })
             .ToArray();
 
         if (format is OutputFormat.Json)
         {
-            var json = JsonSerializer.Serialize(results, JsonSourceGenerationContext.RelaxedEscaping.IntegrationSearchResultArray);
+            var json = JsonSerializer.Serialize(
+                results.Select(static result => new IntegrationSearchResult
+                {
+                    Name = result.Name,
+                    Package = result.Package,
+                    Version = result.Version
+                }).ToArray(),
+                JsonSourceGenerationContext.RelaxedEscaping.IntegrationSearchResultArray);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
             return CliExitCodes.Success;
         }
@@ -141,22 +151,93 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.FoundIntegrationPackages, results.Length));
         }
 
-        var table = new Table();
-        table.AddBoldColumn(AddCommandStrings.HeaderName);
-        table.AddBoldColumn(AddCommandStrings.HeaderPackage);
-        table.AddBoldColumn(AddCommandStrings.HeaderVersion);
-
-        foreach (var result in results)
+        var rows = new List<IRenderable>();
+        foreach (var group in results
+            .GroupBy(static result => result.Group)
+            .OrderBy(static group => group.Key))
         {
-            table.AddRow(
-                Markup.Escape(result.Name),
-                Markup.Escape(result.Package),
-                Markup.Escape(result.Version));
+            if (rows.Count > 0)
+            {
+                rows.Add(Text.Empty);
+            }
+
+            rows.Add(new Markup($"[bold]{Markup.Escape(IntegrationDisplayHelpers.GetIntegrationGroupTitle(group.Key))}[/] [dim]({group.Count().ToString(CultureInfo.CurrentCulture)})[/]"));
+
+            var table = new Table();
+            table.AddBoldColumn(AddCommandStrings.HeaderName);
+            table.AddBoldColumn(AddCommandStrings.HeaderPackage);
+            table.AddBoldColumn(AddCommandStrings.HeaderVersion);
+
+            foreach (var result in group.OrderBy(static result => result.Name, new CommunityToolkitFirstComparer()).ThenBy(static result => result.Package, StringComparer.OrdinalIgnoreCase))
+            {
+                table.AddRow(
+                    Markup.Escape(result.Name),
+                    Markup.Escape(result.Package),
+                    Markup.Escape(result.Version));
+            }
+
+            rows.Add(table);
         }
 
-        InteractionService.DisplayRenderable(table);
-        return CliExitCodes.Success;
+        InteractionService.DisplayRenderable(new Rows(rows));
+        return ExitCodeConstants.Success;
     }
+
+}
+internal static class IntegrationDisplayHelpers
+{
+    public static IntegrationSearchResultGroup GetIntegrationGroup(string packageId)
+    {
+        if (packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparisons.NuGetPackageId))
+        {
+            return IntegrationSearchResultGroup.CommunityToolkit;
+        }
+
+        if (HostingIntegrationMetadata.IsBuiltInHostingPackageId(packageId))
+        {
+            return IntegrationSearchResultGroup.Microsoft;
+        }
+
+        return IntegrationSearchResultGroup.ThirdParty;
+    }
+
+    public static string GetIntegrationGroupTitle(IntegrationSearchResultGroup group)
+    {
+        return group switch
+        {
+            IntegrationSearchResultGroup.Microsoft => AddCommandStrings.IntegrationGroupMicrosoft,
+            IntegrationSearchResultGroup.CommunityToolkit => AddCommandStrings.IntegrationGroupCommunityToolkit,
+            IntegrationSearchResultGroup.ThirdParty => AddCommandStrings.IntegrationGroupThirdParty,
+            _ => throw new ArgumentOutOfRangeException(nameof(group))
+        };
+    }
+}
+
+internal enum IntegrationSearchResultGroup
+{
+    Microsoft,
+    CommunityToolkit,
+    ThirdParty
+}
+
+internal sealed class IntegrationSearchDisplayResult
+{
+    public required string Name { get; init; }
+
+    public required string Package { get; init; }
+
+    public required string Version { get; init; }
+
+    public required IntegrationSearchResultGroup Group { get; init; }
+}
+
+internal sealed class IntegrationSearchResult
+{
+    public required string Name { get; init; }
+
+    public required string Package { get; init; }
+
+    public required string Version { get; init; }
 }
 
 internal sealed class IntegrationListCommand : IntegrationDiscoveryCommand
@@ -198,11 +279,3 @@ internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
     protected override string? GetSearchTerm(ParseResult parseResult) => parseResult.GetValue(_queryArgument);
 }
 
-internal sealed class IntegrationSearchResult
-{
-    public required string Name { get; init; }
-
-    public required string Package { get; init; }
-
-    public required string Version { get; init; }
-}

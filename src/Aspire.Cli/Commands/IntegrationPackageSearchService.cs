@@ -35,7 +35,8 @@ internal sealed class IntegrationPackageSearchService(
             var integrationPackages = await channel.SearchPackagesAsync(
                 $"tags:{HostingIntegrationMetadata.CanonicalTag}",
                 workingDirectory,
-                static packageId => !HostingIntegrationMetadata.IsKnownNonHostingAspirePackageId(packageId),
+                static packageId => !HostingIntegrationMetadata.IsKnownNonHostingAspirePackageId(packageId) &&
+                    !DeprecatedPackages.IsDeprecated(packageId),
                 ct);
 
             lock (packagesLock)
@@ -56,6 +57,7 @@ internal sealed class IntegrationPackageSearchService(
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
             var channelPackages = (await channel.GetPackagesAsync(packageId, workingDirectory, ct)).ToArray();
+            channelPackages = [.. channelPackages.Where(static package => !DeprecatedPackages.IsDeprecated(package.Id))];
             if (channelPackages.Length == 0)
             {
                 return;

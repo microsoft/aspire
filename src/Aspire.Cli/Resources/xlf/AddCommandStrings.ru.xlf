@@ -37,6 +37,11 @@
         <target state="new">Found {0} integration package(s) matching '{1}'.</target>
         <note>{0} is the number of integration packages found, {1} is the search term provided by the user.</note>
       </trans-unit>
+      <trans-unit id="HeaderGroup">
+        <source>Group</source>
+        <target state="new">Group</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderName">
         <source>Name</source>
         <target state="new">Name</target>
@@ -60,6 +65,21 @@
       <trans-unit id="IntegrationCommandDescription">
         <source>Manage Aspire hosting integrations</source>
         <target state="new">Manage Aspire hosting integrations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationGroupCommunityToolkit">
+        <source>Community Toolkit</source>
+        <target state="new">Community Toolkit</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationGroupMicrosoft">
+        <source>Microsoft Aspire</source>
+        <target state="new">Microsoft Aspire</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IntegrationGroupThirdParty">
+        <source>Third-party</source>
+        <target state="new">Third-party</target>
         <note />
       </trans-unit>
       <trans-unit id="IntegrationListDescription">
