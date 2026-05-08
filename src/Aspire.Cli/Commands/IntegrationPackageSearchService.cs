@@ -32,12 +32,24 @@ internal sealed class IntegrationPackageSearchService(
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
-            var integrationPackages = await channel.SearchPackagesAsync(
+            var integrationPackages = (await channel.SearchPackagesAsync(
                 $"tags:{HostingIntegrationMetadata.CanonicalTag}",
                 workingDirectory,
                 static packageId => !HostingIntegrationMetadata.IsKnownNonHostingAspirePackageId(packageId) &&
                     !DeprecatedPackages.IsDeprecated(packageId),
-                ct);
+                ct)).ToArray();
+
+            if (VersionHelper.IsLocalBuildChannel(channel.Name))
+            {
+                var builtInPackages = await channel.SearchPackagesAsync(
+                    "Aspire.Hosting",
+                    workingDirectory,
+                    static packageId => HostingIntegrationMetadata.IsBuiltInHostingPackageId(packageId) &&
+                        !DeprecatedPackages.IsDeprecated(packageId),
+                    ct);
+
+                integrationPackages = [.. integrationPackages, .. builtInPackages];
+            }
 
             lock (packagesLock)
             {

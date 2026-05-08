@@ -280,6 +280,11 @@ internal sealed class AddCommand : BaseCommand
             return null;
         }
 
+        if (VersionHelper.IsLocalBuildChannel(channel.Name))
+        {
+            return null;
+        }
+
         if (!string.IsNullOrWhiteSpace(package.Source))
         {
             return package.Source;

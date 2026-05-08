@@ -2492,7 +2492,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal("Aspire.Hosting.MongoDB", addedPackageId);
         Assert.Equal("13.4.0-pr.16882.gf2644312", addedPackageVersion);
-        Assert.Equal(prHiveSource, addUsedSource);
+        Assert.Null(addUsedSource);
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
         Assert.True(File.Exists(nugetConfigPath));
@@ -2501,6 +2501,103 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var source = Assert.Single(nugetConfig.Descendants("add"));
         Assert.Equal(prHiveSource, source.Attribute("key")?.Value);
         Assert.Equal(prHiveSource, source.Attribute("value")?.Value);
+    }
+
+    [Fact]
+    public async Task AddCommandInteractiveListIncludesBuiltInPackagesFromPrHiveWhenTagSearchDoesNotFindThem()
+    {
+        const string nugetOrgSource = "https://api.nuget.org/v3/index.json";
+
+        List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? promptedPackages = null;
+        string? addedPackageId = null;
+        string? addUsedSource = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        var prHiveSource = Path.Combine(workspace.WorkspaceRoot.FullName, "pr-hive", "packages");
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", "pr-16882"));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>());
+                prompter.PromptForIntegrationCallback = packages =>
+                {
+                    promptedPackages = packages.ToList();
+                    return promptedPackages.Single(package => package.Package.Id == "Aspire.Hosting.MongoDB");
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+                    {
+                        NuGetPackage[] packages = query switch
+                        {
+                            var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [
+                                new NuGetPackage { Id = "AspireQuartz.Hosting", Version = "1.0.1", Source = nugetOrgSource }
+                            ],
+                            "Aspire.Hosting" => [
+                                new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gf2644312", Source = prHiveSource }
+                            ],
+                            _ => []
+                        };
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(packages.Where(package => filter?.Invoke(package.Id) ?? true));
+                    }
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                        [
+                            PackageChannel.CreateExplicitChannel(
+                                "pr-16882",
+                                PackageChannelQuality.Both,
+                                [
+                                    new PackageMapping("Aspire*", prHiveSource),
+                                    new PackageMapping(PackageMapping.AllPackages, nugetOrgSource)
+                                ],
+                                cache)
+                        ])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, packageName, _, nugetSource, _, _, _) =>
+                {
+                    addedPackageId = packageName;
+                    addUsedSource = nugetSource;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(promptedPackages);
+        Assert.Contains(promptedPackages, package => package.Package.Id == "AspireQuartz.Hosting");
+        Assert.Contains(promptedPackages, package => package.Package.Id == "Aspire.Hosting.MongoDB");
+        Assert.Equal("Aspire.Hosting.MongoDB", addedPackageId);
+        Assert.Null(addUsedSource);
     }
 
     [Fact]
