@@ -28,7 +28,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("pe-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure Virtual Network resource to the application model.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
     public static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetwork(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -59,7 +59,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("pe-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExport("addAzureVirtualNetworkFromParameter", MethodName = "addAzureVirtualNetwork", Description = "Adds an Azure Virtual Network resource to the application model with a parameterized address prefix.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addAzureVirtualNetwork dispatcher export.")]
     public static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetwork(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -74,6 +74,23 @@ public static class AzureVirtualNetworkExtensions
         AzureVirtualNetworkResource resource = new(name, ConfigureVirtualNetwork, addressPrefix.Resource);
 
         return AddAzureVirtualNetworkCore(builder, resource);
+    }
+
+    [AspireExport("addAzureVirtualNetwork", Description = "Adds an Azure Virtual Network resource to the application model.")]
+    internal static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetworkForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object? addressPrefix = null)
+    {
+        return addressPrefix switch
+        {
+            null => AddAzureVirtualNetwork(builder, name),
+            string addressPrefixValue => AddAzureVirtualNetwork(builder, name, addressPrefixValue),
+            IResourceBuilder<ParameterResource> addressPrefixParameter => AddAzureVirtualNetwork(builder, name, addressPrefixParameter),
+            _ => throw new ArgumentException(
+                "Address prefix must be omitted, a string, or a parameter resource builder.",
+                nameof(addressPrefix))
+        };
     }
 
     private static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetworkCore(
@@ -167,7 +184,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("my-subnet", "10.0.1.0/24");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure subnet resource to an Azure Virtual Network resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
     public static IResourceBuilder<AzureSubnetResource> AddSubnet(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
         [ResourceName] string name,
@@ -201,7 +218,7 @@ public static class AzureVirtualNetworkExtensions
     /// var subnet = vnet.AddSubnet("my-subnet", subnetPrefix);
     /// </code>
     /// </example>
-    [AspireExport("addSubnetFromParameter", MethodName = "addSubnet", Description = "Adds an Azure subnet resource with a parameterized address prefix to an Azure Virtual Network resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSubnet dispatcher export.")]
     public static IResourceBuilder<AzureSubnetResource> AddSubnet(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
         [ResourceName] string name,
@@ -217,6 +234,25 @@ public static class AzureVirtualNetworkExtensions
         var subnet = new AzureSubnetResource(name, subnetName, addressPrefix.Resource, builder.Resource);
 
         return AddSubnetCore(builder, subnet);
+    }
+
+    [AspireExport("addSubnet", Description = "Adds an Azure subnet resource to an Azure Virtual Network resource.")]
+    internal static IResourceBuilder<AzureSubnetResource> AddSubnetForPolyglot(
+        this IResourceBuilder<AzureVirtualNetworkResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object addressPrefix,
+        string? subnetName = null)
+    {
+        ArgumentNullException.ThrowIfNull(addressPrefix);
+
+        return addressPrefix switch
+        {
+            string addressPrefixValue => AddSubnet(builder, name, addressPrefixValue, subnetName),
+            IResourceBuilder<ParameterResource> addressPrefixParameter => AddSubnet(builder, name, addressPrefixParameter, subnetName),
+            _ => throw new ArgumentException(
+                "Address prefix must be a string or a parameter resource builder.",
+                nameof(addressPrefix))
+        };
     }
 
     private static IResourceBuilder<AzureSubnetResource> AddSubnetCore(

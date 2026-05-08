@@ -314,14 +314,18 @@ internal sealed class DescribeCommand : BaseCommand
             var stateText = ColorState(snapshot.State);
             var healthText = ColorHealth(snapshot.HealthStatus?.EscapeMarkup() ?? "-");
 
-            var nameMarkup = ColorResourceName(displayName, displayName.EscapeMarkup());
+            string nameMarkup;
             if (!string.IsNullOrEmpty(dashboardBaseUrl))
             {
                 var resourceUrl = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: snapshot.Name));
-                nameMarkup = $"[link={resourceUrl}]{nameMarkup}[/]";
+                nameMarkup = MarkupHelpers.SafeLink(_interactionService, resourceUrl, displayName);
+            }
+            else
+            {
+                nameMarkup = displayName.EscapeMarkup();
             }
 
-            table.AddRow(nameMarkup, type, stateText, healthText, endpoints);
+            table.AddRow(ColorResourceName(displayName, nameMarkup), type, stateText, healthText, endpoints);
         }
 
         _interactionService.DisplayRenderable(table);
@@ -375,13 +379,12 @@ internal sealed class DescribeCommand : BaseCommand
             .ThenByDescending(e => e.Url.StartsWith("https", StringComparison.OrdinalIgnoreCase))
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase);
 
-    private static string FormatEndpointUrl(string url, string? displayName = null)
+    private string FormatEndpointUrl(string url, string? displayName = null)
     {
-        var escaped = url.EscapeMarkup();
-        var text = !string.IsNullOrEmpty(displayName) ? displayName.EscapeMarkup() : escaped;
+        var text = !string.IsNullOrEmpty(displayName) ? displayName : url;
         return KnownUnsupportedUrlSchemes.IsLinkableUrl(url)
-            ? $"[link={escaped}]{text}[/]"
-            : text;
+            ? MarkupHelpers.SafeLink(_interactionService, url, text)
+            : text.EscapeMarkup();
     }
 
     private static string ColorHealth(string health) => health.ToUpperInvariant() switch

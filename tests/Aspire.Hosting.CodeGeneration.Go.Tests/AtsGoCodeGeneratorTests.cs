@@ -267,6 +267,56 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_CreateBuilderDefaultsAppHostFilePathFromEnvironment()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("if appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\"", aspireGo);
+        Assert.Contains("os.Getenv(\"ASPIRE_APPHOST_FILEPATH\")", aspireGo);
+        Assert.Contains("resolved[\"AppHostFilePath\"] = appHostFilePath", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_CreateBuilderOmitsEmptyDashboardApplicationName()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("if dashboardApplicationName, ok := resolved[\"DashboardApplicationName\"].(string); ok && dashboardApplicationName == \"\"", aspireGo);
+        Assert.Contains("delete(resolved, \"DashboardApplicationName\")", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_DtoCallbacksReturnMutatedArguments()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)", aspireGo);
+        Assert.Contains("cb(arg0)", aspireGo);
+        Assert.Contains("\"p0\": serializeValue(arg0)", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_CallbackArgsSkipUndecodableStructFields()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var baseGo = files["base.go"];
+
+        Assert.Contains("func decodeStructFields[T any](raw any) (T, bool)", baseGo);
+        Assert.Contains("fieldInfo.Tag.Get(\"json\")", baseGo);
+    }
+
+    [Fact]
     public void GeneratedCode_HasGoModFile()
     {
         // Verify that go.mod file is generated

@@ -42,6 +42,8 @@ internal class ConsoleInteractionService : IInteractionService
 
     public ConsoleOutput Console { get; set; }
 
+    public bool SupportsLinks => MessageConsole.Profile.Capabilities.Links;
+
     public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
@@ -590,7 +592,7 @@ internal class ConsoleInteractionService : IInteractionService
             _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand.EscapeMarkup()));
         }
 
-        _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.MoreInfoNewCliVersion, UpdateUrl));
+        _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.MoreInfoNewCliVersion, MarkupHelpers.SafeLink(this, UpdateUrl)));
     }
 
     internal static T? MatchChoice<T>(string value, IEnumerable<T> choices, Func<T, string> choiceFormatter) where T : notnull

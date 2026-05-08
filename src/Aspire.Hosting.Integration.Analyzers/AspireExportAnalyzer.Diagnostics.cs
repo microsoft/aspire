@@ -142,6 +142,17 @@ public partial class AspireExportAnalyzer
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicatePolyglotCapabilityIdId}",
             customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+        private const string DuplicateGeneratedMethodNameId = "ASPIREEXPORT014";
+        internal static readonly DiagnosticDescriptor s_duplicateGeneratedMethodName = new(
+            id: DuplicateGeneratedMethodNameId,
+            title: "Duplicate generated polyglot member name",
+            messageFormat: "Generated polyglot member name '{0}' is already used for target type '{1}' by multiple exports: {2}. Use a unique MethodName, or use a shared MethodName only when every overload has a unique non-default export ID.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicateGeneratedMethodNameId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -155,7 +166,8 @@ public partial class AspireExportAnalyzer
             s_exportedSyncDelegateInvokedInline,
             s_redundantExportId,
             s_callbackContextTypeMissingExport,
-            s_duplicatePolyglotCapabilityId
+            s_duplicatePolyglotCapabilityId,
+            s_duplicateGeneratedMethodName
         );
     }
 }

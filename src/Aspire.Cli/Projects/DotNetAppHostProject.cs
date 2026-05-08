@@ -26,6 +26,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly IInteractionService _interactionService;
     private readonly ICertificateService _certificateService;
     private readonly AspireCliTelemetry _telemetry;
+    private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IFeatures _features;
     private readonly ILogger<DotNetAppHostProject> _logger;
     private readonly TimeProvider _timeProvider;
@@ -44,6 +45,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IInteractionService interactionService,
         ICertificateService certificateService,
         AspireCliTelemetry telemetry,
+        ProfilingTelemetry profilingTelemetry,
         IFeatures features,
         IProjectUpdater projectUpdater,
         IDotNetSdkInstaller sdkInstaller,
@@ -56,6 +58,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _interactionService = interactionService;
         _certificateService = certificateService;
         _telemetry = telemetry;
+        _profilingTelemetry = profilingTelemetry;
         _features = features;
         _projectUpdater = projectUpdater;
         _sdkInstaller = sdkInstaller;
@@ -218,7 +221,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         (bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)? appHostCompatibilityCheck = null;
 
-        using var activity = _telemetry.StartDiagnosticActivity("run");
+        using var activity = _profilingTelemetry.StartAppHostRun();
 
         var isSingleFileAppHost = effectiveAppHostFile.Extension != ".csproj";
 
@@ -228,8 +231,17 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         string? isolatedUserSecretsId = null;
         if (context.Isolated)
         {
-            isolatedUserSecretsId = await ConfigureIsolatedModeAsync(effectiveAppHostFile, env, cancellationToken);
-            _logger.LogInformation("Aspire run isolated. Isolated UserSecretsId: {IsolatedUserSecretsId}", isolatedUserSecretsId);
+            using var isolatedModeActivity = _profilingTelemetry.StartAppHostConfigureIsolatedMode();
+            try
+            {
+                isolatedUserSecretsId = await ConfigureIsolatedModeAsync(effectiveAppHostFile, env, cancellationToken);
+                _logger.LogInformation("Aspire run isolated. Isolated UserSecretsId: {IsolatedUserSecretsId}", isolatedUserSecretsId);
+            }
+            catch (Exception ex)
+            {
+                isolatedModeActivity.SetError(ex.Message);
+                throw;
+            }
         }
 
         // Enable debug logging in the app host so that debug-level output is
@@ -245,7 +257,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         try
         {
-            var certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+            EnsureCertificatesTrustedResult certResult;
+            using (var certActivity = _profilingTelemetry.StartAppHostEnsureDevCertificates())
+            {
+                certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+                certActivity.SetDevCertificateEnvironmentVariables(certResult.EnvironmentVariables.Count);
+            }
 
             // Apply any environment variables returned by the certificate service (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certResult.EnvironmentVariables)
@@ -271,6 +288,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 var shouldBuildInCli = !isExtensionHost || extensionHasBuildCapability;
                 if (shouldBuildInCli)
                 {
+                    using var buildActivity = _profilingTelemetry.StartAppHostBuild(context.NoRestore, isExtensionHost, extensionHasBuildCapability);
+
                     var buildOptions = new ProcessInvocationOptions
                     {
                         StandardOutputCallback = buildOutputCollector.AppendOutput,
@@ -278,6 +297,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                     };
 
                     var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
+                    buildActivity.SetAppHostBuildExitCode(buildExitCode);
 
                     if (buildExitCode != 0)
                     {
@@ -295,7 +315,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             }
             else
             {
+                using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();
                 appHostCompatibilityCheck = await AppHostHelper.CheckAppHostCompatibilityAsync(_runner, _interactionService, effectiveAppHostFile, _telemetry, context.WorkingDirectory, _fileLoggerProvider.LogFilePath, cancellationToken);
+                compatibilityActivity.SetAppHostCompatibility(
+                    appHostCompatibilityCheck.Value.IsCompatibleAppHost,
+                    appHostCompatibilityCheck.Value.SupportsBackchannel,
+                    appHostCompatibilityCheck.Value.AspireHostingVersion);
             }
         }
         catch
@@ -318,6 +343,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         // Signal that build/preparation is complete
         context.BuildCompletionSource?.TrySetResult(true);
+        activity.AddAppHostBuildReadyEvent();
 
         var runOptions = new ProcessInvocationOptions
         {
@@ -343,6 +369,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             // dotnet watch does not support --no-build, so watch + context.NoBuild is invalid and will fail in the runner.
             // noRestore: only relevant when noBuild is false (since --no-build implies --no-restore)
             var noBuild = !watch || context.NoBuild;
+            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
             return await _runner.RunAsync(
                 effectiveAppHostFile,
                 watch,

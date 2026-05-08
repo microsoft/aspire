@@ -263,7 +263,7 @@ internal sealed class PsCommand : BaseCommand
             {
                 if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out _))
                 {
-                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(appHost.DashboardUrl)}[/]";
+                    dashboard = MarkupHelpers.SafeLink(_interactionService, appHost.DashboardUrl);
                 }
                 else
                 {

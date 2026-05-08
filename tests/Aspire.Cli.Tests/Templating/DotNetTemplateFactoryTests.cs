@@ -416,6 +416,7 @@ public class DotNetTemplateFactoryTests
     private sealed class TestInteractionService : IInteractionService
     {
         public ConsoleOutput Console { get; set; }
+        public bool SupportsLinks { get; set; }
 
         public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
@@ -1737,6 +1738,38 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DcpInstanceIdPrefix));
     }
 
+    [Fact]
+    public void DetachedChildEnvironment_IncludesProfilingTelemetryContext()
+    {
+        using var listener = CreateActivityListener("test-detached-child-environment");
+        using var source = new ActivitySource("test-detached-child-environment");
+        using var activity = source.StartActivity("parent");
+        Assert.NotNull(activity);
+        activity.SetBaggage(ProfilingTelemetry.SessionIdBaggageName, "session-1");
+        activity.TraceStateString = "state-1";
+
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.Equal("true", environment[ProfilingTelemetry.EnabledEnvironmentVariable]);
+        Assert.Equal("session-1", environment[ProfilingTelemetry.SessionIdEnvironmentVariable]);
+        Assert.Equal("session-1", environment[KnownConfigNames.Legacy.StartupOperationId]);
+        Assert.Equal(activity.Id, environment[ProfilingTelemetry.TraceParentEnvironmentVariable]);
+        Assert.Equal("state-1", environment[ProfilingTelemetry.TraceStateEnvironmentVariable]);
+    }
+
+    [Fact]
+    public void DetachedChildEnvironment_AllowsMissingProfilingTelemetryContext()
+    {
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnabledEnvironmentVariable));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.SessionIdEnvironmentVariable));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.TraceParentEnvironmentVariable));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.TraceStateEnvironmentVariable));
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -1789,4 +1822,14 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("certificate_trust_failed", tags[TelemetryConstants.Tags.ErrorType]);
     }
 
+    private static ActivityListener CreateActivityListener(string sourceName)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
 }

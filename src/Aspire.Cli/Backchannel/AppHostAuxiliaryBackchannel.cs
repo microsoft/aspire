@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -22,6 +23,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     private JsonRpc? _rpc;
     private bool _disposed;
     private readonly ImmutableHashSet<string> _capabilities;
+    private readonly ProfilingTelemetry? _profilingTelemetry;
 
     /// <summary>
     /// Private constructor - use factory methods to create instances.
@@ -33,7 +35,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         AppHostInformation? appHostInfo,
         bool isInScope,
         ImmutableHashSet<string> capabilities,
-        ILogger? logger)
+        ILogger? logger,
+        ProfilingTelemetry? profilingTelemetry)
     {
         Hash = hash;
         SocketPath = socketPath;
@@ -43,6 +46,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         _capabilities = capabilities;
         ConnectedAt = DateTimeOffset.UtcNow;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <summary>
@@ -54,7 +58,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         JsonRpc rpc,
         AppHostInformation? appHostInfo,
         bool isInScope)
-        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, null)
+        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, null, null)
     {
     }
 
@@ -102,14 +106,16 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="socketPath">The path to the Unix domain socket.</param>
     /// <param name="logger">Optional logger for diagnostic messages.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     public static Task<AppHostAuxiliaryBackchannel> ConnectAsync(
         string socketPath,
         ILogger? logger = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ProfilingTelemetry? profilingTelemetry = null)
     {
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath) ?? string.Empty;
-        return CreateFromSocketAsync(hash, socketPath, isInScope: true, socket: null, logger, cancellationToken);
+        return CreateFromSocketAsync(hash, socketPath, isInScope: true, socket: null, logger, cancellationToken, profilingTelemetry);
     }
 
     /// <summary>
@@ -123,6 +129,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="socket">Optional already-connected socket. If null, a new connection will be established.</param>
     /// <param name="logger">Optional logger.</param>
     /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
         string hash,
@@ -130,7 +137,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         bool isInScope,
         Socket? socket = null,
         ILogger? logger = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ProfilingTelemetry? profilingTelemetry = null)
     {
         // Connect if no socket provided
         if (socket is null)
@@ -155,7 +163,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
 
-        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger);
+        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
     }
 
     /// <summary>
@@ -237,6 +245,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         var rpc = EnsureConnected();
 
         _logger?.LogDebug("Requesting Dashboard URLs");
+        // This method runs inside whichever activity is current, so avoid adding
+        // profiling-only events to reported telemetry unless profiling is on.
+        var activity = _profilingTelemetry?.StartAuxiliaryBackchannelGetDashboardUrls() ?? default;
 
         try
         {
@@ -245,12 +256,16 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
                 [],
                 cancellationToken).ConfigureAwait(false);
 
+            activity.SetAppHostDashboardUrls(dashboardUrls);
+            activity.AddAuxBackchannelGetDashboardUrlsResponseEvent();
+
             return dashboardUrls;
         }
         catch (RemoteMethodNotFoundException ex)
         {
             // The RPC method may not be available on older AppHost versions.
             _logger?.LogDebug(ex, "GetDashboardUrlsAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            activity.AddAuxBackchannelGetDashboardUrlsNotFoundEvent();
             return null;
         }
     }

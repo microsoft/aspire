@@ -159,6 +159,45 @@ internal sealed class AtsMarshaller
         };
     }
 
+    /// <summary>
+    /// Marshals a .NET object to JSON for sending to the guest using a declared CLR type.
+    /// </summary>
+    /// <param name="value">The value to marshal.</param>
+    /// <param name="declaredType">The declared type that should be exposed to the guest.</param>
+    /// <returns>The JSON representation, or null if the value is null.</returns>
+    public JsonNode? MarshalToJson(object? value, Type declaredType)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (declaredType == typeof(object))
+        {
+            return MarshalToJson(value);
+        }
+
+        if (declaredType == typeof(CancellationToken))
+        {
+            return SerializeCancellationToken((CancellationToken)value);
+        }
+
+        var typeId = AtsTypeMapping.DeriveTypeId(declaredType);
+        var category = _context.GetCategory(declaredType);
+
+        return category switch
+        {
+            AtsTypeCategory.Primitive => SerializePrimitive(value),
+            AtsTypeCategory.Enum => JsonValue.Create(value.ToString()),
+            AtsTypeCategory.Dto => SerializeDto(value),
+            AtsTypeCategory.Array => SerializeArray(value, CreateElementTypeRef(declaredType)),
+            AtsTypeCategory.List => _handles.Marshal(value, typeId),
+            AtsTypeCategory.Dict => _handles.Marshal(value, typeId),
+            AtsTypeCategory.Handle => _handles.Marshal(value, typeId),
+            _ => _handles.Marshal(value, typeId)
+        };
+    }
+
     private static JsonNode? SerializePrimitive(object value)
     {
         var type = value.GetType();
@@ -205,6 +244,37 @@ internal sealed class AtsMarshaller
             }
         }
         return jsonArray;
+    }
+
+    private AtsTypeRef? CreateElementTypeRef(Type declaredType)
+    {
+        if (declaredType.IsArray)
+        {
+            return CreateTypeRef(declaredType.GetElementType()!);
+        }
+
+        if (declaredType.IsGenericType)
+        {
+            var genericTypeDefinition = declaredType.GetGenericTypeDefinition();
+            if (genericTypeDefinition == typeof(IReadOnlyList<>)
+                || genericTypeDefinition == typeof(IReadOnlyCollection<>)
+                || genericTypeDefinition == typeof(IEnumerable<>))
+            {
+                return CreateTypeRef(declaredType.GetGenericArguments()[0]);
+            }
+        }
+
+        return null;
+    }
+
+    private AtsTypeRef CreateTypeRef(Type type)
+    {
+        return new AtsTypeRef
+        {
+            TypeId = AtsTypeMapping.DeriveTypeId(type),
+            ClrType = type,
+            Category = _context.GetCategory(type)
+        };
     }
 
     /// <summary>

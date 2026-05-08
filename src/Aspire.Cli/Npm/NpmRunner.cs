@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -11,7 +12,7 @@ namespace Aspire.Cli.Npm;
 /// <summary>
 /// Runs npm CLI commands for package management operations.
 /// </summary>
-internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
+internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
 {
     /// <summary>
     /// The public npm registry URL. Commands that resolve packages from the registry
@@ -249,9 +250,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
     private static string CreateIsolatedTempDirectory()
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-npm-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-        return tempDir;
+        return Directory.CreateTempSubdirectory("aspire-npm-").FullName;
     }
 
     private void CleanupTempDirectory(string tempDir)
@@ -356,15 +355,19 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
             var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory);
 
             using var process = new Process { StartInfo = startInfo };
+            using var activity = profilingTelemetry.StartNpmCommand(npmPath, args.Length, workingDirectory);
             process.Start();
+            activity.SetProcessId(process.Id);
 
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            activity.SetProcessExitCode(process.ExitCode);
 
             if (process.ExitCode != 0)
             {
+                activity.SetError($"npm exited with code {process.ExitCode}.");
                 var errorOutput = await errorTask.ConfigureAwait(false);
                 logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, process.ExitCode, errorOutput.Trim());
                 return null;

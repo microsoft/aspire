@@ -295,8 +295,8 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                 ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(info.StartTimeNano.Value))
                 : "";
             var shortTraceId = OtlpHelpers.ToShortenedId(info.TraceId);
-            var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, info.TraceId, $"[grey]{shortTraceId}[/]");
-            var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} {traceLink}";
+            var traceLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, info.TraceId, shortTraceId);
+            var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} [grey]{traceLink}[/]";
             table.AddRow(timestamp, nameColumn, info.SpanCount.ToString(CultureInfo.InvariantCulture), durationStr, statusText);
         }
 
@@ -333,7 +333,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
 
         var shortTraceId = OtlpHelpers.ToShortenedId(traceId);
-        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, shortTraceId);
+        var traceLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, traceId, shortTraceId);
 
         if (spans.Count == 0)
         {
@@ -409,7 +409,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var statusText = span.HasError ? "ERR" : "OK";
         var durationStr = TelemetryCommandHelpers.FormatDuration(span.Duration).PadLeft(8);
         var shortenedSpanId = OtlpHelpers.ToShortenedId(span.SpanId);
-        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, $"[dim]{shortenedSpanId}[/]", spanId: span.SpanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, traceId, shortenedSpanId, spanId: span.SpanId);
         var escapedName = span.Name.EscapeMarkup();
 
         // Truncate long names
@@ -418,7 +418,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             ? escapedName[..(maxNameLength - 3)] + "..."
             : escapedName;
 
-        _interactionService.DisplayMarkupLine($"{indent}{connector} {spanIdLink} {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
+        _interactionService.DisplayMarkupLine($"{indent}{connector} [dim]{spanIdLink}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
 
         // Render children
         if (childrenByParent.TryGetValue(span.SpanId, out var children))

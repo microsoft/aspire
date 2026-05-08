@@ -68,6 +68,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly AppHostLauncher _appHostLauncher;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ProfilingTelemetry _profilingTelemetry;
     private bool _isDetachMode;
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
@@ -97,7 +98,8 @@ internal sealed class RunCommand : BaseCommand
         IAppHostProjectFactory projectFactory,
         AppHostLauncher appHostLauncher,
         FileLoggerProvider fileLoggerProvider,
-        ICliHostEnvironment hostEnvironment)
+        ICliHostEnvironment hostEnvironment,
+        ProfilingTelemetry profilingTelemetry)
         : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _runner = runner;
@@ -112,6 +114,7 @@ internal sealed class RunCommand : BaseCommand
         _appHostLauncher = appHostLauncher;
         _fileLoggerProvider = fileLoggerProvider;
         _hostEnvironment = hostEnvironment;
+        _profilingTelemetry = profilingTelemetry;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -186,23 +189,27 @@ internal sealed class RunCommand : BaseCommand
 
         try
         {
-            using var activity = Telemetry.StartDiagnosticActivity(this.Name);
-
             // Start a reported telemetry activity for the app host run early so that
             // all failure paths (project not found, incompatible version, etc.) are captured.
             runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
+            using var activity = _profilingTelemetry.StartRunCommand();
+
             var multipleAppHostBehavior = _hostEnvironment.SupportsInteractiveInput
                 ? MultipleAppHostProjectsFoundBehavior.Prompt
                 : MultipleAppHostProjectsFoundBehavior.Throw;
 
-            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
-                passedAppHostProjectFile,
-                multipleAppHostBehavior,
-                createSettingsFile: true,
-                cancellationToken);
+            AppHostProjectSearchResult searchResult;
+            using (var findAppHostActivity = _profilingTelemetry.StartRunAppHostFindAppHost(passedAppHostProjectFile))
+            {
+                searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
+                    passedAppHostProjectFile,
+                    multipleAppHostBehavior,
+                    createSettingsFile: true,
+                    cancellationToken);
+            }
             var effectiveAppHostFile = searchResult.SelectedProjectFile;
 
             if (effectiveAppHostFile is null)
@@ -225,7 +232,12 @@ internal sealed class RunCommand : BaseCommand
             // Check for running instance — even if we fail to stop we won't
             // block the apphost starting to make sure we don't ever break flow.
             // It should mostly stop just fine though.
-            var runningInstanceResult = await project.FindAndStopRunningInstanceAsync(effectiveAppHostFile, ExecutionContext.HomeDirectory, cancellationToken);
+            RunningInstanceResult runningInstanceResult;
+            using (var stopRunningInstanceActivity = _profilingTelemetry.StartRunAppHostStopExistingInstance())
+            {
+                runningInstanceResult = await project.FindAndStopRunningInstanceAsync(effectiveAppHostFile, ExecutionContext.HomeDirectory, cancellationToken);
+                stopRunningInstanceActivity.SetAppHostRunningInstanceResult(runningInstanceResult);
+            }
 
             // If in isolated mode and a running instance was stopped, warn the user
             if (isolated && runningInstanceResult == RunningInstanceResult.InstanceStopped)
@@ -254,12 +266,22 @@ internal sealed class RunCommand : BaseCommand
                 BuildCompletionSource = buildCompletionSource,
                 BackchannelCompletionSource = backchannelCompletionSource,
             };
+            ProfilingTelemetry.AddCurrentContextToEnvironment(context.EnvironmentVariables);
 
             // Start the project run as a pending task - we'll handle UX while it runs
-            var pendingRun = project.RunAsync(context, cancellationToken);
+            Task<int> pendingRun;
+            using (_profilingTelemetry.StartRunAppHostStartProject(project.LanguageId, noBuild, waitForDebugger))
+            {
+                pendingRun = project.RunAsync(context, cancellationToken);
+            }
 
             // Wait for the build to complete first (project handles its own build status spinners)
-            var buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
+            bool buildSuccess;
+            using (var waitForBuildActivity = _profilingTelemetry.StartRunAppHostWaitForBuild())
+            {
+                buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
+                waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
+            }
             if (!buildSuccess)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
@@ -279,17 +301,27 @@ internal sealed class RunCommand : BaseCommand
             }
 
             // Now wait for the backchannel to be established
-            var backchannel = await InteractionService.ShowStatusAsync(
-                RunCommandStrings.ConnectingToAppHost,
-                async () => await backchannelCompletionSource.Task.WaitAsync(cancellationToken));
+            IAppHostCliBackchannel backchannel;
+            using (var waitForBackchannelActivity = _profilingTelemetry.StartRunAppHostWaitForBackchannel())
+            {
+                backchannel = await InteractionService.ShowStatusAsync(
+                    RunCommandStrings.ConnectingToAppHost,
+                    async () => await backchannelCompletionSource.Task.WaitAsync(cancellationToken));
+                waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
+            }
 
             // Set up log capture - writes to unified CLI log file
             var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, cancellationToken);
 
             // Get dashboard URLs
-            var dashboardUrls = await InteractionService.ShowStatusAsync(
-                RunCommandStrings.StartingDashboard,
-                async () => await backchannel.GetDashboardUrlsAsync(cancellationToken));
+            DashboardUrlsState dashboardUrls;
+            using (var getDashboardUrlsActivity = _profilingTelemetry.StartRunAppHostGetDashboardUrls())
+            {
+                dashboardUrls = await InteractionService.ShowStatusAsync(
+                    RunCommandStrings.StartingDashboard,
+                    async () => await backchannel.GetDashboardUrlsAsync(cancellationToken));
+                getDashboardUrlsActivity.SetAppHostDashboardHealthy(dashboardUrls.DashboardHealthy);
+            }
 
             if (dashboardUrls.DashboardHealthy is false)
             {
@@ -345,7 +377,7 @@ internal sealed class RunCommand : BaseCommand
                                 i == 0
                                     ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
                                     : Text.Empty,
-                                new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] [link={endpoint.EscapeMarkup()}]{endpoint.EscapeMarkup()}[/]")
+                                new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(_interactionService, endpoint)}")
                             );
                         }
 
@@ -391,8 +423,14 @@ internal sealed class RunCommand : BaseCommand
                 extInteractionService.NotifyAppHostStartupCompleted();
             }
 
-            await pendingLogCapture;
-            return await pendingRun;
+            using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
+            {
+                runActivity?.Stop();
+                await pendingLogCapture;
+                var exitCode = await pendingRun;
+                lifetimeActivity.SetProcessExitCode(exitCode);
+                return exitCode;
+            }
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
@@ -541,12 +579,12 @@ internal sealed class RunCommand : BaseCommand
             {
                 grid.AddRow(
                     LabelMarkup(dashboardLabel),
-                    new Markup($"[link={dashboardUrl}]{dashboardUrl}[/]"));
+                    new Markup(MarkupHelpers.SafeLink(console, dashboardUrl)));
 
                 // Codespaces URL (if available)
                 if (!string.IsNullOrEmpty(codespacesUrl))
                 {
-                    grid.AddRow(Text.Empty, new Markup($"[link={codespacesUrl}]{codespacesUrl}[/]"));
+                    grid.AddRow(Text.Empty, new Markup(MarkupHelpers.SafeLink(console, codespacesUrl)));
                 }
             }
             else
