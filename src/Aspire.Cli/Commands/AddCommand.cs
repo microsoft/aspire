@@ -72,7 +72,7 @@ internal sealed class AddCommand : BaseCommand
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
 
-            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
+            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: false, cancellationToken);
             var effectiveAppHostProjectFile = searchResult.SelectedProjectFile;
 
             if (effectiveAppHostProjectFile is null)
@@ -116,6 +116,26 @@ internal sealed class AddCommand : BaseCommand
 
             var filteredPackagesWithShortName = packagesWithShortName
                 .Where(p => p.FriendlyName == integrationName || p.Package.Id == integrationName);
+
+            var exactPackageIdMatches = Array.Empty<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
+
+            if (!filteredPackagesWithShortName.Any() && integrationName is not null)
+            {
+                exactPackageIdMatches =
+                [
+                    .. (await _integrationPackageSearchService.GetPackagesByExactIdWithChannelsAsync(
+                        effectiveAppHostProjectFile.Directory!,
+                        integrationName,
+                        configuredChannel,
+                        cancellationToken))
+                    .Select(IntegrationPackageSearchService.GenerateFriendlyName)
+                ];
+
+                if (exactPackageIdMatches.Length > 0)
+                {
+                    filteredPackagesWithShortName = exactPackageIdMatches;
+                }
+            }
 
             if (!filteredPackagesWithShortName.Any() && integrationName is not null && version is not null && !_hostEnvironment.SupportsInteractiveInput)
             {

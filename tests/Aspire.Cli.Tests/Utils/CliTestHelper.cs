@@ -133,6 +133,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.FirstTimeUseNoticeSentinelFactory);
         services.AddSingleton(options.BannerServiceFactory);
         services.AddSingleton<FallbackProjectParser>();
+        services.AddSingleton<IPackageTagMetadataService, PackageTagMetadataService>();
         services.AddSingleton(options.ProjectUpdaterFactory);
         services.AddSingleton<NuGetPackagePrefetcher>();
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<NuGetPackagePrefetcher>());
@@ -418,7 +419,8 @@ internal sealed class CliServiceCollectionTestOptions
         var cache = serviceProvider.GetRequiredService<IMemoryCache>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var fallbackParser = serviceProvider.GetRequiredService<FallbackProjectParser>();
-        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var packageTagMetadataService = serviceProvider.GetRequiredService<IPackageTagMetadataService>();
+        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
     };
 
     public Func<IServiceProvider, ICliHostEnvironment> CliHostEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>
