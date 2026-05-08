@@ -510,17 +510,7 @@ internal sealed class PackageTagMetadataService(
 
     private static bool IsRelevantMapping(string packageFilter, string packageId)
     {
-        if (string.Equals(packageFilter, PackageMapping.AllPackages, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        if (packageFilter.EndsWith('*'))
-        {
-            return packageId.StartsWith(packageFilter[..^1], StringComparisons.NuGetPackageId);
-        }
-
-        return string.Equals(packageFilter, packageId, StringComparisons.NuGetPackageId);
+        return PackageMapping.MatchesPackageId(packageFilter, packageId);
     }
 
     private async Task<JsonDocument?> GetJsonDocumentAsync(HttpClient client, Uri uri, string packageId, string source, CancellationToken cancellationToken)
@@ -531,7 +521,7 @@ internal sealed class PackageTagMetadataService(
             if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
             {
                 logger.LogWarning(
-                    "Package metadata for '{PackageId}' could not be verified from '{Source}' because the feed requires authentication. Authenticated feed metadata lookup is not supported by this local spike.",
+                    "Package metadata for '{PackageId}' could not be verified from '{Source}' because the feed requires authentication. Authenticated feed metadata lookup is not supported.",
                     packageId,
                     source);
             }

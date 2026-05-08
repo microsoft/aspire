@@ -290,7 +290,10 @@ internal sealed class AddCommand : BaseCommand
             return package.Source;
         }
 
-        return channel.Mappings?.Select(mapping => mapping.Source).FirstOrDefault(source => !string.IsNullOrWhiteSpace(source));
+        return channel.Mappings?
+            .Where(mapping => mapping.MatchesPackageId(package.Id))
+            .Select(mapping => mapping.Source)
+            .FirstOrDefault(source => !string.IsNullOrWhiteSpace(source));
     }
 
     private async Task EnsureLocalBuildChannelNuGetConfigAsync(string? requestedSource, PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
@@ -317,13 +320,17 @@ internal sealed class AddCommand : BaseCommand
             return;
         }
 
-        var nugetConfigFile = new FileInfo(Path.Combine(projectDirectory.FullName, "nuget.config"));
-        if (nugetConfigFile.Exists)
+        if (!projectDirectory.Exists)
+        {
+            projectDirectory.Create();
+        }
+
+        if (NuGetConfigMerger.TryFindNuGetConfigInDirectory(projectDirectory, out _))
         {
             return;
         }
 
-        projectDirectory.Create();
+        var nugetConfigFile = new FileInfo(Path.Combine(projectDirectory.FullName, "nuget.config"));
         var configXml = new System.Xml.Linq.XDocument(
             new System.Xml.Linq.XElement("configuration",
                 new System.Xml.Linq.XElement("packageSources",
