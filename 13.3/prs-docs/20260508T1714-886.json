@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Documents standalone dashboard startup via Aspire CLI and container image; matches aspire-dashboard-cli-command entry",
+  "mergedAt": "2026-05-08T17:14:21Z",
+  "number": 886,
+  "runDate": "2026-05-08T18:31:30Z",
+  "status": "included",
+  "title": "Update standalone dashboard docs for Aspire CLI"
+}

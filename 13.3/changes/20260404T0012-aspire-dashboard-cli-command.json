@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
@@ -9,10 +9,11 @@
     587,
     588,
     677,
-    773
+    773,
+    886
   ],
   "docsRequired": true,
-  "emoji": "\ud83d\udcfa",
+  "emoji": "📺",
   "firstMergedAt": "2026-04-04T00:12:09Z",
   "lastMergedAt": "2026-04-04T00:12:09Z",
   "name": "New `aspire dashboard` CLI command",
