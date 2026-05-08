@@ -16,6 +16,11 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
     public HashSet<string> FailQueueNames { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// When set, <see cref="CreateVirtualHostAsync"/> throws for virtual hosts whose name is in this set.
+    /// </summary>
+    public HashSet<string> FailVirtualHostNames { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// When set, <see cref="DeclareExchangeAsync"/> throws for exchanges whose name is in this set.
     /// </summary>
     public HashSet<string> FailExchangeNames { get; } = new(StringComparer.Ordinal);
@@ -101,6 +106,11 @@ internal sealed class FakeRabbitMQProvisioningClient : IRabbitMQProvisioningClie
     public Task CreateVirtualHostAsync(string vhost, CancellationToken ct)
     {
         Calls.Add($"CreateVirtualHostAsync({vhost})");
+        if (FailVirtualHostNames.Contains(vhost))
+        {
+            throw new DistributedApplicationException($"boom");
+        }
+
         return Task.CompletedTask;
     }
 

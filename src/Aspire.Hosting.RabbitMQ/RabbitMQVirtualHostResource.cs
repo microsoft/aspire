@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.RabbitMQ.Provisioning;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -81,18 +82,28 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
             .Concat(Exchanges)
             .Concat(Shovels);
 
-    /// <summary>
-    /// Completed when this virtual host and its full topology have been provisioned; faulted if provisioning failed.
-    /// </summary>
-    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
+    Task IRabbitMQProvisionable.ProvisionedTask => _tcs.Task;
 
-    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, ResourceNotificationService notifications, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
     {
-        if (VirtualHostName != "/")
+        await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Starting }).ConfigureAwait(false);
+        try
         {
-            await client.CreateVirtualHostAsync(VirtualHostName, cancellationToken).ConfigureAwait(false);
+            if (VirtualHostName != "/")
+            {
+                await client.CreateVirtualHostAsync(VirtualHostName, cancellationToken).ConfigureAwait(false);
+            }
+
+            _tcs.TrySetResult();
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Running }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _tcs.TrySetException(ex);
+            resourceLogger.GetLogger(Name).LogError(ex, "Failed to create virtual host '{VirtualHost}'.", VirtualHostName);
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
         }
     }
 

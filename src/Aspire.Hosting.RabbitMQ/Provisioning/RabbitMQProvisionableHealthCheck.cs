@@ -10,9 +10,9 @@ namespace Aspire.Hosting.RabbitMQ.Provisioning;
 /// A single <see cref="IHealthCheck"/> implementation shared by all RabbitMQ child resources
 /// (virtual hosts, queues, exchanges, shovels, policies). The check proceeds in three stages:
 /// <list type="number">
-///   <item>If <see cref="IRabbitMQProvisionable.ProvisioningComplete"/> has not yet signalled, return <see cref="HealthStatus.Degraded"/> ("provisioning in progress").</item>
-///   <item>Await <see cref="IRabbitMQProvisionable.ProvisioningComplete"/> — unhealthy if faulted.</item>
-///   <item>Await each <see cref="IRabbitMQProvisionable.HealthDependencies"/> TCS — unhealthy if any faulted.</item>
+///   <item>If <see cref="IRabbitMQProvisionable.ProvisionedTask"/> has not yet completed, return <see cref="HealthStatus.Degraded"/> ("provisioning in progress").</item>
+///   <item>Await <see cref="IRabbitMQProvisionable.ProvisionedTask"/> — unhealthy if faulted.</item>
+///   <item>Await each <see cref="IRabbitMQProvisionable.HealthDependencies"/> task — unhealthy if any faulted.</item>
 ///   <item>Call <see cref="IRabbitMQProvisionable.ProbeAsync"/> for a live broker verification.</item>
 /// </list>
 /// </summary>
@@ -21,7 +21,7 @@ internal sealed class RabbitMQProvisionableHealthCheck(IRabbitMQProvisionable se
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         // Stage 1: return Degraded immediately if provisioning hasn't completed yet
-        if (!self.ProvisioningComplete.Task.IsCompleted)
+        if (!self.ProvisionedTask.IsCompleted)
         {
             return HealthCheckResult.Degraded($"Provisioning of '{self.Name}' is in progress.");
         }
@@ -29,7 +29,7 @@ internal sealed class RabbitMQProvisionableHealthCheck(IRabbitMQProvisionable se
         // Stage 2: own provisioning
         try
         {
-            await self.ProvisioningComplete.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await self.ProvisionedTask.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -47,7 +47,7 @@ internal sealed class RabbitMQProvisionableHealthCheck(IRabbitMQProvisionable se
         {
             try
             {
-                await dep.ProvisioningComplete.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await dep.ProvisionedTask.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.RabbitMQ.Provisioning;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -70,12 +71,9 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
     /// </summary>
     public int? SrcDeleteAfter { get; set; }
 
-    /// <summary>
-    /// Completed when this shovel has been created on the broker; faulted if creation failed.
-    /// </summary>
-    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
+    Task IRabbitMQProvisionable.ProvisionedTask => _tcs.Task;
 
     async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
@@ -85,39 +83,52 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
             : RabbitMQProbeResult.Unhealthy($"Shovel '{ShovelName}' is in state '{state ?? "unknown"}'.");
     }
 
-    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, ResourceNotificationService notifications, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
     {
-        var srcUri = await Source.ConnectionStringExpression.GetValueAsync(cancellationToken).ConfigureAwait(false)
-            ?? throw new DistributedApplicationException($"Could not resolve source URI for shovel '{ShovelName}'.");
-        var destUri = await Destination.ConnectionStringExpression.GetValueAsync(cancellationToken).ConfigureAwait(false)
-            ?? throw new DistributedApplicationException($"Could not resolve destination URI for shovel '{ShovelName}'.");
-
-        var ackModeString = AckMode switch
+        await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Starting }).ConfigureAwait(false);
+        try
         {
-            RabbitMQShovelAckMode.OnConfirm => "on-confirm",
-            RabbitMQShovelAckMode.OnPublish => "on-publish",
-            RabbitMQShovelAckMode.NoAck => "no-ack",
-            _ => "on-confirm"
-        };
+            var srcUri = await Source.ConnectionStringExpression.GetValueAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new DistributedApplicationException($"Could not resolve source URI for shovel '{ShovelName}'.");
+            var destUri = await Destination.ConnectionStringExpression.GetValueAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new DistributedApplicationException($"Could not resolve destination URI for shovel '{ShovelName}'.");
 
-        var def = new RabbitMQShovelDefinitionValue
+            var ackModeString = AckMode switch
+            {
+                RabbitMQShovelAckMode.OnConfirm => "on-confirm",
+                RabbitMQShovelAckMode.OnPublish => "on-publish",
+                RabbitMQShovelAckMode.NoAck => "no-ack",
+                _ => "on-confirm"
+            };
+
+            var def = new RabbitMQShovelDefinitionValue
+            {
+                SrcUri = srcUri,
+                SrcQueue = Source.Kind == RabbitMQDestinationKind.Queue ? Source.ProvisionedName : null,
+                SrcExchange = Source.Kind == RabbitMQDestinationKind.Exchange ? Source.ProvisionedName : null,
+                DestUri = destUri,
+                DestQueue = Destination.Kind == RabbitMQDestinationKind.Queue ? Destination.ProvisionedName : null,
+                DestExchange = Destination.Kind == RabbitMQDestinationKind.Exchange ? Destination.ProvisionedName : null,
+                AckMode = ackModeString,
+                ReconnectDelay = ReconnectDelay.HasValue ? (int)ReconnectDelay.Value.TotalSeconds : null,
+                SrcDeleteAfter = SrcDeleteAfter?.ToString(CultureInfo.InvariantCulture)
+            };
+
+            await client.PutShovelAsync(
+                Parent.VirtualHostName,
+                ShovelName,
+                new RabbitMQShovelDefinition { Value = def },
+                cancellationToken).ConfigureAwait(false);
+
+            _tcs.TrySetResult();
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Running }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
         {
-            SrcUri = srcUri,
-            SrcQueue = Source.Kind == RabbitMQDestinationKind.Queue ? Source.ProvisionedName : null,
-            SrcExchange = Source.Kind == RabbitMQDestinationKind.Exchange ? Source.ProvisionedName : null,
-            DestUri = destUri,
-            DestQueue = Destination.Kind == RabbitMQDestinationKind.Queue ? Destination.ProvisionedName : null,
-            DestExchange = Destination.Kind == RabbitMQDestinationKind.Exchange ? Destination.ProvisionedName : null,
-            AckMode = ackModeString,
-            ReconnectDelay = ReconnectDelay.HasValue ? (int)ReconnectDelay.Value.TotalSeconds : null,
-            SrcDeleteAfter = SrcDeleteAfter?.ToString(CultureInfo.InvariantCulture)
-        };
-
-        await client.PutShovelAsync(
-            Parent.VirtualHostName,
-            ShovelName,
-            new RabbitMQShovelDefinition { Value = def },
-            cancellationToken).ConfigureAwait(false);
+            _tcs.TrySetException(ex);
+            resourceLogger.GetLogger(Name).LogError(ex, "Failed to create shovel '{Shovel}'.", ShovelName);
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
+        }
     }
 
     RabbitMQVirtualHostResource IRabbitMQServerChild.VirtualHost => Parent;

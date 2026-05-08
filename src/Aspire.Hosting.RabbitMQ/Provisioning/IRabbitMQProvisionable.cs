@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.ApplicationModel;
+
 namespace Aspire.Hosting.RabbitMQ.Provisioning;
 
 /// <summary>
@@ -13,15 +15,18 @@ internal interface IRabbitMQProvisionable
     string Name { get; }
 
     /// <summary>
-    /// Completed when this resource has been fully provisioned (or faulted if provisioning failed).
+    /// Completed when this resource has been fully provisioned; faulted if provisioning failed.
     /// Each resource owns its own TCS so failures are isolated to the affected resource.
     /// </summary>
-    TaskCompletionSource ProvisioningComplete { get; }
+    Task ProvisionedTask { get; }
 
     /// <summary>
     /// Applies this resource to the broker using the supplied provisioning client.
+    /// Implementations publish <c>Starting</c> at entry, then <c>Running</c> on success or
+    /// <c>FailedToStart</c> on failure, log errors to the resource logger, and signal the internal TCS accordingly.
+    /// Implementations must not throw — all failures are captured internally.
     /// </summary>
-    Task ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken);
+    Task ApplyAsync(IRabbitMQProvisioningClient client, ResourceNotificationService notifications, ResourceLoggerService resourceLogger, CancellationToken cancellationToken);
 
     /// <summary>
     /// Returns the set of other provisionable resources that must have completed successfully
@@ -32,7 +37,7 @@ internal interface IRabbitMQProvisionable
 
     /// <summary>
     /// Performs a live broker probe to verify that this resource exists and is in the expected state.
-    /// Called by the health check after <see cref="ProvisioningComplete"/> and all
+    /// Called by the health check after <see cref="ProvisionedTask"/> and all
     /// <see cref="HealthDependencies"/> have completed successfully.
     /// Defaults to returning <see cref="RabbitMQProbeResult.Healthy"/> (no probe needed).
     /// </summary>

@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.RabbitMQ.Provisioning;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -96,32 +97,42 @@ public class RabbitMQQueueResource : RabbitMQDestination, IResourceWithConnectio
         }
     }
 
-    /// <summary>
-    /// Completed when this queue has been declared on the broker; faulted if declaration failed.
-    /// </summary>
-    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
+    Task IRabbitMQProvisionable.ProvisionedTask => _tcs.Task;
 
-    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, ResourceNotificationService notifications, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
     {
-        var args = new Dictionary<string, object?>();
-
-        if (QueueType != RabbitMQQueueType.Classic)
+        await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Starting }).ConfigureAwait(false);
+        try
         {
-            args["x-queue-type"] = QueueType.ToString().ToLowerInvariant();
+            var args = new Dictionary<string, object?>();
+
+            if (QueueType != RabbitMQQueueType.Classic)
+            {
+                args["x-queue-type"] = QueueType.ToString().ToLowerInvariant();
+            }
+
+            QueueArguments.FlattenInto(args, $"Queue '{QueueName}'");
+
+            await client.DeclareQueueAsync(
+                VirtualHost.VirtualHostName,
+                QueueName,
+                Durable,
+                Exclusive,
+                AutoDelete,
+                args.Count > 0 ? args : null,
+                cancellationToken).ConfigureAwait(false);
+
+            _tcs.TrySetResult();
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Running }).ConfigureAwait(false);
         }
-
-        QueueArguments.FlattenInto(args, $"Queue '{QueueName}'");
-
-        await client.DeclareQueueAsync(
-            VirtualHost.VirtualHostName,
-            QueueName,
-            Durable,
-            Exclusive,
-            AutoDelete,
-            args.Count > 0 ? args : null,
-            cancellationToken).ConfigureAwait(false);
+        catch (Exception ex)
+        {
+            _tcs.TrySetException(ex);
+            resourceLogger.GetLogger(Name).LogError(ex, "Failed to declare queue '{Queue}'.", QueueName);
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
+        }
     }
 
     async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)

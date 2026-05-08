@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.RabbitMQ.Provisioning;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -117,47 +118,57 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
         return _compiledPattern.IsMatch(entityName);
     }
 
-    /// <summary>
-    /// Completed when this policy has been applied to the broker; faulted if the request failed.
-    /// </summary>
-    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
+    Task IRabbitMQProvisionable.ProvisionedTask => _tcs.Task;
 
-    Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, ResourceNotificationService notifications, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
     {
-        if (ApplyTo == RabbitMQPolicyApplyTo.Exchanges && QueueArguments.HasAnyValue())
+        await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Starting }).ConfigureAwait(false);
+        try
         {
-            throw new DistributedApplicationException(
-                $"Policy '{PolicyName}' has QueueArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Exchanges)}'. " +
-                $"Queue arguments are ignored when a policy only targets exchanges. " +
-                $"Set ApplyTo to '{nameof(RabbitMQPolicyApplyTo.Queues)}' or '{nameof(RabbitMQPolicyApplyTo.All)}', or clear QueueArguments.");
-        }
+            if (ApplyTo == RabbitMQPolicyApplyTo.Exchanges && QueueArguments.HasAnyValue())
+            {
+                throw new DistributedApplicationException(
+                    $"Policy '{PolicyName}' has QueueArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Exchanges)}'. " +
+                    $"Queue arguments are ignored when a policy only targets exchanges. " +
+                    $"Set ApplyTo to '{nameof(RabbitMQPolicyApplyTo.Queues)}' or '{nameof(RabbitMQPolicyApplyTo.All)}', or clear QueueArguments.");
+            }
 
-        if (ApplyTo == RabbitMQPolicyApplyTo.Queues && ExchangeArguments.HasAnyValue())
+            if (ApplyTo == RabbitMQPolicyApplyTo.Queues && ExchangeArguments.HasAnyValue())
+            {
+                throw new DistributedApplicationException(
+                    $"Policy '{PolicyName}' has ExchangeArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Queues)}'. " +
+                    $"Exchange arguments are ignored when a policy only targets queues. " +
+                    $"Set ApplyTo to '{nameof(RabbitMQPolicyApplyTo.Exchanges)}' or '{nameof(RabbitMQPolicyApplyTo.All)}', or clear ExchangeArguments.");
+            }
+
+            var definition = new Dictionary<string, object?>();
+            QueueArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
+            ExchangeArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
+
+            foreach (var (k, v) in AdditionalArguments)
+            {
+                definition[k] = v;
+            }
+
+            var def = new RabbitMQPolicyDefinition(
+                Pattern,
+                ApplyTo.ToString().ToLowerInvariant(),
+                definition,
+                Priority);
+
+            await client.PutPolicyAsync(Parent.VirtualHostName, PolicyName, def, cancellationToken).ConfigureAwait(false);
+
+            _tcs.TrySetResult();
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Running }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
         {
-            throw new DistributedApplicationException(
-                $"Policy '{PolicyName}' has ExchangeArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Queues)}'. " +
-                $"Exchange arguments are ignored when a policy only targets queues. " +
-                $"Set ApplyTo to '{nameof(RabbitMQPolicyApplyTo.Exchanges)}' or '{nameof(RabbitMQPolicyApplyTo.All)}', or clear ExchangeArguments.");
+            _tcs.TrySetException(ex);
+            resourceLogger.GetLogger(Name).LogError(ex, "Failed to apply policy '{Policy}'.", PolicyName);
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
         }
-
-        var definition = new Dictionary<string, object?>();
-        QueueArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
-        ExchangeArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
-
-        foreach (var (k, v) in AdditionalArguments)
-        {
-            definition[k] = v;
-        }
-
-        var def = new RabbitMQPolicyDefinition(
-            Pattern,
-            ApplyTo.ToString().ToLowerInvariant(),
-            definition,
-            Priority);
-
-        return client.PutPolicyAsync(Parent.VirtualHostName, PolicyName, def, cancellationToken);
     }
 
     async ValueTask<RabbitMQProbeResult> IRabbitMQProvisionable.ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)

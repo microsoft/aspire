@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.RabbitMQ.Provisioning;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -92,41 +93,72 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
             new("ExchangeName", ReferenceExpression.Create($"{ExchangeName}")),
         ]);
 
+    private readonly TaskCompletionSource _tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    Task IRabbitMQProvisionable.ProvisionedTask => _tcs.Task;
+
     /// <summary>
-    /// Completed when this exchange has been declared and all its bindings applied; faulted if declaration or any binding failed.
+    /// Phase 2: declares the exchange on the broker and publishes <c>Running</c>.
+    /// The TCS is NOT signalled here — that happens in phase 3 after bindings are applied.
+    /// On failure, faults the TCS and publishes <c>FailedToStart</c>.
     /// </summary>
-    internal TaskCompletionSource ProvisioningComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    TaskCompletionSource IRabbitMQProvisionable.ProvisioningComplete => ProvisioningComplete;
-
-    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, ResourceNotificationService notifications, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
     {
-        var typeString = ExchangeType.ToString().ToLowerInvariant();
-        var args = new Dictionary<string, object?>();
-
-        ExchangeArguments.FlattenInto(args, $"Exchange '{ExchangeName}'");
-
-        await client.DeclareExchangeAsync(
-            VirtualHost.VirtualHostName,
-            ExchangeName,
-            typeString,
-            Durable,
-            AutoDelete,
-            args.Count > 0 ? args : null,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    internal async Task ApplyBindingsAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
-    {
-        foreach (var binding in Bindings)
+        await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Starting }).ConfigureAwait(false);
+        try
         {
-            await binding.Destination.BindAsync(
-                client,
+            var typeString = ExchangeType.ToString().ToLowerInvariant();
+            var args = new Dictionary<string, object?>();
+
+            ExchangeArguments.FlattenInto(args, $"Exchange '{ExchangeName}'");
+
+            await client.DeclareExchangeAsync(
                 VirtualHost.VirtualHostName,
                 ExchangeName,
-                binding.RoutingKey,
-                binding.MatchHeaders,
+                typeString,
+                Durable,
+                AutoDelete,
+                args.Count > 0 ? args : null,
                 cancellationToken).ConfigureAwait(false);
+
+            // Exchange IS running — it exists on the broker. Bindings are phase 3.
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Running }).ConfigureAwait(false);
+            // ProvisionedTask stays pending until ApplyBindingsAsync completes.
+        }
+        catch (Exception ex)
+        {
+            _tcs.TrySetException(ex);
+            resourceLogger.GetLogger(Name).LogError(ex, "Failed to declare exchange '{Exchange}'.", ExchangeName);
+            await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Phase 3: applies all bindings for this exchange and signals the TCS.
+    /// On success, <see cref="IRabbitMQProvisionable.ProvisionedTask"/> completes; lifecycle stays <c>Running</c>.
+    /// On failure, faults the TCS; lifecycle stays <c>Running</c> (exchange itself is healthy).
+    /// </summary>
+    internal async Task ApplyBindingsAsync(IRabbitMQProvisioningClient client, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
+    {
+        try
+        {
+            foreach (var binding in Bindings)
+            {
+                await binding.Destination.BindAsync(
+                    client,
+                    VirtualHost.VirtualHostName,
+                    ExchangeName,
+                    binding.RoutingKey,
+                    binding.MatchHeaders,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            _tcs.TrySetResult();
+        }
+        catch (Exception ex)
+        {
+            _tcs.TrySetException(ex);
+            resourceLogger.GetLogger(Name).LogError(ex, "Failed to apply bindings for exchange '{Exchange}'.", ExchangeName);
         }
     }
 
