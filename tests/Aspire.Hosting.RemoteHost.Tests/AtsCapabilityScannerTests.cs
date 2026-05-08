@@ -450,9 +450,9 @@ public class AtsCapabilityScannerTests
             Assert.Equal(expectedMethodName, method.Name);
         }
 
-        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/withNamespace", "namespace", "WithNamespace");
-        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/withReleaseName", "releaseName", "WithReleaseName");
-        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/withChartVersion", "version", "WithChartVersion");
+        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/HelmChartOptions.withNamespace", "namespace", "WithNamespace");
+        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/HelmChartOptions.withReleaseName", "releaseName", "WithReleaseName");
+        AssertUnionCapability(result, "Aspire.Hosting.Kubernetes/HelmChartOptions.withChartVersion", "version", "WithChartVersion");
     }
 
     [Fact]
