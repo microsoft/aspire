@@ -289,20 +289,14 @@ internal sealed class TerminalReplica : IAsyncDisposable
     /// </summary>
     private Hex1bTerminal BuildTerminal()
     {
-        return Hex1bTerminal.CreateBuilder()
-            .WithDimensions(Columns, Rows)
-            // Producer side: terminal host LISTENS on producerUdsPath; DCP dials
-            // in. Hex1b plays the HMP1 protocol CLIENT role over that accepted
-            // stream (consuming Hello/Output/StateSync/Exit and forwarding
-            // Input/Resize back). Composing WithHmp1Client with a listen-and-
-            // accept transport lets us flip the TCP direction without flipping
-            // the HMP1 protocol direction (DCP, holding the PTY, must remain
-            // the protocol server). The producer-connected flag is set inside
-            // the factory so we report it the moment we accept the dial, not
-            // only after the HMP1 handshake completes — if the handshake then
-            // fails, the stream EOFs immediately, the terminal exits, and the
-            // recycle loop clears the flag and rebinds.
-            .WithHmp1Client(async cct =>
+        // Build the upstream workload adapter ourselves so we can plumb downstream
+        // resize events (from the consumer-side multi-head server below) into
+        // unconditional FrameResize writes upstream to DCP. See DcpUpstreamAdapter
+        // for why Hex1b's stock Hmp1WorkloadAdapter cannot be used here (DCP is
+        // a single-peer producer that doesn't speak multi-head, so the adapter's
+        // IsPrimary gate would silently drop every resize forever).
+        var upstream = new DcpUpstreamAdapter(
+            async cct =>
             {
                 await foreach (var stream in Hmp1Transports.ListenUnixSocket(ProducerUdsPath, cct).ConfigureAwait(false))
                 {
@@ -313,8 +307,52 @@ internal sealed class TerminalReplica : IAsyncDisposable
                     return stream;
                 }
                 throw new OperationCanceledException("Producer UDS listener was cancelled before any client connected.");
-            })
-            .WithHmp1UdsServer(ConsumerUdsPath)
+            },
+            _logger);
+
+        upstream.Disconnected += () =>
+        {
+            lock (_gate)
+            {
+                _producerConnected = false;
+            }
+        };
+
+        return Hex1bTerminal.CreateBuilder()
+            .WithDimensions(Columns, Rows)
+            .WithWorkload(upstream)
+            .WithHmp1UdsServer(
+                ConsumerUdsPath,
+                srvOpts =>
+                {
+                    // Bridge downstream → upstream resize. The consumer-side multi-head
+                    // server fires OnResized whenever the current primary peer's dims
+                    // change (RequestPrimary or explicit Resize from primary). Forward
+                    // those dims as a raw FrameResize upstream so DCP runs ConPty.Resize
+                    // and the underlying workload sees the new TIOCSWINSZ value. Without
+                    // this hook the consumer-side presentation reflects the new dims but
+                    // the actual PTY stays at whatever DCP started it at.
+                    srvOpts.OnResized = async (e, ct) =>
+                    {
+                        try
+                        {
+                            await upstream.ResizeAsync(e.Width, e.Height, ct).ConfigureAwait(false);
+                            _logger.LogDebug(
+                                "Replica {Index}: forwarded downstream resize ({Width}x{Height}) to upstream PTY.",
+                                Index, e.Width, e.Height);
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                        {
+                            // Recycle loop is shutting down; drop quietly.
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex,
+                                "Replica {Index}: forwarding downstream resize ({Width}x{Height}) upstream failed.",
+                                Index, e.Width, e.Height);
+                        }
+                    };
+                })
             .Build();
     }
 
