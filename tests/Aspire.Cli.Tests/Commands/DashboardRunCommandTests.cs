@@ -464,6 +464,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         DashboardRunCommand.RenderDashboardSummary(interactionService, dashboardInfo, logFilePath);
 
         var outputString = output.ToString();
+        // SafeFileLink percent-encodes brackets so the resulting OSC 8 hyperlink target
+        // is valid; mirror that here so the assertion exactly matches what was emitted.
         var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
             .Replace("[", "%5B", StringComparison.Ordinal)
             .Replace("]", "%5D", StringComparison.Ordinal);

@@ -338,20 +338,10 @@ internal class ConsoleInteractionService : IInteractionService
         return ExitCodeConstants.AppHostIncompatible;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
-        if (TrySplitLogFileReference(errorMessage, out var errorWithoutLogReference, out var logReference))
-        {
-            if (!string.IsNullOrWhiteSpace(errorWithoutLogReference))
-            {
-                DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{errorWithoutLogReference.EscapeMarkup()}[/]", allowMarkup: true);
-            }
-
-            DisplayMessage(KnownEmojis.PageFacingUp, logReference);
-            return;
-        }
-
-        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{errorMessage.EscapeMarkup()}[/]", allowMarkup: true);
+        var formatted = allowMarkup ? errorMessage : errorMessage.EscapeMarkup();
+        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
@@ -364,7 +354,7 @@ internal class ConsoleInteractionService : IInteractionService
             MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + logMessage);
         }
 
-        var displayMessage = allowMarkup ? message : ConsoleHelpers.EscapeMarkupWithFileLink(message, _executionContext.LogFilePath);
+        var displayMessage = allowMarkup ? message : message.EscapeMarkup();
         MessageConsole.MarkupLine(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole) + displayMessage);
     }
 
@@ -430,21 +420,6 @@ internal class ConsoleInteractionService : IInteractionService
         return effectiveConsole == ConsoleOutput.Error
             ? System.Console.IsErrorRedirected
             : System.Console.IsOutputRedirected;
-    }
-
-    private bool TrySplitLogFileReference(string message, [NotNullWhen(true)] out string? errorWithoutLogReference, [NotNullWhen(true)] out string? logReference)
-    {
-        logReference = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, _executionContext.LogFilePath);
-        var logReferenceIndex = message.LastIndexOf(logReference, StringComparison.Ordinal);
-        if (logReferenceIndex < 0)
-        {
-            errorWithoutLogReference = null;
-            logReference = null;
-            return false;
-        }
-
-        errorWithoutLogReference = message[..logReferenceIndex].TrimEnd();
-        return true;
     }
 
     public void DisplayMarkupLine(string markup)
@@ -596,7 +571,7 @@ internal class ConsoleInteractionService : IInteractionService
     public void DisplaySubtleMessage(string message, bool allowMarkup = false)
     {
         MessageLogger.LogInformation("{Message}", message);
-        var displayMessage = allowMarkup ? message : ConsoleHelpers.EscapeMarkupWithFileLink(message, _executionContext.LogFilePath);
+        var displayMessage = allowMarkup ? message : message.EscapeMarkup();
         MessageConsole.MarkupLine($"[dim]{displayMessage}[/]");
     }
 

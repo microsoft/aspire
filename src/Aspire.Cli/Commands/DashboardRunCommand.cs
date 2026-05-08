@@ -326,7 +326,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Dashboard row
         grid.AddRow(
             new Align(new Markup($"[bold green]{dashboardLabel}[/]:"), HorizontalAlignment.Right),
-            new Markup(MarkupHelpers.SafeLink(_interactionService, info.DashboardUrl)));
+            new Markup(MarkupHelpers.SafeLink(interactionService, info.DashboardUrl)));
         grid.AddRow(Text.Empty, Text.Empty);
 
         // OTLP gRPC row
@@ -344,7 +344,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Logs row
         grid.AddRow(
             new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Markup(ConsoleHelpers.FormatPathAsFileLink(logFilePath)));
+            new Markup(MarkupHelpers.SafeFileLink(interactionService, logFilePath)));
 
         var padder = new Padder(grid, new Padding(3, 0));
         interactionService.DisplayRenderable(padder);
@@ -446,7 +446,10 @@ internal sealed class DashboardRunCommand : BaseCommand
                 : DashboardCommandStrings.DashboardStartTimedOut;
 
             _interactionService.DisplayError(exitMessage);
-            _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            _interactionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(_interactionService, ExecutionContext.LogFilePath)),
+                allowMarkup: true);
 
             if (!process.HasExited)
             {

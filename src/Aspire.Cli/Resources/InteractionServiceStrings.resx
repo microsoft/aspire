@@ -195,10 +195,10 @@
     <value>The project argument was not specified and no AppHost project files were detected.</value>
   </data>
   <data name="ProjectCouldNotBeBuilt" xml:space="preserve">
-    <value>The project could not be built. See logs at {0}</value>
+    <value>The project could not be built.</value>
   </data>
   <data name="ProjectCouldNotBeCreated" xml:space="preserve">
-    <value>The app could not be created. See logs at {0}</value>
+    <value>The app could not be created.</value>
   </data>
   <data name="OperationCancelled" xml:space="preserve">
     <value>The operation was canceled.</value>

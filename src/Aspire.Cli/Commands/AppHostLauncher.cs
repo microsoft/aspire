@@ -378,10 +378,10 @@ internal sealed class AppHostLauncher(
         var checkLogsMessage = string.Format(
             CultureInfo.CurrentCulture,
             RunCommandStrings.CheckLogsForDetails,
-            childLogFile);
+            MarkupHelpers.SafeFileLink(interactionService, childLogFile));
         interactionService.DisplayMessage(
             KnownEmojis.MagnifyingGlassTiltedLeft,
-            ConsoleHelpers.EscapeMarkupWithFileLink(checkLogsMessage, childLogFile),
+            checkLogsMessage,
             allowMarkup: true);
 
         return ExitCodeConstants.FailedToDotnetRunAppHost;

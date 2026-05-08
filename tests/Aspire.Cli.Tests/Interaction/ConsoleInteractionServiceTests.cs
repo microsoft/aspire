@@ -477,7 +477,7 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public void DisplayMessage_WithCurrentLogFilePath_RendersClickableFileLink()
+    public void DisplayMessage_WithFileLinkMarkup_RendersClickableLinkWhenAllowMarkup()
     {
         var output = new StringBuilder();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
@@ -487,12 +487,17 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output)),
             Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         });
+        console.Profile.Capabilities.Links = true;
         console.Profile.Width = int.MaxValue;
 
         var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
         var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
 
-        interactionService.DisplayMessage(KnownEmojis.PageFacingUp, $"See logs at {logFilePath}");
+        var fileLinkMarkup = MarkupHelpers.SafeFileLink(interactionService, logFilePath);
+        interactionService.DisplayMessage(
+            KnownEmojis.PageFacingUp,
+            $"See logs at {fileLinkMarkup}",
+            allowMarkup: true);
 
         var outputString = output.ToString();
         var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
@@ -504,7 +509,7 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public void DisplayError_WithCurrentLogFilePath_RendersClickableFileLink()
+    public void DisplayError_WithAllowMarkup_RendersMarkupAsIs()
     {
         var output = new StringBuilder();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
@@ -514,26 +519,45 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output)),
             Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         });
+        console.Profile.Capabilities.Links = true;
         console.Profile.Width = int.MaxValue;
 
         var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
         var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
 
-        interactionService.DisplayError($"The project could not be built. See logs at {logFilePath}");
+        var fileLinkMarkup = MarkupHelpers.SafeFileLink(interactionService, logFilePath);
+        interactionService.DisplayError($"Build failed. Logs: {fileLinkMarkup}", allowMarkup: true);
 
         var outputString = output.ToString();
         var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
             .Replace("[", "%5B", StringComparison.Ordinal)
             .Replace("]", "%5D", StringComparison.Ordinal);
-        var lines = outputString.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries);
-
-        Assert.Equal(2, lines.Length);
-        Assert.Contains("The project could not be built.", lines[0]);
-        Assert.DoesNotContain(logFilePath, lines[0]);
-        Assert.Contains("See logs at", lines[1]);
-        Assert.Contains($";{fileUri}\u001b\\", outputString);
+        Assert.Contains("Build failed.", outputString);
         Assert.Contains(logFilePath, outputString);
+        Assert.Contains($";{fileUri}\u001b\\", outputString);
         Assert.Contains("\u001b]8;;\u001b\\", outputString);
+    }
+
+    [Fact]
+    public void DisplayError_WithoutAllowMarkup_EscapesBrackets()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+
+        // Bracket characters in the error message would normally break Spectre markup parsing,
+        // but DisplayError escapes them by default.
+        var message = "Build failed for [Project Alpha].";
+        var exception = Record.Exception(() => interactionService.DisplayError(message));
+
+        Assert.Null(exception);
+        Assert.Contains("Build failed for [Project Alpha].", output.ToString());
     }
 
     [Fact]

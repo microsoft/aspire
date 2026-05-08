@@ -337,7 +337,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         return _consoleInteractionService.DisplayIncompatibleVersionError(ex, appHostHostingSdkVersion);
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         // Serialize the local console write onto the same channel as the backchannel call so
         // it stays ordered with prior queued operations (e.g. DisplayLines). Otherwise the
@@ -347,7 +347,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
             await Backchannel.DisplayErrorAsync(errorMessage.RemoveSpectreFormatting(), _cancellationToken);
-            _consoleInteractionService.DisplayError(errorMessage);
+            _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
         });
         Debug.Assert(result);
     }

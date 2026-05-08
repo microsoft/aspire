@@ -101,4 +101,70 @@ public class MarkupHelpersTests
         }
         return console;
     }
+
+    [Fact]
+    public void SafeFileLink_WithEmptyPath_ReturnsEmpty()
+    {
+        Assert.Equal(string.Empty, MarkupHelpers.SafeFileLink(supportsLinks: true, string.Empty));
+        Assert.Equal(string.Empty, MarkupHelpers.SafeFileLink(supportsLinks: false, string.Empty));
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenNoLinkSupport_ReturnsEscapedPath()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "logs", "cli [Dev].log");
+
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: false, path);
+
+        Assert.Equal(path.EscapeMarkup(), result);
+        Assert.DoesNotContain("[link", result);
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenSupportsLinks_BuildsLinkMarkupWithFileUri()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "logs", "aspire.log");
+
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
+
+        var expectedUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        Assert.Equal($"[link={expectedUri}]{path.EscapeMarkup()}[/]", result);
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenSupportsLinks_PercentEncodesBracketsInUri()
+    {
+        // Bracket characters in file paths are not percent-encoded by Uri.AbsoluteUri,
+        // but they would otherwise be parsed by Spectre.Console as the start of a new
+        // markup tag inside [link=...]. SafeFileLink must encode them to keep both the
+        // OSC 8 hyperlink and the surrounding markup well-formed.
+        var path = Path.Combine(Path.GetTempPath(), "logs", "cli [Dev].log");
+
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
+
+        var expectedUri = new Uri(Path.GetFullPath(path)).AbsoluteUri
+            .Replace("[", "%5B", StringComparison.Ordinal)
+            .Replace("]", "%5D", StringComparison.Ordinal);
+        Assert.Contains("%5B", expectedUri);
+        Assert.Contains("%5D", expectedUri);
+        Assert.Equal($"[link={expectedUri}]{path.EscapeMarkup()}[/]", result);
+    }
+
+    [Fact]
+    public void SafeFileLink_WhenSupportsLinks_ProducesValidMarkup()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "logs", "cli [Dev].log");
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
+
+        var output = new StringBuilder();
+        var console = CreateAnsiConsole(output, ansi: true);
+        console.MarkupLine(result);
+
+        var rendered = output.ToString().Trim();
+        var fileUri = new Uri(Path.GetFullPath(path)).AbsoluteUri
+            .Replace("[", "%5B", StringComparison.Ordinal)
+            .Replace("]", "%5D", StringComparison.Ordinal);
+        var pattern = $"\\x1b]8;id=\\d+;{Regex.Escape(fileUri)}\\x1b\\\\{Regex.Escape(path)}\\x1b]8;;\\x1b\\\\";
+        Assert.Matches(pattern, rendered);
+    }
 }
