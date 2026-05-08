@@ -155,12 +155,26 @@ public static class GoHostingExtensions
                     var runtimeImage = baseImageAnnotation?.RuntimeImage ?? "alpine:latest";
 
                     var buildCmd = BuildDockerGoCommand(ctx.Resource);
+                    var hasGoMod = File.Exists(Path.Combine(appDirectory, "go.mod"));
+                    var hasGoSum = File.Exists(Path.Combine(appDirectory, "go.sum"));
 
-                    ctx.Builder
+                    var buildStage = ctx.Builder
                         .From(buildImage, "build")
-                        .WorkDir("/app")
-                        .Copy("go.mod", "go.sum", "./")
-                        .Run("go mod download")
+                        .WorkDir("/app");
+
+                    if (hasGoMod)
+                    {
+                        buildStage.Copy("go.mod", "./");
+
+                        if (hasGoSum)
+                        {
+                            buildStage.Copy("go.sum", "./");
+                        }
+
+                        buildStage.Run("go mod download");
+                    }
+
+                    buildStage
                         .Copy(".", ".")
                         .Run(buildCmd);
 
