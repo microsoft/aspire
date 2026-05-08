@@ -2,13 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -206,6 +209,55 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedPath));
     }
 
+    [Fact]
+    public async Task StopCommand_AllEmitsProfilingActivities()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var stoppedActivities = new ConcurrentQueue<Activity>();
+        using var listener = CreateProfilingActivityListener(stoppedActivities.Enqueue);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
+        var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
+        var processId1 = int.MaxValue - 6;
+        var processId2 = int.MaxValue - 7;
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, processId1));
+        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, processId2));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.ConfigurationCallback += config =>
+            {
+                config[KnownConfigNames.ProfilingEnabled] = "true";
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --all");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var stopCommandActivity = Assert.Single(stoppedActivities, activity => activity.OperationName == ProfilingTelemetry.Activities.StopCommand);
+        Assert.Equal(true, stopCommandActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostStopAll));
+        Assert.Equal(2, stopCommandActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostStopCount));
+        Assert.Equal(ExitCodeConstants.Success, stopCommandActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
+
+        var stopAppHostActivities = stoppedActivities.Where(activity => activity.OperationName == ProfilingTelemetry.Activities.StopAppHost).ToArray();
+        Assert.Equal(2, stopAppHostActivities.Length);
+        var expectedProcessIds = new[] { processId1, processId2 }.Order().ToArray();
+        Assert.Equal(
+            expectedProcessIds,
+            stopAppHostActivities
+                .Select(activity => Assert.IsType<int>(activity.GetTagItem(TelemetryConstants.Tags.ProcessPid)))
+                .Order()
+                .ToArray());
+        Assert.All(stopAppHostActivities, activity => Assert.Equal(ExitCodeConstants.Success, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode)));
+    }
+
     private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId)
     {
         return new TestAppHostAuxiliaryBackchannel
@@ -228,5 +280,17 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             .Concat(interactionService.DisplayedErrors)
             .Concat(statusMessages)
             .ToArray();
+    }
+
+    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 }

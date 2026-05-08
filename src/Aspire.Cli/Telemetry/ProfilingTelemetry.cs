@@ -63,6 +63,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string GuestExecuteCommand = "aspire/cli/guest.execute_command";
         public const string GitCommand = "aspire/cli/git.command";
         public const string NpmCommand = "aspire/cli/npm.command";
+        public const string StopCommand = "aspire/cli/stop";
+        public const string StopAppHost = "aspire/cli/stop_apphost";
 
         public static string DotNetCommand(string command) => $"aspire/cli/dotnet.{command}";
     }
@@ -118,6 +120,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string AppHostSupportsBackchannel = "aspire.cli.apphost.supports_backchannel";
         public const string AppHostAspireHostingVersion = "aspire.cli.apphost.aspire_hosting_version";
         public const string AppHostWatch = "aspire.cli.apphost.watch";
+        public const string AppHostStopAll = "aspire.cli.apphost.stop_all";
+        public const string AppHostStopCount = "aspire.cli.apphost.stop_count";
         public const string DevCertificateEnvironmentVariableCount = "aspire.cli.dev_cert.env_var_count";
         public const string BackchannelSocketFile = "aspire.cli.backchannel.socket_file";
         public const string BackchannelAutoReconnect = "aspire.cli.backchannel.auto_reconnect";
@@ -461,6 +465,25 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return StartActivity(Activities.RunCommand, startWithRemoteParent: true);
     }
 
+    internal ActivityScope StartStopCommand(bool stopAll, bool passedAppHostProjectFile)
+    {
+        var activity = StartActivity(Activities.StopCommand, startWithRemoteParent: true);
+        activity.SetAppHostStopAll(stopAll);
+        activity.SetAppHostProjectFileSpecified(passedAppHostProjectFile);
+        return activity;
+    }
+
+    internal ActivityScope StartStopAppHost(AppHostInformation? appHostInfo)
+    {
+        var activity = StartActivity(Activities.StopAppHost);
+        if (appHostInfo is not null)
+        {
+            activity.SetProcessId(appHostInfo.ProcessId);
+        }
+
+        return activity;
+    }
+
     private ActivityScope StartActivity(
         string name,
         ActivityKind kind = ActivityKind.Internal,
@@ -718,6 +741,10 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public void SetAppHostProjectFileSpecified(bool specified) => SetTag(Tags.AppHostProjectFileSpecified, specified);
 
         public void SetAppHostRunningInstanceResult(object? result) => SetTag(Tags.AppHostRunningInstanceResult, result?.ToString());
+
+        public void SetAppHostStopAll(bool stopAll) => SetTag(Tags.AppHostStopAll, stopAll);
+
+        public void SetAppHostStopCount(int count) => SetTag(Tags.AppHostStopCount, count);
 
         public void SetAppHostWatch(bool watch) => SetTag(Tags.AppHostWatch, watch);
 

@@ -22,6 +22,7 @@ internal sealed class StopCommand : BaseCommand
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<StopCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly TimeProvider _timeProvider;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
@@ -41,13 +42,15 @@ internal sealed class StopCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         ILogger<StopCommand> logger,
         AspireCliTelemetry telemetry,
+        ProfilingTelemetry profilingTelemetry,
         TimeProvider? timeProvider = null)
         : base("stop", StopCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger, profilingTelemetry);
         _hostEnvironment = hostEnvironment;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider ?? TimeProvider.System;
 
         Options.Add(s_appHostOption);
@@ -58,27 +61,28 @@ internal sealed class StopCommand : BaseCommand
     {
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var stopAll = parseResult.GetValue(s_allOption);
+        using var activity = _profilingTelemetry.StartStopCommand(stopAll, passedAppHostProjectFile is not null);
 
         // Validate mutual exclusivity of --all and --project
         if (stopAll && passedAppHostProjectFile is not null)
         {
             _interactionService.DisplayError(string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
-            return ExitCodeConstants.FailedToFindProject;
+            return CompleteStopActivity(activity, ExitCodeConstants.FailedToFindProject);
         }
 
         // Handle --all: stop all running AppHosts
         if (stopAll)
         {
-            return await StopAllAppHostsAsync(cancellationToken);
+            return CompleteStopActivity(activity, await StopAllAppHostsAsync(cancellationToken));
         }
 
         // In non-interactive mode, try to auto-resolve without prompting
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            return await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken);
+            return CompleteStopActivity(activity, await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken));
         }
 
-        return await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken);
+        return CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken));
     }
 
     /// <summary>
@@ -112,6 +116,7 @@ internal sealed class StopCommand : BaseCommand
         if (inScopeConnections.Length == 1)
         {
             var connection = inScopeConnections[0].Connection!;
+            _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
             return await StopAppHostAsync(connection, GetAppHostDisplayPath(connection), cancellationToken);
         }
 
@@ -137,6 +142,7 @@ internal sealed class StopCommand : BaseCommand
             return AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService);
         }
 
+        _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
         return await StopAppHostAsync(result.Connection!, GetAppHostDisplayPath(result.Connection!), cancellationToken);
     }
 
@@ -148,6 +154,7 @@ internal sealed class StopCommand : BaseCommand
         var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
             SharedCommandStrings.ScanningForRunningAppHosts,
             cancellationToken);
+        _profilingTelemetry.CurrentActivity.SetAppHostStopCount(allConnections.Length);
 
         if (allConnections.Length == 0)
         {
@@ -190,10 +197,10 @@ internal sealed class StopCommand : BaseCommand
     {
         // Stop the selected AppHost
         var appHostPath = connection.AppHostInfo?.AppHostPath ?? "Unknown";
+        var appHostInfo = connection.AppHostInfo;
+        using var activity = _profilingTelemetry.StartStopAppHost(appHostInfo);
         _interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FoundRunningAppHost, appHostIdentifier));
         _logger.LogDebug("Stopping AppHost: {AppHostPath}", appHostPath);
-
-        var appHostInfo = connection.AppHostInfo;
 
         _interactionService.DisplayMessage(KnownEmojis.StopSign, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.SendingStopSignal, appHostIdentifier));
 
@@ -208,7 +215,7 @@ internal sealed class StopCommand : BaseCommand
             {
                 _logger.LogWarning(ex, "Failed to send stop signal to CLI process {Pid}", cliPid);
                 _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
             }
         }
         else
@@ -237,13 +244,13 @@ internal sealed class StopCommand : BaseCommand
                 {
                     _logger.LogWarning(ex, "Failed to send stop signal to process {Pid}", appHostPid);
                     _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-                    return ExitCodeConstants.FailedToDotnetRunAppHost;
+                    return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
                 }
             }
             else if (!rpcSucceeded)
             {
                 _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
             }
         }
 
@@ -292,13 +299,24 @@ internal sealed class StopCommand : BaseCommand
         if (stopped)
         {
             _interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
-            return ExitCodeConstants.Success;
+            return CompleteStopActivity(activity, ExitCodeConstants.Success);
         }
         else
         {
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
         }
+    }
+
+    private static int CompleteStopActivity(ProfilingTelemetry.ActivityScope activity, int exitCode)
+    {
+        activity.SetProcessExitCode(exitCode);
+        if (exitCode != ExitCodeConstants.Success)
+        {
+            activity.SetError($"Stop exited with code {exitCode}.");
+        }
+
+        return exitCode;
     }
 
     private static string GetAppHostDisplayPath(IAppHostAuxiliaryBackchannel connection)
