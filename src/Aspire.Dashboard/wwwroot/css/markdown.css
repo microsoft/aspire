@@ -86,6 +86,9 @@
 .markdown-container pre code {
     font-size: 13px;
     line-height: 20px;
+}
+
+.markdown-container pre code, .markdown-container a code {
     background-color: unset;
     padding: unset;
     border-radius: unset;
