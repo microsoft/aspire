@@ -38,17 +38,19 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:lint", scripts["predev"]?.GetValue<string>());
         Assert.Equal("npm run aspire:start", scripts["dev"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
         Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
         Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
+        Assert.False(scripts.ContainsKey("aspire:lint"));
+        Assert.False(scripts.ContainsKey("lint"));
+        Assert.False(scripts.ContainsKey("predev"));
+        Assert.False(scripts.ContainsKey("prebuild"));
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
-        Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
-        Assert.Equal("^8.57.1", devDependencies["typescript-eslint"]?.GetValue<string>());
+        Assert.Equal("^8.2.0", devDependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.False(devDependencies.ContainsKey("eslint"));
+        Assert.False(devDependencies.ContainsKey("typescript-eslint"));
+        Assert.Null(packageJson["dependencies"]);
 
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
@@ -56,8 +58,7 @@ public sealed class TypeScriptLanguageSupportTests
         // Verify the raw JSON does not contain unicode escapes for >= (fidelity check)
         Assert.DoesNotContain("\\u003E", files["package.json"]);
 
-        Assert.Contains("eslint.config.mjs", files.Keys);
-        Assert.Contains("project: './tsconfig.apphost.json'", files["eslint.config.mjs"]);
+        Assert.DoesNotContain("eslint.config.mjs", files.Keys);
 
         var tsConfig = ParseJson(files["tsconfig.apphost.json"]);
         Assert.Equal("./dist/apphost", tsConfig["compilerOptions"]?["outDir"]?.GetValue<string>());
@@ -96,7 +97,6 @@ public sealed class TypeScriptLanguageSupportTests
 
         var packageJson = ParseJson(files["package.json"]);
         var scripts = packageJson["scripts"]!.AsObject();
-        var dependencies = packageJson["dependencies"]!.AsObject();
         var devDependencies = packageJson["devDependencies"]!.AsObject();
 
         // Scaffold output should NOT echo existing content — the CLI-side
@@ -110,17 +110,20 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.False(scripts.ContainsKey("aspire:lint"));
         Assert.False(scripts.ContainsKey("dev"));
         Assert.False(scripts.ContainsKey("build"));
         Assert.False(scripts.ContainsKey("preview"));
 
         // Scaffold should only contain Aspire-desired dependencies (at Aspire's versions)
-        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Null(packageJson["dependencies"]);
+        Assert.Equal("^8.2.0", devDependencies["vscode-jsonrpc"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.False(devDependencies.ContainsKey("eslint"));
+        Assert.False(devDependencies.ContainsKey("typescript-eslint"));
         Assert.False(devDependencies.ContainsKey("vite"));
 
         // engines.node is always set
@@ -154,16 +157,16 @@ public sealed class TypeScriptLanguageSupportTests
         });
 
         var packageJson = ParseJson(files["package.json"]);
-        var dependencies = packageJson["dependencies"]!.AsObject();
         var devDependencies = packageJson["devDependencies"]!.AsObject();
 
         // Scaffold always produces Aspire's desired versions — the CLI-side
         // PackageJsonMerger handles semver comparison with existing on-disk versions.
-        Assert.Equal("^8.2.0", dependencies["vscode-jsonrpc"]?.GetValue<string>());
+        Assert.Null(packageJson["dependencies"]);
         Assert.Equal("^22.0.0", devDependencies["@types/node"]?.GetValue<string>());
         Assert.Equal("^3.1.14", devDependencies["nodemon"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
+        Assert.Equal("^8.2.0", devDependencies["vscode-jsonrpc"]?.GetValue<string>());
     }
 
     [Fact]

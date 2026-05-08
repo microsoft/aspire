@@ -105,8 +105,8 @@ internal static class PackageJsonMerger
         MergeDependencySection(existing, scaffold, DevDependenciesKey, logger);
 
         // Handle engines with overwrite semantics for "node" — since the user is running
-        // "aspire init", we enforce our Node version constraint (required for ESLint 10
-        // and TypeScript tooling compatibility). Other engines sub-keys are preserved.
+        // "aspire init", we enforce our Node version constraint (required for TypeScript
+        // AppHost tooling compatibility). Other engines sub-keys are preserved.
         MergeEngines(existing, scaffold, logger);
 
         // Deep merge everything else (scalars, nested objects).
@@ -251,7 +251,7 @@ internal static class PackageJsonMerger
     /// <summary>
     /// Merges the <c>engines</c> section from scaffold into existing. The <c>engines.node</c>
     /// constraint is always overwritten by the scaffold's value because <c>aspire init</c> requires
-    /// specific Node.js versions for ESLint 10 and TypeScript tooling compatibility. Other
+    /// specific Node.js versions for TypeScript AppHost tooling compatibility. Other
     /// <c>engines</c> sub-keys (e.g., <c>npm</c>) are preserved from the existing package.json.
     /// </summary>
     private static void MergeEngines(JsonObject existing, JsonObject scaffold, ILogger logger)

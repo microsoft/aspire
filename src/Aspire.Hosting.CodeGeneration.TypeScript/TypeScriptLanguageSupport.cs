@@ -90,28 +90,6 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             """;
         files[PackageJsonFileName] = CreatePackageJson(request);
 
-        // Create eslint.config.mjs for catching unawaited promises in apphost.ts
-        files["eslint.config.mjs"] = """
-            // @ts-check
-
-            import { defineConfig } from 'eslint/config';
-            import tseslint from 'typescript-eslint';
-
-            export default defineConfig({
-              files: ['apphost.ts'],
-              extends: [tseslint.configs.base],
-              languageOptions: {
-                parserOptions: {
-                  project: './tsconfig.apphost.json',
-                  tsconfigRootDir: import.meta.dirname,
-                },
-              },
-              rules: {
-                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
-              },
-            });
-            """;
-
         // Create an apphost-specific tsconfig so existing brownfield TypeScript settings are preserved.
         files[AppHostTsConfigFileName] = AppHostTsConfigContent;
 
@@ -160,36 +138,30 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             packageJson["type"] = "module";
         }
 
-        // NOTE: The engines.node constraint must match ESLint 10's own requirement
-        // (^20.19.0 || ^22.13.0 || >=24) to avoid install/runtime failures on unsupported Node versions.
+        // NOTE: Keep this aligned with the generated TypeScript AppHost tooling requirements
+        // to avoid install/runtime failures on unsupported Node versions.
         // This is set for both greenfield and brownfield scenarios — the user is opting into Aspire
         // which requires these Node versions. The CLI-side MergeEngines also enforces this during merge.
         var engines = EnsureObject(packageJson, "engines");
         engines["node"] = "^20.19.0 || ^22.13.0 || >=24";
 
         var scripts = EnsureObject(packageJson, "scripts");
-        scripts["aspire:lint"] = "eslint apphost.ts";
         scripts["aspire:start"] = "aspire run";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
 
         if (isGreenfield)
         {
-            scripts["lint"] = "npm run aspire:lint";
-            scripts["predev"] = "npm run aspire:lint";
             scripts["dev"] = "npm run aspire:start";
-            scripts["prebuild"] = "npm run aspire:lint";
             scripts["build"] = "npm run aspire:build";
             scripts["watch"] = "npm run aspire:dev";
         }
 
-        EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
         EnsureDependency(packageJson, "devDependencies", "@types/node", "^22.0.0");
-        EnsureDependency(packageJson, "devDependencies", "eslint", "^10.0.3");
         EnsureDependency(packageJson, "devDependencies", "nodemon", "^3.1.14");
         EnsureDependency(packageJson, "devDependencies", "tsx", "^4.21.0");
         EnsureDependency(packageJson, "devDependencies", "typescript", "^5.9.3");
-        EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.57.1");
+        EnsureDependency(packageJson, "devDependencies", "vscode-jsonrpc", "^8.2.0");
 
         return packageJson.ToJsonString(s_jsonSerializerOptions);
     }

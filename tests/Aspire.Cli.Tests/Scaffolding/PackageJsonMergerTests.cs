@@ -1114,7 +1114,8 @@ public class PackageJsonMergerTests
 
         var result = MergeJson(existing, scaffold);
 
-        // engines.node is always overwritten — aspire init enforces Node version for ESLint 10
+        // engines.node is always overwritten — aspire init enforces Node version
+        // for TypeScript AppHost tooling.
         var engines = ParseJson(result)["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
     }
@@ -1227,15 +1228,12 @@ public class PackageJsonMergerTests
             {
               "scripts": {
                 "aspire:start": "aspire run",
-                "aspire:build": "tsc -p tsconfig.apphost.json",
-                "aspire:lint": "eslint apphost.ts"
-              },
-              "dependencies": {
-                "vscode-jsonrpc": "^8.2.0"
+                "aspire:build": "tsc -p tsconfig.apphost.json"
               },
               "devDependencies": {
                 "typescript": "^5.9.3",
-                "tsx": "^4.21.0"
+                "tsx": "^4.21.0",
+                "vscode-jsonrpc": "^8.2.0"
               },
               "engines": {
                 "node": "^20.19.0 || ^22.13.0 || >=24"
@@ -1261,8 +1259,9 @@ public class PackageJsonMergerTests
         Assert.Contains("aspire:build", scripts.Select(p => p.Key));
 
         // Dependencies merged
-        Assert.NotNull(doc["dependencies"]?["vscode-jsonrpc"]);
         Assert.NotNull(doc["devDependencies"]?["typescript"]);
+        Assert.NotNull(doc["devDependencies"]?["vscode-jsonrpc"]);
+        Assert.Null(doc["dependencies"]?["vscode-jsonrpc"]);
 
         // Engines set
         Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
@@ -1408,19 +1407,14 @@ public class PackageJsonMergerTests
               "scripts": {
                 "aspire:start": "aspire run",
                 "aspire:build": "tsc -p tsconfig.apphost.json",
-                "aspire:dev": "tsc --watch -p tsconfig.apphost.json",
-                "aspire:lint": "eslint apphost.ts"
-              },
-              "dependencies": {
-                "vscode-jsonrpc": "^8.2.0"
+                "aspire:dev": "tsc --watch -p tsconfig.apphost.json"
               },
               "devDependencies": {
                 "@types/node": "^22.0.0",
-                "eslint": "^10.0.3",
                 "nodemon": "^3.1.14",
                 "tsx": "^4.21.0",
                 "typescript": "^5.9.3",
-                "typescript-eslint": "^8.57.1"
+                "vscode-jsonrpc": "^8.2.0"
               },
               "engines": {
                 "node": "^20.19.0 || ^22.13.0 || >=24"
@@ -1446,19 +1440,22 @@ public class PackageJsonMergerTests
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.False(scripts.ContainsKey("aspire:lint"));
 
         // No spurious aspire-prefixed duplicates of existing scripts
         Assert.False(scripts.ContainsKey("aspire:preview"));
 
         // Existing deps preserved, Aspire deps added
         Assert.Equal("^3.5.0", GetDep(result, "dependencies", "vue"));
-        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+        Assert.Null(GetDep(result, "dependencies", "vscode-jsonrpc"));
 
         // Existing devDeps: vite preserved, typescript upgraded to Aspire's version (newer)
         Assert.Equal("^7.0.0", GetDep(result, "devDependencies", "vite"));
         Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
         Assert.Equal("^4.21.0", GetDep(result, "devDependencies", "tsx"));
+        Assert.Equal("^8.2.0", GetDep(result, "devDependencies", "vscode-jsonrpc"));
+        Assert.Null(GetDep(result, "devDependencies", "eslint"));
+        Assert.Null(GetDep(result, "devDependencies", "typescript-eslint"));
 
         // Engines set
         Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
