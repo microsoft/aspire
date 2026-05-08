@@ -147,6 +147,10 @@
   <data name="SourceArgumentDescription" xml:space="preserve">
     <value>The NuGet source to use for the integration</value>
   </data>
+  <data name="SourceDoesNotExist" xml:space="preserve">
+    <value>The local NuGet source '{0}' does not exist. Create the local feed directory or use a valid package source URL.</value>
+    <comment>{0} is the NuGet source path.</comment>
+  </data>
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
   </data>
@@ -162,6 +166,9 @@
   </data>
   <data name="NoPackagesFound" xml:space="preserve">
     <value>No packages found.</value>
+  </data>
+  <data name="IntegrationNameRequiredInNonInteractiveMode" xml:space="preserve">
+    <value>An integration name is required when interactive input is not available.</value>
   </data>
   <data name="UnexpectedNumberOfPackagesFound" xml:space="preserve">
     <value>Unexpected number of packages found.</value>

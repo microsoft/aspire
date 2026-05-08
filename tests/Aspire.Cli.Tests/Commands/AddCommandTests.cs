@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -996,6 +997,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
 
             options.AddCommandPrompterFactory = (sp) =>
             {
@@ -2239,6 +2241,201 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var packageSourceMapping = nugetConfig.Root!.Element("packageSourceMapping")!;
         var sourceMapping = packageSourceMapping.Elements("packageSource")
             .Single(packageSource => string.Equals((string?)packageSource.Attribute("key"), expectedSource, StringComparison.Ordinal));
+        Assert.Contains(sourceMapping.Elements("package"), package =>
+            string.Equals((string?)package.Attribute("pattern"), PackageMapping.AllPackages, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AddCommandWithMissingLocalSourceDisplaysErrorBeforePackageSearch()
+    {
+        var testInteractionService = new TestInteractionService();
+        var packageSearchWasCalled = false;
+        var addPackageWasCalled = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var missingSource = Path.Combine(workspace.WorkspaceRoot.FullName, "missing-feed");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    packageSearchWasCalled = true;
+                    return (0, Array.Empty<NuGetPackage>());
+                };
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --apphost \"{appHostFile.FullName}\" --source \"{missingSource}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.False(packageSearchWasCalled);
+        Assert.False(addPackageWasCalled);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SourceDoesNotExist, missingSource),
+            testInteractionService.DisplayedErrors);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+    }
+
+    [Fact]
+    public async Task AddCommandWithoutIntegrationNameInNonInteractiveModeDoesNotAddFirstPackage()
+    {
+        var testInteractionService = new TestInteractionService();
+        var addPackageWasCalled = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                        query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                            ? [
+                                new NuGetPackage { Id = "AspireQuartz.Hosting", Version = "1.0.1", Source = "nuget" },
+                                new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.2.0", Source = "nuget" }
+                            ]
+                            : [])
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.False(addPackageWasCalled);
+        Assert.Contains(AddCommandStrings.IntegrationNameRequiredInNonInteractiveMode, testInteractionService.DisplayedErrors);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+    }
+
+    [Fact]
+    public async Task AddCommandWithoutSourceAddsSelectedExplicitChannelSourceMapping()
+    {
+        const string packageId = "AspireQuartz.Hosting";
+        const string packageVersion = "1.0.1";
+        const string nugetOrgSource = "https://api.nuget.org/v3/index.json";
+
+        string? addUsedSource = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var implicitCache = new FakeNuGetPackageCache();
+                var nugetOrgCache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                        query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                            ? [new NuGetPackage { Id = packageId, Version = packageVersion, Source = nugetOrgSource }]
+                            : [])
+                };
+
+                var explicitChannel = PackageChannel.CreateExplicitChannel(
+                    PackageChannelNames.Stable,
+                    PackageChannelQuality.Stable,
+                    [new PackageMapping(PackageMapping.AllPackages, nugetOrgSource)],
+                    nugetOrgCache);
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                        [PackageChannel.CreateImplicitChannel(implicitCache), explicitChannel])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, _, _, nugetSource, _, _, _) =>
+                {
+                    addUsedSource = nugetSource;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add {packageId} --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Null(addUsedSource);
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath));
+
+        var nugetConfig = XDocument.Load(nugetConfigPath);
+        var packageSources = nugetConfig.Root!.Element("packageSources")!;
+        Assert.Contains(packageSources.Elements("add"), add =>
+            string.Equals((string?)add.Attribute("key"), nugetOrgSource, StringComparison.Ordinal) &&
+            string.Equals((string?)add.Attribute("value"), nugetOrgSource, StringComparison.Ordinal));
+
+        var packageSourceMapping = nugetConfig.Root!.Element("packageSourceMapping")!;
+        var sourceMapping = packageSourceMapping.Elements("packageSource")
+            .Single(packageSource => string.Equals((string?)packageSource.Attribute("key"), nugetOrgSource, StringComparison.Ordinal));
         Assert.Contains(sourceMapping.Elements("package"), package =>
             string.Equals((string?)package.Attribute("pattern"), PackageMapping.AllPackages, StringComparison.Ordinal));
     }

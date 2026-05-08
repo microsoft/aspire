@@ -133,6 +133,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string SourceDoesNotExist
+        {
+            get
+            {
+                return ResourceManager.GetString("SourceDoesNotExist", resourceCulture);
+            }
+        }
+
         public static string FormatOptionDescription
         {
             get
@@ -170,6 +178,14 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("NoPackagesFound", resourceCulture);
+            }
+        }
+
+        public static string IntegrationNameRequiredInNonInteractiveMode
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationNameRequiredInNonInteractiveMode", resourceCulture);
             }
         }
 
