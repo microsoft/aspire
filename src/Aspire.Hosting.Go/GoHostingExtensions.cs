@@ -164,9 +164,18 @@ public static class GoHostingExtensions
                         .Copy(".", ".")
                         .Run(buildCmd);
 
-                    ctx.Builder
-                        .From(runtimeImage)
-                        .Run("apk --no-cache add ca-certificates tzdata")
+                    var runtimeStage = ctx.Builder.From(runtimeImage);
+
+                    // Only use apk when the runtime image is Alpine-based.
+                    // For custom images (e.g. debian:bookworm-slim) the caller
+                    // is expected to supply a base image that already includes
+                    // ca-certificates and tzdata, or extend the Dockerfile.
+                    if (runtimeImage.Contains("alpine", StringComparison.OrdinalIgnoreCase))
+                    {
+                        runtimeStage.Run("apk --no-cache add ca-certificates tzdata");
+                    }
+
+                    runtimeStage
                         .WorkDir("/app")
                         .CopyFrom("build", "/app/server", "/app/server")
                         .Entrypoint(["/app/server"]);
@@ -407,9 +416,13 @@ public static class GoHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        // Switch the underlying executable from "go" to "dlv".
-        builder.Resource.Annotations.Add(new ExecutableAnnotation { Command = "dlv", WorkingDirectory = builder.Resource.WorkingDirectory });
-        return builder.WithAnnotation(new GoDelveServerAnnotation(port), ResourceAnnotationMutationBehavior.Replace);
+        // Switch the underlying executable from "go" to "dlv" using Replace so that
+        // calling WithDelveServer more than once is idempotent.
+        return builder
+            .WithAnnotation(
+                new ExecutableAnnotation { Command = "dlv", WorkingDirectory = builder.Resource.WorkingDirectory },
+                ResourceAnnotationMutationBehavior.Replace)
+            .WithAnnotation(new GoDelveServerAnnotation(port), ResourceAnnotationMutationBehavior.Replace);
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -450,12 +463,12 @@ public static class GoHostingExtensions
 
         if (resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
         {
-            parts.Add($"-ldflags={ldFlagsAnnotation.Flags}");
+            parts.Add($"-ldflags={ShellQuote(ldFlagsAnnotation.Flags)}");
         }
 
         if (resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
         {
-            parts.Add($"-gcflags={gcFlagsAnnotation.Flags}");
+            parts.Add($"-gcflags={ShellQuote(gcFlagsAnnotation.Flags)}");
         }
 
         parts.AddRange(["-o", "/app/server", "."]);
@@ -483,14 +496,22 @@ public static class GoHostingExtensions
 
         if (resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
         {
-            parts.Add($"-ldflags={ldFlagsAnnotation.Flags}");
+            parts.Add($"-ldflags={ShellQuote(ldFlagsAnnotation.Flags)}");
         }
 
         if (resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
         {
-            parts.Add($"-gcflags={gcFlagsAnnotation.Flags}");
+            parts.Add($"-gcflags={ShellQuote(gcFlagsAnnotation.Flags)}");
         }
 
         return string.Join(" ", parts);
     }
+
+    /// <summary>
+    /// Wraps <paramref name="value"/> in single quotes when it contains spaces so that
+    /// shell tokenisation in Dockerfile <c>RUN</c> instructions and Delve's
+    /// <c>--build-flags</c> parser do not split it into separate tokens.
+    /// </summary>
+    private static string ShellQuote(string value) =>
+        value.Contains(' ') ? $"'{value}'" : value;
 }

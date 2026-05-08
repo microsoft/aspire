@@ -390,7 +390,8 @@ public class GoPublicApiTests
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
-        Assert.Equal(["--headless=true", "--listen=:2345", "--api-version=2", "debug", "--build-flags=-tags=netgo -ldflags=-s -w", "."], args);
+        // Values with spaces are shell-quoted so the Delve parser keeps them as single tokens.
+        Assert.Equal(["--headless=true", "--listen=:2345", "--api-version=2", "debug", "--build-flags=-tags=netgo -ldflags='-s -w'", "."], args);
     }
 
     [Fact]

@@ -335,7 +335,7 @@ public class AddGoAppTests
                 "--listen=:2345",
                 "--api-version=2",
                 "debug",
-                "--build-flags=-tags=netgo -ldflags=-s -w",
+                "--build-flags=-tags=netgo -ldflags=\u0027-s -w\u0027",
                 "."
               ]
             }
@@ -395,7 +395,7 @@ public class AddGoAppTests
                 "--listen=:2345",
                 "--api-version=2",
                 "debug",
-                "--build-flags=-gcflags=all=-N -l",
+                "--build-flags=-gcflags=\u0027all=-N -l\u0027",
                 "."
               ]
             }
@@ -496,7 +496,7 @@ public class AddGoAppTests
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
         Assert.Contains("-race", content);
         Assert.Contains("-tags=netgo,osusergo", content);
-        Assert.Contains("-ldflags=-X main.version=1.0.0", content);
+        Assert.Contains("-ldflags='-X main.version=1.0.0'", content);
     }
 
     [Fact]

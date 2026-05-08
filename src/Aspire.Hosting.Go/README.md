@@ -33,14 +33,25 @@ builder.Build().Run();
 ```
 
 The method executes the package as `go run .` from the directory containing `go.mod`.
-Pass additional program arguments via the `args` parameter, or chain `.WithArgs(...)` after the call.
+Pass runtime arguments via `.WithAppArgs(...)` and pre-start module commands via `.WithModTidy()`, `.WithModVendor()`, `.WithModDownload()`, or `.WithVetTool()`.
 
 ### Build flags
 
+Build-time compiler options are parameters of `AddGoApp` itself:
+
+```csharp
+builder.AddGoApp("api", "../go-api",
+    buildTags: ["integration", "netgo"],
+    ldFlags: "-X main.version=1.2.3 -s -w",
+    gcFlags: "all=-N -l",
+    raceDetector: true);
+```
+
+Pass runtime arguments to the program:
+
 ```csharp
 builder.AddGoApp("api", "../go-api")
-    .WithBuildTags("integration", "netgo")
-    .WithLdFlags("-X main.version=1.2.3 -s -w");
+    .WithAppArgs("--config", "prod.yaml");
 ```
 
 ### Debugging
