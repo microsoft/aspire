@@ -4248,7 +4248,7 @@ type DistributedApplicationBuilder interface {
 	AddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error
 	AddExecutable(name string, command string, workingDirectory string, args []string) ExecutableResource
 	AddExternalService(name string, url any) ExternalServiceResource
-	AddGoApp(name string, appDirectory string) GoAppResource
+	AddGoApp(name string, appDirectory string, options ...*AddGoAppOptions) GoAppResource
 	AddParameter(name string, options ...*AddParameterOptions) ParameterResource
 	AddParameterFromConfiguration(name string, configurationKey string, options ...*AddParameterFromConfigurationOptions) ParameterResource
 	AddParameterWithGeneratedValue(name string, value *GenerateParameterDefault, options ...*AddParameterWithGeneratedValueOptions) ParameterResource
@@ -4551,7 +4551,7 @@ func (s *distributedApplicationBuilder) AddExternalService(name string, url any)
 }
 
 // AddGoApp adds a Go application resource
-func (s *distributedApplicationBuilder) AddGoApp(name string, appDirectory string) GoAppResource {
+func (s *distributedApplicationBuilder) AddGoApp(name string, appDirectory string, options ...*AddGoAppOptions) GoAppResource {
 	if s.err != nil { return &goAppResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -4559,6 +4559,13 @@ func (s *distributedApplicationBuilder) AddGoApp(name string, appDirectory strin
 	}
 	reqArgs["name"] = serializeValue(name)
 	reqArgs["appDirectory"] = serializeValue(appDirectory)
+	if len(options) > 0 {
+		merged := &AddGoAppOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/addGoApp", reqArgs)
 	if err != nil {
 		return &goAppResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
@@ -9593,7 +9600,6 @@ type GoAppResource interface {
 	WithAppArgs(args []string) GoAppResource
 	WithArgs(args []string) GoAppResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) GoAppResource
-	WithBuildTags(tags []string) GoAppResource
 	WithCertificateTrustScope(scope CertificateTrustScope) GoAppResource
 	WithChildRelationship(child Resource) GoAppResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) GoAppResource
@@ -9608,7 +9614,6 @@ type GoAppResource interface {
 	WithExecutableCommand(command string) GoAppResource
 	WithExplicitStart() GoAppResource
 	WithExternalHttpEndpoints() GoAppResource
-	WithGcFlags(flags string) GoAppResource
 	WithHealthCheck(key string) GoAppResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) GoAppResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) GoAppResource
@@ -9620,25 +9625,24 @@ type GoAppResource interface {
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) GoAppResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) GoAppResource
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) GoAppResource
-	WithLdFlags(flags string) GoAppResource
 	WithMcpServer(options ...*WithMcpServerOptions) GoAppResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) GoAppResource
 	WithParentRelationship(parent Resource) GoAppResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) GoAppResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) GoAppResource
-	WithRaceDetector() GoAppResource
 	WithReference(source any, options ...*WithReferenceOptions) GoAppResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) GoAppResource
 	WithRelationship(resourceBuilder Resource, type_ string) GoAppResource
 	WithRemoteImageName(remoteImageName string) GoAppResource
 	WithRemoteImageTag(remoteImageTag string) GoAppResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) GoAppResource
-	WithTidy() GoAppResource
+	WithModDownload() GoAppResource
+	WithModTidy() GoAppResource
+	WithModVendor() GoAppResource
 	WithUrl(url any, options ...*WithUrlOptions) GoAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) GoAppResource
 	WithUrls(callback func(obj ResourceUrlsCallbackContext)) GoAppResource
-	WithVendor() GoAppResource
-	WithVet() GoAppResource
+	WithVetTool() GoAppResource
 	WithWorkingDirectory(workingDirectory string) GoAppResource
 	WithoutHttpsCertificate() GoAppResource
 	WorkingDirectory() (string, error)
@@ -10003,18 +10007,6 @@ func (s *goAppResource) WithArgsCallback(callback func(obj CommandLineArgsCallba
 	return s
 }
 
-// WithBuildTags specifies Go build tags passed via -tags
-func (s *goAppResource) WithBuildTags(tags []string) GoAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if tags != nil { reqArgs["tags"] = serializeValue(tags) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withBuildTags", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *goAppResource) WithCertificateTrustScope(scope CertificateTrustScope) GoAppResource {
 	if s.err != nil { return s }
@@ -10246,18 +10238,6 @@ func (s *goAppResource) WithExternalHttpEndpoints() GoAppResource {
 	return s
 }
 
-// WithGcFlags specifies Go compiler flags passed via -gcflags
-func (s *goAppResource) WithGcFlags(flags string) GoAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["flags"] = serializeValue(flags)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withGcFlags", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithHealthCheck adds a health check by key
 func (s *goAppResource) WithHealthCheck(key string) GoAppResource {
 	if s.err != nil { return s }
@@ -10471,18 +10451,6 @@ func (s *goAppResource) WithImagePushOptions(callback func(arg ContainerImagePus
 	return s
 }
 
-// WithLdFlags specifies Go linker flags passed via -ldflags
-func (s *goAppResource) WithLdFlags(flags string) GoAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["flags"] = serializeValue(flags)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withLdFlags", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithMcpServer configures an MCP server endpoint on the resource
 func (s *goAppResource) WithMcpServer(options ...*WithMcpServerOptions) GoAppResource {
 	if s.err != nil { return s }
@@ -10575,17 +10543,6 @@ func (s *goAppResource) WithPipelineStepFactory(stepName string, callback func(a
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPipelineStepFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithRaceDetector enables the Go race detector via -race
-func (s *goAppResource) WithRaceDetector() GoAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withRaceDetector", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10684,14 +10641,14 @@ func (s *goAppResource) WithRequiredCommand(command string, options ...*WithRequ
 	return s
 }
 
-// WithTidy runs go mod tidy before starting the application to ensure go.sum is up to date
-func (s *goAppResource) WithTidy() GoAppResource {
+// WithModTidy runs go mod tidy before starting the application to ensure go.sum is up to date
+func (s *goAppResource) WithModTidy() GoAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withTidy", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModTidy", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10760,25 +10717,40 @@ func (s *goAppResource) WithUrls(callback func(obj ResourceUrlsCallbackContext))
 	return s
 }
 
-// WithVendor runs go mod vendor before starting the application to cache module dependencies locally
-func (s *goAppResource) WithVendor() GoAppResource {
+// WithModVendor runs go mod vendor before starting the application to cache module dependencies locally
+func (s *goAppResource) WithModVendor() GoAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withVendor", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModVendor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
-// WithVet runs go vet ./... before starting the application to catch static analysis issues
-func (s *goAppResource) WithVet() GoAppResource {
+// WithModDownload runs go mod download before starting the application to pre-fetch module dependencies into the local cache
+func (s *goAppResource) WithModDownload() GoAppResource {
+	if s.err != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModDownload", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithVetTool runs go vet ./... before starting the application to catch static analysis issues
+func (s *goAppResource) WithVetTool() GoAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withVet", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withVetTool", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15812,6 +15784,24 @@ func (o *AddForEndpointOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.DisplayText != nil { m["displayText"] = serializeValue(o.DisplayText) }
+	return m
+}
+
+// AddGoAppOptions carries optional parameters for AddGoApp.
+type AddGoAppOptions struct {
+	BuildTags []string `json:"buildTags,omitempty"`
+	LdFlags *string `json:"ldFlags,omitempty"`
+	GcFlags *string `json:"gcFlags,omitempty"`
+	RaceDetector *bool `json:"raceDetector,omitempty"`
+}
+
+func (o *AddGoAppOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.BuildTags != nil { m["buildTags"] = serializeValue(o.BuildTags) }
+	if o.LdFlags != nil { m["ldFlags"] = serializeValue(o.LdFlags) }
+	if o.GcFlags != nil { m["gcFlags"] = serializeValue(o.GcFlags) }
+	if o.RaceDetector != nil { m["raceDetector"] = serializeValue(o.RaceDetector) }
 	return m
 }
 

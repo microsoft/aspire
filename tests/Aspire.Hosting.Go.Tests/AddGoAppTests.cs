@@ -47,15 +47,14 @@ public class AddGoAppTests
         Assert.Equal(expected, manifest.ToString());
     }
 
-    // ---- Manifest: with build tags ----------------------------------------
+    // ---- Manifest: AddGoApp build params ------------------------------------
 
     [Fact]
-    public async Task VerifyManifest_WithBuildTags()
+    public async Task VerifyManifest_AddGoApp_BuildTagsParam()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithBuildTags("netgo", "osusergo");
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory, buildTags: ["netgo", "osusergo"]);
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -74,15 +73,12 @@ public class AddGoAppTests
         Assert.Equal(expected, manifest.ToString());
     }
 
-    // ---- Manifest: with ldflags -------------------------------------------
-
     [Fact]
-    public async Task VerifyManifest_WithLdFlags()
+    public async Task VerifyManifest_AddGoApp_LdFlagsParam()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithLdFlags("-X main.version=1.0.0");
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory, ldFlags: "-X main.version=1.0.0");
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -101,16 +97,12 @@ public class AddGoAppTests
         Assert.Equal(expected, manifest.ToString());
     }
 
-    // ---- Manifest: with build tags AND ldflags together -------------------
-
     [Fact]
-    public async Task VerifyManifest_WithBuildTagsAndLdFlags()
+    public async Task VerifyManifest_AddGoApp_GcFlagsParam()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithBuildTags("netgo")
-            .WithLdFlags("-s -w");
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory, gcFlags: "all=-N -l");
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -121,8 +113,62 @@ public class AddGoAppTests
               "command": "go",
               "args": [
                 "run",
+                "-gcflags=all=-N -l",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_AddGoApp_RaceDetectorParam()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory, raceDetector: true);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "go",
+              "args": [
+                "run",
+                "-race",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_AddGoApp_AllBuildParams()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory,
+            buildTags: ["netgo"],
+            ldFlags: "-s -w",
+            gcFlags: "all=-N -l",
+            raceDetector: true);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "go",
+              "args": [
+                "run",
+                "-race",
                 "-tags=netgo",
                 "-ldflags=-s -w",
+                "-gcflags=all=-N -l",
                 "."
               ]
             }
@@ -158,131 +204,15 @@ public class AddGoAppTests
         Assert.Equal(expected, manifest.ToString());
     }
 
-    // ---- Manifest: WithRaceDetector injects -race flag -------------------
+    // ---- Manifest: WithModTidy does not appear in manifest ---------------
 
     [Fact]
-    public async Task VerifyManifest_WithRaceDetector()
+    public async Task VerifyManifest_WithModTidy_DoesNotAlterMainManifest()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithRaceDetector();
-
-        var manifest = await ManifestUtils.GetManifest(app.Resource);
-
-        var expected = """
-            {
-              "type": "executable.v0",
-              "workingDirectory": ".",
-              "command": "go",
-              "args": [
-                "run",
-                "-race",
-                "."
-              ]
-            }
-            """;
-        Assert.Equal(expected, manifest.ToString());
-    }
-
-    // ---- Manifest: WithGcFlags injects -gcflags --------------------------
-
-    [Fact]
-    public async Task VerifyManifest_WithGcFlags()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
-
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithGcFlags("all=-N -l");
-
-        var manifest = await ManifestUtils.GetManifest(app.Resource);
-
-        var expected = """
-            {
-              "type": "executable.v0",
-              "workingDirectory": ".",
-              "command": "go",
-              "args": [
-                "run",
-                "-gcflags=all=-N -l",
-                "."
-              ]
-            }
-            """;
-        Assert.Equal(expected, manifest.ToString());
-    }
-
-    // ---- Manifest: WithDelveServer with race detector --------------------
-
-    [Fact]
-    public async Task VerifyManifest_WithDelveServer_AndRaceDetector()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
-
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithRaceDetector()
-            .WithDelveServer(port: 2345);
-
-        var manifest = await ManifestUtils.GetManifest(app.Resource);
-
-        var expected = """
-            {
-              "type": "executable.v0",
-              "workingDirectory": ".",
-              "command": "dlv",
-              "args": [
-                "--headless=true",
-                "--listen=:2345",
-                "--api-version=2",
-                "debug",
-                "--build-flags=-race",
-                "."
-              ]
-            }
-            """;
-        Assert.Equal(expected, manifest.ToString());
-    }
-
-    // ---- Manifest: WithDelveServer with gcflags --------------------------
-
-    [Fact]
-    public async Task VerifyManifest_WithDelveServer_AndGcFlags()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
-
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithGcFlags("all=-N -l")
-            .WithDelveServer(port: 2345);
-
-        var manifest = await ManifestUtils.GetManifest(app.Resource);
-
-        var expected = """
-            {
-              "type": "executable.v0",
-              "workingDirectory": ".",
-              "command": "dlv",
-              "args": [
-                "--headless=true",
-                "--listen=:2345",
-                "--api-version=2",
-                "debug",
-                "--build-flags=-gcflags=all=-N -l",
-                "."
-              ]
-            }
-            """;
-        Assert.Equal(expected, manifest.ToString());
-    }
-
-    // ---- Manifest: WithTidy does not appear in manifest ------------------
-
-    [Fact]
-    public async Task VerifyManifest_WithTidy_DoesNotAlterMainManifest()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
-
-        // WithTidy only creates a sibling in run mode; in publish mode the manifest is unchanged.
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory).WithTidy();
+        // WithModTidy only creates a sibling in run mode; in publish mode the manifest is unchanged.
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory).WithModTidy();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -300,14 +230,39 @@ public class AddGoAppTests
         Assert.Equal(expected, manifest.ToString());
     }
 
-    // ---- Manifest: WithVendor does not appear in manifest ----------------
+    // ---- Manifest: WithModVendor does not appear in manifest -------------
 
     [Fact]
-    public async Task VerifyManifest_WithVendor_DoesNotAlterMainManifest()
+    public async Task VerifyManifest_WithModVendor_DoesNotAlterMainManifest()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory).WithVendor();
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory).WithModVendor();
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "go",
+              "args": [
+                "run",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    // ---- Manifest: WithModDownload does not appear in manifest -----------
+
+    [Fact]
+    public async Task VerifyManifest_WithModDownload_DoesNotAlterMainManifest()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory).WithModDownload();
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -361,9 +316,9 @@ public class AddGoAppTests
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithBuildTags("netgo")
-            .WithLdFlags("-s -w")
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory,
+                buildTags: ["netgo"],
+                ldFlags: "-s -w")
             .WithDelveServer(port: 2345);
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
@@ -379,6 +334,66 @@ public class AddGoAppTests
                 "--api-version=2",
                 "debug",
                 "--build-flags=-tags=netgo -ldflags=-s -w",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    // ---- Manifest: WithDelveServer with race detector --------------------
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_AndRaceDetector()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory, raceDetector: true)
+            .WithDelveServer(port: 2345);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=:2345",
+                "--api-version=2",
+                "debug",
+                "--build-flags=-race",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    // ---- Manifest: WithDelveServer with gcflags --------------------------
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_AndGcFlags()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory, gcFlags: "all=-N -l")
+            .WithDelveServer(port: 2345);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=:2345",
+                "--api-version=2",
+                "debug",
+                "--build-flags=-gcflags=all=-N -l",
                 "."
               ]
             }

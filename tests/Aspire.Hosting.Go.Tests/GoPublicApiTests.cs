@@ -108,6 +108,66 @@ public class GoPublicApiTests
         Assert.Equal(["run", "."], args);
     }
 
+    [Fact]
+    public async Task AddGoApp_BuildTagsParam_InjectsTagsFlag()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory, buildTags: ["netgo", "osusergo"]);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "-tags=netgo,osusergo", "."], args);
+    }
+
+    [Fact]
+    public async Task AddGoApp_LdFlagsParam_InjectsLdFlagsArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory, ldFlags: "-X main.version=1.0.0");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "-ldflags=-X main.version=1.0.0", "."], args);
+    }
+
+    [Fact]
+    public async Task AddGoApp_GcFlagsParam_InjectsGcFlagsArg()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory, gcFlags: "all=-N -l");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "-gcflags=all=-N -l", "."], args);
+    }
+
+    [Fact]
+    public async Task AddGoApp_RaceDetectorParam_InjectsRaceFlag()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory, raceDetector: true);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "-race", "."], args);
+    }
+
+    [Fact]
+    public async Task AddGoApp_AllBuildParams_ProduceCorrectOrdering()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory,
+            buildTags: ["netgo"],
+            ldFlags: "-s -w",
+            gcFlags: "all=-N -l",
+            raceDetector: true);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        // Ordering: run -race -tags=... -ldflags=... -gcflags=... .
+        Assert.Equal(["run", "-race", "-tags=netgo", "-ldflags=-s -w", "-gcflags=all=-N -l", "."], args);
+    }
+
     // ---- WithAppArgs --------------------------------------------------------
 
     [Fact]
@@ -147,293 +207,141 @@ public class GoPublicApiTests
         Assert.Equal(["run", ".", "--port", "9090"], args);
     }
 
-    // ---- WithBuildTags ------------------------------------------------------
+    // ---- WithModTidy --------------------------------------------------------
 
     [Fact]
-    public void WithBuildTagsShouldThrowWhenBuilderIsNull()
+    public void WithModTidyShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<GoAppResource> builder = null!;
 
-        var action = () => builder.WithBuildTags("netgo");
+        var action = () => builder.WithModTidy();
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
     }
 
     [Fact]
-    public async Task WithBuildTagsInjectsTagsFlag()
+    public void WithModTidyIsIdempotent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithBuildTags("netgo", "osusergo");
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-tags=netgo,osusergo", "."], args);
-    }
-
-    // ---- WithLdFlags --------------------------------------------------------
-
-    [Fact]
-    public void WithLdFlagsShouldThrowWhenBuilderIsNull()
-    {
-        IResourceBuilder<GoAppResource> builder = null!;
-
-        var action = () => builder.WithLdFlags("-s -w");
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(builder), exception.ParamName);
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void WithLdFlagsShouldThrowWhenFlagsIsNullOrEmpty(bool isNull)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var flags = isNull ? null! : string.Empty;
-
-        var action = () => builder.AddGoApp("api", builder.AppHostDirectory).WithLdFlags(flags);
-
-        var exception = isNull
-            ? Assert.Throws<ArgumentNullException>(action)
-            : Assert.Throws<ArgumentException>(action);
-        Assert.Equal(nameof(flags), exception.ParamName);
-    }
-
-    [Fact]
-    public async Task WithLdFlagsInjectsLdFlagsArg()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithLdFlags("-X main.version=1.0.0");
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-ldflags=-X main.version=1.0.0", "."], args);
-    }
-
-    [Fact]
-    public async Task WithBuildTagsAndLdFlagsBothPresent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithBuildTags("netgo")
-                         .WithLdFlags("-s -w");
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-tags=netgo", "-ldflags=-s -w", "."], args);
-    }
-
-    // ---- WithRaceDetector ---------------------------------------------------
-
-    [Fact]
-    public void WithRaceDetectorShouldThrowWhenBuilderIsNull()
-    {
-        IResourceBuilder<GoAppResource> builder = null!;
-
-        var action = () => builder.WithRaceDetector();
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(builder), exception.ParamName);
-    }
-
-    [Fact]
-    public async Task WithRaceDetectorInjectsRaceFlag()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithRaceDetector();
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-race", "."], args);
-    }
-
-    [Fact]
-    public async Task WithRaceDetectorIsIdempotent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithRaceDetector()
-                         .WithRaceDetector();
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-race", "."], args);
-    }
-
-    [Fact]
-    public async Task WithRaceDetectorAndBuildFlagsTogether()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithRaceDetector()
-                         .WithBuildTags("integration")
-                         .WithLdFlags("-s -w");
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-race", "-tags=integration", "-ldflags=-s -w", "."], args);
-    }
-
-    // ---- WithGcFlags --------------------------------------------------------
-
-    [Fact]
-    public void WithGcFlagsShouldThrowWhenBuilderIsNull()
-    {
-        IResourceBuilder<GoAppResource> builder = null!;
-
-        var action = () => builder.WithGcFlags("all=-N -l");
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(builder), exception.ParamName);
-    }
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void WithGcFlagsShouldThrowWhenFlagsIsNullOrEmpty(bool isNull)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var flags = isNull ? null! : string.Empty;
-
-        var action = () => builder.AddGoApp("api", builder.AppHostDirectory).WithGcFlags(flags);
-
-        var exception = isNull
-            ? Assert.Throws<ArgumentNullException>(action)
-            : Assert.Throws<ArgumentException>(action);
-        Assert.Equal(nameof(flags), exception.ParamName);
-    }
-
-    [Fact]
-    public async Task WithGcFlagsInjectsGcFlagsArg()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithGcFlags("all=-N -l");
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-gcflags=all=-N -l", "."], args);
-    }
-
-    [Fact]
-    public async Task WithGcFlagsAndOtherFlagsPreserveOrdering()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithBuildTags("netgo")
-                         .WithLdFlags("-s -w")
-                         .WithGcFlags("all=-N -l");
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "-tags=netgo", "-ldflags=-s -w", "-gcflags=all=-N -l", "."], args);
-    }
-
-    // ---- WithTidy -----------------------------------------------------------
-
-    [Fact]
-    public void WithTidyShouldThrowWhenBuilderIsNull()
-    {
-        IResourceBuilder<GoAppResource> builder = null!;
-
-        var action = () => builder.WithTidy();
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(builder), exception.ParamName);
-    }
-
-    [Fact]
-    public void WithTidyIsIdempotent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithTidy()
-                         .WithTidy();
+                         .WithModTidy()
+                         .WithModTidy();
 
         // Only one tidy sibling should have been created
-        var tidyResources = builder.Resources.Where(r => r.Name == "api-tidy").ToList();
+        var tidyResources = builder.Resources.Where(r => r.Name == "api-mod-tidy").ToList();
         Assert.Single(tidyResources);
     }
 
     [Fact]
-    public void WithTidyCreatesSiblingResource()
+    public void WithModTidyCreatesSiblingResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        builder.AddGoApp("api", builder.AppHostDirectory).WithTidy();
+        builder.AddGoApp("api", builder.AppHostDirectory).WithModTidy();
 
-        Assert.Contains(builder.Resources, r => r.Name == "api-tidy");
+        Assert.Contains(builder.Resources, r => r.Name == "api-mod-tidy");
     }
 
-    // ---- WithVendor ---------------------------------------------------------
+    // ---- WithModVendor ------------------------------------------------------
 
     [Fact]
-    public void WithVendorShouldThrowWhenBuilderIsNull()
+    public void WithModVendorShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<GoAppResource> builder = null!;
 
-        var action = () => builder.WithVendor();
+        var action = () => builder.WithModVendor();
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
     }
 
     [Fact]
-    public void WithVendorIsIdempotent()
+    public void WithModVendorIsIdempotent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.AddGoApp("api", builder.AppHostDirectory)
-               .WithVendor()
-               .WithVendor();
+               .WithModVendor()
+               .WithModVendor();
 
-        var vendorResources = builder.Resources.Where(r => r.Name == "api-vendor").ToList();
+        var vendorResources = builder.Resources.Where(r => r.Name == "api-mod-vendor").ToList();
         Assert.Single(vendorResources);
     }
 
     [Fact]
-    public void WithVendorCreatesSiblingResource()
+    public void WithModVendorCreatesSiblingResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        builder.AddGoApp("api", builder.AppHostDirectory).WithVendor();
+        builder.AddGoApp("api", builder.AppHostDirectory).WithModVendor();
 
-        Assert.Contains(builder.Resources, r => r.Name == "api-vendor");
+        Assert.Contains(builder.Resources, r => r.Name == "api-mod-vendor");
     }
 
-    // ---- WithVet -----------------------------------------------------------
+    // ---- WithModDownload ----------------------------------------------------
 
     [Fact]
-    public void WithVetShouldThrowWhenBuilderIsNull()
+    public void WithModDownloadShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<GoAppResource> builder = null!;
 
-        var action = () => builder.WithVet();
+        var action = () => builder.WithModDownload();
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
     }
 
     [Fact]
-    public void WithVetIsIdempotent()
+    public void WithModDownloadIsIdempotent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         builder.AddGoApp("api", builder.AppHostDirectory)
-               .WithVet()
-               .WithVet();
+               .WithModDownload()
+               .WithModDownload();
 
-        var lintResources = builder.Resources.Where(r => r.Name == "api-vet").ToList();
-        Assert.Single(lintResources);
+        var downloadResources = builder.Resources.Where(r => r.Name == "api-mod-download").ToList();
+        Assert.Single(downloadResources);
     }
 
     [Fact]
-    public void WithVetCreatesSiblingResource()
+    public void WithModDownloadCreatesSiblingResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        builder.AddGoApp("api", builder.AppHostDirectory).WithVet();
+        builder.AddGoApp("api", builder.AppHostDirectory).WithModDownload();
 
-        Assert.Contains(builder.Resources, r => r.Name == "api-vet");
+        Assert.Contains(builder.Resources, r => r.Name == "api-mod-download");
+    }
+
+    // ---- WithVetTool --------------------------------------------------------
+
+    [Fact]
+    public void WithVetToolShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<GoAppResource> builder = null!;
+
+        var action = () => builder.WithVetTool();
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithVetToolIsIdempotent()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddGoApp("api", builder.AppHostDirectory)
+               .WithVetTool()
+               .WithVetTool();
+
+        var vetResources = builder.Resources.Where(r => r.Name == "api-vet-tool").ToList();
+        Assert.Single(vetResources);
+    }
+
+    [Fact]
+    public void WithVetToolCreatesSiblingResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddGoApp("api", builder.AppHostDirectory).WithVetTool();
+
+        Assert.Contains(builder.Resources, r => r.Name == "api-vet-tool");
     }
 
     // ---- WithDelveServer ----------------------------------------------------
@@ -475,9 +383,9 @@ public class GoPublicApiTests
     public async Task WithDelveServerIncludesBuildFlagsWhenPresent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory)
-                         .WithBuildTags("netgo")
-                         .WithLdFlags("-s -w")
+        var app = builder.AddGoApp("api", builder.AppHostDirectory,
+                            buildTags: ["netgo"],
+                            ldFlags: "-s -w")
                          .WithDelveServer(port: 2345);
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);

@@ -19,6 +19,10 @@ public static class GoHostingExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to add the resource to.</param>
     /// <param name="name">The name of the resource.</param>
     /// <param name="appDirectory">The path to the directory containing the Go application (must contain <c>go.mod</c>).</param>
+    /// <param name="buildTags">Optional build tags passed to the compiler via <c>-tags</c> (e.g. <c>"netgo"</c>, <c>"integration"</c>).</param>
+    /// <param name="ldFlags">Optional linker flags passed via <c>-ldflags</c> (e.g. <c>"-X main.version=1.0.0"</c>).</param>
+    /// <param name="gcFlags">Optional compiler flags passed via <c>-gcflags</c> (e.g. <c>"all=-N -l"</c> to disable optimisations for Delve).</param>
+    /// <param name="raceDetector">When <see langword="true"/>, enables the Go race detector by passing <c>-race</c> to <c>go run</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
@@ -27,16 +31,20 @@ public static class GoHostingExtensions
     /// </para>
     /// <para>
     /// Go applications automatically have VS Code debugging support enabled via Delve.
-    /// Use <see cref="WithBuildTags{T}"/> to pass build constraints, <see cref="WithLdFlags{T}"/>
-    /// to pass linker flags, and <see cref="WithAppArgs{T}"/> to pass runtime program arguments.
+    /// Use <see cref="WithModTidy{T}"/>, <see cref="WithModVendor{T}"/>, or <see cref="WithModDownload{T}"/>
+    /// to manage module dependencies before startup, and <see cref="WithVetTool{T}"/> to run static analysis.
+    /// Use <see cref="WithAppArgs{T}"/> to pass runtime program arguments, and
+    /// <see cref="WithDelveServer{T}"/> to enable remote debugging via a headless Delve server.
     /// </para>
     /// </remarks>
     /// <example>
-    /// Add a Go API to the application model:
+    /// Add a Go API to the application model with build tags and linker flags:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddGoApp("api", "../go-api")
+    /// builder.AddGoApp("api", "../go-api",
+    ///            buildTags: ["netgo"],
+    ///            ldFlags: "-X main.version=1.0.0")
     ///        .WithHttpEndpoint(port: 8080)
     ///        .WithExternalHttpEndpoints();
     ///
@@ -47,7 +55,11 @@ public static class GoHostingExtensions
     public static IResourceBuilder<GoAppResource> AddGoApp(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
-        string appDirectory)
+        string appDirectory,
+        string[]? buildTags = null,
+        string? ldFlags = null,
+        string? gcFlags = null,
+        bool raceDetector = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -56,12 +68,12 @@ public static class GoHostingExtensions
         appDirectory = Path.GetFullPath(appDirectory, builder.AppHostDirectory);
         var resource = new GoAppResource(name, appDirectory);
 
-        return builder.AddResource(resource)
+        var rb = builder.AddResource(resource)
             .WithArgs(ctx =>
             {
                 var programArgs = ctx.Resource.TryGetLastAnnotation<GoAppArgsAnnotation>(out var argsAnnotation)
                     ? argsAnnotation.Args
-                    : Array.Empty<string>();
+                    : [];
 
                 var hasDelve = ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation);
 
@@ -126,6 +138,28 @@ public static class GoHostingExtensions
                 }
             })
             .WithVSCodeDebugging();
+
+        if (buildTags is { Length: > 0 })
+        {
+            rb.WithAnnotation(new GoBuildTagsAnnotation(buildTags), ResourceAnnotationMutationBehavior.Replace);
+        }
+
+        if (ldFlags is not null)
+        {
+            rb.WithAnnotation(new GoLdFlagsAnnotation(ldFlags), ResourceAnnotationMutationBehavior.Replace);
+        }
+
+        if (gcFlags is not null)
+        {
+            rb.WithAnnotation(new GoGcFlagsAnnotation(gcFlags), ResourceAnnotationMutationBehavior.Replace);
+        }
+
+        if (raceDetector)
+        {
+            rb.WithAnnotation(new GoRaceDetectorAnnotation(), ResourceAnnotationMutationBehavior.Replace);
+        }
+
+        return rb;
     }
 
     /// <summary>
@@ -146,71 +180,6 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
-    /// Specifies Go build tags to pass to <c>go run</c> via <c>-tags</c>.
-    /// </summary>
-    /// <typeparam name="T">The type of the Go application resource.</typeparam>
-    /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="tags">One or more build tags (e.g., <c>"integration"</c>, <c>"netgo"</c>).</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Specifies Go build tags passed via -tags")]
-    public static IResourceBuilder<T> WithBuildTags<T>(this IResourceBuilder<T> builder, params string[] tags)
-        where T : GoAppResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(tags);
-
-        return builder.WithAnnotation(new GoBuildTagsAnnotation(tags), ResourceAnnotationMutationBehavior.Replace);
-    }
-
-    /// <summary>
-    /// Specifies linker flags to pass to <c>go run</c> via <c>-ldflags</c>.
-    /// </summary>
-    /// <typeparam name="T">The type of the Go application resource.</typeparam>
-    /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="flags">The linker flags string (e.g., <c>"-X main.version=1.0.0"</c>).</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Specifies Go linker flags passed via -ldflags")]
-    public static IResourceBuilder<T> WithLdFlags<T>(this IResourceBuilder<T> builder, string flags)
-        where T : GoAppResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(flags);
-
-        return builder.WithAnnotation(new GoLdFlagsAnnotation(flags), ResourceAnnotationMutationBehavior.Replace);
-    }
-
-    /// <summary>
-    /// Enables the Go race detector by passing <c>-race</c> to <c>go run</c>.
-    /// When used with <see cref="WithDelveServer{T}"/>, <c>-race</c> is forwarded via <c>--build-flags</c>.
-    /// </summary>
-    /// <typeparam name="T">The type of the Go application resource.</typeparam>
-    /// <param name="builder">The resource builder for the Go application.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Enables the Go race detector via -race")]
-    public static IResourceBuilder<T> WithRaceDetector<T>(this IResourceBuilder<T> builder)
-        where T : GoAppResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        return builder.WithAnnotation(new GoRaceDetectorAnnotation(), ResourceAnnotationMutationBehavior.Replace);
-    }
-
-    /// <summary>
-    /// Specifies compiler flags to pass to <c>go run</c> via <c>-gcflags</c>.
-    /// </summary>
-    /// <typeparam name="T">The type of the Go application resource.</typeparam>
-    /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="flags">The compiler flags string (e.g., <c>"all=-N -l"</c> to disable optimisations for Delve).</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Specifies Go compiler flags passed via -gcflags")]
-    public static IResourceBuilder<T> WithGcFlags<T>(this IResourceBuilder<T> builder, string flags)
-        where T : GoAppResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(flags);
-        return builder.WithAnnotation(new GoGcFlagsAnnotation(flags), ResourceAnnotationMutationBehavior.Replace);
-    }
-
-    /// <summary>
     /// Runs <c>go mod tidy</c> before starting the application, ensuring <c>go.sum</c> is up to date.
     /// The main application waits for the tidy step to complete successfully before launching.
     /// </summary>
@@ -218,7 +187,7 @@ public static class GoHostingExtensions
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     [AspireExport(Description = "Runs go mod tidy before starting the application to ensure go.sum is up to date")]
-    public static IResourceBuilder<T> WithTidy<T>(this IResourceBuilder<T> builder)
+    public static IResourceBuilder<T> WithModTidy<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -235,7 +204,7 @@ public static class GoHostingExtensions
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             var tidyResource = new ExecutableResource(
-                $"{builder.Resource.Name}-tidy", "go", builder.Resource.WorkingDirectory);
+                $"{builder.Resource.Name}-mod-tidy", "go", builder.Resource.WorkingDirectory);
 
             var tidy = builder.ApplicationBuilder
                 .AddResource(tidyResource)
@@ -257,7 +226,7 @@ public static class GoHostingExtensions
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     [AspireExport(Description = "Runs go mod vendor before starting the application to cache module dependencies locally")]
-    public static IResourceBuilder<T> WithVendor<T>(this IResourceBuilder<T> builder)
+    public static IResourceBuilder<T> WithModVendor<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -272,7 +241,7 @@ public static class GoHostingExtensions
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             var vendorResource = new ExecutableResource(
-                $"{builder.Resource.Name}-vendor", "go", builder.Resource.WorkingDirectory);
+                $"{builder.Resource.Name}-mod-vendor", "go", builder.Resource.WorkingDirectory);
 
             var vendor = builder.ApplicationBuilder
                 .AddResource(vendorResource)
@@ -286,14 +255,51 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
+    /// Runs <c>go mod download</c> before starting the application, pre-fetching all module
+    /// dependencies into the local module cache without modifying <c>go.sum</c>.
+    /// The main application waits for the download step to complete successfully before launching.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport(Description = "Runs go mod download before starting the application to pre-fetch module dependencies into the local cache")]
+    public static IResourceBuilder<T> WithModDownload<T>(this IResourceBuilder<T> builder)
+        where T : GoAppResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (builder.Resource.TryGetLastAnnotation<GoModDownloadAnnotation>(out _))
+        {
+            return builder;
+        }
+
+        builder.WithAnnotation(new GoModDownloadAnnotation());
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            var downloadResource = new ExecutableResource(
+                $"{builder.Resource.Name}-mod-download", "go", builder.Resource.WorkingDirectory);
+
+            var download = builder.ApplicationBuilder
+                .AddResource(downloadResource)
+                .WithArgs("mod", "download")
+                .ExcludeFromManifest();
+
+            builder.WaitForCompletion(download);
+        }
+
+        return builder;
+    }
+
+    /// <summary>
     /// Runs <c>go vet ./...</c> before starting the application to catch static analysis issues.
-    /// The main application waits for the lint step to complete successfully before launching.
+    /// The main application waits for the vet step to complete successfully before launching.
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     [AspireExport(Description = "Runs go vet ./... before starting the application to catch static analysis issues")]
-    public static IResourceBuilder<T> WithVet<T>(this IResourceBuilder<T> builder)
+    public static IResourceBuilder<T> WithVetTool<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -307,15 +313,15 @@ public static class GoHostingExtensions
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            var lintResource = new ExecutableResource(
-                $"{builder.Resource.Name}-vet", "go", builder.Resource.WorkingDirectory);
+            var vetResource = new ExecutableResource(
+                $"{builder.Resource.Name}-vet-tool", "go", builder.Resource.WorkingDirectory);
 
-            var lint = builder.ApplicationBuilder
-                .AddResource(lintResource)
+            var vet = builder.ApplicationBuilder
+                .AddResource(vetResource)
                 .WithArgs("vet", "./...")
                 .ExcludeFromManifest();
 
-            builder.WaitForCompletion(lint);
+            builder.WaitForCompletion(vet);
         }
 
         return builder;

@@ -365,22 +365,6 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
-    public void GoHostingAssembly_ExposesWithBuildTagsCapability()
-    {
-        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
-
-        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withBuildTags");
-    }
-
-    [Fact]
-    public void GoHostingAssembly_ExposesWithLdFlagsCapability()
-    {
-        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
-
-        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withLdFlags");
-    }
-
-    [Fact]
     public void GoHostingAssembly_ExposesWithDelveServerCapability()
     {
         var capabilities = ScanCapabilitiesFromGoHostingAssembly();
@@ -389,43 +373,35 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
-    public void GoHostingAssembly_ExposesWithRaceDetectorCapability()
+    public void GoHostingAssembly_ExposesWithModTidyCapability()
     {
         var capabilities = ScanCapabilitiesFromGoHostingAssembly();
 
-        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withRaceDetector");
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withModTidy");
     }
 
     [Fact]
-    public void GoHostingAssembly_ExposesWithGcFlagsCapability()
+    public void GoHostingAssembly_ExposesWithModVendorCapability()
     {
         var capabilities = ScanCapabilitiesFromGoHostingAssembly();
 
-        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withGcFlags");
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withModVendor");
     }
 
     [Fact]
-    public void GoHostingAssembly_ExposesWithTidyCapability()
+    public void GoHostingAssembly_ExposesWithModDownloadCapability()
     {
         var capabilities = ScanCapabilitiesFromGoHostingAssembly();
 
-        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withTidy");
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withModDownload");
     }
 
     [Fact]
-    public void GoHostingAssembly_ExposesWithVendorCapability()
+    public void GoHostingAssembly_ExposesWithVetToolCapability()
     {
         var capabilities = ScanCapabilitiesFromGoHostingAssembly();
 
-        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withVendor");
-    }
-
-    [Fact]
-    public void GoHostingAssembly_ExposesWithVetCapability()
-    {
-        var capabilities = ScanCapabilitiesFromGoHostingAssembly();
-
-        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withVet");
+        Assert.Contains(capabilities, c => c.CapabilityId == "Aspire.Hosting.Go/withVetTool");
     }
 
     [Fact]
@@ -445,6 +421,10 @@ public class AtsGoCodeGeneratorTests
 
         Assert.Contains(addGoApp.Parameters, p => p.Name == "name");
         Assert.Contains(addGoApp.Parameters, p => p.Name == "appDirectory");
+        Assert.Contains(addGoApp.Parameters, p => p.Name == "buildTags" && p.IsOptional);
+        Assert.Contains(addGoApp.Parameters, p => p.Name == "ldFlags" && p.IsOptional);
+        Assert.Contains(addGoApp.Parameters, p => p.Name == "gcFlags" && p.IsOptional);
+        Assert.Contains(addGoApp.Parameters, p => p.Name == "raceDetector" && p.IsOptional);
     }
 
     [Fact]
@@ -472,14 +452,11 @@ public class AtsGoCodeGeneratorTests
 
         Assert.Contains("AddGoApp", aspireGo);
         Assert.Contains("WithAppArgs", aspireGo);
-        Assert.Contains("WithBuildTags", aspireGo);
-        Assert.Contains("WithGcFlags", aspireGo);
-        Assert.Contains("WithLdFlags", aspireGo);
         Assert.Contains("WithDelveServer", aspireGo);
-        Assert.Contains("WithRaceDetector", aspireGo);
-        Assert.Contains("WithTidy", aspireGo);
-        Assert.Contains("WithVendor", aspireGo);
-        Assert.Contains("WithVet", aspireGo);
+        Assert.Contains("WithModTidy", aspireGo);
+        Assert.Contains("WithModVendor", aspireGo);
+        Assert.Contains("WithModDownload", aspireGo);
+        Assert.Contains("WithVetTool", aspireGo);
 
         await Verify(aspireGo, extension: "go")
             .UseFileName("GoHostingGeneratedAspire");

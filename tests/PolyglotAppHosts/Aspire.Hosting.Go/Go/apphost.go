@@ -18,21 +18,26 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// Go app with build tags and linker flags
-	worker := builder.AddGoApp("worker", "../go-worker")
-	worker.WithBuildTags([]string{"netgo", "osusergo"}).
-		WithLdFlags("-s -w -X main.version=1.0.0")
+	// Go app with build tags and linker flags via AddGoAppOptions
+	worker := builder.AddGoApp("worker", "../go-worker", &aspire.AddGoAppOptions{
+		BuildTags: []string{"netgo", "osusergo"},
+		LdFlags:   aspire.StringPtr("-s -w -X main.version=1.0.0"),
+	})
 	if err = worker.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// Go app with pre-start lifecycle helpers and debug-friendly compiler flags
-	managed := builder.AddGoApp("managed", "../go-managed").
-		WithTidy().
-		WithVendor().
-		WithVet().
-		WithRaceDetector().
-		WithGcFlags("all=-N -l").
+	// Go app with pre-start lifecycle helpers and all build options
+	managed := builder.AddGoApp("managed", "../go-managed", &aspire.AddGoAppOptions{
+		BuildTags:    []string{"integration"},
+		LdFlags:      aspire.StringPtr("-s -w"),
+		GcFlags:      aspire.StringPtr("all=-N -l"),
+		RaceDetector: aspire.BoolPtr(true),
+	}).
+		WithModTidy().
+		WithModVendor().
+		WithModDownload().
+		WithVetTool().
 		WithAppArgs([]string{"--config", "prod.yaml"})
 	if err = managed.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))

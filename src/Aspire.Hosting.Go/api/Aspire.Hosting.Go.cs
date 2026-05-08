@@ -11,42 +11,30 @@ namespace Aspire.Hosting
     public static partial class GoHostingExtensions
     {
         [AspireExport(Description = "Adds a Go application resource")]
-        public static ApplicationModel.IResourceBuilder<Go.GoAppResource> AddGoApp(this IDistributedApplicationBuilder builder, string name, string appDirectory) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Go.GoAppResource> AddGoApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string[]? buildTags = null, string? ldFlags = null, string? gcFlags = null, bool raceDetector = false) { throw null; }
 
         [AspireExport(Description = "Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)")]
         public static ApplicationModel.IResourceBuilder<T> WithAppArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, params string[] args)
-            where T : Go.GoAppResource { throw null; }
-
-        [AspireExport(Description = "Specifies Go build tags passed via -tags")]
-        public static ApplicationModel.IResourceBuilder<T> WithBuildTags<T>(this ApplicationModel.IResourceBuilder<T> builder, params string[] tags)
             where T : Go.GoAppResource { throw null; }
 
         [AspireExport(Description = "Starts a headless Delve server for remote debugging (GoLand, VS Code attach, any DAP client)")]
         public static ApplicationModel.IResourceBuilder<T> WithDelveServer<T>(this ApplicationModel.IResourceBuilder<T> builder, int port = 2345)
             where T : Go.GoAppResource { throw null; }
 
-        [AspireExport(Description = "Specifies Go linker flags passed via -ldflags")]
-        public static ApplicationModel.IResourceBuilder<T> WithLdFlags<T>(this ApplicationModel.IResourceBuilder<T> builder, string flags)
-            where T : Go.GoAppResource { throw null; }
-
-        [AspireExport(Description = "Enables the Go race detector via -race")]
-        public static ApplicationModel.IResourceBuilder<T> WithRaceDetector<T>(this ApplicationModel.IResourceBuilder<T> builder)
-            where T : Go.GoAppResource { throw null; }
-
-        [AspireExport(Description = "Specifies Go compiler flags passed via -gcflags")]
-        public static ApplicationModel.IResourceBuilder<T> WithGcFlags<T>(this ApplicationModel.IResourceBuilder<T> builder, string flags)
-            where T : Go.GoAppResource { throw null; }
-
         [AspireExport(Description = "Runs go mod tidy before starting the application to ensure go.sum is up to date")]
-        public static ApplicationModel.IResourceBuilder<T> WithTidy<T>(this ApplicationModel.IResourceBuilder<T> builder)
+        public static ApplicationModel.IResourceBuilder<T> WithModTidy<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : Go.GoAppResource { throw null; }
 
         [AspireExport(Description = "Runs go mod vendor before starting the application to cache module dependencies locally")]
-        public static ApplicationModel.IResourceBuilder<T> WithVendor<T>(this ApplicationModel.IResourceBuilder<T> builder)
+        public static ApplicationModel.IResourceBuilder<T> WithModVendor<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : Go.GoAppResource { throw null; }
+
+        [AspireExport(Description = "Runs go mod download before starting the application to pre-fetch module dependencies into the local cache")]
+        public static ApplicationModel.IResourceBuilder<T> WithModDownload<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : Go.GoAppResource { throw null; }
 
         [AspireExport(Description = "Runs go vet ./... before starting the application to catch static analysis issues")]
-        public static ApplicationModel.IResourceBuilder<T> WithVet<T>(this ApplicationModel.IResourceBuilder<T> builder)
+        public static ApplicationModel.IResourceBuilder<T> WithVetTool<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : Go.GoAppResource { throw null; }
     }
 }
