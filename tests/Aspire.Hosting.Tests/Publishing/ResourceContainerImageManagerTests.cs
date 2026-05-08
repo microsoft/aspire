@@ -704,7 +704,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var collector = app.Services.GetFakeLogCollector();
         var logs = collector.GetSnapshot();
 
-        Assert.Contains(logs, log => log.Message.Contains("/p:LocalRegistry=\"podman\""));
+        Assert.Contains(logs, log => log.Message.Contains("/p:LocalRegistry=\"Podman\""));
     }
 
     [Fact]

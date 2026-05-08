@@ -434,12 +434,12 @@ internal sealed class ResourceContainerImageManager(
     {
         if (string.Equals(containerRuntime.Name, KnownContainerRuntimes.Docker, StringComparison.OrdinalIgnoreCase))
         {
-            return KnownContainerRuntimes.Docker;
+            return "Docker";
         }
 
         if (string.Equals(containerRuntime.Name, KnownContainerRuntimes.Podman, StringComparison.OrdinalIgnoreCase))
         {
-            return KnownContainerRuntimes.Podman;
+            return "Podman";
         }
 
         return null;
