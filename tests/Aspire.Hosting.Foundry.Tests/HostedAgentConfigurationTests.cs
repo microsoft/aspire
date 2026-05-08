@@ -67,7 +67,7 @@ public class HostedAgentConfigurationTests
             Cpu = 1.0m,
         };
 
-        var options = config.ToProjectsAgentVersionCreationOptions();
+        var options = config.ToProjectsAgentVersionCreationOptions("target");
 
         Assert.NotNull(options);
         Assert.Equal("Test agent", options.Description);
@@ -81,6 +81,23 @@ public class HostedAgentConfigurationTests
 
         Assert.Single(config.EnvironmentVariables);
         Assert.Equal("VALUE", config.EnvironmentVariables["KEY"]);
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_ThrowsForInvalidEnvironmentVariableNames()
+    {
+        var config = new HostedAgentConfiguration("myimage:latest");
+        config.EnvironmentVariables["VALID_NAME_1"] = "value";
+        config.EnvironmentVariables["INVALID-NAME"] = "value";
+        config.EnvironmentVariables["invalid.name"] = "value";
+
+        var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
+
+        Assert.Contains("Foundry hosted agent for target resource 'target'", ex.Message);
+        Assert.Contains("Environment variable names must contain only ASCII letters, digits, or underscores.", ex.Message);
+        Assert.Contains("'INVALID-NAME'", ex.Message);
+        Assert.Contains("'invalid.name'", ex.Message);
+        Assert.DoesNotContain("VALID_NAME_1", ex.Message);
     }
 
     [Fact]

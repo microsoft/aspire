@@ -274,11 +274,11 @@ public class FoundryExtensionsTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+        var weatherAgent = builder.AddProject<Project>("weatheragent", launchProfileName: null)
             .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
             .WithComputeEnvironment(env);
 
-        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+        var advisorAgent = builder.AddProject<Project>("advisoragent", launchProfileName: null)
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent)
             .PublishAsHostedAgent(project);
@@ -300,7 +300,7 @@ public class FoundryExtensionsTests
             NullLogger<FoundryExtensionsTests>.Instance,
             cts.Token);
 
-        Assert.Equal("https://weather-agent.example.azurecontainerapps.io", environmentVariables["services__weather-agent__http__0"]);
+        Assert.Equal("https://weatheragent.example.azurecontainerapps.io", environmentVariables["services__weatheragent__http__0"]);
     }
 
     [Fact]
@@ -427,3 +427,4 @@ public class FoundryExtensionsTests
     }
 
 }
+
