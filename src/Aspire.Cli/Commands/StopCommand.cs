@@ -117,7 +117,7 @@ internal sealed class StopCommand : BaseCommand
         {
             var connection = inScopeConnections[0].Connection!;
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
-            return await StopAppHostAsync(connection, GetAppHostDisplayPath(connection), cancellationToken);
+            return await StopAppHostAsync(connection, GetSingleAppHostDisplayPath(connection), cancellationToken);
         }
 
         // Multiple in-scope AppHosts or none in scope: error with guidance
@@ -143,7 +143,7 @@ internal sealed class StopCommand : BaseCommand
         }
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
-        return await StopAppHostAsync(result.Connection!, GetAppHostDisplayPath(result.Connection!), cancellationToken);
+        return await StopAppHostAsync(result.Connection!, GetSingleAppHostDisplayPath(result.Connection!), cancellationToken);
     }
 
     /// <summary>
@@ -232,7 +232,7 @@ internal sealed class StopCommand : BaseCommand
                 _logger.LogWarning(ex, "Failed to send stop signal via RPC");
             }
 
-            // If RPC didn't work, try sending SIGINT to AppHost process directly
+            // If RPC didn't work, try sending a stop signal to the AppHost process directly.
             if (!rpcSucceeded && appHostInfo?.ProcessId is int appHostPid)
             {
                 _logger.LogDebug("RPC stop not available, sending SIGTERM to AppHost PID {Pid}", appHostPid);
@@ -319,11 +319,17 @@ internal sealed class StopCommand : BaseCommand
         return exitCode;
     }
 
-    private static string GetAppHostDisplayPath(IAppHostAuxiliaryBackchannel connection)
+    private string GetSingleAppHostDisplayPath(IAppHostAuxiliaryBackchannel connection)
     {
-        var appHostPath = GetAppHostPath(connection);
-        var displayPaths = FileSystemHelper.ShortenPaths([appHostPath]);
-        return displayPaths.TryGetValue(appHostPath, out var displayPath) ? displayPath : appHostPath;
+        if (string.IsNullOrEmpty(connection.AppHostInfo?.AppHostPath))
+        {
+            return "Unknown";
+        }
+
+        var appHostPath = connection.AppHostInfo.AppHostPath;
+        return connection.IsInScope
+            ? Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostPath)
+            : appHostPath;
     }
 
     private static string GetAppHostPath(IAppHostAuxiliaryBackchannel connection)

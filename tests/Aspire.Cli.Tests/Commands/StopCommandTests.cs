@@ -204,9 +204,41 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        var expectedPath = "App1.AppHost.csproj";
+        var expectedPath = Path.Combine("App1", "App1.AppHost", "App1.AppHost.csproj");
         Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, expectedPath));
         Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedPath));
+    }
+
+    [Fact]
+    public async Task StopCommand_SingleOutOfScopeAppHostUsesFullPathInMessages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var outOfScopeWorkspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var statusMessages = new ConcurrentQueue<string>();
+        interactionService.ShowStatusCallback = statusMessages.Enqueue;
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var appHostPath = Path.Combine(outOfScopeWorkspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostPath));
+        Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostPath));
     }
 
     [Fact]
@@ -219,8 +251,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
-        var processId1 = int.MaxValue - 6;
-        var processId2 = int.MaxValue - 7;
+        var processId1 = int.MaxValue - 7;
+        var processId2 = int.MaxValue - 8;
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, processId1));
         monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, processId2));
 
@@ -258,13 +290,13 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.All(stopAppHostActivities, activity => Assert.Equal(ExitCodeConstants.Success, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode)));
     }
 
-    private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId)
+    private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId, bool isInScope = true)
     {
         return new TestAppHostAuxiliaryBackchannel
         {
             Hash = $"hash-{processId.ToString(CultureInfo.InvariantCulture)}",
             SocketPath = $"socket.{processId.ToString(CultureInfo.InvariantCulture)}",
-            IsInScope = true,
+            IsInScope = isInScope,
             AppHostInfo = new AppHostInformation
             {
                 AppHostPath = appHostPath,
