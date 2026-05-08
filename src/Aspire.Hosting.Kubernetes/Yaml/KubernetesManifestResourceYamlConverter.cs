@@ -16,7 +16,7 @@ internal sealed class KubernetesManifestResourceYamlConverter : IYamlTypeConvert
 
     public object? ReadYaml(IParser parser, Type type, ObjectDeserializer rootDeserializer)
     {
-        throw new NotSupportedException($"{nameof(KubernetesManifestResource)} only supports YAML serialization.");
+        throw new NotSupportedException($"{nameof(KubernetesManifestResource)} does not support YAML deserialization.");
     }
 
     public void WriteYaml(IEmitter emitter, object? value, Type type, ObjectSerializer serializer)

@@ -138,13 +138,68 @@ public sealed class KubernetesManifestResource : BaseKubernetesResource
             null => null,
             string => value,
             bool => value,
-            byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => value,
+            byte or sbyte or short or ushort or int or uint or long or ulong => value,
+            float floatValue => NormalizeFloatingPointValue(floatValue),
+            double doubleValue => NormalizeFloatingPointValue(doubleValue),
+            decimal decimalValue => NormalizeDecimalValue(decimalValue),
             JsonElement element => NormalizeJsonElement(element),
             JsonNode node => NormalizeJsonNode(node),
             IDictionary dictionary => NormalizeDictionary(dictionary),
             IEnumerable enumerable when value is not string => NormalizeEnumerable(enumerable),
             _ => throw new ArgumentException($"Manifest field values must be JSON-compatible primitives, dictionaries, or arrays. Type '{value.GetType()}' is not supported.", nameof(value))
         };
+    }
+
+    private const double MaxLongExclusiveAsDouble = 9_223_372_036_854_775_808d;
+
+    private static object NormalizeFloatingPointValue(float value)
+    {
+        if (!float.IsFinite(value))
+        {
+            throw new ArgumentException("Manifest field numeric values must be finite.", nameof(value));
+        }
+
+        if (MathF.Truncate(value) == value)
+        {
+            return ConvertWholeNumberToLong(value);
+        }
+
+        return value;
+    }
+
+    private static object NormalizeFloatingPointValue(double value)
+    {
+        if (!double.IsFinite(value))
+        {
+            throw new ArgumentException("Manifest field numeric values must be finite.", nameof(value));
+        }
+
+        if (Math.Truncate(value) == value)
+        {
+            return ConvertWholeNumberToLong(value);
+        }
+
+        return value;
+    }
+
+    private static object NormalizeDecimalValue(decimal value)
+    {
+        if (decimal.Truncate(value) == value && value >= long.MinValue && value <= long.MaxValue)
+        {
+            return decimal.ToInt64(value);
+        }
+
+        return value;
+    }
+
+    private static long ConvertWholeNumberToLong(double value)
+    {
+        if (value < long.MinValue || value >= MaxLongExclusiveAsDouble)
+        {
+            throw new ArgumentException($"Whole-number manifest field values must be between {long.MinValue} and {long.MaxValue}.", nameof(value));
+        }
+
+        return (long)value;
     }
 
     private static object? NormalizeJsonNode(JsonNode node)

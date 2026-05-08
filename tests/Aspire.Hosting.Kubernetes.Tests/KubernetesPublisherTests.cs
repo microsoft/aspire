@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Utils;
+using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
@@ -194,7 +195,7 @@ public class KubernetesPublisherTests()
                         .WithField("spec.scaleTargetRef.kind", "Deployment")
                         .WithField("spec.scaleTargetRef.name", "myapp")
                         .WithField("spec.minReplicaCount", 1)
-                        .WithField("spec.maxReplicaCount", 3)
+                        .WithField("spec.maxReplicaCount", (double)3)
                         .WithField("data.enabled", true);
                 });
             });
@@ -219,7 +220,14 @@ public class KubernetesPublisherTests()
         Assert.Contains("kind: \"Deployment\"", content);
         Assert.Contains("name: \"myapp\"", content);
         Assert.Contains("minReplicaCount: 1", content);
-        Assert.Contains("maxReplicaCount: 3", content);
+
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(content));
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var spec = Assert.IsType<YamlMappingNode>(root.Children.Single(static entry => entry.Key is YamlScalarNode { Value: "spec" }).Value);
+        var maxReplicaCount = Assert.IsType<YamlScalarNode>(spec.Children.Single(static entry => entry.Key is YamlScalarNode { Value: "maxReplicaCount" }).Value);
+        Assert.Equal("3", maxReplicaCount.Value);
+        Assert.DoesNotContain("maxReplicaCount: 3.0", content);
         Assert.Contains("enabled: true", content);
     }
 
