@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting github models ai</PackageTags>
+    <PackageTags>aspire integration hosting github models ai aspire-hosting</PackageTags>
     <Description>GitHub Models resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)GitHub_256x.png</PackageIconFullPath>
   </PropertyGroup>

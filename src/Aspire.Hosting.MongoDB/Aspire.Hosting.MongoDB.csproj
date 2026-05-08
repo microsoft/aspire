@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting MongoDB database data</PackageTags>
+    <PackageTags>aspire integration hosting MongoDB database data aspire-hosting</PackageTags>
     <PackageIconFullPath>$(SharedDir)MongoDB_300px.png</PackageIconFullPath>
     <Description>MongoDB support for Aspire.</Description>
     <NoWarn>$(NoWarn);CS8002</NoWarn> <!-- MongoDB.Driver.Core.Extensions.DiagnosticSources and AspNetCore.HealthChecks.MongoDb packages are not signed -->

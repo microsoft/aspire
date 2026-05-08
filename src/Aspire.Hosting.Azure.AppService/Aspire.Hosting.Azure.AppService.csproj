@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure cloud appservice</PackageTags>
+    <PackageTags>aspire integration hosting azure cloud appservice aspire-hosting</PackageTags>
     <Description>Azure app service resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
     <!-- Disable package validation as this package hasn't shipped stable yet. -->

@@ -6,7 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <EnablePackageValidation>false</EnablePackageValidation>
-    <PackageTags>aspire integration hosting azure kubernetes aks</PackageTags>
+    <PackageTags>aspire integration hosting azure kubernetes aks aspire-hosting</PackageTags>
     <Description>Azure Kubernetes Service (AKS) resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
   </PropertyGroup>

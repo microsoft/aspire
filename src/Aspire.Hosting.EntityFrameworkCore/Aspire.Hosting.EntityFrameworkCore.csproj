@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting ef efcore entityframeworkcore migrations database</PackageTags>
+    <PackageTags>aspire integration hosting ef efcore entityframeworkcore migrations database aspire-hosting</PackageTags>
     <Description>Entity Framework Core migration management support for Aspire.</Description>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <!-- Disable package validation since this is a new package with no baseline -->

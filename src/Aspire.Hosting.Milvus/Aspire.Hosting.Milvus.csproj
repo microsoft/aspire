@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting milvus database vector search data ai-search</PackageTags>
+    <PackageTags>aspire integration hosting milvus database vector search data ai-search aspire-hosting</PackageTags>
     <Description>Milvus vector database support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Milvus_256x.png</PackageIconFullPath>
     <NoWarn>$(NoWarn);CS8002</NoWarn><!-- Milvus.Client packages are not signed -->

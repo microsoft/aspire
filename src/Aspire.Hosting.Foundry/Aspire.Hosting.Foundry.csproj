@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure openai ai aifoundry foundry ai-search cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure openai ai aifoundry foundry ai-search cloud aspire-hosting</PackageTags>
     <Description>Microsoft Foundry resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Foundry_256x.png</PackageIconFullPath>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>

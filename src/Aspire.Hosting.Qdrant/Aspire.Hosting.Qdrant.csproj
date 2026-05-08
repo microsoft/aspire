@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting qdrant vector database ai-search data</PackageTags>
+    <PackageTags>aspire integration hosting qdrant vector database ai-search data aspire-hosting</PackageTags>
     <Description>Qdrant vector database support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)QdrantLogo_256x.png</PackageIconFullPath>
   </PropertyGroup>

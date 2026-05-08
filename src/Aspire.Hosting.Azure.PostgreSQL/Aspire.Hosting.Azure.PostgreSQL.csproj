@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure postgresql database data cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure postgresql database data cloud aspire-hosting</PackageTags>
     <Description>Azure PostgreSql Flexible Server resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzurePostgreSQL_256x.png</PackageIconFullPath>
   </PropertyGroup>

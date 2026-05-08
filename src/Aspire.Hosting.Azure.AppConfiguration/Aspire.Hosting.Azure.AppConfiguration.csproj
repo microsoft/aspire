@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure configuration cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure configuration cloud aspire-hosting</PackageTags>
     <Description>Azure AppConfiguration resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureAppConfig_256x.png</PackageIconFullPath>
   </PropertyGroup>

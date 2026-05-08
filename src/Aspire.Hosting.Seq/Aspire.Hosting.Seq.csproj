@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting Seq observability logging</PackageTags>
+    <PackageTags>aspire integration hosting Seq observability logging aspire-hosting</PackageTags>
     <Description>Seq support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Seq_logo.275x147.png</PackageIconFullPath>
   </PropertyGroup>

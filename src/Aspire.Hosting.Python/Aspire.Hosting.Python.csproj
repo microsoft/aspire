@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting python framework runtime</PackageTags>
+    <PackageTags>aspire integration hosting python framework runtime aspire-hosting</PackageTags>
     <Description>Python support for Aspire.</Description>
   </PropertyGroup>
 

@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire hosting devtunnels</PackageTags>
+    <PackageTags>aspire hosting devtunnels aspire-hosting</PackageTags>
     <Description>DevTunnels support for Aspire.</Description>
   </PropertyGroup>
 

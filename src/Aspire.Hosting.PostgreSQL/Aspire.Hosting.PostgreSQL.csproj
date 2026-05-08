@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting postgresql postgres npgsql sql database data</PackageTags>
+    <PackageTags>aspire integration hosting postgresql postgres npgsql sql database data aspire-hosting</PackageTags>
     <Description>PostgreSQL® support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)PostgreSQL_logo.3colors.540x557.png</PackageIconFullPath>
   </PropertyGroup>

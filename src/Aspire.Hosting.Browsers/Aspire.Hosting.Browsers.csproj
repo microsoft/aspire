@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting browser browsers logs diagnostics</PackageTags>
+    <PackageTags>aspire integration hosting browser browsers logs diagnostics aspire-hosting</PackageTags>
     <Description>Browser support for Aspire hosting.</Description>
     <!-- In preview until the public API is validated. -->
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>

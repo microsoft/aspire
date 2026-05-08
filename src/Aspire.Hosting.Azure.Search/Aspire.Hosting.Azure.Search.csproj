@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure search ai ai-search cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure search ai ai-search cloud aspire-hosting</PackageTags>
     <Description>Azure AI Search resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureSearch_256x.png</PackageIconFullPath>
   </PropertyGroup>

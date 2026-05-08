@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure openai ai cognitiveservices cognitive services cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure openai ai cognitiveservices cognitive services cloud aspire-hosting</PackageTags>
     <Description>Azure OpenAI resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureOpenAI_256x.png</PackageIconFullPath>
   </PropertyGroup>

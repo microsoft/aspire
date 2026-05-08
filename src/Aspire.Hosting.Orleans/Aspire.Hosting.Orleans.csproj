@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting orleans messaging eventing</PackageTags>
+    <PackageTags>aspire integration hosting orleans messaging eventing aspire-hosting</PackageTags>
     <Description>Orleans support for Aspire.</Description>
   </PropertyGroup>
 

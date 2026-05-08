@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire hosting docker docker-compose</PackageTags>
+    <PackageTags>aspire hosting docker docker-compose aspire-hosting</PackageTags>
     <Description>Docker Compose publishing for Aspire.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>

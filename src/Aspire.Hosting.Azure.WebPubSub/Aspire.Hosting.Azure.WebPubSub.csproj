@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure webpubsub pubsub websocket messaging cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure webpubsub pubsub websocket messaging cloud aspire-hosting</PackageTags>
     <Description>Azure WebPubSub resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureWebPubSub_256x.png</PackageIconFullPath>
   </PropertyGroup>

@@ -7,7 +7,7 @@
     <Description>MAUI integration for Aspire (local dev only)</Description>
     <IsPackable>true</IsPackable>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
-    <PackageTags>aspire maui hosting</PackageTags>
+    <PackageTags>aspire maui hosting aspire-hosting</PackageTags>
     <PackageIconFullPath>$(SharedDir)Maui_265x.png</PackageIconFullPath>
   </PropertyGroup>
 

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure signalr realtime cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure signalr realtime cloud aspire-hosting</PackageTags>
     <Description>Azure SignalR resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureSignalR_256x.png</PackageIconFullPath>
   </PropertyGroup>

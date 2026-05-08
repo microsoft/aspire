@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure keyvault security secrets cloud</PackageTags>
+    <PackageTags>aspire integration hosting azure keyvault security secrets cloud aspire-hosting</PackageTags>
     <Description>Azure resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureKeyVault_256x.png</PackageIconFullPath>
   </PropertyGroup>
