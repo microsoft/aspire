@@ -131,11 +131,6 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             },
             e =>
             {
-                Assert.Equal(KnownConfigNames.DashboardOtlpHttpEndpointUrl, e.Key);
-                Assert.Equal("https://localhost:5002", e.Value);
-            },
-            e =>
-            {
                 Assert.Equal(KnownConfigNames.ResourceServiceEndpointUrl, e.Key);
                 Assert.Equal("http://localhost:5000", e.Value);
             },
@@ -185,7 +180,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)]
     [InlineData(KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl)]
-    public async Task DashboardWithBlankOtlpEndpoint_AutoConfiguresDynamicOtlpPorts(string dashboardOtlpGrpcEndpointUrlKey)
+    public async Task DashboardWithBlankOtlpEndpoint_AutoConfiguresDynamicOtlpGrpcPort(string dashboardOtlpGrpcEndpointUrlKey)
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
@@ -206,17 +201,13 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var dashboard = Assert.Single(model.Resources);
         var otlpGrpcEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
-        var otlpHttpEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
         var dashboardOptions = app.Services.GetRequiredService<IOptions<DashboardOptions>>().Value;
 
         Assert.Null(dashboardOptions.OtlpGrpcEndpointUrl);
         Assert.Equal("https", otlpGrpcEndpoint.UriScheme);
         Assert.Equal("localhost", otlpGrpcEndpoint.TargetHost);
         Assert.Null(otlpGrpcEndpoint.Port);
-
-        Assert.Equal("https", otlpHttpEndpoint.UriScheme);
-        Assert.Equal("localhost", otlpHttpEndpoint.TargetHost);
-        Assert.Null(otlpHttpEndpoint.Port);
+        Assert.DoesNotContain(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
     }
 
     [Fact]
@@ -240,15 +231,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var dashboard = Assert.Single(model.Resources);
         var otlpGrpcEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
-        var otlpHttpEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
 
         Assert.Equal("http", otlpGrpcEndpoint.UriScheme);
         Assert.Equal("localhost", otlpGrpcEndpoint.TargetHost);
         Assert.Null(otlpGrpcEndpoint.Port);
-
-        Assert.Equal("http", otlpHttpEndpoint.UriScheme);
-        Assert.Equal("localhost", otlpHttpEndpoint.TargetHost);
-        Assert.Null(otlpHttpEndpoint.Port);
+        Assert.DoesNotContain(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
     }
 
     [Theory]
@@ -460,6 +447,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         endpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(endpointAnnotation, "localhost", 8081);
 
         var dashboard = Assert.Single(model.Resources, r => r.Name == "aspire-dashboard");
+        Assert.DoesNotContain(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
 
         SetDashboardAllocatedEndpoints(dashboard, otlpGrpcPort: 5001, otlpHttpPort: 5002, httpPort: 5003, httpsPort: 5005);
 

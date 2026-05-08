@@ -437,8 +437,15 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             }
         }
 
-        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, allowUnsecureTransport, transport: "http2"));
-        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, allowUnsecureTransport));
+        if (otlpHttpEndpointUrl is not null)
+        {
+            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, allowUnsecureTransport));
+        }
+
+        if (otlpGrpcEndpointUrl is not null || otlpHttpEndpointUrl is null)
+        {
+            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, allowUnsecureTransport, transport: "http2"));
+        }
 
         // Determine whether any HTTPS endpoints are configured
         var hasHttpsEndpoint = dashboardResource.TryGetAnnotationsOfType<EndpointAnnotation>(out var endpoints) && endpoints.Any(e => e.UriScheme is "https");
@@ -545,20 +552,24 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         PopulateDashboardUrls(context);
 
-        // Use explicitly defined allowed origins if configured.
-        var allowedOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
-
-        // If allowed origins are not configured then calculate allowed origins from endpoints.
-        if (string.IsNullOrEmpty(allowedOrigins))
+        var otlpHttp = ((IResourceWithEndpoints)context.Resource).GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
+        if (otlpHttp.Exists)
         {
-            var model = context.ExecutionContext.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
-            allowedOrigins = GetAllowedOriginsFromResourceEndpoints(model);
-        }
+            // Use explicitly defined allowed origins if configured.
+            var allowedOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
 
-        if (!string.IsNullOrEmpty(allowedOrigins))
-        {
-            context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedOriginsKeyName.EnvVarName] = allowedOrigins;
-            context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedHeadersKeyName.EnvVarName] = "*";
+            // If allowed origins are not configured then calculate allowed origins from endpoints.
+            if (string.IsNullOrEmpty(allowedOrigins))
+            {
+                var model = context.ExecutionContext.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                allowedOrigins = GetAllowedOriginsFromResourceEndpoints(model);
+            }
+
+            if (!string.IsNullOrEmpty(allowedOrigins))
+            {
+                context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedOriginsKeyName.EnvVarName] = allowedOrigins;
+                context.EnvironmentVariables[DashboardConfigNames.DashboardOtlpCorsAllowedHeadersKeyName.EnvVarName] = "*";
+            }
         }
 
         // Configure frontend browser token
