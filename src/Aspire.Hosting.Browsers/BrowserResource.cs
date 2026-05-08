@@ -6,7 +6,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
 
-internal sealed class BrowserLogsResource(
+internal sealed class BrowserResource(
     string name,
     IResourceWithEndpoints parentResource,
     BrowserConfiguration initialConfiguration,
@@ -19,7 +19,7 @@ internal sealed class BrowserLogsResource(
 
     public BrowserConfigurationExplicitValues ExplicitConfigurationValues { get; } = explicitConfigurationValues;
 
-    public BrowserConfiguration ResolveCurrentConfiguration(IConfiguration configuration, BrowserLogsConfigurationStore? configurationStore = null)
+    public BrowserConfiguration ResolveCurrentConfiguration(IConfiguration configuration, BrowserConfigurationStore? configurationStore = null)
     {
         var (resourceConfiguration, globalConfiguration) = configurationStore?.GetConfigurations(ParentResource.Name) ?? default;
         return BrowserConfiguration.Resolve(

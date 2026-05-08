@@ -16,29 +16,29 @@ namespace Aspire.Hosting;
 internal sealed class BrowserHostRegistry : IAsyncDisposable
 {
     private readonly BrowserEndpointDiscovery _endpointDiscovery;
-    private readonly Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory> _createUserDataDirectory;
-    private readonly Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
+    private readonly Func<BrowserConfiguration, string, BrowserUserDataDirectory> _createUserDataDirectory;
+    private readonly Func<BrowserConfiguration, BrowserHostIdentity, BrowserUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
     private readonly Dictionary<BrowserHostIdentity, BrowserHostEntry> _hosts = new();
     private readonly bool _enableEndpointMetadataAdoption;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly object _lockLifetimeGate = new();
-    private readonly ILogger<BrowserLogsSessionManager> _logger;
+    private readonly ILogger<BrowserSessionManager> _logger;
     private readonly TimeProvider _timeProvider;
     private TaskCompletionSource? _lockUsersDrained;
     private int _activeLockUsers;
     private int _disposed;
     private bool _lockDisposed;
 
-    public BrowserHostRegistry(ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
+    public BrowserHostRegistry(ILogger<BrowserSessionManager> logger, TimeProvider timeProvider)
         : this(logger, timeProvider, createUserDataDirectory: null, createHostAsync: null)
     {
     }
 
     internal BrowserHostRegistry(
-        ILogger<BrowserLogsSessionManager> logger,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider,
-        Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory>? createUserDataDirectory,
-        Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>>? createHostAsync,
+        Func<BrowserConfiguration, string, BrowserUserDataDirectory>? createUserDataDirectory,
+        Func<BrowserConfiguration, BrowserHostIdentity, BrowserUserDataDirectory, CancellationToken, Task<IBrowserHost>>? createHostAsync,
         bool enableEndpointMetadataAdoption = false)
     {
         _endpointDiscovery = new BrowserEndpointDiscovery(logger);
@@ -54,7 +54,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         var browserExecutable = ChromiumBrowserResolver.TryResolveExecutable(configuration.Browser)
-            ?? throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUnableToLocateBrowser, configuration.Browser));
+            ?? throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserUnableToLocateBrowser, configuration.Browser));
         var userDataDirectory = _createUserDataDirectory(configuration, browserExecutable);
         var identity = new BrowserHostIdentity(browserExecutable, userDataDirectory.Path);
 
@@ -81,7 +81,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
                 // In Playwright terms, the user data directory is the persistent-context boundary: multiple pages can
                 // share one browser process/context, while requests for a different named profile are rejected.
                 // In the playground this shows up as one browser window/process with additional tracked page targets
-                // as more resources start browser-log sessions, rather than one browser process per session.
+                // as more resources start browser sessions, rather than one browser process per session.
                 ValidateProfileCompatibility(identity, entry.ProfileDirectoryName, userDataDirectory.ProfileDirectoryName);
                 entry.ReferenceCount++;
                 _logger.LogInformation("Reusing tracked browser host '{BrowserExecutable}' at '{Endpoint}'. Active leases: {ReferenceCount}.", identity.ExecutablePath, FormatDebugEndpoint(entry.Host.DebugEndpoint), entry.ReferenceCount);
@@ -92,7 +92,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             // No host exists for this identity yet. CreateHostCoreAsync owns the second-stage decision: start a new
             // pipe-owned browser by default, or adopt a validated WebSocket endpoint if an explicit attach mode enabled
             // that path. The returned host is inserted before returning the first lease so future callers can reuse it.
-            // This keeps the visible behavior stable when several resources request browser logs together: the first
+            // This keeps the visible behavior stable when several resources request browser together: the first
             // request opens/adopts the browser, and the rest attach to that result.
             var host = await _createHostAsync(configuration, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
             _hosts[identity] = new BrowserHostEntry(host, userDataDirectory.ProfileDirectoryName, ReferenceCount: 1);
@@ -292,7 +292,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     private async Task<IBrowserHost> CreateHostCoreAsync(
         BrowserConfiguration configuration,
         BrowserHostIdentity identity,
-        BrowserLogsUserDataDirectory userDataDirectory,
+        BrowserUserDataDirectory userDataDirectory,
         CancellationToken cancellationToken)
     {
         // Default owned launches use a process-private CDP pipe. WebSocket remains the attach/adoption transport for
@@ -311,7 +311,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         return await OwnedBrowserHost.StartAsync(identity, configuration.Browser, userDataDirectory, _logger, _timeProvider, cancellationToken).ConfigureAwait(false);
     }
 
-    private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserConfiguration configuration, string browserExecutable)
+    private BrowserUserDataDirectory CreateUserDataDirectory(BrowserConfiguration configuration, string browserExecutable)
     {
         // Both modes use a persistent Aspire-managed user data directory. The mode picks the path scope:
         //   Shared   -> machine-wide, shared across every Aspire AppHost
@@ -328,7 +328,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         var profileDirectoryName = configuration.Profile is { } profile
             ? ResolveProfileDirectoryName(path, profile)
             : null;
-        return BrowserLogsUserDataDirectory.CreatePersistent(path, profileDirectoryName);
+        return BrowserUserDataDirectory.CreatePersistent(path, profileDirectoryName);
     }
 
     private static string ResolveProfileDirectoryName(string userDataDirectory, string profile)
@@ -365,9 +365,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         throw new InvalidOperationException(
             string.Format(
                 CultureInfo.CurrentCulture,
-                BrowserMessageStrings.BrowserLogsTrackedBrowserProfileConflict,
+                BrowserMessageStrings.BrowserTrackedBrowserProfileConflict,
                 identity.UserDataRootPath,
-                existingProfileDirectoryName ?? BrowserMessageStrings.BrowserLogsDefaultProfileName,
+                existingProfileDirectoryName ?? BrowserMessageStrings.BrowserDefaultProfileName,
                 requestedProfileDirectoryName));
     }
 

@@ -11,7 +11,7 @@ namespace Aspire.Hosting;
 /// Resolves Chromium-based browser executables, user data directories, and profile directories.
 /// </summary>
 /// <remarks>
-/// This type translates the resolved browser-log configuration into local machine paths. Keep OS/browser probing here
+/// This type translates the resolved browser configuration into local machine paths. Keep OS/browser probing here
 /// so <see cref="BrowserConfiguration"/> stays focused on configuration precedence and effective option values.
 /// </remarks>
 internal static class ChromiumBrowserResolver
@@ -56,7 +56,7 @@ internal static class ChromiumBrowserResolver
 
         if (!Directory.Exists(userDataDirectory))
         {
-            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUserDataDirectoryNotFound, userDataDirectory));
+            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserUserDataDirectoryNotFound, userDataDirectory));
         }
 
         if (TryResolveProfileDirectoryFromDirectoryEntries(userDataDirectory, profile) is { } directMatch)
@@ -92,25 +92,25 @@ internal static class ChromiumBrowserResolver
             catch (IOException ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserUnableToReadProfileMetadata, localStatePath, profile),
                     ex);
             }
             catch (UnauthorizedAccessException ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserUnableToReadProfileMetadata, localStatePath, profile),
                     ex);
             }
             catch (JsonException ex)
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsInvalidProfileMetadata, localStatePath, profile),
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserInvalidProfileMetadata, localStatePath, profile),
                     ex);
             }
         }
 
         throw new InvalidOperationException(
-            string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsProfileNotFound, profile, userDataDirectory));
+            string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserProfileNotFound, profile, userDataDirectory));
     }
 
     /// <summary>
@@ -144,7 +144,7 @@ internal static class ChromiumBrowserResolver
             if (match is not null && !string.Equals(match, profileEntry.Name, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserLogsAmbiguousProfile, profile, userDataDirectory));
+                    string.Format(CultureInfo.CurrentCulture, BrowserMessageStrings.BrowserAmbiguousProfile, profile, userDataDirectory));
             }
 
             match = profileEntry.Name;

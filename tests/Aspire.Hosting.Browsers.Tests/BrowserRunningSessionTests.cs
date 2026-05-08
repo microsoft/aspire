@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
-public class BrowserLogsRunningSessionTests
+public class BrowserRunningSessionTests
 {
     [Fact]
     public async Task RunningSessionRoutesPageEventsToResourceLogsAndReleasesHostOnCompletion()
@@ -26,9 +26,9 @@ public class BrowserLogsRunningSessionTests
             TestBrowserHost? host = null;
             await using var registry = new BrowserHostRegistry(
 
-                NullLogger<BrowserLogsSessionManager>.Instance,
+                NullLogger<BrowserSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createUserDataDirectory: (configuration, _) => BrowserUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
                 createHostAsync: (configuration, identity, _, _) =>
                 {
                     host = new TestBrowserHost(identity);
@@ -36,31 +36,31 @@ public class BrowserLogsRunningSessionTests
                 });
 
             var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
-            var resourceName = "web-browser-logs";
-            BrowserLogsRunningSession? session = null;
+            var resourceName = "web-browser";
+            BrowserRunningSession? session = null;
             var logs = await ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount: 5, () =>
             {
-                session = BrowserLogsRunningSession.StartAsync(
+                session = BrowserRunningSession.StartAsync(
                     new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared, AppHostKey: null),
                     resourceName,
                     "session-0001",
                     new Uri("https://localhost:5001/"),
                     registry,
                     resourceLoggerService.GetLogger(resourceName),
-                    NullLogger<BrowserLogsSessionManager>.Instance,
+                    NullLogger<BrowserSessionManager>.Instance,
                     TimeProvider.System,
                     CancellationToken.None).GetAwaiter().GetResult();
 
-                host!.PageSession!.RaiseEventAsync(new BrowserLogsConsoleApiCalledEvent(
+                host!.PageSession!.RaiseEventAsync(new BrowserConsoleApiCalledEvent(
                     SessionId: "target-session-1",
-                    new BrowserLogsRuntimeConsoleApiCalledParameters
+                    new BrowserRuntimeConsoleApiCalledParameters
                     {
                         Type = "log",
                         Args =
                         [
-                            new BrowserLogsCdpProtocolRemoteObject
+                            new BrowserCdpProtocolRemoteObject
                             {
-                                Value = new BrowserLogsCdpProtocolStringValue("hello from tracked browser")
+                                Value = new BrowserCdpProtocolStringValue("hello from tracked browser")
                             }
                         ]
                     })).AsTask().GetAwaiter().GetResult();
@@ -120,9 +120,9 @@ public class BrowserLogsRunningSessionTests
 
         public TestBrowserPageSession? PageSession { get; private set; }
 
-        public Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-            ILogger<BrowserLogsSessionManager> logger,
+        public Task<IBrowserCdpConnection> CreateCdpConnectionAsync(
+            Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+            ILogger<BrowserSessionManager> logger,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -130,7 +130,7 @@ public class BrowserLogsRunningSessionTests
             string sessionId,
             Uri url,
             BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
             CancellationToken cancellationToken)
         {
             PageSession = new TestBrowserPageSession(sessionId, url, eventHandler);
@@ -148,7 +148,7 @@ public class BrowserLogsRunningSessionTests
     private sealed class TestBrowserPageSession(
         string sessionId,
         Uri url,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler) : IBrowserPageSession
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler) : IBrowserPageSession
     {
         private readonly TaskCompletionSource<BrowserPageSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -164,12 +164,27 @@ public class BrowserLogsRunningSessionTests
 
         public int DisposeCount { get; private set; }
 
-        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken)
+        public Task<BrowserCaptureScreenshotResult> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
-            return Task.FromResult(new BrowserLogsCaptureScreenshotResult { Data = Convert.ToBase64String([0x89, 0x50, 0x4e, 0x47]) });
+            return Task.FromResult(new BrowserCaptureScreenshotResult { Data = Convert.ToBase64String([0x89, 0x50, 0x4e, 0x47]) });
         }
 
-        public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
+        public Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"action":"evaluate"}""");
+        }
+
+        public Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"action":"cdp"}""");
+        }
+
+        public ValueTask RaiseEventAsync(BrowserCdpProtocolEvent protocolEvent)
         {
             return eventHandler(protocolEvent);
         }

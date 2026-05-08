@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-internal interface IBrowserLogsRunningSession
+internal interface IBrowserRunningSession
 {
     string SessionId { get; }
 
@@ -25,14 +25,20 @@ internal interface IBrowserLogsRunningSession
 
     Task StartCompletionObserver(Func<int?, Exception?, Task> onCompleted);
 
-    Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken);
+    Task<byte[]> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken);
+
+    Task NavigateAsync(Uri url, CancellationToken cancellationToken);
+
+    Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken);
+
+    Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken);
 
     Task StopAsync(CancellationToken cancellationToken);
 }
 
-internal interface IBrowserLogsRunningSessionFactory
+internal interface IBrowserRunningSessionFactory
 {
-    Task<IBrowserLogsRunningSession> StartSessionAsync(
+    Task<IBrowserRunningSession> StartSessionAsync(
         BrowserConfiguration configuration,
         string resourceName,
         Uri url,
@@ -41,20 +47,20 @@ internal interface IBrowserLogsRunningSessionFactory
         CancellationToken cancellationToken);
 }
 
-internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory, IAsyncDisposable
+internal sealed class BrowserRunningSessionFactory : IBrowserRunningSessionFactory, IAsyncDisposable
 {
     private readonly BrowserHostRegistry _browserHostRegistry;
-    private readonly ILogger<BrowserLogsSessionManager> _logger;
+    private readonly ILogger<BrowserSessionManager> _logger;
     private readonly TimeProvider _timeProvider;
 
-    public BrowserLogsRunningSessionFactory(ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
+    public BrowserRunningSessionFactory(ILogger<BrowserSessionManager> logger, TimeProvider timeProvider)
     {
         _browserHostRegistry = new BrowserHostRegistry(logger, timeProvider);
         _logger = logger;
         _timeProvider = timeProvider;
     }
 
-    public async Task<IBrowserLogsRunningSession> StartSessionAsync(
+    public async Task<IBrowserRunningSession> StartSessionAsync(
         BrowserConfiguration configuration,
         string resourceName,
         Uri url,
@@ -62,7 +68,7 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
         ILogger resourceLogger,
         CancellationToken cancellationToken)
     {
-        return await BrowserLogsRunningSession.StartAsync(
+        return await BrowserRunningSession.StartAsync(
             configuration,
             resourceName,
             sessionId,
@@ -79,12 +85,12 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
 
 // Owns one tracked browser page session. The browser host may be shared with other sessions; this type keeps the
 // per-resource page lifecycle, diagnostics, and recovery.
-internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
+internal sealed class BrowserRunningSession : IBrowserRunningSession
 {
     private readonly BrowserEventLogger _eventLogger;
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
     private readonly BrowserHostRegistry _browserHostRegistry;
-    private readonly ILogger<BrowserLogsSessionManager> _logger;
+    private readonly ILogger<BrowserSessionManager> _logger;
     private readonly ILogger _resourceLogger;
     private readonly string _resourceName;
     private readonly BrowserConfiguration _configuration;
@@ -104,14 +110,14 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private IBrowserPageSession? _pageSession;
     private string? _targetSessionId;
 
-    private BrowserLogsRunningSession(
+    private BrowserRunningSession(
         BrowserConfiguration configuration,
         string resourceName,
         string sessionId,
         Uri url,
         BrowserHostRegistry browserHostRegistry,
         ILogger resourceLogger,
-        ILogger<BrowserLogsSessionManager> logger,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider)
     {
         _eventLogger = new BrowserEventLogger(sessionId, resourceLogger);
@@ -142,18 +148,18 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private Task<BrowserSessionResult> Completion => _completion ?? throw new InvalidOperationException("Session has not been started.");
 
-    public static async Task<BrowserLogsRunningSession> StartAsync(
+    public static async Task<BrowserRunningSession> StartAsync(
         BrowserConfiguration configuration,
         string resourceName,
         string sessionId,
         Uri url,
         BrowserHostRegistry browserHostRegistry,
         ILogger resourceLogger,
-        ILogger<BrowserLogsSessionManager> logger,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var session = new BrowserLogsRunningSession(configuration, resourceName, sessionId, url, browserHostRegistry, resourceLogger, logger, timeProvider);
+        var session = new BrowserRunningSession(configuration, resourceName, sessionId, url, browserHostRegistry, resourceLogger, logger, timeProvider);
 
         try
         {
@@ -173,10 +179,10 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         return ObserveCompletionAsync(onCompleted);
     }
 
-    public async Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken)
+    public async Task<byte[]> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
     {
         var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
-        var result = await pageSession.CaptureScreenshotAsync(cancellationToken).ConfigureAwait(false);
+        var result = await pageSession.CaptureScreenshotAsync(options, cancellationToken).ConfigureAwait(false);
 
         var data = result.Data ?? throw new InvalidOperationException("Tracked browser screenshot capture returned no image data.");
 
@@ -190,11 +196,29 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
     }
 
+    public async Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        await pageSession.NavigateAsync(url, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        return await pageSession.EvaluateJsonAsync(expression, timeout, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        return await pageSession.SendCdpCommandJsonAsync(method, parametersJson, session, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         try { _stopCts.Cancel(); } catch (ObjectDisposedException) { }
 
-        // Stopping a dashboard browser-log session should close only the page target it created. The shared browser
+        // Stopping a dashboard browser session should close only the page target it created. The shared browser
         // process/window is released through the lease and may stay alive while other resource sessions are still active.
         await DisposePageSessionAsync().ConfigureAwait(false);
         await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);

@@ -31,19 +31,19 @@ internal interface IBrowserHost : IAsyncDisposable
 
     // Opens a browser-level CDP connection for a page session. WebSocket-backed hosts create a new connection per
     // session; pipe-backed hosts return a shared/multiplexed connection over the private CDP pipe owned by this AppHost.
-    Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        ILogger<BrowserLogsSessionManager> logger,
+    Task<IBrowserCdpConnection> CreateCdpConnectionAsync(
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserSessionManager> logger,
         CancellationToken cancellationToken);
 
-    // Creates a page/tab owned by one tracked browser-log session. The returned session owns only that page target;
+    // Creates a page/tab owned by one tracked browser session. The returned session owns only that page target;
     // disposing it must never close the browser process. Host implementations hide CDP event fanout and recovery
     // so callers cannot accidentally share a page target or call Browser.close on an adopted browser.
     Task<IBrowserPageSession> CreatePageSessionAsync(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken);
 }
 
@@ -57,10 +57,16 @@ internal interface IBrowserPageSession : IAsyncDisposable
     // or the host terminated. Host-level reconnects should reattach and preserve this session when possible.
     Task<BrowserPageSessionResult> Completion { get; }
 
-    Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken);
+    Task<BrowserCaptureScreenshotResult> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken);
+
+    Task NavigateAsync(Uri url, CancellationToken cancellationToken);
+
+    Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken);
+
+    Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken);
 }
 
-// Normalized page-session completion signal consumed by BrowserLogsRunningSession so manager state is independent of
+// Normalized page-session completion signal consumed by BrowserRunningSession so manager state is independent of
 // the exact CDP event or transport failure that ended the page.
 internal readonly record struct BrowserPageSessionResult(BrowserPageSessionCompletionKind CompletionKind, Exception? Error);
 

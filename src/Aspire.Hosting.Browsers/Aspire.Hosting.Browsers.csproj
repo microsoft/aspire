@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting browser browsers logs diagnostics</PackageTags>
+    <PackageTags>aspire integration hosting browser browsers automation diagnostics</PackageTags>
     <Description>Browser support for Aspire hosting.</Description>
     <!-- In preview until the public API is validated. -->
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
@@ -34,6 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Scripts\BrowserHelpers.js" LogicalName="Aspire.Hosting.Browsers.Scripts.BrowserHelpers.js" />
     <EmbeddedResource Update="Resources\BrowserCommandStrings.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>BrowserCommandStrings.Designer.cs</LastGenOutput>

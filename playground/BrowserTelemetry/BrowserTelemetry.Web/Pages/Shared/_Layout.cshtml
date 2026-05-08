@@ -27,7 +27,7 @@
         </main>
     </div>
     @await RenderSectionAsync("Scripts", required: false)
-    <script src="scripts/bundle.js"></script>
+    <script src="~/scripts/bundle.js" asp-append-version="true"></script>
     @if (Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT") is { Length: > 0 } endpointUrl)
     {
         var headers = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_HEADERS");

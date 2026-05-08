@@ -17,10 +17,15 @@ internal static class ChromiumDevToolsActivePortParser
             return null;
         }
 
-        // Chromium writes DevToolsActivePort as two lines:
+        // Chromium writes DevToolsActivePort as a two-line hand-off file while starting a debug-enabled browser:
         //
         // 51943
         // /devtools/browser/4c8404fb-06f8-45f0-9d89-112233445566
+        //
+        // The second line is the browser target path later exposed as webSocketDebuggerUrl from /json/version:
+        // https://chromedevtools.github.io/devtools-protocol/#how-do-i-access-the-browser-target
+        // Some Chromium builds have been observed to omit the leading slash, so normalize that before composing the
+        // loopback websocket URI. Additional trailing lines are ignored because only the browser target endpoint matters.
         using var reader = new StringReader(activePortFileContents);
         var portLine = reader.ReadLine();
         var browserPathLine = reader.ReadLine();

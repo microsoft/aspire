@@ -5,11 +5,11 @@ using System.Globalization;
 
 namespace Aspire.Hosting;
 
-// Writes durable browser-log command artifacts outside of command output so commands can return concise, agent-friendly
+// Writes durable browser command artifacts outside of command output so commands can return concise, agent-friendly
 // summaries while large payloads stay on disk.
-internal interface IBrowserLogsArtifactWriter
+internal interface IBrowserArtifactWriter
 {
-    Task<BrowserLogsArtifact> WriteArtifactAsync(
+    Task<BrowserArtifact> WriteArtifactAsync(
         string? appHostKey,
         string resourceName,
         string artifactType,
@@ -19,18 +19,18 @@ internal interface IBrowserLogsArtifactWriter
         CancellationToken cancellationToken);
 }
 
-internal sealed class BrowserLogsArtifactWriter : IBrowserLogsArtifactWriter
+internal sealed class BrowserArtifactWriter : IBrowserArtifactWriter
 {
     private const int AppHostKeySegmentLength = 16;
     private readonly Func<string> _rootDirectoryFactory;
     private readonly TimeProvider _timeProvider;
 
-    public BrowserLogsArtifactWriter(TimeProvider timeProvider)
+    public BrowserArtifactWriter(TimeProvider timeProvider)
         : this(timeProvider, GetAspireCommandArtifactRoot)
     {
     }
 
-    internal BrowserLogsArtifactWriter(TimeProvider timeProvider, Func<string> rootDirectoryFactory)
+    internal BrowserArtifactWriter(TimeProvider timeProvider, Func<string> rootDirectoryFactory)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(rootDirectoryFactory);
@@ -39,7 +39,7 @@ internal sealed class BrowserLogsArtifactWriter : IBrowserLogsArtifactWriter
         _rootDirectoryFactory = rootDirectoryFactory;
     }
 
-    public async Task<BrowserLogsArtifact> WriteArtifactAsync(
+    public async Task<BrowserArtifact> WriteArtifactAsync(
         string? appHostKey,
         string resourceName,
         string artifactType,
@@ -87,10 +87,10 @@ internal sealed class BrowserLogsArtifactWriter : IBrowserLogsArtifactWriter
                 await stream.WriteAsync(content, cancellationToken).ConfigureAwait(false);
             }
 
-            return new BrowserLogsArtifact(resourceName, artifactType, filePath, mimeType, content.Length, createdAt);
+            return new BrowserArtifact(resourceName, artifactType, filePath, mimeType, content.Length, createdAt);
         }
 
-        throw new IOException($"Unable to create a unique browser-log command artifact file under '{directory}'.");
+        throw new IOException($"Unable to create a unique browser command artifact file under '{directory}'.");
     }
 
     private static string GetAppHostSegment(string? appHostKey)
@@ -159,7 +159,7 @@ internal sealed class BrowserLogsArtifactWriter : IBrowserLogsArtifactWriter
     }
 }
 
-internal sealed record BrowserLogsArtifact(
+internal sealed record BrowserArtifact(
     string ResourceName,
     string ArtifactType,
     string FilePath,

@@ -25,7 +25,8 @@ Use these commands when the user calls out one resource by name, such as Redis, 
 aspire resource <resource> start
 aspire resource <resource> stop
 aspire resource <resource> restart
-aspire resource <resource> <command>
+aspire resource <resource> <command> [options]
+aspire resource <resource> <command> --help
 ```
 
 Keep these points in mind:
@@ -33,6 +34,8 @@ Keep these points in mind:
 - Prefer resource-scoped commands when the task does not require an AppHost-wide restart.
 - If the user says one resource is wedged, use a resource-scoped command such as `aspire resource <resource> restart` when available, or stop and start that resource, before escalating to `aspire start`.
 - Use `aspire resource <resource> <command>` when the AppHost exposes a resource-specific dashboard or operational command, such as `aspire resource <resource> rebuild` for C# project resources that expose rebuild.
+- Resource command inputs are exposed as command-specific CLI options generated from the running AppHost metadata. Prefer kebab-case option names such as `--timeout-milliseconds`; exact input names such as `--timeoutMilliseconds` are also accepted.
+- Use `aspire resource <resource> <command> --help` against the running AppHost to inspect required inputs, defaults, allowed values, and whether a `--` delimiter is needed for command options that collide with Aspire CLI options.
 
 ## Scenario: Apply One Resource's Code Change Without Bouncing The Whole App
 

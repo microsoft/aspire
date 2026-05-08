@@ -38,8 +38,8 @@ public class BrowserHostTests
             var host = await OwnedBrowserHost.StartAsync(
                 identity,
                 browserDisplayName: "Test Browser",
-                BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, profileDirectoryName: "Profile 1"),
-                NullLogger<BrowserLogsSessionManager>.Instance,
+                BrowserUserDataDirectory.CreatePersistent(userDataDirectory.FullName, profileDirectoryName: "Profile 1"),
+                NullLogger<BrowserSessionManager>.Instance,
                 TimeProvider.System,
                 CancellationToken.None,
                 startPipeBrowserProcess: (executablePath, arguments) =>
@@ -66,12 +66,12 @@ public class BrowserHostTests
 
                 await using var connection = await host.CreateCdpConnectionAsync(
                     static _ => ValueTask.CompletedTask,
-                    NullLogger<BrowserLogsSessionManager>.Instance,
+                    NullLogger<BrowserSessionManager>.Instance,
                     CancellationToken.None);
 
                 var enableDiscoveryTask = connection.EnableTargetDiscoveryAsync(CancellationToken.None);
                 using var command = JsonDocument.Parse(await fakeProcess!.ReadFrameAsync().DefaultTimeout());
-                Assert.Equal(BrowserLogsCdpProtocol.TargetSetDiscoverTargetsMethod, command.RootElement.GetProperty("method").GetString());
+                Assert.Equal(BrowserCdpProtocol.TargetSetDiscoverTargetsMethod, command.RootElement.GetProperty("method").GetString());
 
                 var responseFrame = "{\"id\":" + command.RootElement.GetProperty("id").GetInt64() + ",\"result\":{}}";
                 await fakeProcess.SendFrameAsync(responseFrame).DefaultTimeout();
@@ -90,7 +90,7 @@ public class BrowserHostTests
         }
     }
 
-    private sealed class FakePipeBrowserProcess : IBrowserLogsPipeBrowserProcess
+    private sealed class FakePipeBrowserProcess : IBrowserPipeProcess
     {
         private readonly Pipe _appToBrowser = new();
         private readonly Stream _browserInput;
@@ -98,7 +98,7 @@ public class BrowserHostTests
         private readonly Stream _browserRead;
         private readonly Stream _browserWrite;
         private readonly Pipe _browserToApp = new();
-        private readonly TaskCompletionSource<BrowserLogsProcessResult> _processCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<BrowserProcessResult> _processCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public FakePipeBrowserProcess()
         {
@@ -114,7 +114,7 @@ public class BrowserHostTests
 
         public Stream BrowserInput => _browserInput;
 
-        public Task<BrowserLogsProcessResult> ProcessTask => _processCompletion.Task;
+        public Task<BrowserProcessResult> ProcessTask => _processCompletion.Task;
 
         public bool Disposed { get; private set; }
 
@@ -155,7 +155,7 @@ public class BrowserHostTests
             }
 
             Disposed = true;
-            _processCompletion.TrySetResult(new BrowserLogsProcessResult(0));
+            _processCompletion.TrySetResult(new BrowserProcessResult(0));
 
             await _browserInput.DisposeAsync();
             await _browserOutput.DisposeAsync();

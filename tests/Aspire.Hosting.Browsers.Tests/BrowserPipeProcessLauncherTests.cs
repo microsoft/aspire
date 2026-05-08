@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
-public class BrowserLogsPipeBrowserProcessLauncherTests
+public class BrowserPipeProcessLauncherTests
 {
     [Fact]
     public void CreatePipeArguments_AppendsRemoteDebuggingPipeArgument()
@@ -19,7 +19,7 @@ public class BrowserLogsPipeBrowserProcessLauncherTests
             "about:blank"
         };
 
-        var pipeArguments = BrowserLogsPipeBrowserProcessLauncher.CreatePipeArguments(originalArguments);
+        var pipeArguments = BrowserPipeProcessLauncher.CreatePipeArguments(originalArguments);
 
         Assert.Equal(
             [
@@ -35,7 +35,7 @@ public class BrowserLogsPipeBrowserProcessLauncherTests
     [Fact]
     public void BuildWindowsCommandLine_QuotesExecutableAndArguments()
     {
-        var commandLine = BrowserLogsPipeBrowserProcessLauncher.BuildWindowsCommandLine(
+        var commandLine = BrowserPipeProcessLauncher.BuildWindowsCommandLine(
             @"C:\Program Files\Browser\chrome.exe",
             [
                 "--flag",
@@ -54,7 +54,7 @@ public class BrowserLogsPipeBrowserProcessLauncherTests
             return;
         }
 
-        await using var process = BrowserLogsPipeBrowserProcessLauncher.Start(
+        await using var process = BrowserPipeProcessLauncher.Start(
             "/bin/sh",
             [
                 "-c",

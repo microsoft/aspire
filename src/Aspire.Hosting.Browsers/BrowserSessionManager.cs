@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -13,53 +13,53 @@ using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting;
 
-// Coordinates browser-log commands with dashboard resource state. The running session owns CDP capture; this manager
+// Coordinates browser commands with dashboard resource state. The running session owns CDP capture; this manager
 // owns session ids, resource logs, health reports, and snapshot properties that make failures diagnosable in the dashboard.
-internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IAsyncDisposable
+internal sealed partial class BrowserSessionManager : IBrowserSessionManager, IAsyncDisposable
 {
     private static readonly JsonSerializerOptions s_browserSessionPropertyJsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly ResourceLoggerService _resourceLoggerService;
     private readonly ResourceNotificationService _resourceNotificationService;
     private readonly TimeProvider _timeProvider;
-    private readonly ILogger<BrowserLogsSessionManager> _logger;
-    private readonly IBrowserLogsArtifactWriter _artifactWriter;
-    private readonly IBrowserLogsRunningSessionFactory _sessionFactory;
+    private readonly ILogger<BrowserSessionManager> _logger;
+    private readonly IBrowserArtifactWriter _artifactWriter;
+    private readonly IBrowserRunningSessionFactory _sessionFactory;
     private readonly ConcurrentDictionary<string, ResourceSessionState> _resourceStates = new(StringComparer.Ordinal);
     private int _disposing;
 
-    public BrowserLogsSessionManager(
+    public BrowserSessionManager(
         ResourceLoggerService resourceLoggerService,
         ResourceNotificationService resourceNotificationService,
         TimeProvider timeProvider,
-        ILogger<BrowserLogsSessionManager> logger)
+        ILogger<BrowserSessionManager> logger)
         : this(
             resourceLoggerService,
             resourceNotificationService,
             timeProvider,
             logger,
-            new BrowserLogsArtifactWriter(timeProvider),
-            new BrowserLogsRunningSessionFactory(logger, timeProvider))
+            new BrowserArtifactWriter(timeProvider),
+            new BrowserRunningSessionFactory(logger, timeProvider))
     {
     }
 
-    internal BrowserLogsSessionManager(
+    internal BrowserSessionManager(
         ResourceLoggerService resourceLoggerService,
         ResourceNotificationService resourceNotificationService,
         TimeProvider timeProvider,
-        ILogger<BrowserLogsSessionManager> logger,
-        IBrowserLogsArtifactWriter? artifactWriter,
-        IBrowserLogsRunningSessionFactory sessionFactory)
+        ILogger<BrowserSessionManager> logger,
+        IBrowserArtifactWriter? artifactWriter,
+        IBrowserRunningSessionFactory sessionFactory)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourceNotificationService = resourceNotificationService;
         _timeProvider = timeProvider;
         _logger = logger;
-        _artifactWriter = artifactWriter ?? new BrowserLogsArtifactWriter(timeProvider);
+        _artifactWriter = artifactWriter ?? new BrowserArtifactWriter(timeProvider);
         _sessionFactory = sessionFactory;
     }
 
-    public async Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
+    public async Task StartSessionAsync(BrowserResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(configuration.Browser);
@@ -68,7 +68,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         ThrowIfDisposing();
 
         var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
-        // Dashboard commands can start/stop browser-log sessions for the same resource while previous targets are still
+        // Dashboard commands can start/stop browser sessions for the same resource while previous targets are still
         // completing. Serialize per resource so session ids, health reports, and properties describe the same observed
         // set of browser targets.
         await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -105,7 +105,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 stopTimeStamp: null,
                 exitCode: null).ConfigureAwait(false);
 
-            IBrowserLogsRunningSession session;
+            IBrowserRunningSession session;
             try
             {
                 session = await _sessionFactory.StartSessionAsync(
@@ -181,7 +181,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         }
     }
 
-    public async Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, CancellationToken cancellationToken)
+    public async Task<BrowserScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ThrowIfDisposing();
@@ -211,13 +211,13 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceState.Lock.Release();
         }
 
-        var screenshotBytes = await activeSession.Session.CaptureScreenshotAsync(cancellationToken).ConfigureAwait(false);
+        var screenshotBytes = await activeSession.Session.CaptureScreenshotAsync(options, cancellationToken).ConfigureAwait(false);
         var artifact = await _artifactWriter.WriteArtifactAsync(
             activeSession.AppHostKey,
             resourceName,
             artifactType: "screenshot",
-            fileExtension: ".png",
-            mimeType: "image/png",
+            fileExtension: options.FileExtension,
+            mimeType: options.MimeType,
             content: screenshotBytes,
             cancellationToken).ConfigureAwait(false);
 
@@ -233,7 +233,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             activeSession.BrowserHostOwnership,
             processDescription);
 
-        return new BrowserLogsScreenshotCaptureResult(
+        return new BrowserScreenshotCaptureResult(
             activeSession.SessionId,
             activeSession.Browser,
             activeSession.BrowserExecutable,
@@ -253,7 +253,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     {
         Interlocked.Exchange(ref _disposing, 1);
 
-        var sessionsToStop = new List<IBrowserLogsRunningSession>();
+        var sessionsToStop = new List<IBrowserRunningSession>();
         var completionObservers = new List<Task>();
 
         foreach (var resourceState in _resourceStates.Values)
@@ -312,7 +312,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     }
 
     private async Task HandleSessionCompletedAsync(
-        BrowserLogsResource resource,
+        BrowserResource resource,
         string resourceName,
         ResourceSessionState resourceState,
         string sessionId,
@@ -368,7 +368,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     }
 
     private Task PublishResourceSnapshotAsync(
-        BrowserLogsResource resource,
+        BrowserResource resource,
         string resourceName,
         ResourceSessionState resourceState,
         string stateText,
@@ -424,7 +424,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         else if (resourceState.LastError is not null)
         {
             reports.Add(new HealthReportSnapshot(
-                BrowserLogsBuilderExtensions.LastErrorPropertyName,
+                BrowserAutomationBuilderExtensions.LastErrorPropertyName,
                 HealthStatus.Unhealthy,
                 resourceState.LastError,
                 null)
@@ -438,34 +438,34 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
     private static IEnumerable<ResourcePropertySnapshot> GetPropertyUpdates(ResourceSessionState resourceState)
     {
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, resourceState.ActiveSessions.Count);
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, FormatActiveSessions(resourceState.ActiveSessions.Values));
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserSessionsPropertyName, FormatBrowserSessions(resourceState.ActiveSessions.Values));
-        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, resourceState.TotalSessionsLaunched);
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.ActiveSessionCountPropertyName, resourceState.ActiveSessions.Count);
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.ActiveSessionsPropertyName, FormatActiveSessions(resourceState.ActiveSessions.Values));
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.BrowserSessionsPropertyName, FormatBrowserSessions(resourceState.ActiveSessions.Values));
+        yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.TotalSessionsLaunchedPropertyName, resourceState.TotalSessionsLaunched);
 
         if (resourceState.LastSessionId is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.LastSessionPropertyName, resourceState.LastSessionId);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.LastSessionPropertyName, resourceState.LastSessionId);
         }
 
         if (resourceState.LastTargetUrl is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.TargetUrlPropertyName, resourceState.LastTargetUrl);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.TargetUrlPropertyName, resourceState.LastTargetUrl);
         }
 
         if (resourceState.LastBrowserExecutable is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable);
         }
 
         if (resourceState.LastBrowserHostOwnership is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership);
         }
 
         if (resourceState.LastError is not null)
         {
-            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError);
+            yield return new ResourcePropertySnapshot(BrowserAutomationBuilderExtensions.LastErrorPropertyName, resourceState.LastError);
         }
     }
 
@@ -475,24 +475,24 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         IEnumerable<ResourcePropertySnapshot> propertyUpdates)
     {
         properties = resourceState.LastBrowser is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserPropertyName, resourceState.LastBrowser)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserPropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.BrowserPropertyName, resourceState.LastBrowser)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.BrowserPropertyName);
 
         properties = resourceState.LastBrowserExecutable is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.BrowserExecutablePropertyName);
 
         properties = resourceState.LastBrowserHostOwnership is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.BrowserHostOwnershipPropertyName);
 
         properties = resourceState.LastError is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.LastErrorPropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.LastErrorPropertyName, resourceState.LastError)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.LastErrorPropertyName);
 
         properties = resourceState.LastProfile is not null
-            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
-            : RemoveProperty(properties, BrowserLogsBuilderExtensions.ProfilePropertyName);
+            ? properties.SetResourceProperty(BrowserAutomationBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
+            : RemoveProperty(properties, BrowserAutomationBuilderExtensions.ProfilePropertyName);
 
         return properties.SetResourcePropertyRange(propertyUpdates);
     }
@@ -607,7 +607,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         DateTime StartedAt,
         string TargetId,
         Uri TargetUrl,
-        IBrowserLogsRunningSession Session,
+        IBrowserRunningSession Session,
         Task CompletionObserver);
 
     private sealed record BrowserSessionPropertyValue(
@@ -622,6 +622,21 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string CdpEndpoint,
         string? PageCdpEndpoint,
         string TargetId);
+
+    private sealed record BrowserNavigateCommandResult(
+        string SessionId,
+        string Browser,
+        string TargetId,
+        string TargetUrl);
+
+    private sealed record BrowserCloseBrowserCommandResult(
+        string SessionId,
+        string Browser,
+        string BrowserExecutable,
+        string BrowserHostOwnership,
+        int? ProcessId,
+        string TargetId,
+        string TargetUrl);
 
     private static string FormatDebugEndpoint(Uri? browserDebugEndpoint) =>
         browserDebugEndpoint?.ToString() ?? "pipe";

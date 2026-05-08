@@ -6,12 +6,12 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting;
 
 // Factory for browser-level CDP connections.
-internal delegate Task<IBrowserLogsCdpConnection> BrowserLogsCdpConnectionFactory(
-    Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-    ILogger<BrowserLogsSessionManager> logger,
+internal delegate Task<IBrowserCdpConnection> BrowserCdpConnectionFactory(
+    Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+    ILogger<BrowserSessionManager> logger,
     CancellationToken cancellationToken);
 
-// Owns one browser page/tab for one browser-log session. CDP calls pages "targets", but this layer intentionally
+// Owns one browser page/tab for one browser session. CDP calls pages "targets", but this layer intentionally
 // models the user-visible page session. The host may be shared by many sessions, while each BrowserPageSession has
 // its own browser CDP connection, attached target session id, instrumentation setup, lifecycle monitoring, and
 // reconnection loop.
@@ -26,21 +26,21 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
     private readonly TaskCompletionSource<BrowserPageSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
-    private readonly BrowserLogsCdpConnectionFactory _connectionFactory;
-    private readonly Func<BrowserLogsCdpProtocolEvent, ValueTask> _eventHandler;
+    private readonly BrowserCdpConnectionFactory _connectionFactory;
+    private readonly Func<BrowserCdpProtocolEvent, ValueTask> _eventHandler;
     private readonly IBrowserHost _host;
     // Serializes every operation that replaces, disposes, or sends a command through the current CDP connection.
     // Without this, screenshot capture can read a live connection reference while reconnect/dispose tears down that
     // same connection underneath it.
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
-    private readonly ILogger<BrowserLogsSessionManager> _logger;
+    private readonly ILogger<BrowserSessionManager> _logger;
     private readonly bool _reuseInitialBlankTarget;
     private readonly string _sessionId;
     private readonly CancellationTokenSource _stopCts = new();
     private readonly TimeProvider _timeProvider;
     private readonly Uri _url;
 
-    private IBrowserLogsCdpConnection? _connection;
+    private IBrowserCdpConnection? _connection;
     private Task<BrowserPageSessionResult>? _monitorTask;
     private int _disposed;
     private string? _targetId;
@@ -51,9 +51,9 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        BrowserLogsCdpConnectionFactory connectionFactory,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        ILogger<BrowserLogsSessionManager> logger,
+        BrowserCdpConnectionFactory connectionFactory,
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget)
     {
@@ -74,7 +74,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
     public Task<BrowserPageSessionResult> Completion => _monitorTask ?? throw new InvalidOperationException("Browser page session has not started.");
 
-    public async Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken)
+    public async Task<BrowserCaptureScreenshotResult> CaptureScreenshotAsync(BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
     {
         await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -88,7 +88,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
             // Keep the lock for the whole CDP command. Capturing only the fields under the lock is not enough because
             // BrowserPageSession.DisposeAsync and reconnect both dispose the connection object itself.
             using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
-            return await connection.CaptureScreenshotAsync(targetSessionId, captureCts.Token).ConfigureAwait(false);
+            return await connection.CaptureScreenshotAsync(targetSessionId, options, captureCts.Token).ConfigureAwait(false);
         }
         finally
         {
@@ -96,24 +96,107 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         }
     }
 
-    internal static BrowserPageSessionResult? TryGetPageCompletion(BrowserLogsCdpProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
+    public async Task NavigateAsync(Uri url, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+            var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+            var targetSessionId = _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
+
+            using var navigateCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+            await connection.NavigateAsync(targetSessionId, url, navigateCts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
+    public async Task<string> EvaluateJsonAsync(string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expression);
+
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+            var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+            var targetSessionId = _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
+
+            // BrowserScripts already wrapped command bodies as async JavaScript that returns JSON text. This layer only
+            // chooses the active page target and turns the CDP Runtime.evaluate result back into that JSON payload.
+            using var evaluateCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+            var result = await connection.EvaluateAsync(targetSessionId, expression, timeout, evaluateCts.Token).ConfigureAwait(false);
+
+            return result.Result?.Value switch
+            {
+                BrowserCdpProtocolStringValue stringValue => stringValue.Value,
+                BrowserCdpProtocolNullValue => "null",
+                null => throw new InvalidOperationException("Tracked browser script evaluation returned no value."),
+                _ => throw new InvalidOperationException("Tracked browser script evaluation did not return JSON text.")
+            };
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
+    public async Task<string> SendCdpCommandJsonAsync(string method, string? parametersJson, string session, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        ArgumentException.ThrowIfNullOrWhiteSpace(session);
+
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+            var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+            var targetSessionId = _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
+            var commandSessionId = session switch
+            {
+                "page" => targetSessionId,
+                "browser" => null,
+                _ => throw new InvalidOperationException("CDP command session must be 'page' or 'browser'.")
+            };
+
+            using var cdpCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+            return await connection.SendRawCommandAsync(commandSessionId, method, parametersJson, cdpCts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
+    internal static BrowserPageSessionResult? TryGetPageCompletion(BrowserCdpProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
     {
         return protocolEvent switch
         {
-            BrowserLogsTargetDestroyedEvent targetDestroyed when string.Equals(targetDestroyed.TargetId, targetId, StringComparison.Ordinal) =>
+            BrowserTargetDestroyedEvent targetDestroyed when string.Equals(targetDestroyed.TargetId, targetId, StringComparison.Ordinal) =>
                 new BrowserPageSessionResult(BrowserPageSessionCompletionKind.PageClosed, Error: null),
 
-            BrowserLogsTargetCrashedEvent targetCrashed when string.Equals(targetCrashed.TargetId, targetId, StringComparison.Ordinal) =>
+            BrowserTargetCrashedEvent targetCrashed when string.Equals(targetCrashed.TargetId, targetId, StringComparison.Ordinal) =>
                 new BrowserPageSessionResult(
                     BrowserPageSessionCompletionKind.PageCrashed,
                     new InvalidOperationException($"Tracked browser page crashed with status '{targetCrashed.Parameters.Status}' and error code '{targetCrashed.Parameters.ErrorCode}'.")),
 
-            BrowserLogsDetachedFromTargetEvent detached when
+            BrowserDetachedFromTargetEvent detached when
                 string.Equals(detached.DetachedSessionId, targetSessionId, StringComparison.Ordinal) ||
                 string.Equals(detached.TargetId, targetId, StringComparison.Ordinal) =>
                 new BrowserPageSessionResult(BrowserPageSessionCompletionKind.PageClosed, Error: null),
 
-            BrowserLogsInspectorDetachedEvent inspectorDetached when string.Equals(inspectorDetached.SessionId, targetSessionId, StringComparison.Ordinal) =>
+            BrowserInspectorDetachedEvent inspectorDetached when string.Equals(inspectorDetached.SessionId, targetSessionId, StringComparison.Ordinal) =>
                 string.Equals(inspectorDetached.Reason, "target_closed", StringComparison.OrdinalIgnoreCase)
                     ? new BrowserPageSessionResult(BrowserPageSessionCompletionKind.PageClosed, Error: null)
                     : new BrowserPageSessionResult(
@@ -129,8 +212,8 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        ILogger<BrowserLogsSessionManager> logger,
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget,
         CancellationToken cancellationToken)
@@ -153,9 +236,9 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        BrowserLogsCdpConnectionFactory connectionFactory,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        ILogger<BrowserLogsSessionManager> logger,
+        BrowserCdpConnectionFactory connectionFactory,
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget,
         CancellationToken cancellationToken)
@@ -292,7 +375,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
             ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
     }
 
-    internal static string? TrySelectReusableStartupPageTargetId(IReadOnlyList<BrowserLogsTargetInfo>? targetInfos)
+    internal static string? TrySelectReusableStartupPageTargetId(IReadOnlyList<BrowserTargetInfo>? targetInfos)
     {
         if (targetInfos is null)
         {
@@ -433,7 +516,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         return false;
     }
 
-    private async ValueTask HandleEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
+    private async ValueTask HandleEventAsync(BrowserCdpProtocolEvent protocolEvent)
     {
         // Browser-level lifecycle events often are not stamped with the attached page session id, so check completion
         // first. Only after that should ordinary Runtime/Log/Network/Page events be filtered to this target session.

@@ -19,6 +19,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Redis" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.PostgreSQL" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Yarp" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Browsers" />
     <ProjectReference Include="..\BasketService\BasketService.csproj" />
     <ProjectReference Include="..\CatalogDb\CatalogDb.csproj" />
     <ProjectReference Include="..\CatalogService\CatalogService.csproj" />

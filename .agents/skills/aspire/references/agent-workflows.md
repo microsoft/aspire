@@ -67,6 +67,86 @@ Inspect the live app before editing code:
 4. `aspire otel traces <resource>` to follow cross-service activity. Add `--search "<term>"` to narrow results.
 5. `aspire export` when you need a zipped telemetry snapshot for deeper analysis or handoff.
 
+## Scenario: I Need To Drive A Browser In An Aspire App
+
+If the app exposes a Browser resource, use it as the first-choice agent browser before reaching for Playwright. Browser is optimized for frontend applications and keeps browser actions, console logs, network events, screenshots, cookies, storage, and session state tied to the Aspire resource.
+
+If the AppHost does not expose browser for the frontend yet, add the frontend-focused browser integration before falling back to Playwright:
+
+```bash
+aspire add browsers
+```
+
+Attach browser to the frontend resource, not to backend services. For TypeScript AppHosts with a Vite frontend:
+
+```typescript
+const frontend = await builder
+    .addViteApp("frontend", "./frontend")
+    .withExternalHttpEndpoints()
+    .withBrowserAutomation();
+```
+
+For TypeScript AppHosts with a generic JavaScript frontend:
+
+```typescript
+const frontend = await builder
+    .addJavaScriptApp("frontend", "./frontend", { runScriptName: "dev" })
+    .withHttpEndpoint({ env: "PORT" })
+    .withExternalHttpEndpoints()
+    .withBrowserAutomation();
+```
+
+For C# AppHosts:
+
+```csharp
+builder.AddProject<Projects.Web>("web")
+    .WithExternalHttpEndpoints()
+    .WithBrowserAutomation();
+```
+
+For TypeScript AppHosts, run `aspire add browsers`, then inspect `.modules/aspire.ts` for the generated `withBrowserAutomation` API before editing `apphost.ts`.
+
+Start the app and find the browser resource. The resource is currently named like `<frontend>-browser`:
+
+```bash
+aspire start --isolated
+aspire describe --format Json
+aspire resource <browser-resource> open-tracked-browser
+aspire resource <browser-resource> inspect-browser
+```
+
+Use refs and snapshots for the agent loop:
+
+```bash
+aspire resource <browser-resource> click-browser --selector e1 --snapshot-after
+aspire resource <browser-resource> type-browser-text --selector e2 --text "hello" --snapshot-after
+aspire resource <browser-resource> wait --selector '#results' --timeout-milliseconds 10000
+aspire resource <browser-resource> get --property text --selector '#results'
+```
+
+Use state and session commands when tests need continuity or low-level browser control:
+
+```bash
+aspire resource <browser-resource> state --action get
+aspire resource <browser-resource> state --action set --state '<state-json>' --clear-existing
+aspire resource <browser-resource> cookies --action set --name session --value abc
+aspire resource <browser-resource> storage --area local --action set --key theme --value dark
+aspire resource <browser-resource> tabs --action list
+aspire resource <browser-resource> frames
+aspire resource <browser-resource> dialog --action accept
+aspire resource <browser-resource> downloads --behavior allow --download-path /tmp/downloads --events-enabled
+aspire resource <browser-resource> upload --selector '#file' --files '["/tmp/file.txt"]'
+aspire resource <browser-resource> cdp --method Runtime.evaluate --params '{"expression":"document.title","returnByValue":true}' --session page
+```
+
+Keep these points in mind:
+
+- Re-run `inspect-browser` after navigation or major DOM changes because refs are snapshot-scoped.
+- Resource command inputs are CLI options generated from the command metadata. Use kebab-case option names such as `--snapshot-after` and `--timeout-milliseconds`; use `aspire resource <resource> <command> --help` against a running AppHost to see the exact inputs.
+- Prefer `--snapshot-after` on mutating commands when the next agent decision depends on the resulting DOM.
+- Browser cookie/state commands are page-origin scoped and cannot read or set HttpOnly cookies.
+- Use Playwright only when you need independent contexts, browser matrix testing, tracing/video, or an existing Playwright test suite.
+
 ## Scenario: I Need To Add An Integration, Understand An API, Or Add A Custom Command Safely
 
 Use integration search to find the package when needed, then use the docs commands for the workflow and the API reference commands if you need the concrete API entry:

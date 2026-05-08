@@ -10,12 +10,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only
 
 namespace Aspire.Hosting.Browsers.Tests;
 
 [Trait("Partition", "2")]
-public class BrowserLogsSessionManagerTests
+public class BrowserSessionManagerTests
 {
     [Fact]
     public void BrowserHostIdentity_NormalizesTrailingDirectorySeparators()
@@ -66,9 +66,9 @@ public class BrowserLogsSessionManagerTests
             var createdHosts = new List<TestBrowserHost>();
             await using var registry = new BrowserHostRegistry(
 
-                NullLogger<BrowserLogsSessionManager>.Instance,
+                NullLogger<BrowserSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createUserDataDirectory: (configuration, _) => BrowserUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
                 createHostAsync: (configuration, identity, _, _) =>
                 {
                     var host = new TestBrowserHost(identity, configuration.Profile);
@@ -106,9 +106,9 @@ public class BrowserLogsSessionManagerTests
             var createdHosts = new List<TestBrowserHost>();
             var registry = new BrowserHostRegistry(
 
-                NullLogger<BrowserLogsSessionManager>.Instance,
+                NullLogger<BrowserSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createUserDataDirectory: (configuration, _) => BrowserUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
                 createHostAsync: (configuration, identity, _, _) =>
                 {
                     var host = new TestBrowserHost(identity, configuration.Profile);
@@ -140,9 +140,9 @@ public class BrowserLogsSessionManagerTests
             File.WriteAllText(browserExecutable, string.Empty);
             await using var registry = new BrowserHostRegistry(
 
-                NullLogger<BrowserLogsSessionManager>.Instance,
+                NullLogger<BrowserSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createUserDataDirectory: (configuration, _) => BrowserUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
                 createHostAsync: (configuration, identity, _, _) => Task.FromResult<IBrowserHost>(new TestBrowserHost(identity, configuration.Profile)));
 
             var firstLease = await registry.AcquireAsync(
@@ -184,9 +184,9 @@ public class BrowserLogsSessionManagerTests
 
             await using var registry = new BrowserHostRegistry(
 
-                NullLogger<BrowserLogsSessionManager>.Instance,
+                NullLogger<BrowserSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createUserDataDirectory: (configuration, _) => BrowserUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
                 createHostAsync: null,
                 enableEndpointMetadataAdoption: true);
 
@@ -212,9 +212,9 @@ public class BrowserLogsSessionManagerTests
     public void BrowserPageSession_MapsTargetLifecycleEventsToCompletion()
     {
         var closed = BrowserPageSession.TryGetPageCompletion(
-            new BrowserLogsDetachedFromTargetEvent(
+            new BrowserDetachedFromTargetEvent(
                 SessionId: null,
-                new BrowserLogsDetachedFromTargetParameters
+                new BrowserDetachedFromTargetParameters
                 {
                     SessionId = "target-session-1",
                     TargetId = "target-1"
@@ -222,9 +222,9 @@ public class BrowserLogsSessionManagerTests
             targetId: "target-1",
             targetSessionId: "target-session-1");
         var crashed = BrowserPageSession.TryGetPageCompletion(
-            new BrowserLogsTargetCrashedEvent(
+            new BrowserTargetCrashedEvent(
                 SessionId: null,
-                new BrowserLogsTargetCrashedParameters
+                new BrowserTargetCrashedParameters
                 {
                     TargetId = "target-1",
                     Status = "crashed",
@@ -233,9 +233,9 @@ public class BrowserLogsSessionManagerTests
             targetId: "target-1",
             targetSessionId: "target-session-1");
         var unrelated = BrowserPageSession.TryGetPageCompletion(
-            new BrowserLogsInspectorDetachedEvent(
+            new BrowserInspectorDetachedEvent(
                 SessionId: "other-session",
-                new BrowserLogsInspectorDetachedParameters
+                new BrowserInspectorDetachedParameters
                 {
                     Reason = "target_closed"
                 }),
@@ -259,7 +259,7 @@ public class BrowserLogsSessionManagerTests
                 Path.Combine(userDataDirectory.FullName, "browser"),
                 userDataDirectory.FullName);
             var metadataPath = BrowserEndpointDiscovery.GetEndpointMetadataFilePath(userDataDirectory.FullName);
-            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserLogsSessionManager>.Instance);
+            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserSessionManager>.Instance);
 
             await BrowserEndpointDiscovery.WriteAsync(
                 identity,
@@ -319,7 +319,7 @@ public class BrowserLogsSessionManagerTests
                 Path.Combine(userDataDirectory.FullName, "browser"),
                 userDataDirectory.FullName);
             var metadataPath = BrowserEndpointDiscovery.GetEndpointMetadataFilePath(userDataDirectory.FullName);
-            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserLogsSessionManager>.Instance);
+            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserSessionManager>.Instance);
             await File.WriteAllTextAsync(
                 metadataPath,
                 $$"""
@@ -351,7 +351,7 @@ public class BrowserLogsSessionManagerTests
             var identity = new BrowserHostIdentity(
                 Path.Combine(userDataDirectory.FullName, "browser"),
                 userDataDirectory.FullName);
-            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserLogsSessionManager>.Instance);
+            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserSessionManager>.Instance);
             var browserEndpoint = StartBrowserVersionEndpoint(out var serverTask);
 
             await BrowserEndpointDiscovery.WriteAsync(
@@ -534,15 +534,15 @@ public class BrowserLogsSessionManagerTests
     public async Task StartSessionAsync_ThrowsWhenManagerIsDisposing()
     {
         var sessionFactory = new ThrowIfCalledSessionFactory();
-        var manager = new BrowserLogsSessionManager(
+        var manager = new BrowserSessionManager(
             ConsoleLoggingTestHelpers.GetResourceLoggerService(),
             ResourceNotificationServiceTestHelpers.Create(),
             TimeProvider.System,
-            NullLogger<BrowserLogsSessionManager>.Instance,
+            NullLogger<BrowserSessionManager>.Instance,
             artifactWriter: null,
             sessionFactory: sessionFactory);
-        var resource = new BrowserLogsResource(
-            "web-browser-logs",
+        var resource = new BrowserResource(
+            "web-browser",
             new TestResourceWithEndpoints("web"),
             new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated, AppHostKey: "test-apphost"),
             new BrowserConfigurationExplicitValues());
@@ -606,11 +606,11 @@ public class BrowserLogsSessionManagerTests
         return browserEndpoint;
     }
 
-    private sealed class ThrowIfCalledSessionFactory : IBrowserLogsRunningSessionFactory
+    private sealed class ThrowIfCalledSessionFactory : IBrowserRunningSessionFactory
     {
         public bool WasCalled { get; private set; }
 
-        public Task<IBrowserLogsRunningSession> StartSessionAsync(
+        public Task<IBrowserRunningSession> StartSessionAsync(
             BrowserConfiguration configuration,
             string resourceName,
             Uri url,
@@ -656,9 +656,9 @@ public class BrowserLogsSessionManagerTests
 
         public Task Termination { get; } = Task.CompletedTask;
 
-        public Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-            ILogger<BrowserLogsSessionManager> logger,
+        public Task<IBrowserCdpConnection> CreateCdpConnectionAsync(
+            Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+            ILogger<BrowserSessionManager> logger,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -666,7 +666,7 @@ public class BrowserLogsSessionManagerTests
             string sessionId,
             Uri url,
             BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

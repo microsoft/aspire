@@ -16,13 +16,13 @@ namespace Aspire.Hosting;
 //
 // Why this exists:
 // - Chromium's singleton is keyed by the user data root, not by Aspire. If a WebSocket-based option already launched a
-//   debug-enabled browser for that root, a later browser-log session can attach to it instead of starting another
+//   debug-enabled browser for that root, a later browser session can attach to it instead of starting another
 //   process.
 // - Chromium's DevToolsActivePort file is only a launch-time hand-off file and isn't enough for cross-session adoption.
 //   This sidecar records the exact browser identity and endpoint proved during startup.
 // - The sidecar is intentionally treated as a hint. Users can close the browser, edit/delete files, or reuse ports, so
 //   every read revalidates schema, identity, PID liveness, endpoint reachability, and profile compatibility.
-internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager> logger)
+internal sealed class BrowserEndpointDiscovery(ILogger<BrowserSessionManager> logger)
 {
     private static readonly TimeSpan s_probeHttpClientTimeout = Timeout.InfiniteTimeSpan;
     // Endpoint adoption is on the command path, so fail quickly when stale metadata points at a dead or reused port.
@@ -41,7 +41,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         WriteIndented = true
     });
 
-    private readonly ILogger<BrowserLogsSessionManager> _logger = logger;
+    private readonly ILogger<BrowserSessionManager> _logger = logger;
 
     // Aspire sidecar file stored at the Chromium user data root next to browser singleton files such as
     // SingletonLock/lockfile and DevToolsActivePort. Keeping it under the user data root makes the adoption state
@@ -139,10 +139,10 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             throw new InvalidOperationException(
                 string.Format(
                     CultureInfo.CurrentCulture,
-                    BrowserMessageStrings.BrowserLogsTrackedBrowserProfileConflict,
+                    BrowserMessageStrings.BrowserTrackedBrowserProfileConflict,
                     identity.UserDataRootPath,
-                    metadata.ProfileDirectoryName ?? BrowserMessageStrings.BrowserLogsDefaultProfileName,
-                    profileDirectoryName ?? BrowserMessageStrings.BrowserLogsDefaultProfileName));
+                    metadata.ProfileDirectoryName ?? BrowserMessageStrings.BrowserDefaultProfileName,
+                    profileDirectoryName ?? BrowserMessageStrings.BrowserDefaultProfileName));
         }
 
         return metadata with { Endpoint = endpoint.ToString() };
