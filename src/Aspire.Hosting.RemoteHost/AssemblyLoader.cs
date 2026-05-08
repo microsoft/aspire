@@ -175,14 +175,11 @@ internal sealed class AssemblyLoader
                 continue;
             }
 
-            Assembly? defaultAsm;
-            try
+            var defaultAsm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(
+                assembly => string.Equals(assembly.GetName().Name, sharedName, StringComparison.OrdinalIgnoreCase));
+            if (defaultAsm is null)
             {
-                defaultAsm = AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName(sharedName));
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Default context does not provide '{AssemblyName}'", sharedName);
+                logger.LogDebug("Default context does not currently provide '{AssemblyName}'", sharedName);
                 continue;
             }
 
