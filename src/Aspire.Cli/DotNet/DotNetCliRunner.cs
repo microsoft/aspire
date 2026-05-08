@@ -541,6 +541,16 @@ internal sealed class DotNetCliRunner(
         cliArgsList.Add(projectFile.FullName);
 
         string[] cliArgs = [.. cliArgsList];
+        // These probes parse dotnet/msbuild stdout as machine-readable JSON. Disable
+        // telemetry and workload-update notifications for every property/item probe so
+        // unrelated first-run or workload messages cannot corrupt the JSON stream. This
+        // is intentionally broader than `aspire ls`: the same probe path is used by
+        // AppHost validation in commands such as `run`.
+        var env = new Dictionary<string, string>
+        {
+            [KnownConfigNames.DotnetCliTelemetryOptOut] = "1",
+            [KnownConfigNames.DotnetCliWorkloadUpdateNotifyDisable] = "1"
+        };
 
         var existingStandardOutputCallback = options.StandardOutputCallback;
         var existingStandardErrorCallback = options.StandardErrorCallback;
@@ -564,7 +574,7 @@ internal sealed class DotNetCliRunner(
 
             var exitCode = await ExecuteAsync(
                 args: cliArgs,
-                env: null,
+                env: env,
                 projectFile: projectFile,
                 workingDirectory: projectFile.Directory!,
                 backchannelCompletionSource: null,

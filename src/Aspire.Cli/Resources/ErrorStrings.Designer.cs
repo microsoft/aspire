@@ -61,6 +61,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string DotNetSdkUnavailableAppHostDiscoveryWarning
+        {
+            get
+            {
+                return ResourceManager.GetString("DotNetSdkUnavailableAppHostDiscoveryWarning", resourceCulture);
+            }
+        }
+
         public static string InvalidLocaleProvided
         {
             get

@@ -45,6 +45,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<string> DisplayedErrors { get; } = [];
     public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
     public List<string> DisplayedPlainText { get; } = [];
+    public List<(string Text, ConsoleOutput? ConsoleOverride)> DisplayedRawText { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
 
     // Response queue setup methods
@@ -245,6 +246,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
+        DisplayedRawText.Add((text, consoleOverride));
         DisplayRawTextCallback?.Invoke(text);
     }
 

@@ -127,7 +127,7 @@ internal sealed class RestoreCommand : BaseCommand
 
             if (project is DotNetAppHostProject)
             {
-                if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, InteractionService, Telemetry, cancellationToken))
+                if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, InteractionService, Telemetry, cancellationToken: cancellationToken))
                 {
                     return ExitCodeConstants.SdkNotInstalled;
                 }

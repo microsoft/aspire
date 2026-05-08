@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Projects;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 
@@ -32,6 +33,11 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     internal static class Activities
     {
         public const string RunCommand = "aspire/cli/run";
+        public const string LsCommand = "aspire/cli/ls";
+        public const string LsFindAppHosts = "aspire/cli/ls.find_apphosts";
+        public const string AppHostCandidateDiscovery = "aspire/cli/apphost_candidate_discovery";
+        public const string AppHostCandidateGitMatch = "aspire/cli/apphost_candidate_discovery.match_git_files";
+        public const string AppHostCandidateFilesystemWalk = "aspire/cli/apphost_candidate_discovery.filesystem_walk";
         public const string RunAppHostFindAppHost = "aspire/cli/run_apphost.find_apphost";
         public const string RunAppHostStopExistingInstance = "aspire/cli/run_apphost.stop_existing_instance";
         public const string RunAppHostStartProject = "aspire/cli/run_apphost.start_project";
@@ -55,6 +61,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string GuestInitializeCommand = "aspire/cli/guest.initialize_command";
         public const string GuestInstallDependencies = "aspire/cli/guest.install_dependencies";
         public const string GuestExecuteCommand = "aspire/cli/guest.execute_command";
+        public const string GitCommand = "aspire/cli/git.command";
         public const string NpmCommand = "aspire/cli/npm.command";
 
         public static string DotNetCommand(string command) => $"aspire/cli/dotnet.{command}";
@@ -84,6 +91,17 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string DotNetBinlogArtifactType = "aspire.cli.dotnet.binlog_artifact_type";
         public const string DotNetBinlogSkipReason = "aspire.cli.dotnet.binlog_skip_reason";
         public const string AppHostProjectFileSpecified = "aspire.cli.apphost.project_file_specified";
+        public const string AppHostDiscoveryScope = "aspire.cli.apphost.discovery_scope";
+        public const string AppHostDiscoverySearchDirectory = "aspire.cli.apphost.discovery.search_directory";
+        public const string AppHostDiscoverySource = "aspire.cli.apphost.discovery.source";
+        public const string AppHostDiscoveryPatternCount = "aspire.cli.apphost.discovery.patterns.count";
+        public const string AppHostDiscoveryIncludedFileCount = "aspire.cli.apphost.discovery.included_files.count";
+        public const string AppHostDiscoveryWalkFileCount = "aspire.cli.apphost.discovery.walk.files.count";
+        public const string AppHostDiscoveryWalkDirectoryCount = "aspire.cli.apphost.discovery.walk.directories.count";
+        public const string AppHostDiscoveryWalkSkippedDirectoryCount = "aspire.cli.apphost.discovery.walk.skipped_directories.count";
+        public const string AppHostDiscoverySkipListEnabled = "aspire.cli.apphost.discovery.skip_list_enabled";
+        public const string AppHostDiscoveryNuGetCacheExcluded = "aspire.cli.apphost.discovery.nuget_cache_excluded";
+        public const string AppHostCandidateCount = "aspire.cli.apphost.candidate_count";
         public const string AppHostRunningInstanceResult = "aspire.cli.apphost.running_instance_result";
         public const string AppHostLanguage = "aspire.cli.apphost.language";
         public const string AppHostNoBuild = "aspire.cli.apphost.no_build";
@@ -115,8 +133,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string GuestRuntimeDisplayName = "aspire.cli.guest.display_name";
         public const string GuestCommand = "aspire.cli.guest.command";
         public const string GuestWorkingDirectory = "aspire.cli.guest.working_directory";
+        public const string GitCommand = "aspire.cli.git.command";
+        public const string GitWorkingDirectory = "aspire.cli.git.working_directory";
+        public const string GitStdoutLength = "aspire.cli.git.stdout.length";
+        public const string GitStderrLength = "aspire.cli.git.stderr.length";
         public const string NpmCommand = "aspire.cli.npm.command";
         public const string NpmWorkingDirectory = "aspire.cli.npm.working_directory";
+        public const string LsIncludeAll = "aspire.cli.ls.include_all";
+        public const string LsOutputFormat = "aspire.cli.ls.output_format";
         public const string ProcessCommandArgsCount = "process.command_args.count";
     }
 
@@ -158,6 +182,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     {
         public const string UnsupportedDotNetCommand = "unsupported_dotnet_command";
         public const string MsBuildBinlog = "msbuild.binlog";
+        public const string AppHostDiscoverySourceNone = "none";
+        public const string AppHostDiscoverySourceGit = "git";
+        public const string AppHostDiscoverySourceFilesystem = "filesystem";
     }
 
     public bool IsEnabled => IsProfilingEnabled(configuration);
@@ -335,10 +362,61 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return activity;
     }
 
+    internal ActivityScope StartGitCommand(string command, int argsCount, DirectoryInfo workingDirectory)
+    {
+        var activity = StartActivity(Activities.GitCommand, ActivityKind.Client);
+        activity.SetGitInvocation(command, argsCount, workingDirectory);
+        return activity;
+    }
+
     internal ActivityScope StartRunAppHostFindAppHost(FileInfo? passedAppHostProjectFile)
     {
         var activity = StartActivity(Activities.RunAppHostFindAppHost);
         activity.SetAppHostProjectFileSpecified(passedAppHostProjectFile is not null);
+        return activity;
+    }
+
+    internal ActivityScope StartLsCommand(string outputFormat, bool includeAll)
+    {
+        var activity = StartActivity(Activities.LsCommand);
+        activity.SetLsInvocation(outputFormat, includeAll);
+        return activity;
+    }
+
+    internal ActivityScope StartLsFindAppHosts(string discoveryScope)
+    {
+        var activity = StartActivity(Activities.LsFindAppHosts);
+        activity.SetAppHostDiscoveryScope(discoveryScope);
+        return activity;
+    }
+
+    internal ActivityScope StartAppHostCandidateDiscovery(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int patternsCount, bool nugetCacheExcluded)
+    {
+        var activity = StartActivity(Activities.AppHostCandidateDiscovery);
+        activity.SetAppHostDiscoverySearchDirectory(searchDirectory);
+        activity.SetAppHostDiscoveryScope(scope.ToString());
+        activity.SetAppHostDiscoveryPatternCount(patternsCount);
+        activity.SetAppHostDiscoveryNuGetCacheExcluded(nugetCacheExcluded);
+        return activity;
+    }
+
+    internal ActivityScope StartAppHostCandidateGitMatch(int includedFileCount, int patternsCount)
+    {
+        var activity = StartActivity(Activities.AppHostCandidateGitMatch);
+        activity.SetAppHostDiscoverySource(Values.AppHostDiscoverySourceGit);
+        activity.SetAppHostDiscoveryIncludedFileCount(includedFileCount);
+        activity.SetAppHostDiscoveryPatternCount(patternsCount);
+        return activity;
+    }
+
+    internal ActivityScope StartAppHostCandidateFilesystemWalk(DirectoryInfo searchDirectory, int patternsCount, bool skipListEnabled, bool nugetCacheExcluded)
+    {
+        var activity = StartActivity(Activities.AppHostCandidateFilesystemWalk);
+        activity.SetAppHostDiscoverySearchDirectory(searchDirectory);
+        activity.SetAppHostDiscoverySource(Values.AppHostDiscoverySourceFilesystem);
+        activity.SetAppHostDiscoveryPatternCount(patternsCount);
+        activity.SetAppHostDiscoverySkipListEnabled(skipListEnabled);
+        activity.SetAppHostDiscoveryNuGetCacheExcluded(nugetCacheExcluded);
         return activity;
     }
 
@@ -602,6 +680,29 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetAppHostDashboardHealthy(bool? healthy) => SetTag(Tags.AppHostDashboardHealthy, healthy);
 
+        public void SetAppHostDiscoveryScope(string discoveryScope) => SetTag(Tags.AppHostDiscoveryScope, discoveryScope);
+
+        public void SetAppHostDiscoverySearchDirectory(DirectoryInfo searchDirectory) => SetTag(Tags.AppHostDiscoverySearchDirectory, searchDirectory.FullName);
+
+        public void SetAppHostDiscoverySource(string source) => SetTag(Tags.AppHostDiscoverySource, source);
+
+        public void SetAppHostDiscoveryPatternCount(int count) => SetTag(Tags.AppHostDiscoveryPatternCount, count);
+
+        public void SetAppHostDiscoveryIncludedFileCount(int count) => SetTag(Tags.AppHostDiscoveryIncludedFileCount, count);
+
+        public void SetAppHostDiscoveryWalkCounts(int files, int directories, int skippedDirectories)
+        {
+            SetTag(Tags.AppHostDiscoveryWalkFileCount, files);
+            SetTag(Tags.AppHostDiscoveryWalkDirectoryCount, directories);
+            SetTag(Tags.AppHostDiscoveryWalkSkippedDirectoryCount, skippedDirectories);
+        }
+
+        public void SetAppHostDiscoverySkipListEnabled(bool enabled) => SetTag(Tags.AppHostDiscoverySkipListEnabled, enabled);
+
+        public void SetAppHostDiscoveryNuGetCacheExcluded(bool excluded) => SetTag(Tags.AppHostDiscoveryNuGetCacheExcluded, excluded);
+
+        public void SetAppHostCandidateCount(int count) => SetTag(Tags.AppHostCandidateCount, count);
+
         public void SetAppHostServerImplementation(string implementationName) => SetTag(Tags.AppHostServerImplementation, implementationName);
 
         public void SetAppHostExtensionHasBuildCapability(bool hasCapability) => SetTag(Tags.AppHostExtensionHasBuildCapability, hasCapability);
@@ -679,12 +780,32 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
             SetProcessCommandArgsCount(argsCount);
         }
 
+        public void SetGitInvocation(string command, int argsCount, DirectoryInfo workingDirectory)
+        {
+            SetTag(Tags.GitCommand, command);
+            SetTag(Tags.GitWorkingDirectory, workingDirectory.FullName);
+            SetProcessExecutableName("git");
+            SetProcessCommandArgsCount(argsCount);
+        }
+
+        public void SetGitOutputLengths(int stdoutLength, int stderrLength)
+        {
+            SetTag(Tags.GitStdoutLength, stdoutLength);
+            SetTag(Tags.GitStderrLength, stderrLength);
+        }
+
         public void SetNpmInvocation(string command, int argsCount, string workingDirectory)
         {
             SetTag(Tags.NpmCommand, command);
             SetTag(Tags.NpmWorkingDirectory, workingDirectory);
             SetProcessExecutableName(Path.GetFileName(command));
             SetProcessCommandArgsCount(argsCount);
+        }
+
+        public void SetLsInvocation(string outputFormat, bool includeAll)
+        {
+            SetTag(Tags.LsOutputFormat, outputFormat);
+            SetTag(Tags.LsIncludeAll, includeAll);
         }
 
         public void SetDotNetMsBuildServer(string? msBuildServer) => SetTag(Tags.DotNetMsBuildServer, msBuildServer);

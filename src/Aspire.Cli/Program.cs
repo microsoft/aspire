@@ -338,6 +338,7 @@ public class Program
         });
         builder.Services.AddSingleton(TimeProvider.System);
         AddInteractionServices(builder);
+        builder.Services.AddSingleton<IAppHostCandidateFinder, AppHostCandidateFinder>();
         builder.Services.AddSingleton<IProjectLocator, ProjectLocator>();
         builder.Services.AddSingleton<ISolutionLocator, SolutionLocator>();
         builder.Services.AddSingleton<ILanguageService, LanguageService>();
@@ -477,6 +478,7 @@ public class Program
         builder.Services.AddTransient<StopCommand>();
         builder.Services.AddTransient<StartCommand>();
         builder.Services.AddTransient<WaitCommand>();
+        builder.Services.AddTransient<LsCommand>();
         builder.Services.AddTransient<ResourceCommand>();
         builder.Services.AddTransient<PsCommand>();
         builder.Services.AddTransient<DescribeCommand>();
