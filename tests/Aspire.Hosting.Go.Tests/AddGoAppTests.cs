@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
 
 using Aspire.Hosting.Utils;
+using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Go.Tests;
 
@@ -432,5 +434,104 @@ public class AddGoAppTests
             }
             """;
         Assert.Equal(expected, manifest.ToString());
+    }
+
+    // ---- Publish: Dockerfile generation -------------------------------------
+
+    [Fact]
+    public async Task VerifyPublish_GeneratesDockerfile_WithGoVersionFromGoMod()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.23\n");
+        File.WriteAllText(Path.Combine(sourceDir.Path, "main.go"), "package main\nfunc main() {}");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path);
+
+        builder.Build().Run();
+
+        var dockerfilePath = Path.Combine(outputDir.Path, "api.Dockerfile");
+        Assert.True(File.Exists(dockerfilePath), "Dockerfile should be generated in publish mode");
+
+        var content = await File.ReadAllTextAsync(dockerfilePath);
+        Assert.Contains("FROM golang:1.23-alpine AS build", content);
+        Assert.Contains("FROM alpine:latest", content);
+        Assert.Contains("go build -o /app/server .", content);
+        Assert.Contains("ca-certificates", content);
+    }
+
+    [Fact]
+    public async Task VerifyPublish_UsesDefaultGoVersion_WhenGoModAbsent()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path);
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        Assert.Contains("FROM golang:1.26-alpine AS build", content);
+    }
+
+    [Fact]
+    public async Task VerifyPublish_PropagatesBuildFlagsToDockerfile()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.22\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path,
+            buildTags: ["netgo", "osusergo"],
+            ldFlags: "-X main.version=1.0.0",
+            raceDetector: true);
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        Assert.Contains("-race", content);
+        Assert.Contains("-tags=netgo,osusergo", content);
+        Assert.Contains("-ldflags=-X main.version=1.0.0", content);
+    }
+
+    [Fact]
+    public void VerifyPublish_SkipsDockerfileGeneration_WhenDockerfileExists()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        // Pre-existing Dockerfile — generator should leave it alone
+        File.WriteAllText(Path.Combine(sourceDir.Path, "Dockerfile"), "FROM scratch");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        var app = builder.AddGoApp("api", sourceDir.Path);
+
+        Assert.False(app.Resource.TryGetLastAnnotation<DockerfileBuilderCallbackAnnotation>(out _),
+            "No DockerfileBuilderCallbackAnnotation should be added when a Dockerfile already exists");
+    }
+
+    [Fact]
+    public async Task VerifyPublish_RespectsDockerfileBaseImageAnnotation()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.22\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path)
+               .WithDockerfileBaseImage(buildImage: "golang:1.22-bookworm", runtimeImage: "debian:bookworm-slim");
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        Assert.Contains("FROM golang:1.22-bookworm AS build", content);
+        Assert.Contains("FROM debian:bookworm-slim", content);
+        Assert.DoesNotContain("alpine", content);
     }
 }

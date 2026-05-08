@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Go;
@@ -137,7 +138,40 @@ public static class GoHostingExtensions
                     }
                 }
             })
-            .WithVSCodeDebugging();
+            .WithVSCodeDebugging()
+            .PublishAsDockerFile(containerBuilder =>
+            {
+                if (File.Exists(Path.Combine(appDirectory, "Dockerfile")))
+                {
+                    return;
+                }
+
+                containerBuilder.WithDockerfileBuilder(appDirectory, ctx =>
+                {
+                    var goVersion = GoVersionDetector.Detect(appDirectory);
+
+                    ctx.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
+                    var buildImage = baseImageAnnotation?.BuildImage ?? $"golang:{goVersion}-alpine";
+                    var runtimeImage = baseImageAnnotation?.RuntimeImage ?? "alpine:latest";
+
+                    var buildCmd = BuildDockerGoCommand(ctx.Resource);
+
+                    ctx.Builder
+                        .From(buildImage, "build")
+                        .WorkDir("/app")
+                        .Copy("go.mod", "go.sum", "./")
+                        .Run("go mod download")
+                        .Copy(".", ".")
+                        .Run(buildCmd);
+
+                    ctx.Builder
+                        .From(runtimeImage)
+                        .Run("apk --no-cache add ca-certificates tzdata")
+                        .WorkDir("/app")
+                        .CopyFrom("build", "/app/server", "/app/server")
+                        .Entrypoint(["/app/server"]);
+                });
+            });
 
         if (buildTags is { Length: > 0 })
         {
@@ -394,6 +428,38 @@ public static class GoHostingExtensions
                 WorkingDirectory = workingDirectory
             },
             "go");
+    }
+
+    /// <summary>
+    /// Builds the <c>go build</c> command for the generated Dockerfile, propagating any
+    /// build-time flags that were set on the resource via <see cref="AddGoApp"/>.
+    /// </summary>
+    private static string BuildDockerGoCommand(IResource resource)
+    {
+        var parts = new List<string> { "go", "build" };
+
+        if (resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
+        {
+            parts.Add("-race");
+        }
+
+        if (resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
+        {
+            parts.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
+        }
+
+        if (resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
+        {
+            parts.Add($"-ldflags={ldFlagsAnnotation.Flags}");
+        }
+
+        if (resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
+        {
+            parts.Add($"-gcflags={gcFlagsAnnotation.Flags}");
+        }
+
+        parts.AddRange(["-o", "/app/server", "."]);
+        return string.Join(" ", parts);
     }
 
     /// <summary>
