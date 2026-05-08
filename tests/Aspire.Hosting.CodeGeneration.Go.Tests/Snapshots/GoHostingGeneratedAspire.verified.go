@@ -1842,8 +1842,11 @@ func (s *cSharpAppResource) WithUrlForEndpoint(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -2825,8 +2828,11 @@ func (s *containerRegistryResource) WithUrlForEndpoint(endpointName string, call
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -4136,8 +4142,11 @@ func (s *containerResource) WithUrlForEndpoint(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -6709,8 +6718,11 @@ func (s *dotnetToolResource) WithUrlForEndpoint(endpointName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -8750,8 +8762,11 @@ func (s *executableResource) WithUrlForEndpoint(endpointName string, callback fu
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -9548,8 +9563,11 @@ func (s *externalServiceResource) WithUrlForEndpoint(endpointName string, callba
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -9626,6 +9644,9 @@ type GoAppResource interface {
 	WithIconName(iconName string, options ...*WithIconNameOptions) GoAppResource
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) GoAppResource
 	WithMcpServer(options ...*WithMcpServerOptions) GoAppResource
+	WithModDownload() GoAppResource
+	WithModTidy() GoAppResource
+	WithModVendor() GoAppResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) GoAppResource
 	WithParentRelationship(parent Resource) GoAppResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) GoAppResource
@@ -9636,9 +9657,6 @@ type GoAppResource interface {
 	WithRemoteImageName(remoteImageName string) GoAppResource
 	WithRemoteImageTag(remoteImageTag string) GoAppResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) GoAppResource
-	WithModDownload() GoAppResource
-	WithModTidy() GoAppResource
-	WithModVendor() GoAppResource
 	WithUrl(url any, options ...*WithUrlOptions) GoAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) GoAppResource
 	WithUrls(callback func(obj ResourceUrlsCallbackContext)) GoAppResource
@@ -10469,6 +10487,39 @@ func (s *goAppResource) WithMcpServer(options ...*WithMcpServerOptions) GoAppRes
 	return s
 }
 
+// WithModDownload runs go mod download before starting the application to pre-fetch module dependencies into the local cache
+func (s *goAppResource) WithModDownload() GoAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModDownload", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithModTidy runs go mod tidy before starting the application to ensure go.sum is up to date
+func (s *goAppResource) WithModTidy() GoAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModTidy", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithModVendor runs go mod vendor before starting the application to cache module dependencies locally
+func (s *goAppResource) WithModVendor() GoAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModVendor", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithOtlpExporter configures OTLP telemetry export
 func (s *goAppResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) GoAppResource {
 	if s.err != nil { return s }
@@ -10641,17 +10692,6 @@ func (s *goAppResource) WithRequiredCommand(command string, options ...*WithRequ
 	return s
 }
 
-// WithModTidy runs go mod tidy before starting the application to ensure go.sum is up to date
-func (s *goAppResource) WithModTidy() GoAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModTidy", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *goAppResource) WithUrl(url any, options ...*WithUrlOptions) GoAppResource {
@@ -10689,8 +10729,11 @@ func (s *goAppResource) WithUrlForEndpoint(endpointName string, callback func(ob
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -10714,32 +10757,6 @@ func (s *goAppResource) WithUrls(callback func(obj ResourceUrlsCallbackContext))
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithModVendor runs go mod vendor before starting the application to cache module dependencies locally
-func (s *goAppResource) WithModVendor() GoAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModVendor", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithModDownload runs go mod download before starting the application to pre-fetch module dependencies into the local cache
-func (s *goAppResource) WithModDownload() GoAppResource {
-	if s.err != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Go/withModDownload", reqArgs); err != nil {
-		s.setErr(err)
-	}
 	return s
 }
 
@@ -11639,8 +11656,11 @@ func (s *parameterResource) WithUrlForEndpoint(endpointName string, callback fun
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -13410,8 +13430,11 @@ func (s *projectResource) WithUrlForEndpoint(endpointName string, callback func(
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
+			arg0 := callbackArg[*ResourceUrlAnnotation](args, 0)
+			cb(arg0)
+			return map[string]any{
+				"p0": serializeValue(arg0),
+			}
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -16082,8 +16105,14 @@ func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuil
 		for k, v := range merged.ToMap() { resolved[k] = v }
 	}
 	if _, ok := resolved["Args"]; !ok { resolved["Args"] = os.Args[1:] }
-	if _, ok := resolved["ProjectDirectory"]; !ok {
+	if projectDirectory, ok := resolved["ProjectDirectory"].(string); !ok || projectDirectory == "" {
 		if pwd, err := os.Getwd(); err == nil { resolved["ProjectDirectory"] = pwd }
+	}
+	if appHostFilePath, ok := resolved["AppHostFilePath"].(string); !ok || appHostFilePath == "" {
+		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["AppHostFilePath"] = appHostFilePath }
+	}
+	if dashboardApplicationName, ok := resolved["DashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
+		delete(resolved, "DashboardApplicationName")
 	}
 
 	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})
