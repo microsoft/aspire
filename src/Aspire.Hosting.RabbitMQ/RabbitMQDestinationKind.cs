@@ -4,17 +4,17 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents the kind of a RabbitMQ destination.
+/// Identifies whether a RabbitMQ destination is a queue or an exchange.
 /// </summary>
 public enum RabbitMQDestinationKind
 {
     /// <summary>
-    /// A queue destination.
+    /// The destination is a <see cref="RabbitMQQueueResource"/>.
     /// </summary>
     Queue,
 
     /// <summary>
-    /// An exchange destination.
+    /// The destination is a <see cref="RabbitMQExchangeResource"/>.
     /// </summary>
     Exchange
 }

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// A resource that represents a RabbitMQ virtual host.
+/// Represents a RabbitMQ virtual host resource that can be provisioned against a live broker.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, VirtualHostName = {VirtualHostName}")]
 [AspireExport(ExposeProperties = true)]
@@ -30,13 +30,8 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     }
 
     /// <summary>
-    /// Gets the name of the virtual host.
+    /// Gets the name of the virtual host as known to the broker (e.g. <c>/</c> for the default virtual host).
     /// </summary>
-    /// <remarks>
-    /// This is always a compile-time literal string. Virtual host names are plain
-    /// <see langword="string"/> constructor parameters and cannot be driven by a
-    /// <see cref="ParameterResource"/>.
-    /// </remarks>
     public string VirtualHostName { get; }
 
     /// <summary>
@@ -45,7 +40,7 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     public RabbitMQServerResource Parent { get; }
 
     /// <summary>
-    /// Gets the connection string expression for the RabbitMQ virtual host.
+    /// Gets the AMQP connection string expression for this virtual host, including the vhost path segment.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression
     {
@@ -74,7 +69,7 @@ public class RabbitMQVirtualHostResource : Resource, IResourceWithParent<RabbitM
     internal List<RabbitMQPolicyResource> Policies { get; } = [];
 
     /// <summary>
-    /// Enumerates all child provisionable resources in this virtual host (policies, queues, exchanges, shovels).
+    /// Enumerates all child provisionable resources in this virtual host in provisioning order: policies, queues, exchanges, then shovels.
     /// </summary>
     internal IEnumerable<IRabbitMQProvisionable> EnumerateChildren()
         => Policies.Cast<IRabbitMQProvisionable>()

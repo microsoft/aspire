@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// A resource that represents a RabbitMQ exchange.
+/// Represents a RabbitMQ exchange resource that is declared on the broker during provisioning.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ExchangeName = {ExchangeName}")]
 [AspireExport(ExposeProperties = true)]
@@ -35,7 +35,7 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
     public string ExchangeName { get; }
 
     /// <summary>
-    /// Gets the type of the exchange. Set via the <c>type</c> parameter of <c>AddExchange</c>.
+    /// Gets the routing algorithm used by this exchange. Set via the <c>type</c> parameter of <c>AddExchange</c>.
     /// </summary>
     public RabbitMQExchangeType ExchangeType { get; }
 
@@ -50,15 +50,17 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
     public bool AutoDelete { get; set; }
 
     /// <summary>
-    /// Gets the exchange arguments for this exchange declaration.
-    /// Use <see cref="RabbitMQBuilderExtensions.WithExchangeArguments{T}"/> to configure the alternate exchange and more.
+    /// Gets the exchange arguments for this exchange declaration, such as the alternate exchange for unroutable messages.
     /// </summary>
+    /// <remarks>
+    /// Use <see cref="RabbitMQBuilderExtensions.WithExchangeArguments{T}"/> to configure these settings.
+    /// </remarks>
     public RabbitMQExchangeArguments ExchangeArguments { get; } = new();
 
     internal List<RabbitMQBinding> Bindings { get; } = [];
 
     /// <summary>
-    /// Gets the policies that apply to this exchange, resolved at startup from matching <c>AddPolicy</c> calls.
+    /// Gets the policies that apply to this exchange, resolved at startup from matching <c>AddPolicy</c> calls on the parent virtual host.
     /// </summary>
     internal List<RabbitMQPolicyResource> AppliedPolicies { get; } = [];
 
@@ -86,7 +88,7 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
     public override RabbitMQDestinationKind Kind => RabbitMQDestinationKind.Exchange;
 
     /// <summary>
-    /// Gets the connection string properties for the RabbitMQ exchange.
+    /// Gets the connection string properties for this exchange, including the exchange name.
     /// </summary>
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         VirtualHost.CombineProperties([
@@ -98,10 +100,12 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
     Task IRabbitMQProvisionable.ProvisionedTask => _tcs.Task;
 
     /// <summary>
-    /// Phase 2: declares the exchange on the broker and publishes <c>Running</c>.
-    /// The TCS is NOT signalled here — that happens in phase 3 after bindings are applied.
-    /// On failure, faults the TCS and publishes <c>FailedToStart</c>.
+    /// Declares the exchange on the broker and publishes <c>Running</c>.
     /// </summary>
+    /// <remarks>
+    /// The provisioned task is not signalled here — that happens after bindings are applied in <see cref="ApplyBindingsAsync"/>.
+    /// On failure, faults the provisioned task and publishes <c>FailedToStart</c>.
+    /// </remarks>
     async Task IRabbitMQProvisionable.ApplyAsync(IRabbitMQProvisioningClient client, ResourceNotificationService notifications, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
     {
         await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Starting }).ConfigureAwait(false);
@@ -134,10 +138,12 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
     }
 
     /// <summary>
-    /// Phase 3: applies all bindings for this exchange and signals the TCS.
-    /// On success, <see cref="IRabbitMQProvisionable.ProvisionedTask"/> completes; lifecycle stays <c>Running</c>.
-    /// On failure, faults the TCS; lifecycle stays <c>Running</c> (exchange itself is healthy).
+    /// Applies all bindings for this exchange and signals the provisioned task.
     /// </summary>
+    /// <remarks>
+    /// On success, <see cref="IRabbitMQProvisionable.ProvisionedTask"/> completes and the lifecycle stays <c>Running</c>.
+    /// On failure, the provisioned task is faulted but the lifecycle stays <c>Running</c> because the exchange itself was declared successfully.
+    /// </remarks>
     internal async Task ApplyBindingsAsync(IRabbitMQProvisioningClient client, ResourceLoggerService resourceLogger, CancellationToken cancellationToken)
     {
         try

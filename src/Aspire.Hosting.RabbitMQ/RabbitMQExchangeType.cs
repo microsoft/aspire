@@ -4,7 +4,7 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents the type of a RabbitMQ exchange.
+/// Specifies the type of a RabbitMQ exchange resource.
 /// </summary>
 public enum RabbitMQExchangeType
 {

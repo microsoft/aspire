@@ -726,25 +726,7 @@ public static class RabbitMQBuilderExtensions
         RabbitMQPlugin plugin)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        var pluginName = plugin switch
-        {
-            RabbitMQPlugin.Management => "rabbitmq_management",
-            RabbitMQPlugin.ManagementAgent => "rabbitmq_management_agent",
-            RabbitMQPlugin.Shovel => "rabbitmq_shovel",
-            RabbitMQPlugin.ShovelManagement => "rabbitmq_shovel_management",
-            RabbitMQPlugin.Federation => "rabbitmq_federation",
-            RabbitMQPlugin.FederationManagement => "rabbitmq_federation_management",
-            RabbitMQPlugin.Stream => "rabbitmq_stream",
-            RabbitMQPlugin.StreamManagement => "rabbitmq_stream_management",
-            RabbitMQPlugin.Mqtt => "rabbitmq_mqtt",
-            RabbitMQPlugin.Stomp => "rabbitmq_stomp",
-            RabbitMQPlugin.WebMqtt => "rabbitmq_web_mqtt",
-            RabbitMQPlugin.WebStomp => "rabbitmq_web_stomp",
-            RabbitMQPlugin.Prometheus => "rabbitmq_prometheus",
-            RabbitMQPlugin.Amqp10 => "rabbitmq_amqp1_0",
-            _ => throw new ArgumentOutOfRangeException(nameof(plugin), plugin, null)
-        };
-        return builder.WithPlugin(pluginName);
+        return builder.WithPlugin(plugin.ToPluginName());
     }
 
     /// <summary>
@@ -863,7 +845,7 @@ public static class RabbitMQBuilderExtensions
             // reflects the full set when WithPlugin is also called.
             builder.WithPlugin(RabbitMQPlugin.Management);
             builder.WithPlugin(RabbitMQPlugin.ManagementAgent);
-            builder.WithPlugin("rabbitmq_web_dispatch");
+            builder.WithPlugin(RabbitMQPlugin.WebDispatch);
             builder.WithPlugin(RabbitMQPlugin.Prometheus);
 
             return builder;

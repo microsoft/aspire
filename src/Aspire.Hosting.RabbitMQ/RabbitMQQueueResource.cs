@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// A resource that represents a RabbitMQ queue.
+/// Represents a RabbitMQ queue resource that is declared on the broker during provisioning.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, QueueName = {QueueName}")]
 [AspireExport(ExposeProperties = true)]
@@ -50,15 +50,17 @@ public class RabbitMQQueueResource : RabbitMQDestination, IResourceWithConnectio
     public bool AutoDelete { get; set; }
 
     /// <summary>
-    /// Gets the type of the queue. Set via the <c>type</c> parameter of <c>AddQueue</c>.
+    /// Gets the type of the queue (classic, quorum, or stream). Set via the <c>type</c> parameter of <c>AddQueue</c>.
     /// </summary>
     public RabbitMQQueueType QueueType { get; }
 
     /// <summary>
-    /// Gets the queue arguments for this queue declaration.
-    /// Use <see cref="RabbitMQBuilderExtensions.WithQueueArguments{T}"/> to configure TTL, length limits, dead-lettering, and more.
-    /// For settings that should apply to multiple queues, use <c>AddPolicy</c> on the virtual host instead.
+    /// Gets the queue arguments for this queue declaration, such as TTL, length limits, and dead-lettering.
     /// </summary>
+    /// <remarks>
+    /// Use <see cref="RabbitMQBuilderExtensions.WithQueueArguments{T}"/> to configure these settings.
+    /// For settings that should apply to multiple queues, use <c>AddPolicy</c> on the virtual host instead.
+    /// </remarks>
     public RabbitMQQueueArguments QueueArguments { get; } = new();
 
     /// <inheritdoc/>
@@ -68,7 +70,7 @@ public class RabbitMQQueueResource : RabbitMQDestination, IResourceWithConnectio
     public override RabbitMQDestinationKind Kind => RabbitMQDestinationKind.Queue;
 
     /// <summary>
-    /// Gets the connection string properties for the RabbitMQ queue.
+    /// Gets the connection string properties for this queue, including the queue name.
     /// </summary>
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         VirtualHost.CombineProperties([

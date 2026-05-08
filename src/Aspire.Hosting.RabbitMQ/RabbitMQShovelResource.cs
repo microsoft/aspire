@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// A resource that represents a RabbitMQ shovel.
+/// Represents a RabbitMQ dynamic shovel resource that moves messages from a source to a destination during provisioning.
 /// </summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, ShovelName = {ShovelName}")]
 [AspireExport(ExposeProperties = true)]
@@ -37,37 +37,38 @@ public class RabbitMQShovelResource : Resource, IResourceWithParent<RabbitMQVirt
     }
 
     /// <summary>
-    /// Gets the name of the shovel.
+    /// Gets the name of the shovel as known to the broker.
     /// </summary>
     public string ShovelName { get; }
 
     /// <summary>
-    /// Gets the parent RabbitMQ virtual host resource.
+    /// Gets the virtual host in which this shovel is defined.
     /// </summary>
     public RabbitMQVirtualHostResource Parent { get; }
 
     /// <summary>
-    /// Gets the source destination for the shovel.
+    /// Gets the source queue or exchange from which messages are consumed.
     /// </summary>
     public RabbitMQDestination Source { get; }
 
     /// <summary>
-    /// Gets the destination for the shovel.
+    /// Gets the destination queue or exchange to which messages are forwarded.
     /// </summary>
     public RabbitMQDestination Destination { get; }
 
     /// <summary>
-    /// Gets or sets the acknowledgment mode for the shovel.
+    /// Gets or sets the acknowledgment mode for the shovel. Defaults to <see cref="RabbitMQShovelAckMode.OnConfirm"/>.
     /// </summary>
     public RabbitMQShovelAckMode AckMode { get; set; } = RabbitMQShovelAckMode.OnConfirm;
 
     /// <summary>
-    /// Gets or sets the reconnect delay for the shovel.
+    /// Gets or sets the reconnect delay for the shovel. When <see langword="null"/>, the broker default is used.
     /// </summary>
     public TimeSpan? ReconnectDelay { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of messages to transfer before deleting the shovel.
+    /// Gets or sets the maximum number of messages to transfer before the shovel is deleted.
+    /// When <see langword="null"/>, the shovel runs indefinitely.
     /// </summary>
     public int? SrcDeleteAfter { get; set; }
 

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// A resource that represents a RabbitMQ policy.
+/// Represents a RabbitMQ policy resource that is applied to matching queues and/or exchanges during provisioning.
 /// </summary>
 /// <remarks>
 /// Policies are applied to queues and/or exchanges whose names match the <see cref="Pattern"/> regex
@@ -48,46 +48,49 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
     }
 
     /// <summary>
-    /// Gets the name of the policy in RabbitMQ.
+    /// Gets the name of the policy as known to the broker.
     /// </summary>
     public string PolicyName { get; }
 
     /// <summary>
-    /// Gets the regex pattern that determines which queues and/or exchanges the policy applies to.
+    /// Gets the regex pattern that determines which queues and/or exchanges this policy applies to.
     /// </summary>
     public string Pattern { get; }
 
     /// <summary>
-    /// Gets the parent RabbitMQ virtual host resource.
+    /// Gets the virtual host in which this policy is defined.
     /// </summary>
     public RabbitMQVirtualHostResource Parent { get; }
 
     /// <summary>
-    /// Gets which entity types the policy applies to. Set via the <c>applyTo</c> parameter of <c>AddPolicy</c>.
+    /// Gets which entity types (queues, exchanges, or both) this policy applies to.
     /// </summary>
     public RabbitMQPolicyApplyTo ApplyTo { get; }
 
     /// <summary>
-    /// Gets the policy priority. Higher values take precedence when multiple policies match.
-    /// Set via the <c>priority</c> parameter of <c>AddPolicy</c>.
+    /// Gets the policy priority. Higher values take precedence when multiple policies match the same entity.
     /// </summary>
     public int Priority { get; }
 
     /// <summary>
-    /// Gets the queue arguments applied by this policy.
-    /// Only used when <see cref="ApplyTo"/> is <see cref="RabbitMQPolicyApplyTo.Queues"/> or <see cref="RabbitMQPolicyApplyTo.All"/>.
+    /// Gets the queue arguments applied by this policy to matching queues.
     /// </summary>
+    /// <remarks>
+    /// Only used when <see cref="ApplyTo"/> is <see cref="RabbitMQPolicyApplyTo.Queues"/> or <see cref="RabbitMQPolicyApplyTo.All"/>.
+    /// </remarks>
     public RabbitMQQueueArguments QueueArguments { get; } = new();
 
     /// <summary>
-    /// Gets the exchange arguments applied by this policy.
-    /// Only used when <see cref="ApplyTo"/> is <see cref="RabbitMQPolicyApplyTo.Exchanges"/> or <see cref="RabbitMQPolicyApplyTo.All"/>.
+    /// Gets the exchange arguments applied by this policy to matching exchanges.
     /// </summary>
+    /// <remarks>
+    /// Only used when <see cref="ApplyTo"/> is <see cref="RabbitMQPolicyApplyTo.Exchanges"/> or <see cref="RabbitMQPolicyApplyTo.All"/>.
+    /// </remarks>
     public RabbitMQExchangeArguments ExchangeArguments { get; } = new();
 
     /// <summary>
-    /// Gets additional policy definition keys not covered by <see cref="QueueArguments"/> or <see cref="ExchangeArguments"/>.
-    /// Use this for policy-only keys such as <c>ha-mode</c>, <c>federation-upstream</c>, or <c>ha-sync-mode</c>.
+    /// Gets additional policy definition keys not covered by <see cref="QueueArguments"/> or <see cref="ExchangeArguments"/>,
+    /// such as <c>ha-mode</c>, <c>federation-upstream</c>, or <c>ha-sync-mode</c>.
     /// </summary>
     /// <remarks>
     /// Entries may be added until the application starts. Mutations after <see cref="BeforeStartEvent"/> are ignored.
@@ -97,8 +100,8 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
     /// <summary>
     /// Returns <see langword="true"/> if this policy applies to the entity with the given name and kind.
     /// </summary>
-    /// <param name="entityName">The wire name of the queue or exchange.</param>
-    /// <param name="kind">Whether the entity is a queue or exchange.</param>
+    /// <param name="entityName">The broker wire name of the queue or exchange.</param>
+    /// <param name="kind">The kind of the entity (queue or exchange).</param>
     internal bool AppliesTo(string entityName, RabbitMQDestinationKind kind)
     {
         var scopeMatches = ApplyTo switch
@@ -127,7 +130,11 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
         await notifications.PublishUpdateAsync(this, s => s with { State = KnownResourceStates.Starting }).ConfigureAwait(false);
         try
         {
-            if (ApplyTo == RabbitMQPolicyApplyTo.Exchanges && QueueArguments.HasAnyValue())
+            if (ApplyTo == RabbitMQPolicyApplyTo.Exchanges &&
+                (QueueArguments.MessageTtl is not null || QueueArguments.MaxLength is not null ||
+                 QueueArguments.MaxLengthBytes is not null || QueueArguments.Expires is not null ||
+                 QueueArguments.DeadLetterExchange is not null || QueueArguments.DeadLetterRoutingKey is not null ||
+                 QueueArguments.AdditionalArguments.Count > 0))
             {
                 throw new DistributedApplicationException(
                     $"Policy '{PolicyName}' has QueueArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Exchanges)}'. " +
@@ -135,7 +142,8 @@ public class RabbitMQPolicyResource : Resource, IResourceWithParent<RabbitMQVirt
                     $"Set ApplyTo to '{nameof(RabbitMQPolicyApplyTo.Queues)}' or '{nameof(RabbitMQPolicyApplyTo.All)}', or clear QueueArguments.");
             }
 
-            if (ApplyTo == RabbitMQPolicyApplyTo.Queues && ExchangeArguments.HasAnyValue())
+            if (ApplyTo == RabbitMQPolicyApplyTo.Queues &&
+                (ExchangeArguments.AlternateExchange is not null || ExchangeArguments.AdditionalArguments.Count > 0))
             {
                 throw new DistributedApplicationException(
                     $"Policy '{PolicyName}' has ExchangeArguments set but ApplyTo is '{nameof(RabbitMQPolicyApplyTo.Queues)}'. " +

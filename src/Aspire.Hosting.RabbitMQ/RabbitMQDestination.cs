@@ -9,17 +9,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Base class for RabbitMQ destinations (queues and exchanges).
 /// </summary>
 /// <remarks>
-/// <para>
-/// The two concrete subtypes are <see cref="RabbitMQQueueResource"/> and
-/// <see cref="RabbitMQExchangeResource"/>. The internal constructor prevents external
-/// subclassing, keeping the hierarchy closed to this assembly.
-/// </para>
-/// <para>
-/// Implements <see cref="IResourceWithConnectionString"/> so that the destination's
-/// connection URI is available via <see cref="ConnectionStringExpression"/> without
-/// requiring a separate wrapper type. The expression is forwarded from the parent
-/// virtual host and is therefore always a <see cref="ReferenceExpression"/>.
-/// </para>
+/// The two concrete subtypes are <see cref="RabbitMQQueueResource"/> and <see cref="RabbitMQExchangeResource"/>.
+/// The connection string expression is forwarded from the parent virtual host.
 /// </remarks>
 public abstract class RabbitMQDestination : Resource,
     IResourceWithConnectionString,
@@ -43,15 +34,8 @@ public abstract class RabbitMQDestination : Resource,
     RabbitMQVirtualHostResource IResourceWithParent<RabbitMQVirtualHostResource>.Parent => VirtualHost;
 
     /// <summary>
-    /// Gets the wire name of the entity as declared on the broker.
+    /// Gets the wire name of the entity as known to the broker.
     /// </summary>
-    /// <remarks>
-    /// This is always a compile-time literal string. Queue and exchange names are plain
-    /// <see langword="string"/> constructor parameters and cannot be driven by a
-    /// <see cref="ParameterResource"/>. If parameterised names are ever added, all callers
-    /// of this property in provisioning paths must be updated to use a
-    /// <see cref="ReferenceExpression"/> instead.
-    /// </remarks>
     public abstract string ProvisionedName { get; }
 
     /// <summary>
@@ -60,13 +44,12 @@ public abstract class RabbitMQDestination : Resource,
     public abstract RabbitMQDestinationKind Kind { get; }
 
     /// <summary>
-    /// Gets the connection string expression for this destination.
-    /// Forwarded from the parent virtual host.
+    /// Gets the connection string expression for this destination, forwarded from the parent virtual host.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => VirtualHost.ConnectionStringExpression;
 
     /// <summary>
-    /// Binds this destination to the given source exchange using the provisioning client.
+    /// Binds this destination to <paramref name="sourceExchange"/> using the provisioning client.
     /// </summary>
     internal abstract Task BindAsync(
         IRabbitMQProvisioningClient client,

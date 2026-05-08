@@ -29,15 +29,8 @@ internal sealed class RabbitMQTopologyProvisioner
     }
 
     /// <summary>
-    /// Provisions all entities within a single virtual host in four ordered phases:
-    /// <list type="number">
-    ///   <item><b>Phase 1</b>: Create the virtual host. If this fails, provisioning stops for this vhost; children remain pending.</item>
-    ///   <item><b>Phase 1.5</b>: Apply policies in parallel. Each failure is isolated to its own TCS.</item>
-    ///   <item><b>Phase 2</b>: Declare queues and exchanges in parallel. Exchange TCSs are <em>not</em> signalled here — that happens after bindings in phase 3.</item>
-    ///   <item><b>Phase 3</b>: Apply exchange bindings and create shovels in parallel. Exchange TCSs are signalled after their bindings complete (or fail).</item>
-    /// </list>
-    /// Each resource's <see cref="IRabbitMQProvisionable.ApplyAsync"/> owns its own TCS signaling, lifecycle state publishing,
-    /// and error logging — and never throws.
+    /// Provisions all entities within a single virtual host in ordered phases: virtual host creation, policies, queues and exchanges, then bindings and shovels.
+    /// Each resource's <see cref="IRabbitMQProvisionable.ApplyAsync"/> owns its own failure signalling and never throws.
     /// </summary>
     private static async Task ProvisionVirtualHostAsync(RabbitMQVirtualHostResource vhost, IRabbitMQProvisioningClient client, ILogger logger, ResourceLoggerService resourceLogger, ResourceNotificationService notifications, CancellationToken cancellationToken)
     {

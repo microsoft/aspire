@@ -4,7 +4,7 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents the type of a RabbitMQ queue.
+/// Specifies the type of a RabbitMQ queue resource.
 /// </summary>
 public enum RabbitMQQueueType
 {
