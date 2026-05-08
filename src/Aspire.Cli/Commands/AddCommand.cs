@@ -72,7 +72,7 @@ internal sealed class AddCommand : BaseCommand
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
 
-            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: false, cancellationToken);
+            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
             var effectiveAppHostProjectFile = searchResult.SelectedProjectFile;
 
             if (effectiveAppHostProjectFile is null)
