@@ -383,6 +383,58 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task PublishAsync_SingleFileAppHostUsingCliBundlePassesBundleEnvironmentToRunner()
+    {
+        var appHostFile = CreateSingleFileAppHost(useCliBundle: true);
+        var bundleRoot = CreateCliBundle(out var layout);
+
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, properties, _, _) =>
+            {
+                Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                Assert.Contains("AspireUseCliBundle", properties);
+                return (0, JsonDocument.Parse("""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "AspireUseCliBundle": "true"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, options, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.False(watch);
+            Assert.True(noBuild);
+            Assert.False(noRestore);
+            Assert.True(options.NoLaunchProfile);
+            Assert.Equal(["--operation", "publish"], args);
+            Assert.Equal("Production", env!["DOTNET_ENVIRONMENT"]);
+            Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env[BundleDiscovery.DcpPathEnvVar]);
+            Assert.Equal(
+                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                env[BundleDiscovery.DashboardPathEnvVar]);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.PublishAsync(new PublishContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Arguments = ["--operation", "publish"],
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public void ConfigureSingleFileRunEnvironment_AppliesProfileFromAspireConfigJson()
     {
         var appHostFile = CreateSingleFileAppHost();

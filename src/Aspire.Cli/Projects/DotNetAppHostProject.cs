@@ -555,40 +555,40 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 context.BackchannelCompletionSource?.TrySetException(exception);
                 throw exception;
             }
+        }
 
-            if (await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+        if (await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+        {
+            await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
+        }
+
+        // Build the apphost (unless --no-build is specified)
+        if (!isSingleFileAppHost && !context.NoBuild)
+        {
+            var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
+            var buildOptions = new ProcessInvocationOptions
             {
-                await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
-            }
+                StandardOutputCallback = buildOutputCollector.AppendOutput,
+                StandardErrorCallback = buildOutputCollector.AppendError,
+            };
 
-            // Build the apphost (unless --no-build is specified)
-            if (!context.NoBuild)
+            var buildExitCode = await AppHostHelper.BuildAppHostAsync(
+                _runner,
+                _interactionService,
+                effectiveAppHostFile,
+                noRestore: false,
+                buildOptions,
+                context.WorkingDirectory,
+                cancellationToken);
+
+            if (buildExitCode != 0)
             {
-                var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
-                var buildOptions = new ProcessInvocationOptions
-                {
-                    StandardOutputCallback = buildOutputCollector.AppendOutput,
-                    StandardErrorCallback = buildOutputCollector.AppendError,
-                };
-
-                var buildExitCode = await AppHostHelper.BuildAppHostAsync(
-                    _runner,
-                    _interactionService,
-                    effectiveAppHostFile,
-                    noRestore: false,
-                    buildOptions,
-                    context.WorkingDirectory,
-                    cancellationToken);
-
-                if (buildExitCode != 0)
-                {
-                    // Set OutputCollector so PipelineCommandBase can display errors
-                    context.OutputCollector = buildOutputCollector;
-                    // Signal the backchannel completion source so the caller doesn't wait forever
-                    context.BackchannelCompletionSource?.TrySetException(
-                        new InvalidOperationException("The app host build failed."));
-                    return ExitCodeConstants.FailedToBuildArtifacts;
-                }
+                // Set OutputCollector so PipelineCommandBase can display errors
+                context.OutputCollector = buildOutputCollector;
+                // Signal the backchannel completion source so the caller doesn't wait forever
+                context.BackchannelCompletionSource?.TrySetException(
+                    new InvalidOperationException("The app host build failed."));
+                return ExitCodeConstants.FailedToBuildArtifacts;
             }
         }
 
