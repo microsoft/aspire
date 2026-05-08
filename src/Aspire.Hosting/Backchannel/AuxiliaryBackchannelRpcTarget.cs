@@ -308,12 +308,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var arguments = request.Arguments;
         if (arguments is null)
         {
-            return (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, argumentValues: null), null);
+            return resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, argumentValues: null);
         }
 
         return arguments.GetValueKind() switch
         {
-            JsonValueKind.Object => (resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertObjectArgumentValues(arguments.AsObject())), null),
+            JsonValueKind.Object => resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertObjectArgumentValues(arguments.AsObject())),
             JsonValueKind.Array => resourceCommandService.CreateCommandArguments(request.ResourceName, request.CommandName, ConvertOrderedArgumentValues(arguments.AsArray())),
             _ => throw new InvalidOperationException("Resource command arguments must be a JSON object or array.")
         };

@@ -18,7 +18,6 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceCommandAnnotation"/> class.
     /// </summary>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ResourceCommandAnnotation(
         string name,
         string displayName,

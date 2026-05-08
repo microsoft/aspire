@@ -203,17 +203,36 @@ public class ResourceCommandService
         }
     }
 
-    internal InteractionInputCollection CreateCommandArguments(string resourceId, string commandName, IReadOnlyDictionary<string, string?>? argumentValues)
+    internal (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(string resourceId, string commandName, IReadOnlyDictionary<string, string?>? argumentValues)
     {
         if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
         {
-            return CreateArguments([], argumentValues);
+            return (CreateArguments([], argumentValues), null);
         }
 
         var resolvedCommandName = commandName;
         var annotation = ResolveCommandAnnotation(resourceEvent.Resource, ref resolvedCommandName);
+        if (annotation is null)
+        {
+            return (CreateArguments([], argumentValues), null);
+        }
 
-        return CreateArguments(annotation?.Arguments ?? [], argumentValues);
+        if (argumentValues is { Count: > 0 })
+        {
+            var argumentNames = new HashSet<string>(
+                annotation.Arguments.Select(argument => argument.Name),
+                StringComparers.InteractionInputName);
+            var unknownArgumentNames = argumentValues.Keys
+                .Where(argumentName => !argumentNames.Contains(argumentName))
+                .ToArray();
+
+            if (unknownArgumentNames.Length > 0)
+            {
+                return (CreateArguments(annotation.Arguments, argumentValues), CreateUnknownArgumentMessage(resolvedCommandName, unknownArgumentNames));
+            }
+        }
+
+        return (CreateArguments(annotation.Arguments, argumentValues), null);
     }
 
     internal (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(string resourceId, string commandName, IReadOnlyList<string?>? orderedArgumentValues)
@@ -357,7 +376,17 @@ public class ResourceCommandService
             return new ExecuteCommandResult { Success = false, Message = $"Resource '{resourceId}' not found." };
         }
 
-        var arguments = options.Arguments ?? CreateCommandArguments(resourceEvent.ResourceId, commandName, options.ArgumentValues);
+        var arguments = options.Arguments;
+        if (arguments is null)
+        {
+            var result = CreateCommandArguments(resourceEvent.ResourceId, commandName, options.ArgumentValues);
+            if (result.ErrorMessage is not null)
+            {
+                return new ExecuteCommandResult { Success = false, Message = result.ErrorMessage };
+            }
+
+            arguments = result.Arguments;
+        }
 
         return await ExecuteCommandCoreAsync(
             resourceEvent.ResourceId,
@@ -387,6 +416,13 @@ public class ResourceCommandService
         }
 
         return annotation;
+    }
+
+    private static string CreateUnknownArgumentMessage(string commandName, string[] unknownArgumentNames)
+    {
+        return unknownArgumentNames.Length == 1
+            ? $"Unknown argument '{unknownArgumentNames[0]}' for command '{commandName}'."
+            : $"Unknown arguments for command '{commandName}': {string.Join(", ", unknownArgumentNames.Select(argumentName => $"'{argumentName}'"))}.";
     }
 
     private async Task<bool> ValidateArgumentsAsync(ResourceCommandAnnotation annotation, InteractionInputCollection arguments, CancellationToken cancellationToken)

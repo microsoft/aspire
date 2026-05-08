@@ -311,6 +311,66 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteResourceCommand_WithUnknownArgument_ReturnsFailure()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
+        using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+
+        var executed = false;
+        var testResource = new TestResource("test-resource");
+        using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
+        var builder = applicationBuilder.AddResource(testResource);
+        builder.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: c =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new()
+            {
+                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text,
+                        Required = true
+                    }
+                ]
+            });
+
+        await resourceNotificationService.PublishUpdateAsync(testResource, s =>
+        {
+            return s with { State = new ResourceStateSnapshot("Running", null) };
+        }).DefaultTimeout();
+
+        var context = TestServerCallContext.Create();
+        var response = await dashboardService.ExecuteResourceCommand(
+            new ResourceCommandRequest
+            {
+                ResourceName = testResource.Name,
+                CommandName = "click",
+                Arguments = Value.ForStruct(new Struct
+                {
+                    Fields =
+                    {
+                        ["selecter"] = Value.ForString("#submit")
+                    }
+                })
+            },
+            context);
+
+        Assert.Equal(ResourceCommandResponseKind.Failed, response.Kind);
+        Assert.False(executed);
+        Assert.Equal("Unknown argument 'selecter' for command 'click'.", response.Message);
+    }
+
+    [Fact]
     public async Task ExecuteResourceCommand_WithInvalidArguments_ReturnsValidationErrors()
     {
         var resourceLoggerService = new ResourceLoggerService();

@@ -634,6 +634,37 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task CreateCommandArguments_UnknownNamedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var argumentValues = new Dictionary<string, string?> { ["selecter"] = "#submit" };
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Unknown argument 'selecter' for command 'mycommand'.", errorMessage);
+        Assert.Null(arguments.GetString("selector"));
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_NoArguments_PassesEmptyArgumentsToCommand()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -698,6 +729,53 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var invalidArgument = Assert.Single(result.InvalidArguments);
         Assert.Equal("selector", invalidArgument.Name);
         Assert.Equal("Value is required.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_UnknownNamedArgumentValues_DoesNotExecuteCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions
+            {
+                ArgumentValues = new Dictionary<string, string?> { ["selecter"] = "#submit" },
+                ArgumentsProvided = true,
+                NonInteractive = true
+            },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.Equal("Unknown argument 'selecter' for command 'mycommand'.", result.Message);
+        Assert.Null(result.InvalidArguments);
     }
 
     [Fact]
