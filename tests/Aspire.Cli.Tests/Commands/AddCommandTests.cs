@@ -2413,14 +2413,19 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandFriendlyNameSearchFallsBackToBuiltInPackageIdWithoutCreatingNuGetConfig()
+    public async Task AddCommandFriendlyNameSearchFallsBackToBuiltInPackageIdAndCreatesPrHiveNuGetConfig()
     {
+        const string nugetOrgSource = "https://api.nuget.org/v3/index.json";
+
         string? addedPackageId = null;
         string? addedPackageVersion = null;
+        string? addUsedSource = null;
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        var prHiveSource = Path.Combine(workspace.WorkspaceRoot.FullName, "pr-hive", "packages");
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", "pr-16882"));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -2439,7 +2444,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                         {
                             var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [],
                             "Aspire.Hosting.mongodb" => [
-                                new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gf2644312", Source = "pr-hive" }
+                                new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gf2644312", Source = prHiveSource }
                             ],
                             _ => []
                         };
@@ -2450,16 +2455,27 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
                 return new TestPackagingService
                 {
-                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                        [
+                            PackageChannel.CreateExplicitChannel(
+                                "pr-16882",
+                                PackageChannelQuality.Both,
+                                [
+                                    new PackageMapping("Aspire*", prHiveSource),
+                                    new PackageMapping(PackageMapping.AllPackages, nugetOrgSource)
+                                ],
+                                cache)
+                        ])
                 };
             };
             options.DotNetCliRunnerFactory = _ =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.AddPackageAsyncCallback = (_, packageName, version, _, _, _, _) =>
+                runner.AddPackageAsyncCallback = (_, packageName, version, nugetSource, _, _, _) =>
                 {
                     addedPackageId = packageName;
                     addedPackageVersion = version;
+                    addUsedSource = nugetSource;
                     return 0;
                 };
 
@@ -2476,7 +2492,15 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal("Aspire.Hosting.MongoDB", addedPackageId);
         Assert.Equal("13.4.0-pr.16882.gf2644312", addedPackageVersion);
-        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+        Assert.Equal(prHiveSource, addUsedSource);
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath));
+
+        var nugetConfig = System.Xml.Linq.XDocument.Load(nugetConfigPath);
+        var source = Assert.Single(nugetConfig.Descendants("add"));
+        Assert.Equal(prHiveSource, source.Attribute("key")?.Value);
+        Assert.Equal(prHiveSource, source.Attribute("value")?.Value);
     }
 
     [Fact]

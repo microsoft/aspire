@@ -199,6 +199,8 @@ internal sealed class AddCommand : BaseCommand
                 _ => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, filteredPackagesWithShortName, version, cancellationToken)
             };
 
+            await EnsureLocalBuildChannelNuGetConfigAsync(source, selectedNuGetPackage.Channel, effectiveAppHostProjectFile.Directory!, cancellationToken);
+
             context = new AddPackageContext
             {
                 AppHostFile = effectiveAppHostProjectFile,
@@ -284,6 +286,50 @@ internal sealed class AddCommand : BaseCommand
         }
 
         return channel.Mappings?.Select(mapping => mapping.Source).FirstOrDefault(source => !string.IsNullOrWhiteSpace(source));
+    }
+
+    private async Task EnsureLocalBuildChannelNuGetConfigAsync(string? requestedSource, PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrEmpty(requestedSource) || !VersionHelper.IsLocalBuildChannel(channel.Name))
+        {
+            return;
+        }
+
+        var mappings = channel.Mappings;
+        if (mappings is not { Length: > 0 })
+        {
+            return;
+        }
+
+        var hiveSources = mappings
+            .Select(mapping => mapping.Source)
+            .Where(source => !source.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (hiveSources.Length == 0)
+        {
+            return;
+        }
+
+        var nugetConfigFile = new FileInfo(Path.Combine(projectDirectory.FullName, "nuget.config"));
+        if (nugetConfigFile.Exists)
+        {
+            return;
+        }
+
+        projectDirectory.Create();
+        var configXml = new System.Xml.Linq.XDocument(
+            new System.Xml.Linq.XElement("configuration",
+                new System.Xml.Linq.XElement("packageSources",
+                    hiveSources.Select(source =>
+                        new System.Xml.Linq.XElement("add",
+                            new System.Xml.Linq.XAttribute("key", source),
+                            new System.Xml.Linq.XAttribute("value", source))))));
+
+        await using var stream = nugetConfigFile.Create();
+        await configXml.SaveAsync(stream, System.Xml.Linq.SaveOptions.None, cancellationToken);
+        InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
     }
 
     private static bool TryGetBuiltInHostingPackageIdCandidate(string integrationName, out string packageId)
