@@ -547,7 +547,7 @@ internal static class TelemetryCommandHelpers
         var text = displayText ?? OtlpHelpers.ToShortenedId(traceId);
         if (string.IsNullOrEmpty(dashboardUrl) || string.IsNullOrEmpty(traceId))
         {
-            return text;
+            return text.EscapeMarkup();
         }
 
         // Dashboard trace detail URL: /traces/detail/{traceId}
