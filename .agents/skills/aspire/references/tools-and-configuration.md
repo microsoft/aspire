@@ -66,9 +66,9 @@ aspire config set features.defaultWatchEnabled true
 
 Keep these points in mind:
 
-- `features.defaultWatchEnabled` controls Aspire default watch.
-- Default watch is AppHost-centered and restart-based for the AppHost-managed application.
-- C# AppHosts and TypeScript AppHosts are both supported by default watch. C# project resources are also controlled by this setting today.
+- `features.defaultWatchEnabled` controls Aspire default watch for AppHost execution.
+- Default watch runs supported C# and TypeScript AppHosts in CLI watch mode and is restart-based for the AppHost-managed application.
+- Do not treat default watch as per-resource rebuild, restart, or hot reload for resource source changes.
 - Default watch is not a replacement for resource-specific runtime hot reload/watch, Aspire dashboard actions, Aspire CLI resource commands, or IDE-managed debugging.
 - If VS Code, Visual Studio, or Rider is managing debugging or hot reload, let the IDE own that workflow instead of mixing it with Aspire CLI restart, rebuild, or watch behavior.
 

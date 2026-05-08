@@ -31,12 +31,20 @@ Classify the change before restarting anything:
 2. If one resource's implementation changed, keep the AppHost running and use a resource-specific workflow.
 3. If an IDE is managing debugging or hot reload, defer to the IDE and avoid overlapping Aspire CLI restart, rebuild, or watch behavior.
 
-Use resource commands when the running AppHost already knows about the resource and only that resource needs to be operated on:
+Use resource commands when the running AppHost already knows about the resource and only that resource needs to be operated on. Choose the resource command path that matches the resource.
+
+For a C# project resource that exposes rebuild:
+
+```bash
+aspire resource api rebuild
+aspire wait api
+```
+
+For a resource that needs a process restart and does not have a better resource-specific command:
 
 ```bash
 aspire resource api stop
 aspire resource api start
-aspire resource api rebuild
 aspire wait api
 ```
 
@@ -47,7 +55,7 @@ Keep these points in mind:
 - Use runtime or framework-native hot reload/watch for resource implementation loops when that workflow is available.
 - For frontend resources, remember that frameworks such as Vite, Next.js, and similar client-side JavaScript stacks often enable hot module replacement (HMR) by default. If HMR is already applying the change through the resource's dev server, do not force a resource or AppHost restart.
 - Do not restart the whole AppHost just because one resource changed or one resource needs to be rebuilt.
-- Aspire default watch is controlled by `features.defaultWatchEnabled`; use it for AppHost-centered watch behavior, not as a replacement for resource-specific or IDE hot reload workflows.
+- Aspire default watch is controlled by `features.defaultWatchEnabled`; use it for AppHost-centered CLI watch behavior, not as a replacement for resource-specific or IDE hot reload workflows.
 
 ## Scenario: Something Is Wrong, But Do Not Edit Code Yet
 

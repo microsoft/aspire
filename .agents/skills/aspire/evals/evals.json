@@ -47,7 +47,7 @@
       ],
       "expectations": [
         "The agent should not rerun `aspire start` unless it identifies an AppHost model or AppHost code change.",
-        "The agent should use the command shape `aspire resource <resource-name> <command>` with examples such as `aspire resource api rebuild`, `aspire resource api stop`, or `aspire resource api start`.",
+        "The agent should use the command shape `aspire resource <resource-name> <command>` with examples such as `aspire resource api rebuild`, `aspire resource api stop`, or `aspire resource api start` as alternatives rather than a single sequence.",
         "The agent should mention `features.defaultWatchEnabled` only as Aspire default watch behavior, not as a replacement for resource-specific runtime hot reload/watch/HMR or IDE-managed hot reload.",
         "For frontend resources, the agent should recognize that frameworks such as Vite, Next.js, and similar client-side JavaScript stacks may have HMR enabled by default and should not force a restart when that dev-server workflow is already handling the change."
       ]
