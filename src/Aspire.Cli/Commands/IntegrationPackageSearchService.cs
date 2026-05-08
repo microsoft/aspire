@@ -81,6 +81,40 @@ internal sealed class IntegrationPackageSearchService(
         return packages.DistinctBy(static package => $"{package.Channel.Name}\0{package.Package.Id}\0{package.Package.Version}", StringComparer.OrdinalIgnoreCase);
     }
 
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> SearchBuiltInPackagesByExactIdWithChannelsAsync(DirectoryInfo workingDirectory, string packageId, string? configuredChannel, CancellationToken cancellationToken)
+    {
+        if (!HostingIntegrationMetadata.IsBuiltInHostingPackageId(packageId))
+        {
+            return [];
+        }
+
+        var channels = await GetApplicableChannelsAsync(configuredChannel, cancellationToken);
+        var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
+        var packagesLock = new object();
+
+        await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
+        {
+            var channelPackages = (await channel.SearchPackagesAsync(
+                packageId,
+                workingDirectory,
+                id => string.Equals(id, packageId, StringComparisons.NuGetPackageId) &&
+                    !DeprecatedPackages.IsDeprecated(id),
+                ct)).ToArray();
+
+            if (channelPackages.Length == 0)
+            {
+                return;
+            }
+
+            lock (packagesLock)
+            {
+                packages.AddRange(channelPackages.Select(p => (p, channel)));
+            }
+        });
+
+        return packages.DistinctBy(static package => $"{package.Channel.Name}\0{package.Package.Id}\0{package.Package.Version}", StringComparer.OrdinalIgnoreCase);
+    }
+
     public async Task<(DirectoryInfo WorkingDirectory, string? ConfiguredChannel, int? ExitCode)> GetPackageSearchContextAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
     {
         FileInfo? appHostProjectFile;

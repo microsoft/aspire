@@ -2413,6 +2413,138 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandFriendlyNameSearchFallsBackToBuiltInPackageIdWithoutCreatingNuGetConfig()
+    {
+        string? addedPackageId = null;
+        string? addedPackageVersion = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+                    {
+                        NuGetPackage[] packages = query switch
+                        {
+                            var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [],
+                            "Aspire.Hosting.mongodb" => [
+                                new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gf2644312", Source = "pr-hive" }
+                            ],
+                            _ => []
+                        };
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(packages.Where(package => filter?.Invoke(package.Id) ?? true));
+                    }
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, packageName, version, _, _, _, _) =>
+                {
+                    addedPackageId = packageName;
+                    addedPackageVersion = version;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add mongodb --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal("Aspire.Hosting.MongoDB", addedPackageId);
+        Assert.Equal("13.4.0-pr.16882.gf2644312", addedPackageVersion);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+    }
+
+    [Fact]
+    public async Task AddCommandUnknownIntegrationNameInNonInteractiveModeDoesNotAddFirstPackage()
+    {
+        var testInteractionService = new TestInteractionService();
+        var addPackageWasCalled = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+                    {
+                        NuGetPackage[] packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                            ? [
+                                new NuGetPackage { Id = "AspireQuartz.Hosting", Version = "1.0.1", Source = "nuget" },
+                                new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.2.0", Source = "nuget" }
+                            ]
+                            : [];
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(packages.Where(package => filter?.Invoke(package.Id) ?? true));
+                    }
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add nonexistentpackage --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.False(addPackageWasCalled);
+        Assert.Contains(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, "nonexistentpackage"), testInteractionService.DisplayedErrors);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+    }
+
+    [Fact]
     public async Task AddCommandWithoutSourceUsesSelectedExplicitChannelSourceWithoutCreatingNuGetConfig()
     {
         const string packageId = "AspireQuartz.Hosting";

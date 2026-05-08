@@ -108,14 +108,14 @@ internal sealed class AddCommand : BaseCommand
                 AddCommandStrings.SearchingForAspirePackages,
                 async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
 
-            if (!packagesWithChannels.Any())
+            if (!packagesWithChannels.Any() && integrationName is null)
             {
                 throw new EmptyChoicesException(AddCommandStrings.NoIntegrationPackagesFound);
             }
 
             var packagesWithShortName = packagesWithChannels.Select(IntegrationPackageSearchService.GenerateFriendlyName).OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer());
 
-            if (!packagesWithShortName.Any())
+            if (!packagesWithShortName.Any() && integrationName is null)
             {
                 return CommandResult.Failure(CliExitCodes.FailedToAddPackage, AddCommandStrings.NoPackagesFound);
             }
@@ -149,6 +149,22 @@ internal sealed class AddCommand : BaseCommand
                 }
             }
 
+            if (!filteredPackagesWithShortName.Any() && integrationName is not null && TryGetBuiltInHostingPackageIdCandidate(integrationName, out var builtInPackageIdCandidate))
+            {
+                var builtInPackageMatches = (await _integrationPackageSearchService.SearchBuiltInPackagesByExactIdWithChannelsAsync(
+                        effectiveAppHostProjectFile.Directory!,
+                        builtInPackageIdCandidate,
+                        configuredChannel,
+                        cancellationToken))
+                    .Select(IntegrationPackageSearchService.GenerateFriendlyName)
+                    .ToArray();
+
+                if (builtInPackageMatches.Length > 0)
+                {
+                    filteredPackagesWithShortName = builtInPackageMatches;
+                }
+            }
+
             if (!filteredPackagesWithShortName.Any() && integrationName is not null && version is not null && !_hostEnvironment.SupportsInteractiveInput)
             {
                 throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, integrationName));
@@ -163,6 +179,12 @@ internal sealed class AddCommand : BaseCommand
                 filteredPackagesWithShortName = IntegrationPackageSearchService.GetIntegrationSearchMatches(packagesWithShortName, integrationName)
                     .Select(x => (x.FriendlyName, x.Package, x.Channel))
                     .ToList();
+            }
+
+            if (!filteredPackagesWithShortName.Any() && integrationName is not null && !_hostEnvironment.SupportsInteractiveInput)
+            {
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, integrationName));
+                return ExitCodeConstants.FailedToAddPackage;
             }
 
             // If we didn't match any, show a complete list. If we matched one, and its
@@ -262,6 +284,20 @@ internal sealed class AddCommand : BaseCommand
         }
 
         return channel.Mappings?.Select(mapping => mapping.Source).FirstOrDefault(source => !string.IsNullOrWhiteSpace(source));
+    }
+
+    private static bool TryGetBuiltInHostingPackageIdCandidate(string integrationName, out string packageId)
+    {
+        packageId = string.Empty;
+
+        if (integrationName.Contains('.', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        packageId = $"Aspire.Hosting.{integrationName.Replace('-', '.')}";
+
+        return true;
     }
 
     private static bool TryGetMissingLocalNuGetSource(string? source, DirectoryInfo workingDirectory, out string missingSource)
