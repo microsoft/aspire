@@ -30,8 +30,8 @@ public partial class AIAgentsDialog : IDialogContentComponent
     [Inject]
     public required IOptionsMonitor<DashboardOptions> Options { get; init; }
 
-    private const string AppHostLearnMoreUrl = "https://aspire.dev/get-started/ai-coding-agents/";
-    private const string StandaloneLearnMoreUrl = "https://aspire.dev/dashboard/ai-coding-agents/";
+    private const string AppHostLearnMoreUrl = "https://aka.ms/aspire/ai-agents-apphost";
+    private const string StandaloneLearnMoreUrl = "https://aka.ms/aspire/dashboard-ai-standalone";
 
     private string Description => DashboardClient.IsEnabled
         ? string.Format(CultureInfo.CurrentCulture, Loc[nameof(DialogsLoc.AIAgentsDialogAppHostDescription)], AppHostLearnMoreUrl)
