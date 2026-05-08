@@ -162,7 +162,7 @@ internal sealed class TemplateNuGetConfigService(
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
-        var hasPrHives = query.IncludePrHives && executionContext.GetPrHiveCount() > 0;
+        var hasPrHives = query.IncludePrHives && executionContext.GetHiveCount() > 0;
         var hasChannelSetting = !string.IsNullOrEmpty(channelName);
 
         IEnumerable<PackageChannel> channels;
