@@ -348,6 +348,25 @@ public class AtsCapabilityScannerTests
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.GetCommandResult));
     }
 
+    [Fact]
+    public void ScanAssembly_DerivedExportedType_DoesNotRegenerateInheritedProperties()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var baseNameCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/BaseExportedProperties.name", StringComparison.Ordinal));
+
+        Assert.Contains(baseNameCapability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExportedProperties)));
+        Assert.Contains(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/DerivedExportedProperties.framework", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/DerivedExportedProperties.name", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics,
+            d => d.Message.Contains(nameof(DerivedExportedProperties), StringComparison.Ordinal)
+                && d.Message.Contains("has collisions", StringComparison.Ordinal));
+    }
+
     #endregion
 
     #region Callback Parameter Type Resolution Tests
@@ -531,6 +550,18 @@ public class AtsCapabilityScannerTests
         public TestResource(string name) : base(name)
         {
         }
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private class BaseExportedProperties
+    {
+        public string Name { get; } = "";
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private sealed class DerivedExportedProperties : BaseExportedProperties
+    {
+        public string Framework { get; } = "";
     }
 
     public sealed class AssemblyLevelExportedTestType

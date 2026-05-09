@@ -1409,6 +1409,11 @@ public static class AtsCapabilityScanner
                 continue;
             }
 
+            if (IsInheritedPropertyExportedByBaseType(contextType, property))
+            {
+                continue;
+            }
+
             // Check for [AspireExportIgnore]
             if (HasExportIgnoreAttribute(property))
             {
@@ -1762,6 +1767,38 @@ public static class AtsCapabilityScanner
             Methods = methods,
             Properties = properties
         };
+    }
+
+    private static bool IsInheritedPropertyExportedByBaseType(Type contextType, PropertyInfo property)
+    {
+        var declaringType = property.DeclaringType;
+        if (declaringType is null || declaringType == contextType)
+        {
+            return false;
+        }
+
+        var memberExportAttr = GetAspireExportAttribute(property);
+        var isPublic = property.GetMethod?.IsPublic == true;
+
+        for (var baseType = contextType.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            if (!declaringType.IsAssignableFrom(baseType))
+            {
+                continue;
+            }
+
+            var exposeAllProperties = HasExposePropertiesAttribute(baseType);
+            var baseTypeScansMembers =
+                exposeAllProperties ||
+                HasExposeMethodsAttribute(baseType) ||
+                GetAspireExportAttribute(baseType) is not null;
+            if (baseTypeScansMembers && ShouldExportMember(isPublic, exposeAllProperties, memberExportAttr))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static AtsCapabilityInfo? CreateCapabilityInfo(
