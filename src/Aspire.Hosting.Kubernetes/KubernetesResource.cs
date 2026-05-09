@@ -79,7 +79,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     public List<BaseKubernetesResource> AdditionalResources { get; } = [];
 
     /// <summary>
-    /// Adds an arbitrary Kubernetes manifest to this service's generated Helm chart.
+    /// Adds an arbitrary Kubernetes manifest to this service's generated Helm chart for polyglot callers.
     /// </summary>
     /// <param name="apiVersion">The Kubernetes API version for the manifest.</param>
     /// <param name="kind">The Kubernetes resource kind for the manifest.</param>
@@ -87,7 +87,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// <param name="configure">A callback that configures the manifest fields.</param>
     /// <returns>The added Kubernetes manifest resource.</returns>
     [AspireExport(Description = "Adds an arbitrary Kubernetes manifest to this service's generated Helm chart", RunSyncOnBackgroundThread = true)]
-    public KubernetesManifestResource AddManifest(string apiVersion, string kind, string name, Action<KubernetesManifestResource>? configure = null)
+    internal KubernetesManifestResource AddManifest(string apiVersion, string kind, string name, Action<KubernetesManifestResource>? configure = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
         ArgumentException.ThrowIfNullOrWhiteSpace(kind);

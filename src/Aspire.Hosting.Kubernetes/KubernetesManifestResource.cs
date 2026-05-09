@@ -11,13 +11,8 @@ namespace Aspire.Hosting.Kubernetes;
 /// <summary>
 /// Represents an arbitrary Kubernetes manifest that is emitted with a Kubernetes service.
 /// </summary>
-/// <remarks>
-/// This type provides a polyglot-friendly server-side handle for custom manifests. C# callers that need
-/// strongly typed Kubernetes objects can continue to add <see cref="BaseKubernetesResource"/> instances
-/// directly to <see cref="KubernetesResource.AdditionalResources"/>.
-/// </remarks>
 [AspireExport]
-public sealed class KubernetesManifestResource : BaseKubernetesResource
+internal sealed class KubernetesManifestResource : BaseKubernetesResource
 {
     internal KubernetesManifestResource(string apiVersion, string kind, string name)
         : base(apiVersion, kind)
