@@ -10,13 +10,15 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM eclipse-temurin:25-jdk-noble
+FROM mcr.microsoft.com/devcontainers/java:25-trixie
+
+# Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
+RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
 
 # Install system dependencies (wget, docker CLI, jq for JSON manipulation)
 RUN apt-get update && apt-get install -y \
     wget \
     docker.io \
-    libicu74 \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
