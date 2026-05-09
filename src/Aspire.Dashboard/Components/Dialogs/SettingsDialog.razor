@@ -46,6 +46,18 @@
             </FluentRadioGroup>
         </div>
 
+        <div class="input-container">
+            <FluentRadioGroup TValue="DashboardDensity"
+                              Label="@Loc[nameof(Dialogs.SettingsDialogDensity)]"
+                              @bind-Value="@_dashboardDensity"
+                              @bind-Value:after="OnDensityChanged"
+                              Orientation="Orientation.Vertical">
+                <FluentRadio Value="@DashboardDensity.Comfortable">@Loc[nameof(Dialogs.SettingsDialogDensityComfortable)]</FluentRadio>
+                <FluentRadio Value="@DashboardDensity.Compact">@Loc[nameof(Dialogs.SettingsDialogDensityCompact)]</FluentRadio>
+            </FluentRadioGroup>
+            <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogDensityDescription)]</p>
+        </div>
+
         <div>
             <span class="setting-title">@Loc[nameof(Dialogs.SettingsDialogDashboardLogsAndTelemetry)]</span>
             <div>

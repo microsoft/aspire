@@ -58,6 +58,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     [SupplyParameterFromQuery]
     public string? SpanId { get; set; }
 
+    [CascadingParameter]
+    public DashboardDensity DashboardDensity { get; init; } = DashboardDensity.Comfortable;
+
     [Inject]
     public required ILogger<TraceDetail> Logger { get; init; }
 

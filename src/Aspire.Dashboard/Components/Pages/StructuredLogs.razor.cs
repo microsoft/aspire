@@ -78,6 +78,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
 
+    [CascadingParameter]
+    public DashboardDensity DashboardDensity { get; init; } = DashboardDensity.Comfortable;
+
     [Inject]
     public required ILogger<StructuredLogs> Logger { get; init; }
 

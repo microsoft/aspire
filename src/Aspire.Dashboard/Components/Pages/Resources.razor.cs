@@ -77,6 +77,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public required DashboardDialogService DialogService { get; init; }
     [Inject]
     public required IconResolver IconResolver { get; init; }
+
+    [CascadingParameter]
+    public DashboardDensity DashboardDensity { get; init; } = DashboardDensity.Comfortable;
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
 

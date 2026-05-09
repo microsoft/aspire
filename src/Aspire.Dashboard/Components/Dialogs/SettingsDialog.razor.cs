@@ -16,6 +16,7 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
     private List<CultureInfo> _languageOptions = null!;
     private CultureInfo? _selectedUiCulture;
     private TimeFormat _timeFormat;
+    private DashboardDensity _dashboardDensity = DashboardDensity.Comfortable;
 
     private IDisposable? _themeChangedSubscription;
 
@@ -40,7 +41,7 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _languageOptions = GlobalizationHelpers.OrderedLocalizedCultures;
 
@@ -50,6 +51,11 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
             CultureInfo.CurrentUICulture;
 
         _timeFormat = TimeProvider.ConfiguredTimeFormat;
+        var dashboardDensityResult = await LocalStorage.GetAsync<DashboardDensity>(BrowserStorageKeys.DashboardDensity);
+        if (dashboardDensityResult.Success)
+        {
+            _dashboardDensity = dashboardDensityResult.Value;
+        }
 
         _currentSetting = ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem;
 
@@ -121,6 +127,16 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
         await LocalStorage.SetAsync(BrowserStorageKeys.TimeFormat, _timeFormat);
 
         // Reload the page to ensure all components pick up the new format
+        var uri = new Uri(NavigationManager.Uri)
+            .GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
+
+        NavigationManager.NavigateTo(uri, forceLoad: true);
+    }
+
+    private async Task OnDensityChanged()
+    {
+        await LocalStorage.SetAsync(BrowserStorageKeys.DashboardDensity, _dashboardDensity);
+
         var uri = new Uri(NavigationManager.Uri)
             .GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
 

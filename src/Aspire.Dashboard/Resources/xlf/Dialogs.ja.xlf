@@ -570,6 +570,26 @@ For more information about using AI agents with the dashboard, such as setting u
         <target state="translated">リソース ログとテレメトリ</target>
         <note />
       </trans-unit>
+      <trans-unit id="SettingsDialogDensity">
+        <source>Density</source>
+        <target state="new">Density</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDensityComfortable">
+        <source>Comfortable</source>
+        <target state="new">Comfortable</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDensityCompact">
+        <source>Compact</source>
+        <target state="new">Compact</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDensityDescription">
+        <source>Compact reduces spacing in tables, details, and page chrome.</source>
+        <target state="new">Compact reduces spacing in tables, details, and page chrome.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">
         <source>Runtime: {0}</source>
         <target state="translated">ランタイム: {0}</target>

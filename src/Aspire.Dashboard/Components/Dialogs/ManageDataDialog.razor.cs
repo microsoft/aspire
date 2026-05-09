@@ -56,6 +56,9 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     [Inject]
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
+    [CascadingParameter]
+    public DashboardDensity DashboardDensity { get; init; } = DashboardDensity.Comfortable;
+
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly Dictionary<string, ResourceDataRow> _resourceDataRows = new(StringComparers.ResourceName);
     private readonly HashSet<string> _expandedResourceNames = new(StringComparers.ResourceName);

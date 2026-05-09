@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,7 +23,7 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Dialogs {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
         
         private static global::System.Globalization.CultureInfo resourceCulture;
@@ -1014,6 +1014,42 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Density.
+        /// </summary>
+        public static string SettingsDialogDensity {
+            get {
+                return ResourceManager.GetString("SettingsDialogDensity", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comfortable.
+        /// </summary>
+        public static string SettingsDialogDensityComfortable {
+            get {
+                return ResourceManager.GetString("SettingsDialogDensityComfortable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Compact.
+        /// </summary>
+        public static string SettingsDialogDensityCompact {
+            get {
+                return ResourceManager.GetString("SettingsDialogDensityCompact", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Compact reduces spacing in tables, details, and page chrome..
+        /// </summary>
+        public static string SettingsDialogDensityDescription {
+            get {
+                return ResourceManager.GetString("SettingsDialogDensityDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Theme.
         /// </summary>
