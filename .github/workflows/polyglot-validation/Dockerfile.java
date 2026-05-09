@@ -10,10 +10,7 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/devcontainers/java:25-trixie
-
-# Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
+FROM mcr.microsoft.com/openjdk/jdk:25-ubuntu
 
 # Install system dependencies (wget, docker CLI, jq for JSON manipulation)
 RUN apt-get update && apt-get install -y \
