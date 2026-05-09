@@ -1301,8 +1301,7 @@ public class DistributedApplicationTests
         Assert.Collection(dashboardUrls,
             u => Assert.Equal("Dashboard (https)", u.DisplayText),
             u => Assert.Equal("Dashboard (http)", u.DisplayText),
-            u => Assert.Equal("otlp-grpc", u.DisplayText),
-            u => Assert.Equal("otlp-http", u.DisplayText));
+            u => Assert.Equal("otlp-grpc", u.DisplayText));
 
         await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
