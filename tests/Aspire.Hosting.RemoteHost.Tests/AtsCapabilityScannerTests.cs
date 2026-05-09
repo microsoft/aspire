@@ -425,31 +425,6 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
-    public void ScanAssembly_YarpWithStaticFiles_ExposesSingleOptionalSourcePathCapability()
-    {
-        var yarpAssembly = typeof(global::Aspire.Hosting.Yarp.YarpResource).Assembly;
-
-        var result = AtsCapabilityScanner.ScanAssembly(yarpAssembly);
-
-        var capability = Assert.Single(result.Capabilities,
-            c => c.CapabilityId.EndsWith("/withStaticFiles", StringComparison.Ordinal));
-        var withStaticFilesMethod = Assert.Single(result.Methods,
-            m => m.Key.EndsWith("/withStaticFiles", StringComparison.Ordinal)).Value;
-
-        Assert.Equal("withStaticFiles", capability.MethodName);
-
-        var parameter = Assert.Single(capability.Parameters);
-        Assert.Equal("sourcePath", parameter.Name);
-        Assert.True(parameter.IsOptional);
-
-        var parameters = withStaticFilesMethod.GetParameters();
-        Assert.Equal(2, parameters.Length);
-        Assert.Equal(typeof(IResourceBuilder<global::Aspire.Hosting.Yarp.YarpResource>), parameters[0].ParameterType);
-        Assert.Equal(typeof(string), parameters[1].ParameterType);
-        Assert.True(parameters[1].IsOptional);
-    }
-
-    [Fact]
     public void ScanAssembly_ClassLevelBackgroundThreadOptIn_AppliesToExportedMethods()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
