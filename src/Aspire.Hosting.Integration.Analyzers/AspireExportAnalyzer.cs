@@ -56,12 +56,11 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private readonly struct GeneratedMethodNameExport : IEquatable<GeneratedMethodNameExport>
     {
-        public GeneratedMethodNameExport(string source, Location location, string effectiveExportId, bool canShareGeneratedName)
+        public GeneratedMethodNameExport(string source, Location location, string effectiveExportId)
         {
             Source = source;
             Location = location;
             EffectiveExportId = effectiveExportId;
-            CanShareGeneratedName = canShareGeneratedName;
         }
 
         public string Source { get; }
@@ -70,14 +69,11 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         public string EffectiveExportId { get; }
 
-        public bool CanShareGeneratedName { get; }
-
         public bool Equals(GeneratedMethodNameExport other)
         {
             return Source == other.Source &&
                 Location.Equals(other.Location) &&
-                EffectiveExportId == other.EffectiveExportId &&
-                CanShareGeneratedName == other.CanShareGeneratedName;
+                EffectiveExportId == other.EffectiveExportId;
         }
 
         public override bool Equals(object? obj)
@@ -89,8 +85,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         {
             return StringComparer.Ordinal.GetHashCode(Source) ^
                 Location.GetHashCode() ^
-                StringComparer.Ordinal.GetHashCode(EffectiveExportId) ^
-                CanShareGeneratedName.GetHashCode();
+                StringComparer.Ordinal.GetHashCode(EffectiveExportId);
         }
     }
 
@@ -307,8 +302,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 generatedTargetType,
                 effectiveExportId,
                 GetMethodDisplayString(method),
-                location,
-                canShareGeneratedName: true);
+                location);
         }
 
         // Rule 2b (ASPIREEXPORT011): Warn when explicit id matches the convention-derived name.
@@ -488,8 +482,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                     generatedTargetType,
                     getMethodName,
                     property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-                    location,
-                    canShareGeneratedName: false);
+                    location);
             }
 
             if (property.SetMethod is { IsInitOnly: false })
@@ -510,8 +503,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                     generatedTargetType,
                     $"{typeId}.{setterMethodName}",
                     property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-                    location,
-                    canShareGeneratedName: false);
+                    location);
             }
         }
 
@@ -1330,9 +1322,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 .ToArray();
 
             if (exports.Length <= 1 ||
-                exports.Select(static e => e.EffectiveExportId).Distinct(StringComparer.Ordinal).Count() <= 1 ||
-                (exports.All(static e => e.CanShareGeneratedName) &&
-                 !exports.Any(e => string.Equals(e.EffectiveExportId, kvp.Key.MethodName, StringComparison.Ordinal))))
+                exports.Select(static e => e.EffectiveExportId).Distinct(StringComparer.Ordinal).Count() <= 1)
             {
                 continue;
             }
@@ -1366,11 +1356,10 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         string targetType,
         string effectiveExportId,
         string source,
-        Location location,
-        bool canShareGeneratedName)
+        Location location)
     {
         var bag = generatedMethodNames.GetOrAdd((methodName, targetType), _ => []);
-        bag.Add(new GeneratedMethodNameExport(source, location, effectiveExportId, canShareGeneratedName));
+        bag.Add(new GeneratedMethodNameExport(source, location, effectiveExportId));
     }
 
     private static string? GetExportId(AttributeData attribute)

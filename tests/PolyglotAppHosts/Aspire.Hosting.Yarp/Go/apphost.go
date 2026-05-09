@@ -28,7 +28,8 @@ func main() {
 		WithImageSHA256("abc123def456").
 		WithContainerNetworkAlias("myalias").
 		PublishAsContainer().
-		WithStaticFiles()
+		WithStaticFiles().
+		WithStaticFiles(&aspire.WithStaticFilesOptions{SourcePath: aspire.StringPtr(".")})
 
 	proxy.WithVolume("/data", &aspire.WithVolumeOptions{Name: aspire.StringPtr("proxy-data")})
 	proxy.WithBuildArg("BUILD_VERSION", buildVersion)

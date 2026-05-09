@@ -1285,8 +1285,10 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
-    public async Task GeneratedMethodNameSharedByNonDefaultExports_NoASPIREEXPORT014()
+    public async Task GeneratedMethodNameSharedByNonDefaultExports_ReportsASPIREEXPORT014()
     {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateGeneratedMethodName;
+
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
             using Aspire.Hosting;
             using Aspire.Hosting.ApplicationModel;
@@ -1312,7 +1314,11 @@ public class AspireExportAnalyzerTests
                     string sourcePath)
                     => builder;
             }
-            """, []);
+            """,
+            [
+                CompilerError(diagnostic.Id).WithLocation(14, 6),
+                CompilerError(diagnostic.Id).WithLocation(19, 6)
+            ]);
 
         await test.RunAsync();
     }

@@ -18,6 +18,7 @@ void main() throws Exception {
         proxy.withImageSHA256("abc123def456");
         proxy.withContainerNetworkAlias("myalias");
         proxy.publishAsContainer();
+        proxy.withStaticFiles(".");
         proxy.publishWithStaticFiles(staticFilesSource);
         proxy.withVolume("/data", new WithVolumeOptions().name("proxy-data"));
         proxy.withBuildArg("BUILD_VERSION", buildVersion);
