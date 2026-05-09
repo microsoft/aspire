@@ -45,6 +45,7 @@ Before starting, verify:
   - Include implementation details only after the behavior summary, and keep them concise.
   - Evaluate whether the change makes security assumptions or guarantees, and include details only when security review may be needed.
   - Include relevant validation: tests, manual verification, screenshots, recordings, generated help, or sample output.
+- For infra-only or internal-only changes, such as CI, build infrastructure, repository automation, tests, docs-only maintenance, or skill/workflow guidance, do not add user-facing usage artifacts, `### Breaking changes`, or `### Security considerations` unless the change also affects user-visible behavior, breaks a public API or established scenario, or requires security review.
 - When the change affects user-facing behavior, add a subsection such as `### User-facing usage` or `### Examples` under `## Description` with concrete usage examples. Prefer examples from the diff, tests, docs, generated output, or commands you actually ran. Do not invent usage; if the usage cannot be determined confidently, ask the user or state that an example is not available.
 - Include the most relevant user-facing artifacts by change type:
   - **Dashboard/UI changes**: include dashboard screenshots, preferably before/after when visual behavior changes.
