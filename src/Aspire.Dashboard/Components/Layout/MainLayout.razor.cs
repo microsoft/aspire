@@ -28,6 +28,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private IDialogReference? _openPageDialog;
     private IDisposable? _aiDisplayChangedSubscription;
+    private DashboardDensity _dashboardDensity = DashboardDensity.Comfortable;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
@@ -120,6 +121,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         if (timeFormatResult.Success)
         {
             TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+        }
+
+        var dashboardDensityResult = await LocalStorage.GetAsync<DashboardDensity>(BrowserStorageKeys.DashboardDensity);
+        if (dashboardDensityResult.Success)
+        {
+            _dashboardDensity = dashboardDensityResult.Value;
         }
 
         await DisplayUnsecuredEndpointsMessageAsync();

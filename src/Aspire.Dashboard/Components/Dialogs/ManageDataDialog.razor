@@ -10,7 +10,7 @@
 <div style="height: 44vh; overflow-y: auto;">
     <FluentDataGrid @ref="_dataGrid"
                     Items="@GetGridItems()"
-                    ItemSize="46"
+                    ItemSize="@DashboardDensity.MainGridItemSize()"
                     Virtualize="true"
                     GenerateHeader="GenerateHeaderOption.Sticky"
                     GridTemplateColumns="2fr 1fr"

@@ -71,6 +71,9 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
 
+    [CascadingParameter]
+    public DashboardDensity DashboardDensity { get; init; } = DashboardDensity.Comfortable;
+
     [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 

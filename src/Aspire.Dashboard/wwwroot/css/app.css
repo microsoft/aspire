@@ -2172,3 +2172,189 @@ fluent-button::part(control) {
     font-size: 10px;
     padding: 2px 8px;
 }
+
+/* --- Density: Compact --- */
+.layout[data-density="compact"] {
+    --aspire-radius-card: 10px;
+    --aspire-radius-panel: 12px;
+    --aspire-radius-section: 7px;
+}
+
+.layout[data-density="compact"] .content-layout {
+    border-radius: 12px;
+    height: calc(100% - 20px);
+    margin: 10px 14px;
+    width: calc(100% - 28px);
+}
+
+.layout[data-density="compact"] h1 {
+    font-size: var(--type-ramp-plus-3-font-size);
+    line-height: var(--type-ramp-plus-3-line-height);
+    margin-top: 0;
+    margin-bottom: 0.25rem;
+}
+
+.layout[data-density="compact"] .content-header {
+    padding: 14px 16px 8px;
+}
+
+.layout[data-density="compact"] .content-header .title-toolbar-inline {
+    min-height: 34px;
+}
+
+.layout[data-density="compact"] fluent-toolbar[orientation=horizontal] {
+    gap: 4px;
+    min-height: 36px;
+    padding: 4px 8px;
+}
+
+.layout[data-density="compact"] fluent-tabs::part(tablist) {
+    gap: 3px;
+    padding: 3px 5px;
+}
+
+.layout[data-density="compact"] fluent-tab {
+    font-size: 12px;
+    padding: 3px 10px;
+}
+
+.layout[data-density="compact"] fluent-tab::part(content) {
+    padding: 2px 7px;
+}
+
+.layout[data-density="compact"] fluent-tab[aria-selected="true"]::after {
+    bottom: 2px;
+    left: 12px;
+    right: 12px;
+}
+
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='header'] td,
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='sticky-header'] td,
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='header'] th,
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='sticky-header'] th {
+    font-size: 12px;
+    padding: 7px 10px !important;
+}
+
+.layout[data-density="compact"] .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
+    font-size: 12.5px;
+    line-height: 18px;
+    padding: 6px 10px !important;
+}
+
+.layout[data-density="compact"] .property-grid-container .fluent-data-grid-row[row-type='header'] td,
+.layout[data-density="compact"] .property-grid-container .fluent-data-grid-row[row-type='sticky-header'] td,
+.layout[data-density="compact"] .property-grid-container .fluent-data-grid-row[row-type='header'] th,
+.layout[data-density="compact"] .property-grid-container .fluent-data-grid-row[row-type='sticky-header'] th,
+.layout[data-density="compact"] .property-grid-container .fluent-data-grid-row:not([row-type='header'],[row-type='sticky-header']) td {
+    height: 36px !important;
+}
+
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='header'] .column-header:not(:first-of-type) .col-sort-button,
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='sticky-header'] .column-header:not(:first-of-type) .col-sort-button {
+    margin-inline-start: -8px;
+}
+
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='header'] .column-header:first-of-type .col-sort-button,
+.layout[data-density="compact"] .fluent-data-grid-row[row-type='sticky-header'] .column-header:first-of-type .col-sort-button {
+    margin-inline-start: 18px;
+}
+
+.layout[data-density="compact"] .main-grid .fluent-data-grid-row:not([row-type='sticky-header'], .empty-content-row) td:first-child:not(.expand-col) {
+    padding-left: calc(((var(--design-unit) * 2) + var(--focus-stroke-width) - var(--stroke-width) + 5) * 1px);
+}
+
+.layout[data-density="compact"] .main-grid .column-header:not(.select-all):first-of-type {
+    padding-inline-start: calc(var(--design-unit) * 1px) !important;
+}
+
+.layout[data-density="compact"] .grid-action-container {
+    column-gap: 3px;
+    min-height: 22px;
+}
+
+.layout[data-density="compact"] .grid-action-container fluent-button[appearance=lightweight],
+.layout[data-density="compact"] .grid-action-container fluent-button[appearance=stealth],
+.layout[data-density="compact"] .aspire-menu-button-icon-only[appearance=lightweight],
+.layout[data-density="compact"] .aspire-menu-button-icon-only[appearance=stealth],
+.layout[data-density="compact"] .grid-action-spacer {
+    height: 22px;
+    min-width: 22px;
+    width: 22px;
+}
+
+.layout[data-density="compact"] .grid-action-container fluent-button[appearance=lightweight]::part(control),
+.layout[data-density="compact"] .grid-action-container fluent-button[appearance=stealth]::part(control),
+.layout[data-density="compact"] .aspire-menu-button-icon-only[appearance=lightweight]::part(control),
+.layout[data-density="compact"] .aspire-menu-button-icon-only[appearance=stealth]::part(control) {
+    height: 22px;
+    min-width: 22px;
+    width: 22px;
+}
+
+.layout[data-density="compact"] .main-grid-expand-container,
+.layout[data-density="compact"] .main-grid-expand-button {
+    width: 16px;
+    min-width: 16px;
+}
+
+.layout[data-density="compact"] .main-grid-expand-button::part(control) {
+    height: 16px;
+    min-width: 16px;
+    width: 16px;
+}
+
+.layout[data-density="compact"] .details-container > header {
+    padding: calc(var(--design-unit) * 1.25px) calc(var(--design-unit) * 2px);
+}
+
+.layout[data-density="compact"] .details-container > header > .details-header-title {
+    font-size: var(--type-ramp-minus-1-font-size) !important;
+    line-height: 18px;
+}
+
+.layout[data-density="compact"] .resource-details-layout,
+.layout[data-density="compact"] .structured-log-details-layout {
+    gap: 0;
+}
+
+.layout[data-density="compact"] .property-grid-container {
+    padding: 0;
+}
+
+.layout[data-density="compact"] .property-grid-container fluent-accordion {
+    gap: 0;
+    margin-bottom: 0;
+}
+
+.layout[data-density="compact"] .property-grid-container > fluent-accordion > fluent-accordion-item::part(heading) {
+    padding-left: calc(var(--design-unit) * 1px);
+}
+
+.layout[data-density="compact"] .property-grid-container fluent-accordion-item::part(heading) {
+    min-height: 34px;
+    padding-bottom: 4px;
+    padding-top: 4px;
+}
+
+.layout[data-density="compact"] .property-grid-container fluent-accordion-item::part(heading-content) {
+    font-size: var(--type-ramp-minus-1-font-size);
+}
+
+.layout[data-density="compact"] .property-grid-container fluent-accordion-item:is([expanded], [aria-expanded="true"])::part(heading),
+.layout[data-density="compact"] .property-grid-container fluent-accordion-item:is([expanded], [aria-expanded="true"])::part(heading):hover {
+    background-size: 100% 1px, auto;
+}
+
+.layout[data-density="compact"] fluent-input::part(control),
+.layout[data-density="compact"] fluent-search::part(control),
+.layout[data-density="compact"] fluent-select::part(control),
+.layout[data-density="compact"] fluent-combobox::part(control) {
+    min-height: 30px;
+}
+
+.layout[data-density="compact"] .severity-cell .fluent-badge,
+.layout[data-density="compact"] .severity-cell fluent-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+}

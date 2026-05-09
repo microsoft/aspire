@@ -77,6 +77,9 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
+    [CascadingParameter]
+    public DashboardDensity DashboardDensity { get; init; } = DashboardDensity.Comfortable;
+
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);

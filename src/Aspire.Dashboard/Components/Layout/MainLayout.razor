@@ -6,7 +6,7 @@
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
-<div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+<div class="layout" data-density="@_dashboardDensity.ToAttributeValue()" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     <div class="aspire-icon">
         <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
                       title="@Loc[nameof(Layout.MainLayoutAspire)]"
@@ -94,28 +94,30 @@
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }
 
-    <div class="messagebar-container">
-        <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
-    </div>
-    <div class="layout-body-container">
-        <FluentBodyContent Class="custom-body-content body-content">
-            <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @Body
-        </FluentBodyContent>
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
-    </div>
+    <CascadingValue Value="_dashboardDensity">
+        <div class="messagebar-container">
+            <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
+            @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
+            {
+                <div class="layout-sidebar-spacer"></div>
+            }
+        </div>
+        <div class="layout-body-container">
+            <FluentBodyContent Class="custom-body-content body-content">
+                <FluentToastProvider MaxToastCount="3" Timeout="5000" />
+                @Body
+            </FluentBodyContent>
+            @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
+            {
+                <div class="layout-sidebar-spacer"></div>
+            }
+        </div>
 
-    <FluentDialogProvider/>
-    <FluentTooltipProvider />
-    <FluentMenuProvider />
-    <InteractionsProvider />
+        <FluentDialogProvider/>
+        <FluentTooltipProvider />
+        <FluentMenuProvider />
+        <InteractionsProvider />
+    </CascadingValue>
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
         <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>

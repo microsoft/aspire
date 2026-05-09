@@ -20,7 +20,7 @@
     <FluentDataGrid
         @ref="_dataGrid"
         Items="@_metricsView"
-        ItemSize="46"
+        ItemSize="@DashboardDensity.MainGridItemSize()"
         Virtualize="true"
         GridTemplateColumns="@string.Join(" ", Enumerable.Repeat("1fr", columnCount))"
         ItemKey="@(item => item.DateTime)">

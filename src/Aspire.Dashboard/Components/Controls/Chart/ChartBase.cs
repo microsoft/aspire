@@ -46,6 +46,9 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     [Inject]
     public required PauseManager PauseManager { get; init; }
 
+    [CascadingParameter]
+    public DashboardDensity DashboardDensity { get; init; } = DashboardDensity.Comfortable;
+
     [Parameter, EditorRequired]
     public required InstrumentViewModel InstrumentViewModel { get; set; }
 

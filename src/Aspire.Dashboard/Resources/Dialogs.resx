@@ -147,6 +147,18 @@
   <data name="SettingsDialogTheme" xml:space="preserve">
     <value>Theme</value>
   </data>
+  <data name="SettingsDialogDensity" xml:space="preserve">
+    <value>Density</value>
+  </data>
+  <data name="SettingsDialogDensityComfortable" xml:space="preserve">
+    <value>Comfortable</value>
+  </data>
+  <data name="SettingsDialogDensityCompact" xml:space="preserve">
+    <value>Compact</value>
+  </data>
+  <data name="SettingsDialogDensityDescription" xml:space="preserve">
+    <value>Compact reduces spacing in tables, details, and page chrome.</value>
+  </data>
   <data name="SettingsDialogVersion" xml:space="preserve">
     <value>Version: {0}</value>
     <comment>{0} is the dashboard version string</comment>
