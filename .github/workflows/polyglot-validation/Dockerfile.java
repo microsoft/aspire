@@ -10,7 +10,7 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/openjdk/jdk:25-ubuntu
+FROM eclipse-temurin:25-jdk-noble
 
 # Install system dependencies (wget, docker CLI, jq for JSON manipulation)
 RUN apt-get update && apt-get install -y \
