@@ -16,6 +16,7 @@ FROM eclipse-temurin:25-jdk-noble
 RUN apt-get update && apt-get install -y \
     wget \
     docker.io \
+    libicu74 \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
