@@ -59,6 +59,7 @@
     <Project Path="src/Aspire.Hosting.Kafka/Aspire.Hosting.Kafka.csproj" />
     <Project Path="src/Aspire.Hosting.Keycloak/Aspire.Hosting.Keycloak.csproj" />
     <Project Path="src/Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.csproj" />
+    <Project Path="src/Aspire.Hosting.Markdown/Aspire.Hosting.Markdown.csproj" />
     <Project Path="src/Aspire.Hosting.Maui/Aspire.Hosting.Maui.csproj" />
     <Project Path="src/Aspire.Hosting.Milvus/Aspire.Hosting.Milvus.csproj" />
     <Project Path="src/Aspire.Hosting.MongoDB/Aspire.Hosting.MongoDB.csproj" />

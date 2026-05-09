@@ -26,6 +26,7 @@
       "src\\Aspire.Hosting.EntityFrameworkCore\\Aspire.Hosting.EntityFrameworkCore.csproj",
       "src\\Aspire.Hosting.Integration.Analyzers\\Aspire.Hosting.Integration.Analyzers.csproj",
       "src\\Aspire.Hosting.JavaScript\\Aspire.Hosting.JavaScript.csproj",
+      "src\\Aspire.Hosting.Markdown\\Aspire.Hosting.Markdown.csproj",
       "src\\Aspire.Hosting.PostgreSQL\\Aspire.Hosting.PostgreSQL.csproj",
       "src\\Aspire.Hosting.Python\\Aspire.Hosting.Python.csproj",
       "src\\Aspire.Hosting.RabbitMQ\\Aspire.Hosting.RabbitMQ.csproj",

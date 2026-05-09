@@ -9,6 +9,8 @@ builder.AddTalkingClock("talking-clock");
 
 builder.AddTestResource("test");
 
+builder.AddMarkdownPreview("playground-readme", @"..\..\README.md");
+
 builder.AddParameter("p0");
 
 #if !SKIP_DASHBOARD_REFERENCE
