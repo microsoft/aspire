@@ -226,7 +226,7 @@ public class ExecuteResourceCommandToolTests
         Assert.True(result.IsError);
         Assert.Contains(result.Content, c => c is ModelContextProtocol.Protocol.TextContentBlock t &&
             t.Text.Contains("Command argument validation failed.") &&
-            t.Text.Contains("target: Target must not be prod."));
+            t.Text.Contains("--target: Target must not be prod."));
     }
 
     [Fact]

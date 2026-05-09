@@ -221,6 +221,12 @@ internal sealed class ResourceCommand : BaseCommand
         var parseResult = parserCommand.Parse(capturedArguments);
         if (parseResult.Errors.Count > 0)
         {
+            var unrecognizedCommandOptions = GroupUnrecognizedCommandOptions(parseResult.UnmatchedTokens);
+            if (unrecognizedCommandOptions.Length > 0)
+            {
+                return (arguments, FormatUnrecognizedCommandOptions(unrecognizedCommandOptions));
+            }
+
             return (arguments, string.Join(Environment.NewLine, parseResult.Errors.Select(static error => error.Message)));
         }
 
@@ -271,7 +277,7 @@ internal sealed class ResourceCommand : BaseCommand
     private static JsonObject CreateUnknownArguments(string[] capturedArguments)
     {
         var arguments = new JsonObject();
-        foreach (var token in capturedArguments)
+        foreach (var token in GroupOptionLikeArguments(capturedArguments))
         {
             arguments[token] = null;
         }
@@ -348,7 +354,64 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static bool IsOptionLikeToken(string value)
     {
-        return value.StartsWith("-", StringComparison.Ordinal);
+        return value is not "--" && value.StartsWith("-", StringComparison.Ordinal);
+    }
+
+    private static string[] GroupOptionLikeArguments(IReadOnlyList<string> arguments)
+    {
+        var groupedArguments = new List<string>();
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var argument = arguments[i];
+            if (IsOptionLikeToken(argument) &&
+                !argument.Contains('=') &&
+                i + 1 < arguments.Count &&
+                !IsOptionLikeToken(arguments[i + 1]))
+            {
+                groupedArguments.Add($"{argument} {arguments[i + 1]}");
+                i++;
+            }
+            else
+            {
+                groupedArguments.Add(argument);
+            }
+        }
+
+        return [.. groupedArguments];
+    }
+
+    private static string[] GroupUnrecognizedCommandOptions(IReadOnlyList<string> arguments)
+    {
+        var groupedArguments = new List<string>();
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var argument = arguments[i];
+            if (!IsOptionLikeToken(argument))
+            {
+                continue;
+            }
+
+            if (!argument.Contains('=') &&
+                i + 1 < arguments.Count &&
+                !IsOptionLikeToken(arguments[i + 1]))
+            {
+                groupedArguments.Add($"{argument} {arguments[i + 1]}");
+                i++;
+            }
+            else
+            {
+                groupedArguments.Add(argument);
+            }
+        }
+
+        return [.. groupedArguments];
+    }
+
+    private static string FormatUnrecognizedCommandOptions(string[] optionNames)
+    {
+        return optionNames.Length == 1
+            ? $"Unrecognized command option '{optionNames[0]}'."
+            : $"Unrecognized command options: {string.Join(", ", optionNames.Select(static optionName => $"'{optionName}'"))}.";
     }
 
     private static string ToKebabCase(string value)

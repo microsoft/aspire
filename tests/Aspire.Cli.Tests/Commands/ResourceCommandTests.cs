@@ -407,7 +407,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
-        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--selector", null), ("#submit", null), ("--count", null), ("2", null));
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--selector #submit", null), ("--count 2", null));
     }
 
     [Fact]
@@ -454,7 +454,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
-        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--selector", null), ("#submit", null));
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--selector #submit", null));
     }
 
     [Fact]
@@ -518,7 +518,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
-        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--message", null), ("hello", null));
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--message hello", null));
     }
 
     [Fact]
@@ -688,8 +688,31 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
-        Assert.Contains("--unknown", error);
-        Assert.Contains("value", error);
+        Assert.Equal("Unrecognized command option '--unknown value'.", error);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_GroupsUnknownCommandOptionValueWhenCommandMetadataIsMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot("web-browser-automation")
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --mm ss""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--mm ss", null));
     }
 
     [Fact]
@@ -719,6 +742,47 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("maybe", error);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_DisplaysValidationErrorArgumentNamesAsCliOptions()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ValidationErrors =
+                [
+                    new ResourceCommandArgumentValidationError
+                    {
+                        ArgumentName = "timeoutSeconds",
+                        ErrorMessage = "Value must be greater than 0."
+                    }
+                ]
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand("configure", CreateArgument("timeoutSeconds", inputType: "Number")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --timeout-seconds 0""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("--timeout-seconds: Value must be greater than 0.", error);
+        Assert.DoesNotContain("timeoutSeconds:", error);
     }
 
     [Fact]

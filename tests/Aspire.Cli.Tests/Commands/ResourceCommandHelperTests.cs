@@ -214,7 +214,7 @@ public class ResourceCommandHelperTests
         Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("Command argument validation failed.", error);
-        Assert.Contains("target: Target must not be prod.", error);
+        Assert.Contains("--target: Target must not be prod.", error);
     }
 
     [Fact]
