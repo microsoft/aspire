@@ -234,6 +234,14 @@ internal static class PackageJsonMerger
             var existingVersionNode = existingDeps[packageName];
             if (existingVersionNode is null)
             {
+                // Preserve brownfield package shape: if a scaffolded devDependency already exists
+                // as a runtime dependency, upgrade it in place instead of duplicating it.
+                if (sectionName == DevDependenciesKey &&
+                    TryMergeExistingDependency(existing, DependenciesKey, packageName, desiredVersion))
+                {
+                    continue;
+                }
+
                 existingDeps[packageName] = desiredVersion;
             }
             else
@@ -246,6 +254,29 @@ internal static class PackageJsonMerger
                 }
             }
         }
+    }
+
+    private static bool TryMergeExistingDependency(JsonObject existing, string sectionName, string packageName, string desiredVersion)
+    {
+        if (existing[sectionName] is not JsonObject existingDeps)
+        {
+            return false;
+        }
+
+        var existingVersionNode = existingDeps[packageName];
+        if (existingVersionNode is null)
+        {
+            return false;
+        }
+
+        if (existingVersionNode is JsonValue existingValue
+            && existingValue.TryGetValue<string>(out var existingVersion)
+            && NpmVersionHelper.ShouldUpgrade(existingVersion, desiredVersion))
+        {
+            existingDeps[packageName] = desiredVersion;
+        }
+
+        return true;
     }
 
     /// <summary>
