@@ -78,14 +78,14 @@ internal sealed class ResourceCommand : BaseCommand
         Validators.Add(result =>
         {
             var resourceName = result.GetValue(s_resourceArgument);
-            if (string.IsNullOrEmpty(resourceName))
+            if (string.IsNullOrEmpty(resourceName) || IsOptionLikeToken(resourceName))
             {
                 result.AddError("The 'resource' argument is required.");
                 return;
             }
 
             var commandName = result.GetValue(s_commandArgument);
-            if (string.IsNullOrEmpty(commandName))
+            if (string.IsNullOrEmpty(commandName) || IsOptionLikeToken(commandName))
             {
                 result.AddError("The 'command' argument is required.");
             }
@@ -344,6 +344,11 @@ internal sealed class ResourceCommand : BaseCommand
     private static bool IsNumberInput(ResourceSnapshotCommandArgument argument)
     {
         return string.Equals(argument.InputType, "Number", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsOptionLikeToken(string value)
+    {
+        return value.StartsWith("-", StringComparison.Ordinal);
     }
 
     private static string ToKebabCase(string value)

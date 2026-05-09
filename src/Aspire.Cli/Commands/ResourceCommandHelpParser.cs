@@ -25,7 +25,10 @@ internal static class ResourceCommandHelpParser
         //   aspire resource web --help
         var resourceName = GetArgumentValue(parseResult, resourceArgument);
         var commandName = GetArgumentValue(parseResult, commandArgument);
-        if (string.IsNullOrEmpty(resourceName) || string.IsNullOrEmpty(commandName))
+        if (string.IsNullOrEmpty(resourceName) ||
+            IsOptionLikeToken(resourceName) ||
+            string.IsNullOrEmpty(commandName) ||
+            IsOptionLikeToken(commandName))
         {
             return null;
         }
@@ -46,5 +49,10 @@ internal static class ResourceCommandHelpParser
     {
         var result = parseResult.GetResult(option);
         return result?.Tokens.Count > 0 ? new FileInfo(result.Tokens[0].Value) : null;
+    }
+
+    private static bool IsOptionLikeToken(string value)
+    {
+        return value.StartsWith("-", StringComparison.Ordinal);
     }
 }

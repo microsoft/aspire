@@ -47,6 +47,25 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(ExitCodeConstants.Success, exitCode);
     }
 
+    [Theory]
+    [InlineData("--message hi")]
+    [InlineData("--message=hi")]
+    public async Task ResourceCommand_RequiresResourceArgumentWhenCommandOptionsAreProvidedWithoutResource(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"""resource {arguments}""");
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("The 'resource' argument is required.", error.Message);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+    }
+
     [Fact]
     public async Task ResourceCommand_RequiresCommandArgument()
     {
@@ -56,6 +75,26 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("resource myresource");
+
+        var error = Assert.Single(result.Errors);
+        Assert.Equal("The 'command' argument is required.", error.Message);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Theory]
+    [InlineData("--message hi")]
+    [InlineData("--message=hi")]
+    [InlineData("-- --message hi")]
+    public async Task ResourceCommand_RequiresCommandArgumentWhenCommandOptionsAreProvidedWithoutCommand(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"""resource myresource {arguments}""");
 
         var error = Assert.Single(result.Errors);
         Assert.Equal("The 'command' argument is required.", error.Message);
