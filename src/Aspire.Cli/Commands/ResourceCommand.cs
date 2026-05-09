@@ -80,14 +80,14 @@ internal sealed class ResourceCommand : BaseCommand
             var resourceName = result.GetValue(s_resourceArgument);
             if (string.IsNullOrEmpty(resourceName) || IsOptionLikeToken(resourceName))
             {
-                result.AddError("The 'resource' argument is required.");
+                result.AddError(string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.ArgumentRequired, s_resourceArgument.Name));
                 return;
             }
 
             var commandName = result.GetValue(s_commandArgument);
             if (string.IsNullOrEmpty(commandName) || IsOptionLikeToken(commandName))
             {
-                result.AddError("The 'command' argument is required.");
+                result.AddError(string.Format(CultureInfo.CurrentCulture, ResourceCommandStrings.ArgumentRequired, s_commandArgument.Name));
             }
         });
     }

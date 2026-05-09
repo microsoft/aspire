@@ -70,6 +70,9 @@
   <data name="CommandNameArgumentDescription" xml:space="preserve">
     <value>The name of the command to execute (e.g. start, stop, restart)</value>
   </data>
+  <data name="ArgumentRequired" xml:space="preserve">
+    <value>The '{0}' argument is required.</value>
+  </data>
   <data name="CommandSpecificHelpUsageSyntax" xml:space="preserve">
     <value>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</value>
   </data>
