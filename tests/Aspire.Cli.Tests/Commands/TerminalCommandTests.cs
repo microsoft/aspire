@@ -366,8 +366,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             => _inner.GetResourceLogsAsync(resourceName, follow, cancellationToken);
         public Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
             => _inner.StopAppHostAsync(cancellationToken);
-        public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(string resourceName, string commandName, CancellationToken cancellationToken = default)
-            => _inner.ExecuteResourceCommandAsync(resourceName, commandName, cancellationToken);
+        public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(string resourceName, string commandName, ExecuteResourceCommandOptions? options = null, CancellationToken cancellationToken = default)
+            => _inner.ExecuteResourceCommandAsync(resourceName, commandName, options, cancellationToken);
         public Task<WaitForResourceResponse> WaitForResourceAsync(string resourceName, string status, int timeoutSeconds, CancellationToken cancellationToken = default)
             => _inner.WaitForResourceAsync(resourceName, status, timeoutSeconds, cancellationToken);
         public Task<global::ModelContextProtocol.Protocol.CallToolResult> CallResourceMcpToolAsync(string resourceName, string toolName, IReadOnlyDictionary<string, global::System.Text.Json.JsonElement>? arguments, CancellationToken cancellationToken = default)
