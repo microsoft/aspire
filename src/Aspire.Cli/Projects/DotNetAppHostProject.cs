@@ -224,8 +224,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
 
-        (bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)? appHostCompatibilityCheck = null;
-
         using var activity = _profilingTelemetry.StartAppHostRun();
 
         var isSingleFileAppHost = effectiveAppHostFile.Extension != ".csproj";
@@ -260,85 +258,20 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             env[KnownConfigNames.WaitForDebugger] = "true";
         }
 
-        try
-        {
-            EnsureCertificatesTrustedResult certResult;
-            using (var certActivity = _profilingTelemetry.StartAppHostEnsureDevCertificates())
-            {
-                certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
-                certActivity.SetDevCertificateEnvironmentVariables(certResult.EnvironmentVariables.Count);
-            }
-
-            // Apply any environment variables returned by the certificate service (e.g., SSL_CERT_DIR on Linux)
-            foreach (var kvp in certResult.EnvironmentVariables)
-            {
-                env[kvp.Key] = kvp.Value;
-            }
-        }
-        catch
-        {
-            // Signal that build/preparation failed so RunCommand doesn't hang waiting
-            context.BuildCompletionSource?.TrySetResult(false);
-            throw;
-        }
+        await EnsureDevCertificatesTrustedAsync(context, env, cancellationToken);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
-
-        try
+        var preparationExitCode = await PrepareAppHostAsync(
+            context,
+            effectiveAppHostFile,
+            isSingleFileAppHost,
+            isExtensionHost,
+            extensionBackchannel,
+            buildOutputCollector,
+            cancellationToken);
+        if (preparationExitCode is { } exitCode)
         {
-            if (!context.NoBuild)
-            {
-                // Build in CLI if either not running under extension host, or the extension reports 'build-dotnet-using-cli' capability.
-                var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
-                var shouldBuildInCli = !isExtensionHost || extensionHasBuildCapability;
-                if (shouldBuildInCli)
-                {
-                    using var buildActivity = _profilingTelemetry.StartAppHostBuild(context.NoRestore, isExtensionHost, extensionHasBuildCapability);
-
-                    var buildOptions = new ProcessInvocationOptions
-                    {
-                        StandardOutputCallback = buildOutputCollector.AppendOutput,
-                        StandardErrorCallback = buildOutputCollector.AppendError,
-                    };
-
-                    var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
-                    buildActivity.SetAppHostBuildExitCode(buildExitCode);
-
-                    if (buildExitCode != 0)
-                    {
-                        // Set OutputCollector so RunCommand can display errors
-                        context.OutputCollector = buildOutputCollector;
-                        context.BuildCompletionSource?.TrySetResult(false);
-                        return ExitCodeConstants.FailedToBuildArtifacts;
-                    }
-                }
-            }
-
-            if (isSingleFileAppHost)
-            {
-                appHostCompatibilityCheck = (true, true, VersionHelper.GetDefaultTemplateVersion());
-            }
-            else
-            {
-                using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();
-                appHostCompatibilityCheck = await AppHostHelper.CheckAppHostCompatibilityAsync(_runner, _interactionService, effectiveAppHostFile, _telemetry, context.WorkingDirectory, _fileLoggerProvider.LogFilePath, cancellationToken);
-                compatibilityActivity.SetAppHostCompatibility(
-                    appHostCompatibilityCheck.Value.IsCompatibleAppHost,
-                    appHostCompatibilityCheck.Value.SupportsBackchannel,
-                    appHostCompatibilityCheck.Value.AspireHostingVersion);
-            }
-        }
-        catch
-        {
-            // Signal that build/preparation failed so RunCommand doesn't hang waiting
-            context.BuildCompletionSource?.TrySetResult(false);
-            throw;
-        }
-
-        if (!appHostCompatibilityCheck?.IsCompatibleAppHost ?? throw new InvalidOperationException(RunCommandStrings.IsCompatibleAppHostIsNull))
-        {
-            context.BuildCompletionSource?.TrySetResult(false);
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return exitCode;
         }
 
         var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
@@ -403,6 +336,134 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 IsolatedUserSecretsHelper.CleanupIsolatedUserSecrets(isolatedUserSecretsId);
             }
         }
+    }
+
+    private async Task EnsureDevCertificatesTrustedAsync(AppHostProjectContext context, Dictionary<string, string> env, CancellationToken cancellationToken)
+    {
+        try
+        {
+            EnsureCertificatesTrustedResult certResult;
+            using (var certActivity = _profilingTelemetry.StartAppHostEnsureDevCertificates())
+            {
+                certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+                certActivity.SetDevCertificateEnvironmentVariables(certResult.EnvironmentVariables.Count);
+            }
+
+            // Apply any environment variables returned by the certificate service (e.g., SSL_CERT_DIR on Linux)
+            foreach (var kvp in certResult.EnvironmentVariables)
+            {
+                env[kvp.Key] = kvp.Value;
+            }
+        }
+        catch
+        {
+            // Signal that build/preparation failed so RunCommand doesn't hang waiting
+            context.BuildCompletionSource?.TrySetResult(false);
+            throw;
+        }
+    }
+
+    private async Task<int?> PrepareAppHostAsync(
+        AppHostProjectContext context,
+        FileInfo effectiveAppHostFile,
+        bool isSingleFileAppHost,
+        bool isExtensionHost,
+        IExtensionBackchannel? extensionBackchannel,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var buildExitCode = await BuildAppHostIfNeededAsync(
+                context,
+                effectiveAppHostFile,
+                isExtensionHost,
+                extensionBackchannel,
+                buildOutputCollector,
+                cancellationToken);
+            if (buildExitCode is not null)
+            {
+                return buildExitCode;
+            }
+
+            var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, context.WorkingDirectory, cancellationToken);
+            if (!compatibilityCheck.IsCompatibleAppHost)
+            {
+                context.BuildCompletionSource?.TrySetResult(false);
+                return ExitCodeConstants.FailedToDotnetRunAppHost;
+            }
+
+            return null;
+        }
+        catch
+        {
+            // Signal that build/preparation failed so RunCommand doesn't hang waiting
+            context.BuildCompletionSource?.TrySetResult(false);
+            throw;
+        }
+    }
+
+    private async Task<int?> BuildAppHostIfNeededAsync(
+        AppHostProjectContext context,
+        FileInfo effectiveAppHostFile,
+        bool isExtensionHost,
+        IExtensionBackchannel? extensionBackchannel,
+        OutputCollector buildOutputCollector,
+        CancellationToken cancellationToken)
+    {
+        if (context.NoBuild)
+        {
+            return null;
+        }
+
+        // Build in CLI if either not running under extension host, or the extension reports 'build-dotnet-using-cli' capability.
+        var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
+        if (isExtensionHost && !extensionHasBuildCapability)
+        {
+            return null;
+        }
+
+        using var buildActivity = _profilingTelemetry.StartAppHostBuild(context.NoRestore, isExtensionHost, extensionHasBuildCapability);
+
+        var buildOptions = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = buildOutputCollector.AppendOutput,
+            StandardErrorCallback = buildOutputCollector.AppendError,
+        };
+
+        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
+        buildActivity.SetAppHostBuildExitCode(buildExitCode);
+
+        if (buildExitCode == 0)
+        {
+            return null;
+        }
+
+        // Set OutputCollector so RunCommand can display errors
+        context.OutputCollector = buildOutputCollector;
+        context.BuildCompletionSource?.TrySetResult(false);
+        return ExitCodeConstants.FailedToBuildArtifacts;
+    }
+
+    private async Task<(bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
+        FileInfo effectiveAppHostFile,
+        bool isSingleFileAppHost,
+        DirectoryInfo workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        if (isSingleFileAppHost)
+        {
+            return (true, true, VersionHelper.GetDefaultTemplateVersion());
+        }
+
+        using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();
+        var appHostCompatibilityCheck = await AppHostHelper.CheckAppHostCompatibilityAsync(_runner, _interactionService, effectiveAppHostFile, _telemetry, workingDirectory, _fileLoggerProvider.LogFilePath, cancellationToken);
+        compatibilityActivity.SetAppHostCompatibility(
+            appHostCompatibilityCheck.IsCompatibleAppHost,
+            appHostCompatibilityCheck.SupportsBackchannel,
+            appHostCompatibilityCheck.AspireHostingVersion);
+
+        return appHostCompatibilityCheck;
     }
 
     internal static void ConfigureSingleFileRunEnvironment(
