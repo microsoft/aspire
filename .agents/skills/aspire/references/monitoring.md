@@ -47,9 +47,16 @@ Use this command when you need a portable handoff artifact for deeper analysis o
 aspire export [resource]
 ```
 
-Keep this point in mind:
+Keep these points in mind:
 
 - Use `aspire export` when you need a sharable bundle of telemetry and resource state.
+- `[resource]` is optional. Include it to filter the export to a single resource; omit it to export all resources.
+- The output is a zip archive (default name `aspire-export-<timestamp>.zip`) containing up to four directories:
+  - `resources/` — one JSON file per resource with resource details (name, type, state, endpoints, environment variables, etc.).
+  - `consolelogs/` — one plain-text file per resource with raw console output lines.
+  - `structuredlogs/` — one JSON file per resource with structured log entries in OTLP format.
+  - `traces/` — one JSON file per resource with distributed traces and spans in OTLP format.
+- When extracting the export for analysis, look at `resources/` first for an overview, then drill into `consolelogs/`, `structuredlogs/` and `traces/` for detailed diagnostics.
 
 ## Dashboard Links
 

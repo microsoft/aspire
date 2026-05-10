@@ -334,32 +334,38 @@ export class AppHostDataRepository {
                     extensionLogOutputChannel.info(`aspire describe --follow exited with code ${code}`);
                     this._describeProcess = undefined;
 
-                    if (!this._disposed) {
-                        if (!this._describeReceivedData && code !== 0) {
-                            // The process exited with a non-zero code without ever producing valid data.
-                            // This is expected when no apphost is running. Don't set the error state
-                            // since that would show the "CLI not supported" banner; instead just show
-                            // the normal "no running apphost" welcome.
-                            extensionLogOutputChannel.warn('aspire describe --follow exited without producing data; no running apphost or CLI may not support this feature.');
-                            this._workspaceResources.clear();
-                            this._updateWorkspaceContext();
-                        } else {
-                            this._workspaceResources.clear();
-                            this._setError(undefined);
-                            this._updateWorkspaceContext();
-
-                            // Auto-restart with exponential backoff
-                            const delay = this._describeRestartDelay;
-                            this._describeRestartDelay = Math.min(this._describeRestartDelay * 2, this._getPollingIntervalMs());
-                            extensionLogOutputChannel.info(`Restarting describe --follow in ${delay}ms`);
-                            this._describeRestartTimer = setTimeout(() => {
-                                this._describeRestartTimer = undefined;
-                                if (!this._disposed && this._shouldWatchWorkspace) {
-                                    this._startDescribeWatch();
-                                }
-                            }, delay);
-                        }
+                    if (this._disposed) {
+                        return;
                     }
+
+                    // If this attempt never produced any data, there is no running apphost
+                    // to follow (or the CLI doesn't support --follow). Stop quietly: do not
+                    // set the error state (which would show the "CLI not supported" banner)
+                    // and do not auto-restart on a 5s loop forever — the panel will refresh
+                    // when the user explicitly retries or when activity resumes.
+                    if (!this._describeReceivedData) {
+                        extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
+                        this._workspaceResources.clear();
+                        this._updateWorkspaceContext();
+                        return;
+                    }
+
+                    // We had a working stream that ended (apphost shut down). Reset and try
+                    // once more with backoff in case the apphost is restarting; if that
+                    // attempt also produces no data we'll fall into the branch above.
+                    this._workspaceResources.clear();
+                    this._setError(undefined);
+                    this._updateWorkspaceContext();
+
+                    const delay = this._describeRestartDelay;
+                    this._describeRestartDelay = Math.min(this._describeRestartDelay * 2, this._getPollingIntervalMs());
+                    extensionLogOutputChannel.info(`Restarting describe --follow in ${delay}ms`);
+                    this._describeRestartTimer = setTimeout(() => {
+                        this._describeRestartTimer = undefined;
+                        if (!this._disposed && this._shouldWatchWorkspace) {
+                            this._startDescribeWatch();
+                        }
+                    }, delay);
                 },
                 errorCallback: (error) => {
                     if (this._describeProcess !== describeProcess) {

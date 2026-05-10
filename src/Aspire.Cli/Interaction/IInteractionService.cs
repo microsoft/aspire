@@ -39,6 +39,11 @@ internal interface IInteractionService
     /// </summary>
     ConsoleOutput Console { get; set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the current console supports clickable hyperlinks.
+    /// </summary>
+    bool SupportsLinks { get; }
+
     void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null);
     // The semantic type is stringly-typed because some values originate from backchannel payloads.
     // Use ConsoleLogTypes for CLI-defined values.

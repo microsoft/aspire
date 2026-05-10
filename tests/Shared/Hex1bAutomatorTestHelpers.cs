@@ -413,10 +413,11 @@ internal static class Hex1bAutomatorTestHelpers
             .Find("What version would you like to install?");
         var waitingForLegacyVersionSelection = new CellPatternSearcher()
             .Find("based on NuGet.config");
-        var addCompleted = new CellPatternSearcher()
-            .Find("added to your AppHost project");
-        var addFailed = new CellPatternSearcher()
-            .Find("already exists in the project");
+
+        // We intentionally do NOT check for completion text like "was added successfully"
+        // because it persists on the terminal from prior aspire-add runs and would match
+        // stale output when multiple aspire-add commands run in sequence. Instead we rely
+        // on the shell success/error prompt which uses a unique counter value.
 
         await auto.WaitUntilAsync(s =>
             {
@@ -426,9 +427,7 @@ internal static class Hex1bAutomatorTestHelpers
                     return true;
                 }
 
-                return addCompleted.Search(s).Count > 0
-                    || addFailed.Search(s).Count > 0
-                    || successPrompt.Search(s).Count > 0
+                return successPrompt.Search(s).Count > 0
                     || errorPrompt.Search(s).Count > 0;
             },
             timeout: effectiveTimeout,
@@ -459,7 +458,6 @@ internal static class Hex1bAutomatorTestHelpers
             .Find("configure AI agent environments");
 
         var agentInitFound = false;
-        var agentInitPromptRequiresEnter = false;
         var errorPromptFound = false;
 
         // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
@@ -468,10 +466,6 @@ internal static class Hex1bAutomatorTestHelpers
             if (agentInitPrompt.Search(s).Count > 0)
             {
                 agentInitFound = true;
-                agentInitPromptRequiresEnter = new CellPatternSearcher()
-                    .Find("[Y/n]")
-                    .RightText(": ")
-                    .Search(s).Count > 0;
                 return true;
             }
             var successSearcher = new CellPatternSearcher()
@@ -502,10 +496,12 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        if (agentInitPromptRequiresEnter)
-        {
-            await auto.EnterAsync();
-        }
+
+        // Do not send Enter after typing "n" — the Spectre Console [Y/n] confirmation
+        // prompt accepts a single character. Sending Enter risks a race: if aspire init
+        // exits after reading "n" but before the Enter is delivered, bash receives the
+        // Enter and executes a phantom blank command, advancing CMDCOUNT and desyncing
+        // the test counter from the shell counter.
 
         await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
     }
@@ -584,20 +580,24 @@ internal static class Hex1bAutomatorTestHelpers
                 break;
 
             case AspireTemplate.TypeScriptEmptyAppHost:
-                await auto.TypeAsync("Empty (TypeScript");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (TypeScript AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "TypeScript Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("TypeScript");
                 await auto.EnterAsync();
                 break;
 
             case AspireTemplate.JavaEmptyAppHost:
-                await auto.TypeAsync("Empty (Java AppHost)");
+                await auto.TypeAsync("Empty AppHost");
+                await auto.EnterAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Empty (Java AppHost)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "Java Empty AppHost template selected");
+                    s => new CellPatternSearcher().Find("Which language would you like to use?").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(10),
+                    description: "AppHost language prompt");
+                await auto.TypeAsync("Java");
                 await auto.EnterAsync();
                 break;
 

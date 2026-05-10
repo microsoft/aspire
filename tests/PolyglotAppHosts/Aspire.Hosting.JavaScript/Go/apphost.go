@@ -36,6 +36,9 @@ func main() {
 	nodeApp.WithRunScript("dev", &aspire.WithRunScriptOptions{
 		Args: []string{"--host", "0.0.0.0"},
 	})
+	_, _ = nodeApp.Name()
+	_, _ = nodeApp.Command()
+	_, _ = nodeApp.WorkingDirectory()
 	if err = nodeApp.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -44,6 +47,9 @@ func main() {
 		RunScriptName: aspire.StringPtr("start"),
 	})
 	javaScriptApp.WithEnvironment("NODE_ENV", "development")
+	_, _ = javaScriptApp.Name()
+	_, _ = javaScriptApp.Command()
+	_, _ = javaScriptApp.WorkingDirectory()
 	if err = javaScriptApp.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -62,6 +68,9 @@ func main() {
 	viteApp.WithRunScript("dev", &aspire.WithRunScriptOptions{
 		Args: []string{"--host"},
 	})
+	_, _ = viteApp.Name()
+	_, _ = viteApp.Command()
+	_, _ = viteApp.WorkingDirectory()
 	if err = viteApp.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}

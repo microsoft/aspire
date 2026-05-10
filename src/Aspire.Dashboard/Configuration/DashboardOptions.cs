@@ -309,6 +309,7 @@ public sealed class UIOptions
 {
     public bool? DisableResourceGraph { get; set; }
     public bool? DisableImport { get; set; }
+    public bool? DisableAgentHelp { get; set; }
 }
 
 // Don't set values after validating/parsing options.

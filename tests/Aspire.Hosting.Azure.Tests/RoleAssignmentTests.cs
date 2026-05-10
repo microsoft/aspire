@@ -297,7 +297,7 @@ public class RoleAssignmentTests()
         await ExecuteBeforeStartHooksAsync(app, default);
 
         // Verify that explicit role assignments still work even after ClearDefaultRoleAssignments
-        var projRoles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "api-roles-keyvault");
+        var projRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "api-roles-keyvault");
         Assert.NotNull(projRoles);
     }
 
@@ -325,7 +325,7 @@ public class RoleAssignmentTests()
         await ExecuteBeforeStartHooksAsync(app, default);
 
         // The server should have a role assignment to the cache since it directly references it
-        Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "server-roles-cache");
+        Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == "server-roles-cache");
 
         // The webfrontend should NOT have a role assignment to the cache since it only references the server
         Assert.DoesNotContain(model.Resources, r => r.Name == "webfrontend-roles-cache");
@@ -348,7 +348,12 @@ public class RoleAssignmentTests()
 
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        var projRoles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == $"api-roles-{azureResourceName}");
+        var project = Assert.Single(model.Resources.OfType<ProjectResource>(), r => r.Name == "api");
+        var targetAzureResource = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == azureResourceName);
+        var projRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), r => r.Name == $"api-roles-{azureResourceName}");
+
+        Assert.Same(targetAzureResource, projRoles.TargetAzureResource);
+        Assert.Same(project, projRoles.OwnerResource);
 
         var (rolesManifest, rolesBicep) = await GetManifestWithBicep(projRoles);
 

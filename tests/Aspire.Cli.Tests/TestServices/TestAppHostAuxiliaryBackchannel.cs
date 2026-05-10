@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using ModelContextProtocol.Protocol;
 
@@ -169,11 +170,21 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public ExecuteResourceCommandResponse ExecuteResourceCommandResult { get; set; } = new ExecuteResourceCommandResponse { Success = true };
 
+    public JsonNode? ExecuteResourceCommandArguments { get; private set; }
+
+    public ExecuteResourceCommandOptions? ExecuteResourceCommandOptions { get; private set; }
+
+    public int ExecuteResourceCommandCallCount { get; private set; }
+
     public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        ExecuteResourceCommandCallCount++;
+        ExecuteResourceCommandOptions = options;
+        ExecuteResourceCommandArguments = options?.Arguments;
         return Task.FromResult(ExecuteResourceCommandResult);
     }
 

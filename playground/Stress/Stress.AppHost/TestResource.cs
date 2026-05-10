@@ -47,6 +47,23 @@ static class TestResourceExtensions
 
         return rb;
     }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<CommandGroupResource> AddCommandGroup(this IDistributedApplicationBuilder builder, string name, IResource parent)
+    {
+        var rb = builder.AddResource(new CommandGroupResource(name, parent))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "Command Group",
+                          State = "Running",
+                          Properties = [
+                              new(KnownProperties.Resource.ParentName, parent.Name)
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
 }
 
 internal sealed class TestResourceLifecycle(
@@ -114,6 +131,11 @@ sealed class TestResource(string name) : Resource(name)
 }
 
 sealed class TestNestedResource(string name, IResource parent) : Resource(name), IResourceWithParent
+{
+    public IResource Parent { get; } = parent;
+}
+
+sealed class CommandGroupResource(string name, IResource parent) : Resource(name), IResourceWithParent
 {
     public IResource Parent { get; } = parent;
 }

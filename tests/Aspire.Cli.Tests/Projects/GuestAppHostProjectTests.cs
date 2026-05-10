@@ -4,6 +4,7 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -11,14 +12,24 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposable
+public class GuestAppHostProjectTests : IDisposable
 {
     private const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
 
-    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
+    private readonly TemporaryWorkspace _workspace;
+    private readonly IConfiguration _configuration;
+    private readonly ProfilingTelemetry _profilingTelemetry;
+
+    public GuestAppHostProjectTests(ITestOutputHelper outputHelper)
+    {
+        _workspace = TemporaryWorkspace.Create(outputHelper);
+        _configuration = new ConfigurationBuilder().Build();
+        _profilingTelemetry = new ProfilingTelemetry(_configuration);
+    }
 
     public void Dispose()
     {
+        _profilingTelemetry.Dispose();
         _workspace.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -530,7 +541,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
-    private static GuestAppHostProject CreateGuestAppHostProject()
+    private GuestAppHostProject CreateGuestAppHostProject()
     {
         var language = new LanguageInfo(
             LanguageId: "typescript/nodejs",
@@ -539,9 +550,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             DetectionPatterns: ["apphost.ts"],
             CodeGenerator: "TypeScript");
 
-        var configuration = new ConfigurationBuilder().Build();
-
-        var logFilePath = Path.Combine(Path.GetTempPath(), $"test-guest-{Guid.NewGuid()}.log");
+        var logFilePath = Path.Combine(_workspace.WorkspaceRoot.FullName, $"test-guest-{Guid.NewGuid()}.log");
 
         return new GuestAppHostProject(
             language: language,
@@ -551,10 +560,11 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),
-            configuration: configuration,
-            features: new Features(configuration, NullLogger<Features>.Instance),
+            configuration: _configuration,
+            features: new Features(_configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             logger: NullLogger<GuestAppHostProject>.Instance,
-            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
+            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
+            profilingTelemetry: _profilingTelemetry);
     }
 }

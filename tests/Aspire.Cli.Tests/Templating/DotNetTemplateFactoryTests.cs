@@ -402,6 +402,11 @@ public class DotNetTemplateFactoryTests
             return Task.FromResult<string?>(null);
         }
 
+        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         public string GetSettingsFilePath(bool isGlobal)
         {
             return "/tmp/settings.json";
@@ -411,6 +416,7 @@ public class DotNetTemplateFactoryTests
     private sealed class TestInteractionService : IInteractionService
     {
         public ConsoleOutput Console { get; set; }
+        public bool SupportsLinks { get; set; }
 
         public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
@@ -514,7 +520,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, CancellationToken cancellationToken)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

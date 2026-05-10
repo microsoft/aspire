@@ -338,6 +338,7 @@ public class Program
         });
         builder.Services.AddSingleton(TimeProvider.System);
         AddInteractionServices(builder);
+        builder.Services.AddSingleton<IAppHostCandidateFinder, AppHostCandidateFinder>();
         builder.Services.AddSingleton<IProjectLocator, ProjectLocator>();
         builder.Services.AddSingleton<ISolutionLocator, SolutionLocator>();
         builder.Services.AddSingleton<ILanguageService, LanguageService>();
@@ -477,10 +478,15 @@ public class Program
         builder.Services.AddTransient<StopCommand>();
         builder.Services.AddTransient<StartCommand>();
         builder.Services.AddTransient<WaitCommand>();
+        builder.Services.AddTransient<LsCommand>();
         builder.Services.AddTransient<ResourceCommand>();
         builder.Services.AddTransient<PsCommand>();
         builder.Services.AddTransient<DescribeCommand>();
         builder.Services.AddTransient<LogsCommand>();
+        builder.Services.AddTransient<IntegrationPackageSearchService>();
+        builder.Services.AddTransient<IntegrationCommand>();
+        builder.Services.AddTransient<IntegrationListCommand>();
+        builder.Services.AddTransient<IntegrationSearchCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
@@ -638,11 +644,12 @@ public class Program
             {
                 // Write to stderr to avoid interfering with tools that parse stdout
                 var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
+                var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
 
                 const string telemetryUrl = "https://aka.ms/aspire/cli-telemetry";
 
                 consoleEnvironment.Error.WriteLine();
-                consoleEnvironment.Error.MarkupLine(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.FirstTimeUseTelemetryNotice, $"[link]{telemetryUrl}[/]"));
+                consoleEnvironment.Error.MarkupLine(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.FirstTimeUseTelemetryNotice, MarkupHelpers.SafeLink(interactionService, telemetryUrl)));
                 consoleEnvironment.Error.WriteLine();
             }
 
@@ -763,7 +770,8 @@ public class Program
             EnableDefaultExceptionHandler = false
         };
 
-        using var mainActivity = telemetry.StartReportedActivity(name: TelemetryConstants.Activities.Main, kind: ActivityKind.Internal);
+        app.Services.GetRequiredService<CliExecutionContext>();
+        using var mainActivity = telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
 
         if (mainActivity != null)
         {

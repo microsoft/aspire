@@ -127,20 +127,28 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FormatTraceLink_WithDashboardUrl_ReturnsHyperlink()
     {
-        var result = TelemetryCommandHelpers.FormatTraceLink("http://localhost:18888", "abc123456789");
+        var interactionService = new TestInteractionService { SupportsLinks = true };
+        var result = TelemetryCommandHelpers.FormatTraceLink(interactionService, "http://localhost:18888", "abc123456789");
 
-        Assert.Contains("[link=", result);
-        Assert.Contains("/traces/detail/abc123456789", result);
-        Assert.Contains("abc1234", result); // Shortened ID
+        Assert.Equal("[link=http://localhost:18888/traces/detail/abc123456789]abc1234[/]", result);
     }
 
     [Fact]
     public void FormatTraceLink_WithNullDashboardUrl_ReturnsPlainText()
     {
-        var result = TelemetryCommandHelpers.FormatTraceLink(null, "abc123456789");
+        var interactionService = new TestInteractionService();
+        var result = TelemetryCommandHelpers.FormatTraceLink(interactionService, null, "abc123456789");
 
-        Assert.DoesNotContain("[link=", result);
         Assert.Equal("abc1234", result); // Just the shortened ID
+    }
+
+    [Fact]
+    public void FormatTraceLink_WithDashboardUrlAndNoLinkSupport_ReturnsFallbackWithUrl()
+    {
+        var interactionService = new TestInteractionService { SupportsLinks = false };
+        var result = TelemetryCommandHelpers.FormatTraceLink(interactionService, "http://localhost:18888", "abc123456789");
+
+        Assert.Equal("abc1234 (http://localhost:18888/traces/detail/abc123456789)", result);
     }
 
     [Fact]

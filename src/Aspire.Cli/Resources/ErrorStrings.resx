@@ -120,6 +120,9 @@
   <data name="MinimumSdkVersionNotMet" xml:space="preserve">
     <value>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</value>
   </data>
+  <data name="DotNetSdkUnavailableAppHostDiscoveryWarning" xml:space="preserve">
+    <value>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</value>
+  </data>
   <data name="InvalidLocaleProvided" xml:space="preserve">
     <value>Invalid locale {0} provided will not be used.</value>
   </data>

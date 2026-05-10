@@ -1,4 +1,3 @@
-#pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 
 using Microsoft.Extensions.Hosting;

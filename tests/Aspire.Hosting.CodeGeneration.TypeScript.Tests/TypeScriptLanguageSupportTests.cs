@@ -231,10 +231,13 @@ public sealed class TypeScriptLanguageSupportTests
     public void GetRuntimeSpec_UsesAppHostSpecificTsConfig()
     {
         var runtimeSpec = _languageSupport.GetRuntimeSpec();
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
 
+        Assert.Equal("npx", preExecute.Command);
+        Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, preExecute.Args);
         Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
-        Assert.Contains("npx --no-install tsx --tsconfig tsconfig.apphost.json {appHostFile}", watchExecute.Args);
+        Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
     }
 
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();

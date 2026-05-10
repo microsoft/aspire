@@ -89,6 +89,15 @@ public partial class MobileNavMenu : ComponentBase
             new Icons.Regular.Size24.QuestionCircle()
         );
 
+        if (IsAgentHelpEnabled)
+        {
+            yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
+                LaunchAIAgentsAsync,
+                new Icons.Regular.Size24.BotSparkle()
+            );
+        }
+
         if (IsAIEnabled)
         {
             yield return new MobileNavMenuEntry(

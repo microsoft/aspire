@@ -246,7 +246,7 @@ public static class FoundryExtensions
     /// <param name="roles">The Microsoft Foundry roles to be assigned (for example, <see cref="FoundryRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
-    [AspireExport("withFoundryRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Microsoft Foundry roles to a resource")]
+    [AspireExport("withFoundryRoleAssignments", Description = "Assigns Microsoft Foundry roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<FoundryResource> target,

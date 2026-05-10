@@ -1,0 +1,710 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to exercise resource command arguments.
+
+internal static class CommandResources
+{
+    public static void AddCommandResources(
+        this IDistributedApplicationBuilder builder,
+        IResourceBuilder<ProjectResource> serviceBuilder,
+        IResourceBuilder<ProjectResource> telemetryBuilder)
+    {
+        AddServiceCommands(builder, serviceBuilder);
+        AddTelemetryCommands(builder, telemetryBuilder);
+    }
+
+    private static void AddServiceCommands(IDistributedApplicationBuilder builder, IResourceBuilder<ProjectResource> serviceBuilder)
+    {
+        var iconCommands = builder.AddCommandGroup("icon-commands", serviceBuilder.Resource);
+        iconCommands.WithCommand(
+            name: "icon-test",
+            displayName: "Icon test",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "CloudDatabase"
+            });
+        iconCommands.WithCommand(
+            name: "icon-test-highlighted",
+            displayName: "Icon test highlighted",
+            executeCommand: (c) =>
+            {
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                IconName = "CloudDatabase",
+                IsHighlighted = true
+            });
+
+        var argumentCommands = builder.AddCommandGroup("argument-commands", serviceBuilder.Resource);
+        argumentCommands.WithCommand(
+            name: "echo-command-arguments",
+            displayName: "Echo command arguments",
+            executeCommand: (c) =>
+            {
+                var arguments = c.Arguments;
+                if (string.IsNullOrWhiteSpace(arguments.GetString("message")) || string.IsNullOrWhiteSpace(arguments.GetString("count")))
+                {
+                    return Task.FromResult(CommandResults.Failure("The message and count arguments are required."));
+                }
+
+                var response = new
+                {
+                    Message = arguments.GetString("message"),
+                    Count = arguments.GetDouble("count"),
+                    Urgent = arguments.GetString("urgent") is { } urgent && bool.Parse(urgent)
+                };
+
+                return Task.FromResult(CreateJsonSuccess("Echoed command arguments.", response));
+            },
+            commandOptions: new CommandOptions
+            {
+                Description = "Common API-only command that accepts required text and number arguments plus an optional boolean.",
+                IconName = "Send",
+                Visibility = ResourceCommandVisibility.Api,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "message",
+                        Label = "Message",
+                        InputType = InputType.Text,
+                        Required = true,
+                        Placeholder = "Hello"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "count",
+                        Label = "Count",
+                        InputType = InputType.Number,
+                        Required = true
+                    },
+                    new InteractionInput
+                    {
+                        Name = "urgent",
+                        Label = "Urgent",
+                        InputType = InputType.Boolean
+                    }
+                ]
+            });
+        argumentCommands.WithCommand(
+            name: "echo-arguments",
+            displayName: "Echo arguments",
+            executeCommand: c =>
+            {
+                var arguments = ReadEchoCommandArguments(c.Arguments);
+                if (string.IsNullOrWhiteSpace(arguments.Message))
+                {
+                    return Task.FromResult(CommandResults.Failure("The message argument is required."));
+                }
+                if (arguments.Repeat is < 1 or > 10)
+                {
+                    return Task.FromResult(CommandResults.Failure("The repeat argument must be between 1 and 10."));
+                }
+
+                var message = arguments.Shout ? arguments.Message.ToUpperInvariant() : arguments.Message;
+                var payload = new
+                {
+                    arguments.Message,
+                    arguments.Repeat,
+                    arguments.Shout,
+                    arguments.Flavor,
+                    SecretLength = arguments.Secret?.Length ?? 0,
+                    Echoed = Enumerable.Repeat(message, arguments.Repeat).ToArray()
+                };
+
+                return Task.FromResult(CreateJsonSuccess("Echoed command arguments.", payload, displayImmediately: true));
+            },
+            commandOptions: new CommandOptions
+            {
+                Description = "Common dashboard/API command with text, number, boolean, choice, and secret argument inputs.",
+                IconName = "Code",
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "message",
+                        Label = "Message",
+                        Description = "Text value to echo.",
+                        InputType = InputType.Text,
+                        Required = true,
+                        Placeholder = "Hello from the Stress playground",
+                        MaxLength = 80
+                    },
+                    new InteractionInput
+                    {
+                        Name = "repeat",
+                        Label = "Repeat",
+                        Description = "How many times to echo the message.",
+                        InputType = InputType.Number,
+                        Value = "1"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "shout",
+                        Label = "Shout",
+                        Description = "Uppercase the echoed message.",
+                        InputType = InputType.Boolean,
+                        Value = "false"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "flavor",
+                        Label = "Flavor",
+                        Description = "Choice argument used to verify select input rendering.",
+                        InputType = InputType.Choice,
+                        Value = "vanilla",
+                        Options =
+                        [
+                            KeyValuePair.Create("vanilla", "Vanilla"),
+                            KeyValuePair.Create("chocolate", "Chocolate"),
+                            KeyValuePair.Create("strawberry", "Strawberry")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "secret",
+                        Label = "Secret",
+                        Description = "Secret text input. The command only returns its length.",
+                        InputType = InputType.SecretText,
+                        Required = false,
+                        Placeholder = "Optional secret"
+                    }
+                ]
+            });
+        argumentCommands.WithCommand(
+            name: "validate-arguments",
+            displayName: "Validate arguments",
+            executeCommand: c =>
+            {
+                var arguments = ReadValidateCommandArguments(c.Arguments);
+                if (string.IsNullOrWhiteSpace(arguments.Target))
+                {
+                    return Task.FromResult(CommandResults.Failure("The target argument is required."));
+                }
+                if (arguments.TimeoutSeconds <= 0)
+                {
+                    return Task.FromResult(CommandResults.Failure("The timeoutSeconds argument must be positive."));
+                }
+
+                var payload = new
+                {
+                    arguments.Target,
+                    arguments.Mode,
+                    arguments.TimeoutSeconds,
+                    arguments.RequireHealthy,
+                    ValidatedAt = DateTimeOffset.UtcNow
+                };
+
+                return arguments.Mode == "fail"
+                    ? Task.FromResult(CreateJsonFailure("Argument validation failed.", payload))
+                    : Task.FromResult(CreateJsonSuccess("Argument validation passed.", payload));
+            },
+            commandOptions: new CommandOptions
+            {
+                Description = "Less common validation command with failure results, required inputs, defaults, and choice validation.",
+                IconName = "CheckmarkCircle",
+                ValidateArguments = context =>
+                {
+                    var arguments = ReadValidateCommandArguments(context.Inputs);
+                    if (arguments.TimeoutSeconds <= 0)
+                    {
+                        context.AddValidationError("timeoutSeconds", "The timeoutSeconds argument must be positive.");
+                    }
+
+                    return Task.CompletedTask;
+                },
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "target",
+                        Label = "Target",
+                        Description = "Target resource or subsystem to validate.",
+                        InputType = InputType.Text,
+                        Required = true,
+                        Placeholder = "stress-apiservice",
+                        MaxLength = 80
+                    },
+                    new InteractionInput
+                    {
+                        Name = "mode",
+                        Label = "Mode",
+                        Description = "Select success to pass, fail to return a structured failure, or dry-run for a successful validation preview.",
+                        InputType = InputType.Choice,
+                        Value = "success",
+                        Options =
+                        [
+                            KeyValuePair.Create("success", "Success"),
+                            KeyValuePair.Create("fail", "Fail"),
+                            KeyValuePair.Create("dry-run", "Dry run")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "timeoutSeconds",
+                        Label = "Timeout seconds",
+                        Description = "Positive timeout value to validate.",
+                        InputType = InputType.Number,
+                        Value = "30"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "requireHealthy",
+                        Label = "Require healthy",
+                        Description = "Boolean argument used to verify checkbox input rendering.",
+                        InputType = InputType.Boolean,
+                        Value = "true"
+                    }
+                ]
+            });
+        argumentCommands.WithCommand(
+            name: "argument-stress-test",
+            displayName: "Argument stress test",
+            executeCommand: c =>
+            {
+                var arguments = c.Arguments;
+                var inputsWithValues = arguments.Where(i => i.Value is not null).ToArray();
+                var payload = new
+                {
+                    PropertyCount = inputsWithValues.Length,
+                    StringCharacters = inputsWithValues
+                        .Where(i => i.InputType is InputType.Text or InputType.SecretText or InputType.Choice)
+                        .Sum(i => i.Value?.Length ?? 0),
+                    NumberCount = inputsWithValues.Count(i => i.InputType == InputType.Number),
+                    BooleanCount = inputsWithValues.Count(i => i.InputType == InputType.Boolean),
+                    PropertyNames = inputsWithValues.Select(i => i.Name).ToArray()
+                };
+
+                return Task.FromResult(CreateJsonSuccess("Summarized command arguments.", payload, displayImmediately: true));
+            },
+            commandOptions: new CommandOptions
+            {
+                Description = "Minor dashboard/API stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
+                IconName = "TableLightning",
+                Visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+                Arguments = CreateArgumentStressInputs(fieldCount: 20)
+            });
+        argumentCommands.WithCommand(
+            name: "dependent-arguments",
+            displayName: "Dependent arguments",
+            executeCommand: c =>
+            {
+                var arguments = c.Arguments;
+                var payload = new
+                {
+                    Category = arguments.GetString("category"),
+                    Item = arguments.GetString("item"),
+                    Quantity = arguments.GetInt32("quantity"),
+                    Priority = arguments.GetString("priority")
+                };
+
+                return Task.FromResult(CreateJsonSuccess("Dependent arguments received.", payload, displayImmediately: true));
+            },
+            commandOptions: new CommandOptions
+            {
+                Description = "Command with dependent inputs that dynamically load options based on other input values.",
+                IconName = "BranchFork",
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "category",
+                        Label = "Category",
+                        Description = "Select a category to populate dependent items.",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Placeholder = "Select category",
+                        Options =
+                        [
+                            KeyValuePair.Create("fruit", "Fruit"),
+                            KeyValuePair.Create("vegetable", "Vegetable"),
+                            KeyValuePair.Create("dairy", "Dairy")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "item",
+                        Label = "Item",
+                        Description = "Items are loaded based on the selected category.",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Placeholder = "Select item",
+                        Disabled = true,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["category"],
+                            LoadCallback = async (context) =>
+                            {
+                                await Task.Delay(1000, context.CancellationToken);
+
+                                var category = context.AllInputs["category"].Value;
+                                context.Input.Disabled = string.IsNullOrEmpty(category);
+                                context.Input.Options = category switch
+                                {
+                                    "fruit" =>
+                                    [
+                                        KeyValuePair.Create("apple", "Apple"),
+                                        KeyValuePair.Create("banana", "Banana"),
+                                        KeyValuePair.Create("cherry", "Cherry")
+                                    ],
+                                    "vegetable" =>
+                                    [
+                                        KeyValuePair.Create("carrot", "Carrot"),
+                                        KeyValuePair.Create("broccoli", "Broccoli"),
+                                        KeyValuePair.Create("spinach", "Spinach")
+                                    ],
+                                    "dairy" =>
+                                    [
+                                        KeyValuePair.Create("milk", "Milk"),
+                                        KeyValuePair.Create("cheese", "Cheese"),
+                                        KeyValuePair.Create("yogurt", "Yogurt")
+                                    ],
+                                    _ => []
+                                };
+                            }
+                        }
+                    },
+                    new InteractionInput
+                    {
+                        Name = "quantity",
+                        Label = "Quantity",
+                        Description = "Number of items to order.",
+                        InputType = InputType.Number,
+                        Required = true,
+                        Value = "1"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "priority",
+                        Label = "Priority",
+                        Description = "Priority is determined by the selected item.",
+                        InputType = InputType.Choice,
+                        Disabled = true,
+                        Placeholder = "Determined by item",
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["item"],
+                            LoadCallback = async (context) =>
+                            {
+                                await Task.Delay(500, context.CancellationToken);
+
+                                var item = context.AllInputs["item"].Value;
+                                context.Input.Disabled = string.IsNullOrEmpty(item);
+
+                                // Perishable items get fewer priority options.
+                                var isPerishable = item is "banana" or "milk" or "spinach";
+                                context.Input.Options = isPerishable
+                                    ?
+                                    [
+                                        KeyValuePair.Create("express", "Express"),
+                                        KeyValuePair.Create("overnight", "Overnight")
+                                    ]
+                                    :
+                                    [
+                                        KeyValuePair.Create("standard", "Standard"),
+                                        KeyValuePair.Create("express", "Express"),
+                                        KeyValuePair.Create("overnight", "Overnight")
+                                    ];
+
+                                if (string.IsNullOrEmpty(context.Input.Value))
+                                {
+                                    context.Input.Value = isPerishable ? "express" : "standard";
+                                }
+                            }
+                        }
+                    }
+                ]
+            });
+
+        serviceBuilder.WithHttpCommand("/write-console", "Write to console", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/write-console-large", "Write to console large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/increment-counter", "Increment counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/big-trace", "Big trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/trace-limit", "Trace limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/log-message", "Log message", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/log-message-limit", "Log message limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/log-message-limit-large", "Log message limit large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/http-command-auto-result", "HTTP command auto result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Auto, Description = "Run an HTTP command and infer the result format from the response content type" });
+        serviceBuilder.WithHttpCommand("/http-command-json-result", "HTTP command JSON result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Json, Description = "Run an HTTP command and flow the JSON response back to the caller" });
+        serviceBuilder.WithHttpCommand("/http-command-text-result", "HTTP command text result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Text, Description = "Run an HTTP command and flow the plain-text response back to the caller" });
+        serviceBuilder.WithHttpCommand("/multiple-traces-linked", "Multiple traces linked", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/overflow-counter", "Overflow counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/nested-trace-spans", "Out of order nested spans", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/exemplars-no-span", "Examplars with no span", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/genai-trace", "Gen AI trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/genai-langchain-trace", "Gen AI LangChain trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/genai-trace-display-error", "Gen AI trace display error", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/genai-evaluations", "Gen AI evaluations", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/log-formatting", "Log formatting", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/big-nested-trace", "Big nested trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+    }
+
+    private static void AddTelemetryCommands(IDistributedApplicationBuilder builder, IResourceBuilder<ProjectResource> telemetryBuilder)
+    {
+        var interactionCommands = builder.AddCommandGroup("interaction-commands", telemetryBuilder.Resource);
+        interactionCommands.AddInteractionCommands();
+
+        var lifecycleCommands = builder.AddCommandGroup("lifecycle-commands", telemetryBuilder.Resource);
+        lifecycleCommands
+            .WithCommand(
+                name: "long-command",
+                displayName: "This is a custom command with a very long command display name",
+                executeCommand: (c) =>
+                {
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new() { IconName = "CloudDatabase" })
+            .WithCommand(
+                name: "resource-stop-all",
+                displayName: "Stop all resources",
+                executeCommand: async (c) =>
+                {
+                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StopCommand, c.CancellationToken);
+                    return CommandResults.Success();
+                },
+                commandOptions: new() { IconName = "Stop", IconVariant = IconVariant.Filled })
+            .WithCommand(
+                name: "resource-start-all",
+                displayName: "Start all resources",
+                executeCommand: async (c) =>
+                {
+                    await ExecuteCommandForAllResourcesAsync(c.ServiceProvider, KnownResourceCommands.StartCommand, c.CancellationToken);
+                    return CommandResults.Success();
+                },
+                commandOptions: new() { IconName = "Play", IconVariant = IconVariant.Filled });
+
+        var resultCommands = builder.AddCommandGroup("result-commands", telemetryBuilder.Resource);
+        resultCommands
+            .WithCommand(
+                name: "generate-token",
+                displayName: "Generate Token",
+                executeCommand: (c) =>
+                {
+                    var token = new
+                    {
+                        accessToken = Convert.ToBase64String(Guid.NewGuid().ToByteArray()) + Convert.ToBase64String(Guid.NewGuid().ToByteArray()),
+                        tokenType = "Bearer",
+                        expiresIn = 3600,
+                        scope = "api.read api.write",
+                        issuedAt = DateTime.UtcNow
+                    };
+                    var json = JsonSerializer.Serialize(token, new JsonSerializerOptions { WriteIndented = true });
+                    var resultData = new CommandResultData
+                    {
+                        Value = json,
+                        Format = CommandResultFormat.Json
+                    };
+                    return Task.FromResult(CommandResults.Success("Generated token.", resultData));
+                },
+                commandOptions: new() { IconName = "Key", Description = "Generate a temporary access token" })
+            .WithCommand(
+                name: "get-connection-string",
+                displayName: "Get Connection String",
+                executeCommand: (c) =>
+                {
+                    var connectionString = $"Server=localhost,1433;Database=StressDb;User Id=sa;Password={Guid.NewGuid():N};TrustServerCertificate=true";
+                    var message = """
+                        Retrieved connection string. The database connection was established successfully
+                        after verifying TLS certificates and negotiating encryption parameters.
+
+                        The server responded with protocol version 7.4 and confirmed support for multiple
+                        active result sets. Connection pooling is enabled with a maximum pool size of 100
+                        connections and a minimum of 10 idle connections maintained.
+
+                        The login handshake completed in 42ms with SSPI authentication. All pre-login
+                        checks passed including network library validation and instance name resolution.
+                        """;
+                    return Task.FromResult(CommandResults.Success(message, new CommandResultData { Value = connectionString, DisplayImmediately = true }));
+                },
+                commandOptions: new() { IconName = "LinkMultiple", Description = "Get the connection string for this resource" })
+            .WithCommand(
+                name: "validate-config",
+                displayName: "Validate Config",
+                executeCommand: (c) =>
+                {
+                    var errors = new { errors = new[] { new { field = "connectionString", message = "Invalid host" }, new { field = "timeout", message = "Must be positive" } } };
+                    var json = JsonSerializer.Serialize(errors, new JsonSerializerOptions { WriteIndented = true });
+                    return Task.FromResult(CommandResults.Failure("Validation failed", json, CommandResultFormat.Json));
+                },
+                commandOptions: new() { IconName = "Warning", Description = "Validate resource configuration (always fails with details)" })
+            .WithCommand(
+                name: "check-health",
+                displayName: "Check Health",
+                executeCommand: (c) =>
+                {
+                    return Task.FromResult(CommandResults.Failure("Health check failed", "Connection refused: ECONNREFUSED 127.0.0.1:5432\nRetries exhausted after 3 attempts", CommandResultFormat.Text));
+                },
+                commandOptions: new() { IconName = "HeartBroken", Description = "Check resource health (always fails with details)" })
+            .WithCommand(
+                name: "migrate-database",
+                displayName: "Migrate Database",
+                executeCommand: (c) =>
+                {
+                    var markdown = """
+                        # ⚙️ Database Migration Summary
+
+                        | Table      | Result                     |
+                        |------------|----------------------------|
+                        | Customers  | ✅ 1,200 rows              |
+                        | Products   | ✅ 850 rows                |
+                        | Orders     | ✅ 3,400 rows              |
+                        | OrderItems | ✅ 8,750 rows              |
+                        | Categories | ✅ 45 rows                 |
+                        | Reviews    | ❌ FK constraint violation |
+                        | Inventory  | ✅ 850 rows                |
+                        | Shipping   | ✅ 3,400 rows              |
+                        | Payments   | ❌ Timeout after 30s       |
+                        | Coupons    | ✅ 120 rows                |
+
+                        **Summary:** 8 of 10 tables migrated successfully. 2 tables failed.
+                        """;
+                    return Task.FromResult(CommandResults.Success("Database migrated.", new CommandResultData { Value = markdown, Format = CommandResultFormat.Markdown }));
+                },
+                commandOptions: new() { IconName = "CloudDatabase", Description = "Migrate the database with sample store data" });
+    }
+
+    private static ExecuteCommandResult CreateJsonSuccess(string message, object payload, bool displayImmediately = false)
+    {
+        return CommandResults.Success(message, new CommandResultData
+        {
+            Value = SerializeCommandPayload(payload),
+            Format = CommandResultFormat.Json,
+            DisplayImmediately = displayImmediately
+        });
+    }
+
+    private static ExecuteCommandResult CreateJsonFailure(string message, object payload)
+    {
+        return CommandResults.Failure(message, SerializeCommandPayload(payload), CommandResultFormat.Json);
+    }
+
+    private static string SerializeCommandPayload(object payload)
+    {
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static EchoCommandArguments ReadEchoCommandArguments(InteractionInputCollection arguments)
+    {
+        return new EchoCommandArguments
+        {
+            Message = arguments.GetString("message"),
+            Repeat = arguments.GetInt32("repeat"),
+            Shout = arguments.GetBoolean("shout"),
+            Flavor = arguments.GetString("flavor") ?? "vanilla",
+            Secret = arguments.GetString("secret")
+        };
+    }
+
+    private static ValidateCommandArguments ReadValidateCommandArguments(InteractionInputCollection arguments)
+    {
+        return new ValidateCommandArguments
+        {
+            Target = arguments.GetString("target"),
+            Mode = arguments.GetString("mode") ?? "success",
+            TimeoutSeconds = arguments.GetInt32("timeoutSeconds"),
+            RequireHealthy = arguments.GetBoolean("requireHealthy")
+        };
+    }
+
+    private static IReadOnlyList<InteractionInput> CreateArgumentStressInputs(int fieldCount)
+    {
+        var inputs = new List<InteractionInput>
+        {
+            new()
+            {
+                Name = "runId",
+                Label = "Run ID",
+                Description = "Identifier for this stress command invocation.",
+                InputType = InputType.Text,
+                Required = true,
+                Placeholder = "stress-001",
+                MaxLength = 64
+            },
+            new()
+            {
+                Name = "iterations",
+                Label = "Iterations",
+                Description = "Number input used to verify numeric payload handling.",
+                InputType = InputType.Number,
+                Required = true,
+                Value = "5"
+            },
+            new()
+            {
+                Name = "enabled",
+                Label = "Enabled",
+                Description = "Boolean input used to verify boolean payload handling.",
+                InputType = InputType.Boolean,
+                Required = true,
+                Value = "true"
+            }
+        };
+
+        for (var i = 1; i <= fieldCount; i++)
+        {
+            inputs.Add(new()
+            {
+                Name = $"item{i:00}",
+                Label = $"Item {i:00}",
+                Description = "Generated text input used by the command argument stress test.",
+                InputType = InputType.Text,
+                Required = i <= 3,
+                Placeholder = $"value-{i:00}",
+                MaxLength = 64
+            });
+        }
+
+        return inputs;
+    }
+
+    private static async Task ExecuteCommandForAllResourcesAsync(IServiceProvider serviceProvider, string commandName, CancellationToken cancellationToken)
+    {
+        var commandService = serviceProvider.GetRequiredService<ResourceCommandService>();
+        var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+
+        var resources = model.Resources
+            .Where(r => r.IsContainer() || r is ProjectResource || r is ExecutableResource)
+            .Where(r => r.Name != KnownResourceNames.AspireDashboard)
+            .ToList();
+
+        var commandTasks = new List<Task>();
+        foreach (var r in resources)
+        {
+            commandTasks.Add(commandService.ExecuteCommandAsync(r, commandName, cancellationToken));
+        }
+        await Task.WhenAll(commandTasks).ConfigureAwait(false);
+    }
+
+    private sealed class EchoCommandArguments
+    {
+        public string? Message { get; set; }
+
+        public int Repeat { get; set; } = 1;
+
+        public bool Shout { get; set; }
+
+        public string Flavor { get; set; } = "vanilla";
+
+        public string? Secret { get; set; }
+    }
+
+    private sealed class ValidateCommandArguments
+    {
+        public string? Target { get; set; }
+
+        public string Mode { get; set; } = "success";
+
+        public int TimeoutSeconds { get; set; } = 30;
+
+        public bool RequireHealthy { get; set; } = true;
+    }
+}

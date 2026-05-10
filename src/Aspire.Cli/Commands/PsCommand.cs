@@ -40,6 +40,7 @@ internal sealed class AppHostDisplayInfo
 [JsonSerializable(typeof(ResourceRelationshipJson))]
 [JsonSerializable(typeof(ResourceHealthReportJson))]
 [JsonSerializable(typeof(ResourceCommandJson))]
+[JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
@@ -263,7 +264,7 @@ internal sealed class PsCommand : BaseCommand
             {
                 if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out _))
                 {
-                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(appHost.DashboardUrl)}[/]";
+                    dashboard = MarkupHelpers.SafeLink(_interactionService, appHost.DashboardUrl);
                 }
                 else
                 {

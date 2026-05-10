@@ -163,19 +163,19 @@ Step: provision-api-identity
 Step: provision-api-roles-cache-kv
     Description: Provisions the Azure Bicep resource api-roles-cache-kv using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-cache-kv
-    Resource: api-roles-cache-kv (AzureProvisioningResource)
+    Resource: api-roles-cache-kv (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-api-roles-cosmos-kv
     Description: Provisions the Azure Bicep resource api-roles-cosmos-kv using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-cosmos-kv
-    Resource: api-roles-cosmos-kv (AzureProvisioningResource)
+    Resource: api-roles-cosmos-kv (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-api-roles-pg-kv
     Description: Provisions the Azure Bicep resource api-roles-pg-kv using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-pg-kv
-    Resource: api-roles-pg-kv (AzureProvisioningResource)
+    Resource: api-roles-pg-kv (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-api-website

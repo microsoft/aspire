@@ -117,11 +117,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// </summary>
     /// <param name="resourceName">The name of the resource.</param>
     /// <param name="commandName">The name of the command (e.g., "start", "stop", "restart").</param>
+    /// <param name="options">Options for command execution.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the command execution.</returns>
     Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

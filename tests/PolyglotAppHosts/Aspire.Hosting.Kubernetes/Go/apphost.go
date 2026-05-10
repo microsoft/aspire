@@ -14,26 +14,26 @@ func main() {
 
 	helmNamespace := builder.AddParameter("helm-namespace")
 	helmReleaseName := builder.AddParameter("helm-release-name")
+	helmChartName := builder.AddParameter("helm-chart-name")
 	helmChartVersion := builder.AddParameter("helm-chart-version")
+	helmChartDescription := builder.AddParameter("helm-chart-description")
 
 	kubernetes := builder.AddKubernetesEnvironment("kube")
 	kubernetes.WithHelm(&aspire.WithHelmOptions{
 		Configure: func(helm aspire.HelmChartOptions) {
 			helm.WithNamespace("validation-namespace")
 			helm.WithReleaseName("validation-release")
+			helm.WithChartName("validation-kubernetes")
 			helm.WithChartVersion("1.2.3")
+			helm.WithChartDescription("Validation Helm Chart")
 			helm.WithNamespace(helmNamespace)
 			helm.WithReleaseName(helmReleaseName)
+			helm.WithChartName(helmChartName)
 			helm.WithChartVersion(helmChartVersion)
+			helm.WithChartDescription(helmChartDescription)
 		},
 	})
 	kubernetes.WithProperties(func(environment aspire.KubernetesEnvironmentResource) {
-		environment.SetHelmChartName("validation-kubernetes")
-		_, _ = environment.HelmChartName()
-		environment.SetHelmChartVersion("1.2.3")
-		_, _ = environment.HelmChartVersion()
-		environment.SetHelmChartDescription("Validation Helm Chart")
-		_, _ = environment.HelmChartDescription()
 		environment.SetDefaultStorageType("pvc")
 		_, _ = environment.DefaultStorageType()
 		environment.SetDefaultStorageClassName("fast-storage")
@@ -47,7 +47,6 @@ func main() {
 		environment.SetDefaultServiceType("LoadBalancer")
 		_, _ = environment.DefaultServiceType()
 	})
-	_, _ = kubernetes.HelmChartName()
 	_, _ = kubernetes.DefaultStorageClassName()
 	_, _ = kubernetes.DefaultServiceType()
 	if err = kubernetes.Err(); err != nil {
@@ -65,8 +64,7 @@ func main() {
 	serviceContainer := builder.AddContainer("kube-service", "redis:alpine")
 	_ = serviceContainer.PublishAsKubernetesService(func(service aspire.KubernetesResource) {
 		_, _ = service.Name()
-		serviceParent := service.Parent()
-		_, _ = serviceParent.HelmChartName()
+		_ = service.Parent()
 	})
 	if err = serviceContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))

@@ -186,7 +186,7 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="roles">The Key Vault roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureKeyVaultRole"/> value.</exception>
-    [AspireExport("withKeyVaultRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Key Vault roles to a resource")]
+    [AspireExport("withKeyVaultRoleAssignments", Description = "Assigns Key Vault roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureKeyVaultResource> target,

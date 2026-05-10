@@ -61,7 +61,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         // Stop the AppHost using aspire stop --non-interactive --apphost with a directory path.
         await auto.TypeAsync("aspire stop --non-interactive --apphost TestStopApp");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
@@ -128,7 +128,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         // Stop all AppHosts from within an AppHost directory using --non-interactive --all
         await auto.TypeAsync("aspire stop --non-interactive --all");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
@@ -201,7 +201,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         // Stop all AppHosts from an unrelated directory using --non-interactive --all
         await auto.TypeAsync("aspire stop --non-interactive --all");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
@@ -285,7 +285,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         // Now use --all to stop all AppHosts
         await auto.TypeAsync("aspire stop --all");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
+import { EnvironmentVariables } from '../utils/environment';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
@@ -54,6 +55,92 @@ suite('AspireTerminalProvider tests', () => {
 
             const result = await terminalProvider.getAspireCliExecutablePath();
             assert.strictEqual(result, 'C:\\Program Files\\Aspire\\aspire.exe');
+        });
+    });
+
+    suite('sendAspireCommandToAspireTerminal', () => {
+        const expectedCommand = process.platform === 'win32' ? '& "aspire" logs' : 'aspire logs';
+        let originalStopOnEntry: string | undefined;
+        let isCliDebugLoggingEnabledStub: sinon.SinonStub;
+
+        setup(() => {
+            originalStopOnEntry = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY];
+            delete process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY];
+            isCliDebugLoggingEnabledStub = sinon.stub(terminalProvider, 'isCliDebugLoggingEnabled').returns(false);
+        });
+
+        teardown(() => {
+            isCliDebugLoggingEnabledStub.restore();
+
+            if (originalStopOnEntry === undefined) {
+                delete process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY];
+            }
+            else {
+                process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] = originalStopOnEntry;
+            }
+        });
+
+        test('uses shell integration to execute command when available', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const sentTexts: string[] = [];
+            let executedCommand: string | undefined;
+            let shown = false;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: (text: string) => {
+                    sentTexts.push(text);
+                },
+                show: () => {
+                    shown = true;
+                }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs');
+
+                assert.strictEqual(executedCommand, expectedCommand);
+                assert.deepStrictEqual(sentTexts, []);
+                assert.strictEqual(shown, true);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
+
+        test('sends Ctrl+C before command when shell integration is unavailable', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const sentTexts: { text: string; shouldExecute?: boolean }[] = [];
+            const terminal = {
+                sendText: (text: string, shouldExecute?: boolean) => {
+                    sentTexts.push({ text, shouldExecute });
+                },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs');
+
+                assert.deepStrictEqual(sentTexts, [
+                    { text: '\x03', shouldExecute: false },
+                    { text: expectedCommand, shouldExecute: undefined }
+                ]);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
         });
     });
 });

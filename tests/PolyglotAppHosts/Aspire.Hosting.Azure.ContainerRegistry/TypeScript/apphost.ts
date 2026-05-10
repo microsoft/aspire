@@ -12,7 +12,7 @@ const registry = await builder.addAzureContainerRegistry("containerregistry")
 
 const environment = await builder.addAzureContainerAppEnvironment("environment");
 await environment.withAzureContainerRegistry(registry);
-await environment.withRoleAssignments(registry, [
+await environment.withContainerRegistryRoleAssignments(registry, [
     AzureContainerRegistryRole.AcrPull,
     AzureContainerRegistryRole.AcrPush
 ]);
