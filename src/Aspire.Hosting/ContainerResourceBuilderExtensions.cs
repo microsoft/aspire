@@ -810,7 +810,7 @@ public static class ContainerResourceBuilderExtensions
                 context.LocalImageTag = "latest";
             }
 
-            // See AddDockerfile (above) for rationale on the publish/run split.
+            // Publish/run split: see AddDockerfile.
             if (context.ExecutionContext?.IsPublishMode == true)
             {
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;

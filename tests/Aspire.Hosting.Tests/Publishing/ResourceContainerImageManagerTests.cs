@@ -1194,8 +1194,6 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             runContext,
             CancellationToken.None);
 
-        // In run mode the default callback must not pin a platform; that lets docker/podman use
-        // host arch and avoid emulation. Image name/tag still flow through normally.
         Assert.Equal("mycontainer", context.LocalImageName);
         Assert.NotNull(context.LocalImageTag);
         Assert.Null(context.TargetPlatform);

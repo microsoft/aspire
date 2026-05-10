@@ -873,20 +873,25 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
     }
 
-    // Converts the [Flags] ContainerTargetPlatform to the comma-separated form expected by
-    // docker/podman --platform. Kept local to avoid a using directive on Aspire.Hosting.Publishing
-    // from this DCP-layer file.
+    // Local to keep this file free of a using on Aspire.Hosting.Publishing. Behavior matches
+    // ToRuntimePlatformString in Publishing/ResourceContainerImageManager.cs.
 #pragma warning disable ASPIREPIPELINES003 // ContainerTargetPlatform is experimental.
     private static string ToDcpPlatformString(ContainerTargetPlatform platform)
     {
-        var parts = new List<string>(capacity: 2);
+        var parts = new List<string>();
         if (platform.HasFlag(ContainerTargetPlatform.LinuxAmd64)) { parts.Add("linux/amd64"); }
         if (platform.HasFlag(ContainerTargetPlatform.LinuxArm64)) { parts.Add("linux/arm64"); }
         if (platform.HasFlag(ContainerTargetPlatform.LinuxArm)) { parts.Add("linux/arm"); }
         if (platform.HasFlag(ContainerTargetPlatform.Linux386)) { parts.Add("linux/386"); }
         if (platform.HasFlag(ContainerTargetPlatform.WindowsAmd64)) { parts.Add("windows/amd64"); }
         if (platform.HasFlag(ContainerTargetPlatform.WindowsArm64)) { parts.Add("windows/arm64"); }
-        return string.Join(',', parts);
+
+        if (parts.Count == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unknown container target platform");
+        }
+
+        return string.Join(",", parts);
     }
 #pragma warning restore ASPIREPIPELINES003
 

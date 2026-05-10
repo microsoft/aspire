@@ -95,9 +95,6 @@ public class DcpExecutorTests
 
         await appExecutor.RunApplicationAsync();
 
-        // In run mode, the AddDockerfile default callback intentionally leaves TargetPlatform
-        // unset so docker/podman picks the host architecture. Confirm DCP receives no platform
-        // and won't pass --platform to the build.
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         Assert.NotNull(container.Spec.Build);
         Assert.Null(container.Spec.Build!.Platform);
