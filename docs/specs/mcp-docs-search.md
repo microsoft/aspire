@@ -16,7 +16,7 @@ The Aspire MCP server provides tools for interacting with Aspire applications, b
 
 ### Prior Art
 
-- **aspire.dev/llms-small.txt** - The Aspire documentation site exposes an LLM-friendly documentation file at `https://aspire.dev/llms-small.txt` containing abridged documentation suitable for AI agent consumption
+- **aspire.dev/llms-full.txt** - The Aspire documentation site exposes an LLM-friendly documentation file at `https://aspire.dev/llms-full.txt` containing the full documentation suitable for AI agent consumption
 
 ## Design Goals
 
@@ -84,7 +84,7 @@ flowchart TB
     end
 
     subgraph External["External"]
-        AspireDev["aspire.dev/llms-small.txt"]
+        AspireDev["aspire.dev/llms-full.txt"]
         MemoryCache["IMemoryCache"]
     end
 
@@ -123,7 +123,7 @@ sequenceDiagram
         Fetcher->>Cache: GetETagAsync()
         Cache-->>Fetcher: cached ETag
 
-        Fetcher->>Web: GET /llms-small.txt<br/>If-None-Match: ETag
+        Fetcher->>Web: GET /llms-full.txt<br/>If-None-Match: ETag
 
         alt 200 OK (New Content)
             Web-->>Fetcher: content + new ETag
@@ -159,7 +159,7 @@ internal interface IDocsFetcher
 
 **Implementation details:**
 - Base URL: `https://aspire.dev/`
-- Endpoint: `llms-small.txt`
+- Endpoint: `llms-full.txt`
 - Uses `HttpClient` with conditional requests (`If-None-Match` header)
 - Returns cached content on `304 Not Modified` response
 - Falls back to cached content on network errors
@@ -362,11 +362,9 @@ This ensures the index is ready by the time a user makes their first docs-relate
 
 ## Future Considerations
 
-### Full Documentation Support
+### Configurable Doc Source
 
-Currently uses `llms-small.txt` for abridged documentation. Could add support for:
-- `llms-full.txt` for comprehensive documentation
-- Configurable doc source selection
+Defaults to `llms-full.txt` for the complete documentation set with preserved code-block formatting. The `docs.llmsTxtUrl` configuration setting allows pointing the CLI at any compatible llms.txt-shaped source — a local mirror, a custom corpus, or the abridged `llms-small.txt` if bandwidth is the priority.
 
 ### Disk Persistence
 
@@ -418,5 +416,5 @@ Potential search enhancements:
 
 ## References
 
-- [aspire.dev/llms-small.txt](https://aspire.dev/llms-small.txt) - Abridged documentation for LLMs
+- [aspire.dev/llms-full.txt](https://aspire.dev/llms-full.txt) - Full documentation for LLMs
 - [MCP Specification](https://modelcontextprotocol.io/) - Model Context Protocol
