@@ -91,6 +91,7 @@ internal static partial class LlmsTxtParser
         }
 
         var documents = new List<LlmsDocument>(docBoundaries.Count);
+        var slugCounts = new Dictionary<string, int>(docBoundaries.Count, StringComparer.Ordinal);
 
         for (var i = 0; i < docBoundaries.Count; i++)
         {
@@ -102,7 +103,7 @@ internal static partial class LlmsTxtParser
                 : content.Length;
 
             var docContent = content.AsMemory(startIndex, endIndex - startIndex);
-            var document = ParseDocument(docContent.Span);
+            var document = ParseDocument(docContent.Span, slugCounts);
 
             if (document is not null)
             {
@@ -199,7 +200,12 @@ internal static partial class LlmsTxtParser
     /// <summary>
     /// Parses a single document from a content span.
     /// </summary>
-    private static LlmsDocument? ParseDocument(ReadOnlySpan<char> docSpan)
+    /// <param name="docSpan">The span over the document's content (starting at its H1).</param>
+    /// <param name="slugCounts">Tracks slugs already issued in this parse, so we can append
+    /// a numeric suffix when two documents would otherwise share the same slug. The dictionary
+    /// is mutated in place. Pass <see langword="null"/> only in tests where collision handling
+    /// is not exercised.</param>
+    private static LlmsDocument? ParseDocument(ReadOnlySpan<char> docSpan, Dictionary<string, int>? slugCounts)
     {
         if (docSpan.IsEmpty)
         {
@@ -232,7 +238,7 @@ internal static partial class LlmsTxtParser
         return new LlmsDocument
         {
             Title = titleString,
-            Slug = GenerateSlug(titleString),
+            Slug = GenerateUniqueSlug(titleString, slugCounts),
             Summary = summary,
             Content = content,
             Sections = sections
@@ -678,6 +684,36 @@ internal static partial class LlmsTxtParser
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Generates a slug from <paramref name="title"/> and disambiguates it against
+    /// <paramref name="slugCounts"/>. If the base slug has already been issued, returns
+    /// <c>"&lt;slug&gt;-2"</c> for the second occurrence, <c>"&lt;slug&gt;-3"</c> for the third, and so on.
+    /// </summary>
+    /// <remarks>
+    /// The live llms-full.txt corpus has slug collisions caused by titles that differ only in
+    /// letter case (for example <c>"Azure Cosmos DB Client integration"</c> versus
+    /// <c>"Azure Cosmos DB client integration"</c>). Without disambiguation the second document
+    /// is unreachable via <c>aspire docs get &lt;slug&gt;</c>.
+    /// </remarks>
+    private static string GenerateUniqueSlug(string title, Dictionary<string, int>? slugCounts)
+    {
+        var baseSlug = GenerateSlug(title);
+        if (slugCounts is null)
+        {
+            return baseSlug;
+        }
+
+        if (slugCounts.TryGetValue(baseSlug, out var count))
+        {
+            var next = count + 1;
+            slugCounts[baseSlug] = next;
+            return $"{baseSlug}-{next}";
+        }
+
+        slugCounts[baseSlug] = 1;
+        return baseSlug;
     }
 
     /// <summary>

@@ -265,6 +265,44 @@ public class LlmsTxtParserTests
     }
 
     [Fact]
+    public async Task ParseAsync_DuplicateSlugs_AreDisambiguatedWithNumericSuffix()
+    {
+        // Regression: the live llms-full.txt corpus has titles that differ only in
+        // letter case (e.g. "Azure Cosmos DB Client integration" vs "...client integration").
+        // Both lowercased to the same slug, making the second document unreachable via
+        // `aspire docs get <slug>`. The parser must disambiguate them.
+        var content = """
+            # Azure Cosmos DB Client integration
+
+            First document body.
+
+            # Azure Cosmos DB client integration
+
+            Second document body.
+
+            # Azure Cosmos DB client integration
+
+            Third document body.
+            """;
+
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal("azure-cosmos-db-client-integration", result[0].Slug);
+        Assert.Equal("azure-cosmos-db-client-integration-2", result[1].Slug);
+        Assert.Equal("azure-cosmos-db-client-integration-3", result[2].Slug);
+
+        // Titles remain unchanged — only the slug is disambiguated.
+        Assert.Equal("Azure Cosmos DB Client integration", result[0].Title);
+        Assert.Equal("Azure Cosmos DB client integration", result[1].Title);
+        Assert.Equal("Azure Cosmos DB client integration", result[2].Title);
+
+        // All slugs are distinct.
+        var slugs = result.Select(d => d.Slug).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(3, slugs.Count);
+    }
+
+    [Fact]
     public async Task ParseAsync_H1WithoutSpace_NotRecognizedAsDocument()
     {
         // "#NoSpace" should not be recognized as H1
