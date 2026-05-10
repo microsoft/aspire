@@ -354,9 +354,6 @@ internal partial class MarkdownToSpectreConverter
         }
     }
 
-    [GeneratedRegex(@"\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\(([^)]+)\)")]
-    private static partial Regex LinkRegex();
-
     [GeneratedRegex(@"</?[^>]+>", RegexOptions.Singleline)]
     private static partial Regex HtmlTagRegex();
 }

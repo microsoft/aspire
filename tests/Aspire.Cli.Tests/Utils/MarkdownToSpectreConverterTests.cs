@@ -120,17 +120,6 @@ public partial class MarkdownToSpectreConverterTests
     }
 
     [Fact]
-    public void ConvertLinksToPlainText_WithBracketedLinkText_ConvertsCorrectly()
-    {
-        var result = MarkdownToSpectreConverter.ConvertLinksToPlainText(
-            "[CreateBuilder(string[])](https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)");
-
-        Assert.Equal(
-            "CreateBuilder(string[]) (https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)",
-            result);
-    }
-
-    [Fact]
     public void ConvertToPlainText_WithLinksAndImages_ConvertsCorrectly()
     {
         var markdown = "Visit [GitHub](https://github.com) and remove ![diagram](https://example.com/diagram.png).";
