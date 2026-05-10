@@ -79,6 +79,31 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task DockerfileContainerBuildSpec_RunMode_DefaultsToHostPlatform()
+    {
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath);
+
+        var kubernetesService = new TestKubernetesService();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        // In run mode, the AddDockerfile default callback intentionally leaves TargetPlatform
+        // unset so docker/podman picks the host architecture. Confirm DCP receives no platform
+        // and won't pass --platform to the build.
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Build);
+        Assert.Null(container.Spec.Build!.Platform);
+    }
+
+    [Fact]
     public async Task ResourceStarted_ProjectHasReplicas_EventRaisedOnce()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions

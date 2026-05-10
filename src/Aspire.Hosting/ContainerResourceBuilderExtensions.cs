@@ -649,15 +649,21 @@ public static class ContainerResourceBuilderExtensions
             {
                 context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
                 context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
             else
             {
                 context.LocalImageName = context.Resource.Name;
                 context.LocalImageTag = "latest";
+            }
+
+            // Default to linux/amd64 for publish, where outputs must be portable across host
+            // architectures. In run mode, leave the platform unset so docker/podman uses the host
+            // architecture by default and avoids slow/buggy emulation. Users can override either
+            // default via WithContainerBuildOptions(...).
+            if (context.ExecutionContext?.IsPublishMode == true)
+            {
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
-            context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
         });
 
         // If there's already a ContainerImageAnnotation, don't overwrite it.
@@ -797,15 +803,18 @@ public static class ContainerResourceBuilderExtensions
             {
                 context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
                 context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
             else
             {
                 context.LocalImageName = context.Resource.Name;
                 context.LocalImageTag = "latest";
+            }
+
+            // See AddDockerfile (above) for rationale on the publish/run split.
+            if (context.ExecutionContext?.IsPublishMode == true)
+            {
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
-            context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
         });
 
         // If there's already a ContainerImageAnnotation, don't overwrite it.
