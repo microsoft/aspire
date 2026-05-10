@@ -37,7 +37,7 @@ internal sealed class IntegrationPackageSearchService(
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
             var integrationPackages = (await channel.SearchPackagesAsync(
-                $"tags:{HostingIntegrationMetadata.CanonicalTag}",
+                HostingIntegrationMetadata.DiscoveryQuery,
                 workingDirectory,
                 packageId => discoveryScope.IsPackageAllowed(packageId, thirdPartyPackageAllowlist) &&
                     !HostingIntegrationMetadata.IsKnownNonHostingAspirePackageId(packageId) &&

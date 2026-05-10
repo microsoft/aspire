@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure openai ai cognitiveservices cognitive services cloud aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting azure openai ai cognitiveservices cognitive services cloud</PackageTags>
     <Description>Azure OpenAI resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureOpenAI_256x.png</PackageIconFullPath>
   </PropertyGroup>

@@ -6,6 +6,8 @@ namespace Aspire.Cli.NuGet;
 internal static class HostingIntegrationMetadata
 {
     public const string CanonicalTag = "aspire";
+    public const string HostingTag = "hosting";
+    public const string DiscoveryQuery = $"tags:{CanonicalTag} tags:{HostingTag}";
 
     private static readonly string[] s_hostingDependencyPackageIds =
     [

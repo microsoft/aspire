@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire hosting azure cloud provisioning orchestration aspire-hosting</PackageTags>
+    <PackageTags>aspire hosting azure cloud provisioning orchestration</PackageTags>
     <Description>Azure resource types for Aspire.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>

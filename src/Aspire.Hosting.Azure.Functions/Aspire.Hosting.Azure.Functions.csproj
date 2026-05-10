@@ -5,7 +5,7 @@
     <IsPackable>true</IsPackable>
     <!-- Disable package validation as this package hasn't shipped stable yet. -->
     <EnablePackageValidation>false</EnablePackageValidation>
-    <PackageTags>aspire integration hosting azure functions serverless cloud aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting azure functions serverless cloud</PackageTags>
     <Description>Azure Functions resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
   </PropertyGroup>

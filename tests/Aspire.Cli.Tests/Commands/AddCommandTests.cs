@@ -387,7 +387,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
             {
-                var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                     ? new[] { CreatePackage("Aspire.Hosting.Redis", "1.0.0") }
                     : [];
 
@@ -398,7 +398,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
             {
-                var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                     ? new[] { CreatePackage("Aspire.Hosting.Redis", "2.0.0") }
                     : [];
 
@@ -526,7 +526,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
                 var packages = query switch
                 {
-                    var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => new[] { CreatePackage("Contoso.Hosting.MongoDb", "1.2.3") },
+                    var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => new[] { CreatePackage("Contoso.Hosting.MongoDb", "1.2.3") },
                     _ => Array.Empty<NuGetPackage>()
                 };
 
@@ -590,7 +590,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.Contains($"tags:{HostingIntegrationMetadata.CanonicalTag}", queriedPackages);
+        Assert.Contains(HostingIntegrationMetadata.DiscoveryQuery, queriedPackages);
         Assert.DoesNotContain("Contoso.Legacy.Package", queriedPackages);
         Assert.DoesNotContain("Contoso.Other.Package", queriedPackages);
 
@@ -670,7 +670,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             {
                 var packages = query switch
                 {
-                    var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => new[]
+                    var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => new[]
                     {
                         CreatePackage("Contoso.Hosting.MongoDb", "1.2.3"),
                         CreatePackage("Aspire.StackExchange.Redis", "9.2.0"),
@@ -947,7 +947,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
             {
-                var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                     ? new[] { CreatePackage("Contoso.Hosting.MongoDb", "1.2.3") }
                     : [];
 
@@ -958,7 +958,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
             {
-                var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                     ? new[] { CreatePackage("Scalar.Aspire", "0.9.34") }
                     : [];
 
@@ -1011,7 +1011,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
             {
-                var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                     ? new[] { CreatePackage("Aspire.Hosting.Redis", "1.0.0") }
                     : [];
 
@@ -1022,7 +1022,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         {
             GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
             {
-                var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                     ? new[] { CreatePackage("Aspire.Hosting.Redis", "2.0.0") }
                     : [];
 
@@ -1291,7 +1291,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
                     {
-                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                             ? new[]
                             {
                                 CreatePackage("Aspire.Hosting.Redis", "9.2.0"),
@@ -1377,7 +1377,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
                     {
-                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                             ? new[]
                             {
                                 CreatePackage("Aspire.Hosting.Zookeeper", "9.2.0"),
@@ -1509,7 +1509,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
                     {
-                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                             ? new[]
                             {
                                 CreatePackage("Contoso.Hosting.MongoDb", "1.2.3"),
@@ -1598,7 +1598,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
                     {
-                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        var packages = query == HostingIntegrationMetadata.DiscoveryQuery
                             ? new[] { CreatePackage("Contoso.Hosting.MongoDb", "1.2.3") }
                             : [];
 
@@ -2166,7 +2166,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, queriedPackageId, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(queriedPackageId switch
                     {
-                        var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [CreatePackage("Aspire.Hosting.Redis", "9.2.0")],
+                        var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => [CreatePackage("Aspire.Hosting.Redis", "9.2.0")],
                         packageId => [
                             CreatePackage(packageId, "1.3.0"),
                             CreatePackage(packageId, packageVersion)
@@ -2606,7 +2606,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, queriedPackageId, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(queriedPackageId switch
                     {
-                        var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [CreatePackage("Aspire.Hosting.Redis", "9.2.0")],
+                        var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => [CreatePackage("Aspire.Hosting.Redis", "9.2.0")],
                         packageId => [
                             CreatePackage(packageId, "1.3.0"),
                             CreatePackage(packageId, packageVersion)
@@ -3218,7 +3218,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 var cache = new FakeNuGetPackageCache
                 {
                     GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
-                        query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        query == HostingIntegrationMetadata.DiscoveryQuery
                             ? [
                                 new NuGetPackage { Id = "AspireQuartz.Hosting", Version = "1.0.1", Source = "nuget" },
                                 new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.2.0", Source = "nuget" }
@@ -3286,7 +3286,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     {
                         NuGetPackage[] packages = query switch
                         {
-                            var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [],
+                            var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => [],
                             "Aspire.Hosting.mongodb" => [
                                 new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gf2644312", Source = prHiveSource }
                             ],
@@ -3388,7 +3388,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     {
                         NuGetPackage[] packages = query switch
                         {
-                            var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [
+                            var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => [
                                 new NuGetPackage { Id = "AspireQuartz.Hosting", Version = "1.0.1", Source = nugetOrgSource }
                             ],
                             "Aspire.Hosting" => [
@@ -3472,7 +3472,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     {
                         NuGetPackage[] packages = query switch
                         {
-                            var tagQuery when tagQuery == $"tags:{HostingIntegrationMetadata.CanonicalTag}" => [],
+                            var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => [],
                             "Aspire.Hosting.mongodb" => [
                                 new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gf2644312", Source = prHiveSource }
                             ],
@@ -3547,7 +3547,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
                     {
-                        NuGetPackage[] packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        NuGetPackage[] packages = query == HostingIntegrationMetadata.DiscoveryQuery
                             ? [new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "13.4.0", Source = string.Empty }]
                             : [];
 
@@ -3617,7 +3617,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
                     {
-                        NuGetPackage[] packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        NuGetPackage[] packages = query == HostingIntegrationMetadata.DiscoveryQuery
                             ? [
                                 new NuGetPackage { Id = "AspireQuartz.Hosting", Version = "1.0.1", Source = "nuget" },
                                 new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.2.0", Source = "nuget" }
@@ -3684,7 +3684,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 var nugetOrgCache = new FakeNuGetPackageCache
                 {
                     GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
-                        query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                        query == HostingIntegrationMetadata.DiscoveryQuery
                             ? [new NuGetPackage { Id = packageId, Version = packageVersion, Source = nugetOrgSource }]
                             : [])
                 };

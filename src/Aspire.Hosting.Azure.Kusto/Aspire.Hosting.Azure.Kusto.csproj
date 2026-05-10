@@ -4,7 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <RootNamespace>Aspire.Hosting.Azure</RootNamespace>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure kusto database data cloud aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting azure kusto database data cloud</PackageTags>
     <Description>Azure Kusto support for Aspire.</Description>
     <!-- In preview while Azure.Provisioning.Kusto is in preview. -->
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>

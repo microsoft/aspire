@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure cosmosdb database cloud data nosql aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting azure cosmosdb database cloud data nosql</PackageTags>
     <Description>Azure Cosmos DB resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureCosmosDB_256x.png</PackageIconFullPath>
   </PropertyGroup>

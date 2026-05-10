@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting redis cache caching aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting redis cache caching</PackageTags>
     <Description>Redis® support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)redis-cube-red_white-rgb.png</PackageIconFullPath>
   </PropertyGroup>

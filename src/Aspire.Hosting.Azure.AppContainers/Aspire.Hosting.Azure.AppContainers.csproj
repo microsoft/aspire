@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure container cloud appcontainers aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting azure container cloud appcontainers</PackageTags>
     <Description>Azure container apps resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
   </PropertyGroup>

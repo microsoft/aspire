@@ -4,7 +4,7 @@
     <!-- This project needs to multi-target to net9.0 as well to avoid hitting NuGet Restore issues when package is restored from a net9+ project and avoid NU1605 downgrade errors. -->
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting azure sql database data cloud aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting azure sql database data cloud</PackageTags>
     <Description>Azure SQL Database resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureSqlServer_256x.png</PackageIconFullPath>
   </PropertyGroup>

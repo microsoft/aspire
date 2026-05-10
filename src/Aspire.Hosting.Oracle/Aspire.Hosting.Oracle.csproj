@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting oracle sql database data aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting oracle sql database data</PackageTags>
     <Description>Oracle Database support for Aspire.</Description>
   </PropertyGroup>
 

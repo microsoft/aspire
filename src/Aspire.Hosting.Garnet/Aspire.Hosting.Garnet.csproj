@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting garnet cache caching aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting garnet cache caching</PackageTags>
     <Description>Garnet® support for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)garnet-cube-red_white-rgb.png</PackageIconFullPath>
   </PropertyGroup>

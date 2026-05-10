@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire hosting devtunnels aspire-hosting</PackageTags>
+    <PackageTags>aspire hosting devtunnels</PackageTags>
     <Description>DevTunnels support for Aspire.</Description>
   </PropertyGroup>
 

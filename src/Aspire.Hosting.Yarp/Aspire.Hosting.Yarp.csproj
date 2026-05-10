@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>aspire integration hosting yarp reverse-proxy api aspire-hosting</PackageTags>
+    <PackageTags>aspire integration hosting yarp reverse-proxy api</PackageTags>
     <Description>YARP support for Aspire.</Description>
   </PropertyGroup>
 
