@@ -8,7 +8,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -17,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Hosting.Azure;
+namespace Aspire.Hosting.Azure.Kubernetes;
 
 /// <summary>
 /// AKS-specific pipeline step implementations for <see cref="AzureKubernetesEnvironmentResource"/>.

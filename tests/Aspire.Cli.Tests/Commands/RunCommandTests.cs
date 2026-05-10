@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -198,6 +200,16 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class ProjectFileDoesNotExistLocator : Aspire.Cli.Projects.IProjectLocator
     {
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
+        }
+
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
@@ -253,6 +265,16 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class NoProjectFileProjectLocator : IProjectLocator
     {
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
+        }
+
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
@@ -268,6 +290,16 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class MultipleProjectFilesProjectLocator : IProjectLocator
     {
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
+        }
+
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
@@ -425,13 +457,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenDashboardFailsToStart_ReturnsNonZeroExitCodeWithClearErrorMessage()
+    public async Task RunCommand_WhenDashboardFailsToStart_ContinuesWithWarning()
     {
 
         var backchannelFactory = (IServiceProvider sp) =>
         {
             var backchannel = new TestAppHostBackchannel();
-            // Configure the backchannel to throw DashboardStartupException when GetDashboardUrlsAsync is called
+            // Configure the backchannel to return unhealthy dashboard state
             backchannel.GetDashboardUrlsAsyncCallback = (ct) =>
             {
                 return Task.FromResult(new DashboardUrlsState
@@ -470,6 +502,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         };
 
         var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+        var testInteractionService = new TestInteractionService();
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -477,17 +510,29 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = projectLocatorFactory;
             options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
-            options.InteractionServiceFactory = (sp) => new TestInteractionService();
+            options.InteractionServiceFactory = (sp) => testInteractionService;
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        // Assert that the command returns the expected failure exit code
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        // Simulate CTRL-C - the command should continue past the unhealthy dashboard
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        // The command should succeed even when the dashboard is unhealthy
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // Verify a warning was displayed (not an error)
+        var m = Assert.Single(testInteractionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.Warning, m.Emoji);
+        Assert.Equal(RunCommandStrings.DashboardFailedToStart, m.Message);
+        Assert.Empty(testInteractionService.DisplayedErrors);
     }
 
     [Fact]
@@ -714,7 +759,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        // Pass --start-debug-session to avoid watch mode (which skips build)
         var result = command.Parse("run --start-debug-session");
 
         using var cts = new CancellationTokenSource();
@@ -728,6 +772,60 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.True(buildCalled, "Build should be called when extension has build-dotnet-using-cli capability.");
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenExtensionNoDebugBuildFails_DoesNotRunAppHost()
+    {
+        var buildCalled = false;
+        var runCalled = false;
+
+        var extensionBackchannel = new TestExtensionBackchannel();
+        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCli);
+
+        var extensionInteractionServiceFactory = (IServiceProvider sp) => new TestExtensionInteractionService(sp);
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
+            {
+                buildCalled = true;
+                return 1;
+            };
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                runCalled = true;
+                return Task.FromResult(0);
+            };
+            return runner;
+        };
+
+        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = projectLocatorFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+            options.InteractionServiceFactory = extensionInteractionServiceFactory;
+            options.ConfigurationCallback += config =>
+            {
+                config["ASPIRE_EXTENSION_DEBUG_SESSION_ID"] = "test-session-id";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+        Assert.True(buildCalled, "Build should be called before launching the AppHost in extension no-debug mode.");
+        Assert.False(runCalled, "AppHost should not be launched when the pre-build fails.");
     }
 
     [Fact]
@@ -1296,6 +1394,17 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class SingleFileAppHostProjectLocator : Aspire.Cli.Projects.IProjectLocator
     {
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            var appHostFile = new FileInfo("/tmp/apphost.cs");
+            return Task.FromResult<List<AppHostProjectCandidate>>([new(appHostFile, "test")]);
+        }
+
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<List<FileInfo>>([new FileInfo("/tmp/apphost.cs")]);
+        }
+
         public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken)
         {
             return Task.FromResult(new AppHostProjectSearchResult(new FileInfo("/tmp/apphost.cs"), [new FileInfo("/tmp/apphost.cs")]));
@@ -1670,6 +1779,38 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DcpInstanceIdPrefix));
     }
 
+    [Fact]
+    public void DetachedChildEnvironment_IncludesProfilingTelemetryContext()
+    {
+        using var listener = CreateActivityListener("test-detached-child-environment");
+        using var source = new ActivitySource("test-detached-child-environment");
+        using var activity = source.StartActivity("parent");
+        Assert.NotNull(activity);
+        activity.SetBaggage(ProfilingTelemetry.SessionIdBaggageName, "session-1");
+        activity.TraceStateString = "state-1";
+
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.Equal("true", environment[ProfilingTelemetry.EnabledEnvironmentVariable]);
+        Assert.Equal("session-1", environment[ProfilingTelemetry.SessionIdEnvironmentVariable]);
+        Assert.Equal("session-1", environment[KnownConfigNames.Legacy.StartupOperationId]);
+        Assert.Equal(activity.Id, environment[ProfilingTelemetry.TraceParentEnvironmentVariable]);
+        Assert.Equal("state-1", environment[ProfilingTelemetry.TraceStateEnvironmentVariable]);
+    }
+
+    [Fact]
+    public void DetachedChildEnvironment_AllowsMissingProfilingTelemetryContext()
+    {
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnabledEnvironmentVariable));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.SessionIdEnvironmentVariable));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.TraceParentEnvironmentVariable));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.TraceStateEnvironmentVariable));
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
@@ -1722,4 +1863,14 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("certificate_trust_failed", tags[TelemetryConstants.Tags.ErrorType]);
     }
 
+    private static ActivityListener CreateActivityListener(string sourceName)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
 }

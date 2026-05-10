@@ -38,13 +38,13 @@ func main() {
 		log.Fatalf(aspire.FormatError(container.Err()))
 	}
 
-	container.WithRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
+	container.WithWebPubSubRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
 		aspire.AzureWebPubSubRoleWebPubSubServiceOwner,
 		aspire.AzureWebPubSubRoleWebPubSubServiceReader,
 		aspire.AzureWebPubSubRoleWebPubSubContributor,
 	})
 
-	webpubsub.WithRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
+	webpubsub.WithWebPubSubRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
 		aspire.AzureWebPubSubRoleWebPubSubServiceReader,
 	})
 

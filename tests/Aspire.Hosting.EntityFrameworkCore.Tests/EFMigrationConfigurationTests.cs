@@ -126,7 +126,7 @@ public class EFMigrationConfigurationTests
             .PublishAsMigrationBundle();
 
         // The context type name should be preserved through chaining
-        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.ContextTypeName);
+        Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
     [Fact]

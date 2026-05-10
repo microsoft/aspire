@@ -20,6 +20,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Exec;
 using Aspire.Hosting.Health;
@@ -29,6 +30,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
@@ -39,6 +41,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Hosting;
 
@@ -489,6 +494,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
         }
 
+        ConfigureProfilingTelemetry();
+
         if (ExecutionContext.IsRunMode)
         {
             // Orchestrator
@@ -516,8 +523,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         // Publishing support
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>("docker");
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>("podman");
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
@@ -622,6 +629,82 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<ResourceHealthCheckService>();
             _innerBuilder.Services.AddHostedService<ResourceHealthCheckService>(sp => sp.GetRequiredService<ResourceHealthCheckService>());
         }
+    }
+
+    private void ConfigureProfilingTelemetry()
+    {
+        if (!ShouldConfigureProfilingTelemetry())
+        {
+            return;
+        }
+
+        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
+            .AddService(
+                serviceName: "aspire-apphost",
+                serviceVersion: GetAppHostServiceVersion())
+            .AddAttributes(ProfilingTelemetry.CreateAppHostResourceAttributes(AppHostPath, ExecutionContext.Operation.ToString()));
+
+        _innerBuilder.Services.AddOpenTelemetry()
+            .WithTracing(builder =>
+            {
+                builder
+                    .AddSource(ProfilingTelemetry.ActivitySourceName)
+                    .SetResourceBuilder(resourceBuilder);
+
+                if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+                {
+                    builder.AddOtlpExporter();
+                }
+                else
+                {
+                    var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(_innerBuilder.Configuration);
+
+                    builder.AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(url);
+                        options.Protocol = protocol switch
+                        {
+                            "http/protobuf" => OtlpExportProtocol.HttpProtobuf,
+                            _ => OtlpExportProtocol.Grpc
+                        };
+
+                        if (_innerBuilder.Configuration["AppHost:OtlpApiKey"] is { } otlpApiKey)
+                        {
+                            options.Headers = $"x-otlp-api-key={otlpApiKey}";
+                        }
+                    });
+                }
+            });
+    }
+
+    private bool ShouldConfigureProfilingTelemetry()
+    {
+        // Dashboard OTLP is normally configured for app telemetry. Profiling
+        // spans are high-cardinality diagnostics, so only export them when requested.
+        // This intentionally supports publish/deploy/inspect operations as well as
+        // run so profiling can follow the full CLI/AppHost/pipeline operation.
+        var profilingEnabled =
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.ProfilingEnabled) ??
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.Legacy.StartupProfilingEnabled);
+        if (profilingEnabled is not true)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+        {
+            return true;
+        }
+
+        var dashboardOtlpGrpcUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
+        var dashboardOtlpHttpUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+
+        return !string.IsNullOrEmpty(dashboardOtlpGrpcUrl) || !string.IsNullOrEmpty(dashboardOtlpHttpUrl);
+    }
+
+    private static string? GetAppHostServiceVersion()
+    {
+        return typeof(DistributedApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
     }
 
     private void MapTransportOptionsFromCustomKeys(TransportOptions options)
@@ -845,7 +928,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             policy = NameValidationPolicyAnnotation.Default;
         }
 
-        ModelName.ValidateName(nameof(Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
+        ModelName.ValidateName(nameof(Aspire.Hosting.ApplicationModel.Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
     }
 
     private static bool PathsEqual(string left, string right) =>

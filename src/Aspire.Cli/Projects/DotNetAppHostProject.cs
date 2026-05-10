@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -11,6 +13,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
 
@@ -25,11 +28,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly IInteractionService _interactionService;
     private readonly ICertificateService _certificateService;
     private readonly AspireCliTelemetry _telemetry;
+    private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IFeatures _features;
     private readonly ILogger<DotNetAppHostProject> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly IProjectUpdater _projectUpdater;
     private readonly IDotNetSdkInstaller _sdkInstaller;
+    private readonly IBundleService _bundleService;
     private readonly RunningInstanceManager _runningInstanceManager;
     private readonly Diagnostics.FileLoggerProvider _fileLoggerProvider;
     private readonly Program.CliLoggingOptions _loggingOptions;
@@ -43,9 +48,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IInteractionService interactionService,
         ICertificateService certificateService,
         AspireCliTelemetry telemetry,
+        ProfilingTelemetry profilingTelemetry,
         IFeatures features,
         IProjectUpdater projectUpdater,
         IDotNetSdkInstaller sdkInstaller,
+        IBundleService bundleService,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
@@ -55,9 +62,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _interactionService = interactionService;
         _certificateService = certificateService;
         _telemetry = telemetry;
+        _profilingTelemetry = profilingTelemetry;
         _features = features;
         _projectUpdater = projectUpdater;
         _sdkInstaller = sdkInstaller;
+        _bundleService = bundleService;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
@@ -217,7 +226,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         (bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)? appHostCompatibilityCheck = null;
 
-        using var activity = _telemetry.StartDiagnosticActivity("run");
+        using var activity = _profilingTelemetry.StartAppHostRun();
 
         var isSingleFileAppHost = effectiveAppHostFile.Extension != ".csproj";
 
@@ -227,8 +236,17 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         string? isolatedUserSecretsId = null;
         if (context.Isolated)
         {
-            isolatedUserSecretsId = await ConfigureIsolatedModeAsync(effectiveAppHostFile, env, cancellationToken);
-            _logger.LogInformation("Aspire run isolated. Isolated UserSecretsId: {IsolatedUserSecretsId}", isolatedUserSecretsId);
+            using var isolatedModeActivity = _profilingTelemetry.StartAppHostConfigureIsolatedMode();
+            try
+            {
+                isolatedUserSecretsId = await ConfigureIsolatedModeAsync(effectiveAppHostFile, env, cancellationToken);
+                _logger.LogInformation("Aspire run isolated. Isolated UserSecretsId: {IsolatedUserSecretsId}", isolatedUserSecretsId);
+            }
+            catch (Exception ex)
+            {
+                isolatedModeActivity.SetError(ex.Message);
+                throw;
+            }
         }
 
         // Enable debug logging in the app host so that debug-level output is
@@ -244,7 +262,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         try
         {
-            var certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+            EnsureCertificatesTrustedResult certResult;
+            using (var certActivity = _profilingTelemetry.StartAppHostEnsureDevCertificates())
+            {
+                certResult = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+                certActivity.SetDevCertificateEnvironmentVariables(certResult.EnvironmentVariables.Count);
+            }
 
             // Apply any environment variables returned by the certificate service (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certResult.EnvironmentVariables)
@@ -259,7 +282,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             throw;
         }
 
-        var watch = !isSingleFileAppHost && (_features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !context.StartDebugSession));
+        var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
         try
         {
@@ -270,6 +293,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 var shouldBuildInCli = !isExtensionHost || extensionHasBuildCapability;
                 if (shouldBuildInCli)
                 {
+                    using var buildActivity = _profilingTelemetry.StartAppHostBuild(context.NoRestore, isExtensionHost, extensionHasBuildCapability);
+
                     var buildOptions = new ProcessInvocationOptions
                     {
                         StandardOutputCallback = buildOutputCollector.AppendOutput,
@@ -277,6 +302,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                     };
 
                     var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
+                    buildActivity.SetAppHostBuildExitCode(buildExitCode);
 
                     if (buildExitCode != 0)
                     {
@@ -294,7 +320,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             }
             else
             {
+                using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();
                 appHostCompatibilityCheck = await AppHostHelper.CheckAppHostCompatibilityAsync(_runner, _interactionService, effectiveAppHostFile, _telemetry, context.WorkingDirectory, _fileLoggerProvider.LogFilePath, cancellationToken);
+                compatibilityActivity.SetAppHostCompatibility(
+                    appHostCompatibilityCheck.Value.IsCompatibleAppHost,
+                    appHostCompatibilityCheck.Value.SupportsBackchannel,
+                    appHostCompatibilityCheck.Value.AspireHostingVersion);
             }
         }
         catch
@@ -310,6 +341,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
 
+        var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
+        if (canQueryCliBundleProperty && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+        {
+            await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
+        }
+
         // Create collector and store in context for exception handling
         // This must be set BEFORE signaling build completion to avoid a race condition
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
@@ -317,6 +354,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         // Signal that build/preparation is complete
         context.BuildCompletionSource?.TrySetResult(true);
+        activity.AddAppHostBuildReadyEvent();
 
         var runOptions = new ProcessInvocationOptions
         {
@@ -338,9 +376,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Start the apphost - the runner will signal the backchannel when ready
         try
         {
-            // noBuild: true if either watch mode is off (we already built above) or --no-build was passed
+            // noBuild: true if watch mode is off (we already built above), or if --no-build was explicitly requested.
+            // dotnet watch does not support --no-build, so watch + context.NoBuild is invalid and will fail in the runner.
             // noRestore: only relevant when noBuild is false (since --no-build implies --no-restore)
             var noBuild = !watch || context.NoBuild;
+            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
             return await _runner.RunAsync(
                 effectiveAppHostFile,
                 watch,
@@ -369,15 +409,26 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         string[]? args = null)
     {
         var runJsonFilePath = appHostFile.FullName[..^2] + "run.json";
-        if (!File.Exists(runJsonFilePath))
+        if (File.Exists(runJsonFilePath))
         {
-            AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(
-                env,
-                AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
-                inheritedEnvironmentVariables,
-                args);
+            // dotnet run reads the launch profile from apphost.run.json natively, so the CLI
+            // does not need to inject any environment variables itself.
+            return;
+        }
+
+        // No apphost.run.json — fall back to aspire.config.json profiles (if any), then to
+        // hardcoded defaults. ApplyEffectiveEnvironment is always called last so that explicit
+        // --environment arguments still win.
+        if (!TryApplyAspireConfigProfile(appHostFile, env, filterEnvironmentNames: false))
+        {
             ApplyDefaultSingleFileEndpoints(env);
         }
+
+        AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(
+            env,
+            AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
+            inheritedEnvironmentVariables,
+            args);
     }
 
     internal static void ConfigureSingleFilePublishEnvironment(
@@ -386,7 +437,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IReadOnlyDictionary<string, string?>? inheritedEnvironmentVariables = null,
         string[]? args = null)
     {
-        if (!TryApplySingleFileLaunchProfileEnvironmentVariables(appHostFile, env))
+        if (!TryApplySingleFileLaunchProfileEnvironmentVariables(appHostFile, env)
+            && !TryApplyAspireConfigProfile(appHostFile, env, filterEnvironmentNames: true))
         {
             ApplyDefaultSingleFileEndpoints(env);
         }
@@ -403,6 +455,55 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env)
     {
         var profiles = AspireConfigFile.ReadApphostRunProfiles(appHostFile.FullName[..^2] + "run.json");
+        return TryApplyProfile(profiles, env, filterEnvironmentNames: true);
+    }
+
+    private static bool TryApplyAspireConfigProfile(
+        FileInfo appHostFile,
+        Dictionary<string, string> env,
+        bool filterEnvironmentNames)
+    {
+        if (appHostFile.DirectoryName is not { Length: > 0 } directoryName)
+        {
+            return false;
+        }
+
+        AspireConfigFile? config;
+        try
+        {
+            config = AspireConfigFile.Load(directoryName);
+        }
+        catch (JsonException)
+        {
+            // Malformed aspire.config.json — fall back to the next source rather than failing
+            // the run/publish. This mirrors what happens when apphost.run.json is malformed.
+            return false;
+        }
+
+        if (config?.Profiles is null)
+        {
+            return false;
+        }
+
+        // If aspire.config.json names a different AppHost file, don't apply its profile to
+        // this AppHost. (Covers layouts where multiple AppHosts share a directory.)
+        if (!string.IsNullOrEmpty(config.AppHost?.Path))
+        {
+            var resolvedAppHostPath = Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path));
+            if (!string.Equals(resolvedAppHostPath, appHostFile.FullName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return TryApplyProfile(config.Profiles, env, filterEnvironmentNames);
+    }
+
+    private static bool TryApplyProfile(
+        IReadOnlyDictionary<string, AspireConfigProfile>? profiles,
+        Dictionary<string, string> env,
+        bool filterEnvironmentNames)
+    {
         AspireConfigProfile? profile;
 
         if (profiles?.TryGetValue("https", out var httpsProfile) == true)
@@ -414,21 +515,18 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             profile = profiles?.Values.FirstOrDefault();
         }
 
-        if (profile is null)
+        if (profile is null || string.IsNullOrEmpty(profile.ApplicationUrl))
         {
             return false;
         }
 
-        if (!string.IsNullOrEmpty(profile.ApplicationUrl))
-        {
-            env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
-        }
+        env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
 
         if (profile.EnvironmentVariables is not null)
         {
             foreach (var (key, value) in profile.EnvironmentVariables)
             {
-                if (AppHostEnvironmentDefaults.IsEnvironmentVariableName(key))
+                if (filterEnvironmentNames && AppHostEnvironmentDefaults.IsEnvironmentVariableName(key))
                 {
                     continue;
                 }
@@ -484,35 +582,40 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 context.BackchannelCompletionSource?.TrySetException(exception);
                 throw exception;
             }
+        }
 
-            // Build the apphost (unless --no-build is specified)
-            if (!context.NoBuild)
+        if (await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
+        {
+            await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
+        }
+
+        // Build the apphost (unless --no-build is specified)
+        if (!isSingleFileAppHost && !context.NoBuild)
+        {
+            var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
+            var buildOptions = new ProcessInvocationOptions
             {
-                var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
-                var buildOptions = new ProcessInvocationOptions
-                {
-                    StandardOutputCallback = buildOutputCollector.AppendOutput,
-                    StandardErrorCallback = buildOutputCollector.AppendError,
-                };
+                StandardOutputCallback = buildOutputCollector.AppendOutput,
+                StandardErrorCallback = buildOutputCollector.AppendError,
+            };
 
-                var buildExitCode = await AppHostHelper.BuildAppHostAsync(
-                    _runner,
-                    _interactionService,
-                    effectiveAppHostFile,
-                    noRestore: false,
-                    buildOptions,
-                    context.WorkingDirectory,
-                    cancellationToken);
+            var buildExitCode = await AppHostHelper.BuildAppHostAsync(
+                _runner,
+                _interactionService,
+                effectiveAppHostFile,
+                noRestore: false,
+                buildOptions,
+                context.WorkingDirectory,
+                cancellationToken);
 
-                if (buildExitCode != 0)
-                {
-                    // Set OutputCollector so PipelineCommandBase can display errors
-                    context.OutputCollector = buildOutputCollector;
-                    // Signal the backchannel completion source so the caller doesn't wait forever
-                    context.BackchannelCompletionSource?.TrySetException(
-                        new InvalidOperationException("The app host build failed."));
-                    return ExitCodeConstants.FailedToBuildArtifacts;
-                }
+            if (buildExitCode != 0)
+            {
+                // Set OutputCollector so PipelineCommandBase can display errors
+                context.OutputCollector = buildOutputCollector;
+                // Signal the backchannel completion source so the caller doesn't wait forever
+                context.BackchannelCompletionSource?.TrySetException(
+                    new InvalidOperationException("The app host build failed."));
+                return ExitCodeConstants.FailedToBuildArtifacts;
             }
         }
 
@@ -525,10 +628,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = runOutputCollector.AppendOutput,
             StandardErrorCallback = runOutputCollector.AppendError,
             NoLaunchProfile = true,
-            StartDebugSession = context.StartDebugSession,
-            // When not starting a debug session, prevent DotNetCliRunner from delegating the
-            // apphost launch to the extension — pipeline commands should run the apphost directly.
-            NoExtensionLaunch = !context.StartDebugSession,
+            StartDebugSession = context.StartDebugSession
         };
 
         if (isSingleFileAppHost)
@@ -657,6 +757,50 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         {
             _logger.LogDebug(ex, "Failed to get UserSecretsId from project file");
             return null;
+        }
+    }
+
+    private async Task<bool> IsUsingCliBundleAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    {
+        var (exitCode, jsonDocument) = await _runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["AspireUseCliBundle"],
+            new ProcessInvocationOptions(),
+            cancellationToken);
+
+        if (exitCode != 0 || jsonDocument is null)
+        {
+            return false;
+        }
+
+        var rootElement = jsonDocument.RootElement;
+        if (!rootElement.TryGetProperty("Properties", out var properties) ||
+            !properties.TryGetProperty("AspireUseCliBundle", out var useCliBundleElement))
+        {
+            return false;
+        }
+
+        return string.Equals(useCliBundleElement.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ConfigureCliBundleEnvironmentAsync(Dictionary<string, string> env, CancellationToken cancellationToken)
+    {
+        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken);
+        if (layout is null)
+        {
+            _logger.LogDebug("AspireUseCliBundle is enabled, but the Aspire CLI bundle layout was not available from this CLI process.");
+            return;
+        }
+
+        if (!env.ContainsKey(BundleDiscovery.DcpPathEnvVar) && layout.GetDcpPath() is { } dcpPath)
+        {
+            env[BundleDiscovery.DcpPathEnvVar] = dcpPath;
+        }
+
+        if (!env.ContainsKey(BundleDiscovery.DashboardPathEnvVar) && layout.GetManagedPath() is { } managedPath)
+        {
+            env[BundleDiscovery.DashboardPathEnvVar] = managedPath;
         }
     }
 

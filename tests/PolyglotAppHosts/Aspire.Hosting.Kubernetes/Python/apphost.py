@@ -7,20 +7,25 @@ from aspire_app import create_builder
 with create_builder() as builder:
     helm_namespace = builder.add_parameter("helm-namespace")
     helm_release_name = builder.add_parameter("helm-release-name")
+    helm_chart_name = builder.add_parameter("helm-chart-name")
     helm_chart_version = builder.add_parameter("helm-chart-version")
+    helm_chart_description = builder.add_parameter("helm-chart-description")
     kubernetes = builder.add_kubernetes_environment("resource")
 
     def configure_helm(helm):
         helm.with_namespace("validation-namespace")
         helm.with_release_name("validation-release")
+        helm.with_chart_name("validation-kubernetes")
         helm.with_chart_version("1.2.3")
+        helm.with_chart_description("Validation Helm Chart")
         helm.with_namespace(helm_namespace)
         helm.with_release_name(helm_release_name)
+        helm.with_chart_name(helm_chart_name)
         helm.with_chart_version(helm_chart_version)
+        helm.with_chart_description(helm_chart_description)
 
     kubernetes.with_helm(configure_helm)
     kubernetes.with_properties()
-    _resolved_helm_chart_name = kubernetes.helm_chart_name
     _resolved_default_storage_class_name = kubernetes.default_storage_class_name
     _resolved_default_service_type = kubernetes.default_service_type
     gateway = kubernetes.add_gateway("public-gateway")

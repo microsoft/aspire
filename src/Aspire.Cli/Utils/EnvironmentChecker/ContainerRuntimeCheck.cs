@@ -29,8 +29,8 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
         try
         {
             // Probe all runtimes in parallel
-            var dockerTask = ContainerRuntimeDetector.CheckRuntimeAsync("docker", "Docker", isDefault: true, logger, cancellationToken);
-            var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync("podman", "Podman", isDefault: false, logger, cancellationToken);
+            var dockerTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Docker, "Docker", isDefault: true, logger, cancellationToken);
+            var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Podman, "Podman", isDefault: false, logger, cancellationToken);
             var runtimes = await Task.WhenAll(dockerTask, podmanTask);
 
             var configuredRuntime = Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME")

@@ -91,6 +91,18 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void Create_YarpCluster_From_Resource_With_Named_Endpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var service = builder.AddResource(new TestResource("ServiceC"))
+                             .WithEndpoint(name: "api", scheme: "http");
+
+        var cluster = new YarpCluster(service.Resource);
+
+        Assert.Equal("http://_api.ServiceC", Assert.Single(cluster.Targets));
+    }
+
+    [Fact]
     public void Create_YarpCluster_From_Resource_With_Both_Endpoints()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

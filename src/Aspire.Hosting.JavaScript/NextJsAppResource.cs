@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.JavaScript;
 
 /// <summary>
@@ -10,5 +12,6 @@ namespace Aspire.Hosting.JavaScript;
 /// <param name="command">The command to execute the application.</param>
 /// <param name="workingDirectory">The working directory from which the application command is executed.</param>
 [AspireExport(ExposeProperties = true)]
+[Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class NextJsAppResource(string name, string command, string workingDirectory)
     : JavaScriptAppResource(name, command, workingDirectory);

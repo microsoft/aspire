@@ -31,6 +31,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
+    private const string AIAgentsDialogId = "AIAgentsDialog";
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -245,6 +246,36 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private void HandleDialogClose(DialogInstance dialogResult)
     {
         _openPageDialog = null;
+    }
+
+    public async Task LaunchAIAgentsAsync()
+    {
+        DialogParameters parameters = new()
+        {
+            Title = Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
+            PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
+            PrimaryActionEnabled = true,
+            SecondaryAction = null,
+            TrapFocus = true,
+            Modal = true,
+            Alignment = HorizontalAlignment.Center,
+            Width = "700px",
+            Height = "auto",
+            Id = AIAgentsDialogId,
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+        };
+
+        if (_openPageDialog is not null)
+        {
+            if (Equals(_openPageDialog.Id, AIAgentsDialogId) && !_openPageDialog.Result.IsCompleted)
+            {
+                return;
+            }
+
+            await _openPageDialog.CloseAsync();
+        }
+
+        _openPageDialog = await DialogService.ShowDialogAsync<AIAgentsDialog>(parameters).ConfigureAwait(true);
     }
 
     public async Task LaunchSettingsAsync()

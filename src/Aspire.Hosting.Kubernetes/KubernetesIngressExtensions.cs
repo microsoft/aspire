@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
 
-namespace Aspire.Hosting.Kubernetes;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Provides extension methods for configuring Kubernetes Ingress resources in the Aspire application model.

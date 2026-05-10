@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Xml.Linq;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -77,6 +79,11 @@ internal static class CliE2EAutomatorHelpers
         }
     }
 
+    internal static Task WaitUntilAppHostStoppedSuccessfullyAsync(this Hex1bTerminalAutomator auto, TimeSpan timeout)
+    {
+        return auto.WaitUntilTextAsync(GetAppHostStoppedSuccessfullySuffix(), timeout: timeout);
+    }
+
     /// <summary>
     /// Installs the Aspire CLI inside a Docker container using the given install strategy.
     /// Handles all modes: LocalHive, PullRequest, and InstallScript.
@@ -135,6 +142,21 @@ internal static class CliE2EAutomatorHelpers
         }
 
         await auto.VerifyAspireCliVersionAsync(strategy, counter);
+    }
+
+    private static string GetAppHostStoppedSuccessfullySuffix()
+    {
+        const string appHostMarker = "__AspireAppHost__";
+
+        var formattedMessage = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostMarker);
+        var markerIndex = formattedMessage.IndexOf(appHostMarker, StringComparison.Ordinal);
+        var suffixStart = markerIndex + appHostMarker.Length;
+        if (markerIndex < 0 || suffixStart == formattedMessage.Length)
+        {
+            throw new InvalidOperationException($"Unable to derive a waitable suffix from {nameof(StopCommandStrings.AppHostStoppedSuccessfully)}.");
+        }
+
+        return formattedMessage[suffixStart..];
     }
 
     /// <summary>

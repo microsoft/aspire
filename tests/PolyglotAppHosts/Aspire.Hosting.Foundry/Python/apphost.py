@@ -126,7 +126,7 @@ server.listen(port, '127.0.0.1');
     hosted_agent.publish_as_hosted_agent(project=project)
 
     api = builder.add_container("api", "nginx")
-    foundry.with_role_assignments(registry)
+    foundry.with_container_registry_role_assignments(registry)
 
     _deployment_name = chat.deployment_name
     _model_name = chat.model_name

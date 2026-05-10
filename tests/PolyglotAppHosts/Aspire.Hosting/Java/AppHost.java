@@ -56,7 +56,7 @@ void main() throws Exception {
         container.withReference(endpoint);
         container.withReference("https://example.com/", new WithReferenceOptions().name("external-uri"));
         var vnet = builder.addAzureVirtualNetwork("vnet", "10.0.0.0/16");
-        var subnet = vnet.addSubnet("web", "10.0.1.0/24");
+        var subnet = vnet.addSubnet("web", "10.0.1.0/24", null);
         subnet.allowInbound(new AllowInboundOptions().port("443").from(AzureServiceTags.AzureLoadBalancer));
         subnet.denyInbound(new DenyInboundOptions().from(AzureServiceTags.Internet));
         var aks = builder.addAzureKubernetesEnvironment("aks");

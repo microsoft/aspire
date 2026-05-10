@@ -12,6 +12,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared.UserSecrets;
@@ -41,6 +42,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly TimeProvider _timeProvider;
     private readonly RunningInstanceManager _runningInstanceManager;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -59,6 +61,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         ILanguageDiscovery languageDiscovery,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
+        ProfilingTelemetry profilingTelemetry,
         TimeProvider? timeProvider = null)
     {
         _resolvedLanguage = language;
@@ -73,6 +76,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _languageDiscovery = languageDiscovery;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
+        _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -237,7 +241,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             appHostServerProject,
             environmentVariables: null,
             debug: false,
-            _logger);
+            _logger,
+            _profilingTelemetry);
 
         // Step 3: Connect to server
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -393,7 +398,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger);
+                _logger,
+                _profilingTelemetry);
             var socketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
@@ -503,19 +509,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
                 appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, cancellationToken);
 
-            if (launcher is ExtensionGuestLauncher)
-            {
-                // Extension manages the guest app host lifecycle via VS Code debug session.
-                // Wait for the AppHost server to exit (Ctrl+C or extension termination).
-                await appHostServerProcess.WaitForExitAsync(cancellationToken);
-                return appHostServerProcess.ExitCode;
-            }
-
+            // A non-zero exit code at this point means the in-CLI portion of the guest run
+            // (typically a PreExecute step like `tsc --noEmit` for TypeScript) failed before
+            // the actual AppHost was launched. Surface the failure regardless of launcher
+            // type, otherwise the extension flow would silently hang in
+            // appHostServerProcess.WaitForExitAsync waiting for an apphost that was never started.
             if (guestExitCode != 0)
             {
                 _logger.LogError("{Language} apphost exited with code {ExitCode}", DisplayName, guestExitCode);
 
-                // Display the output (same pattern as DotNetCliRunner)
+                // Surface the captured output (e.g. tsc errors from a TypeScript PreExecute step)
+                // so the user can see why the apphost failed. In the extension flow,
+                // ExtensionInteractionService.DisplayLines routes these lines through the
+                // backchannel without also writing them to the CLI's captured stdout/stderr.
                 if (guestOutput is not null)
                 {
                     _interactionService.DisplayLines(guestOutput.GetLines());
@@ -539,6 +545,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 }
 
                 return guestExitCode;
+            }
+
+            if (launcher is ExtensionGuestLauncher)
+            {
+                // Extension manages the guest app host lifecycle via VS Code debug session.
+                // Wait for the AppHost server to exit (Ctrl+C or extension termination).
+                await appHostServerProcess.WaitForExitAsync(cancellationToken);
+                return appHostServerProcess.ExitCode;
             }
 
             // In watch mode, wait for server to exit (Ctrl+C or orphan detection)
@@ -860,7 +874,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger);
+                _logger,
+                _profilingTelemetry);
             var jsonRpcSocketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
@@ -1369,7 +1384,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
             }
 
-            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider);
+            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider, profilingTelemetry: _profilingTelemetry);
 
             _logger.LogDebug("Created GuestRuntime for {RuntimeDisplayName}: Execute={Command} {Args}",
                 runtimeSpec.DisplayName,

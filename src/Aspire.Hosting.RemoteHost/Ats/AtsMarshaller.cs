@@ -159,6 +159,45 @@ internal sealed class AtsMarshaller
         };
     }
 
+    /// <summary>
+    /// Marshals a .NET object to JSON for sending to the guest using a declared CLR type.
+    /// </summary>
+    /// <param name="value">The value to marshal.</param>
+    /// <param name="declaredType">The declared type that should be exposed to the guest.</param>
+    /// <returns>The JSON representation, or null if the value is null.</returns>
+    public JsonNode? MarshalToJson(object? value, Type declaredType)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (declaredType == typeof(object))
+        {
+            return MarshalToJson(value);
+        }
+
+        if (declaredType == typeof(CancellationToken))
+        {
+            return SerializeCancellationToken((CancellationToken)value);
+        }
+
+        var typeId = AtsTypeMapping.DeriveTypeId(declaredType);
+        var category = _context.GetCategory(declaredType);
+
+        return category switch
+        {
+            AtsTypeCategory.Primitive => SerializePrimitive(value),
+            AtsTypeCategory.Enum => JsonValue.Create(value.ToString()),
+            AtsTypeCategory.Dto => SerializeDto(value),
+            AtsTypeCategory.Array => SerializeArray(value, CreateElementTypeRef(declaredType)),
+            AtsTypeCategory.List => _handles.Marshal(value, typeId),
+            AtsTypeCategory.Dict => _handles.Marshal(value, typeId),
+            AtsTypeCategory.Handle => _handles.Marshal(value, typeId),
+            _ => _handles.Marshal(value, typeId)
+        };
+    }
+
     private static JsonNode? SerializePrimitive(object value)
     {
         var type = value.GetType();
@@ -190,6 +229,79 @@ internal sealed class AtsMarshaller
         return JsonNode.Parse(json);
     }
 
+    private object? DeserializeDto(JsonObject jsonObj, Type targetType, UnmarshalContext context)
+    {
+        if (!HasPopulatedDelegateProperty(jsonObj, targetType))
+        {
+            return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+        }
+
+        var instance = Activator.CreateInstance(targetType)
+            ?? throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Failed to create DTO instance of type '{targetType.Name}'");
+
+        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
+        foreach (var prop in typeInfo.Properties)
+        {
+            if (prop.Set is null)
+            {
+                continue;
+            }
+
+            if (!TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue))
+            {
+                continue;
+            }
+
+            var propContext = new UnmarshalContext
+            {
+                CapabilityId = context.CapabilityId,
+                ParameterName = $"{context.ParameterName ?? targetType.Name}.{prop.Name}"
+            };
+            prop.Set(instance, UnmarshalFromJson(jsonValue, prop.PropertyType, propContext));
+        }
+
+        return instance;
+    }
+
+    private static bool HasPopulatedDelegateProperty(JsonObject jsonObj, Type targetType)
+    {
+        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
+        foreach (var prop in typeInfo.Properties)
+        {
+            if (typeof(Delegate).IsAssignableFrom(prop.PropertyType) &&
+                TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue) &&
+                jsonValue is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetJsonProperty(JsonObject jsonObj, string propertyName, out JsonNode? value)
+    {
+        if (jsonObj.TryGetPropertyValue(propertyName, out value))
+        {
+            return true;
+        }
+
+        foreach (var property in jsonObj)
+        {
+            if (string.Equals(property.Key, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
     private JsonNode? SerializeArray(object value, AtsTypeRef? elementType)
     {
         var jsonArray = new JsonArray();
@@ -205,6 +317,37 @@ internal sealed class AtsMarshaller
             }
         }
         return jsonArray;
+    }
+
+    private AtsTypeRef? CreateElementTypeRef(Type declaredType)
+    {
+        if (declaredType.IsArray)
+        {
+            return CreateTypeRef(declaredType.GetElementType()!);
+        }
+
+        if (declaredType.IsGenericType)
+        {
+            var genericTypeDefinition = declaredType.GetGenericTypeDefinition();
+            if (genericTypeDefinition == typeof(IReadOnlyList<>)
+                || genericTypeDefinition == typeof(IReadOnlyCollection<>)
+                || genericTypeDefinition == typeof(IEnumerable<>))
+            {
+                return CreateTypeRef(declaredType.GetGenericArguments()[0]);
+            }
+        }
+
+        return null;
+    }
+
+    private AtsTypeRef CreateTypeRef(Type type)
+    {
+        return new AtsTypeRef
+        {
+            TypeId = AtsTypeMapping.DeriveTypeId(type),
+            ClrType = type,
+            Category = _context.GetCategory(type)
+        };
     }
 
     /// <summary>
@@ -333,6 +476,11 @@ internal sealed class AtsMarshaller
         if (exprRef != null)
         {
             return exprRef.ToReferenceExpression(_handles, capabilityId, paramName);
+        }
+
+        if (targetType == typeof(object))
+        {
+            return node is JsonValue value ? ConvertPrimitive(value, targetType) : node;
         }
 
         // Handle callbacks - any delegate type is treated as a callback
@@ -469,7 +617,7 @@ internal sealed class AtsMarshaller
                         capabilityId, paramName,
                         $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
                 }
-                return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+                return DeserializeDto(jsonObj, targetType, context);
             }
 
             return null;

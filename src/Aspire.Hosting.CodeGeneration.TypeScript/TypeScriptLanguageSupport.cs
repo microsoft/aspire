@@ -266,6 +266,14 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 Command = "npm",
                 Args = ["install"]
             },
+            PreExecute =
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "-p", AppHostTsConfigFileName]
+                }
+            ],
             Execute = new CommandSpec
             {
                 Command = "npx",
@@ -282,7 +290,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"npx --no-install tsx --tsconfig {AppHostTsConfigFileName} {{appHostFile}}"
+                    "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>

@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Publishing;
@@ -330,7 +331,13 @@ internal sealed class ResourceContainerImageManager(
             throw new DistributedApplicationException($"The resource '{resource.Name}' does not have a project metadata annotation.");
         }
 
+        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         var arguments = $"publish \"{projectMetadata.ProjectPath}\" --configuration Release /t:PublishContainer /p:ContainerRepository=\"{options.LocalImageName}\" /p:ContainerImageTag=\"{options.LocalImageTag}\"";
+
+        if (GetLocalRegistryName(containerRuntime) is string localRegistry)
+        {
+            arguments += $" /p:LocalRegistry=\"{localRegistry}\"";
+        }
 
         // Add additional arguments based on options
         if (!string.IsNullOrEmpty(options.OutputPath))
@@ -421,6 +428,23 @@ internal sealed class ResourceContainerImageManager(
                     processResult.ExitCode);
             }
         }
+    }
+
+    private static string? GetLocalRegistryName(IContainerRuntime containerRuntime)
+    {
+        // The .NET SDK container targets require these exact LocalRegistry values;
+        // lower-case executable names fail with CONTAINER2002.
+        if (string.Equals(containerRuntime.Name, KnownContainerRuntimes.Docker, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Docker";
+        }
+
+        if (string.Equals(containerRuntime.Name, KnownContainerRuntimes.Podman, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Podman";
+        }
+
+        return null;
     }
 
     private async Task BuildContainerImageFromDockerfileAsync(IResource resource, DockerfileBuildAnnotation dockerfileBuildAnnotation, string imageName, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)

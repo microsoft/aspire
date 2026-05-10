@@ -5,12 +5,12 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace Aspire.TypeSystem;
+namespace Aspire.Shared.Json;
 
 /// <summary>
 /// Provides JSON literal formatting helpers for generated ATS source code.
 /// </summary>
-public static class AtsJsonCodeWriter
+internal static class AtsJsonCodeWriter
 {
     private static readonly JsonSerializerOptions s_relaxedJsonOptions = new()
     {
@@ -20,7 +20,7 @@ public static class AtsJsonCodeWriter
     /// <summary>
     /// Formats a JSON node using relaxed escaping so non-ASCII content remains readable in generated source.
     /// </summary>
-    public static string ToRelaxedJsonString(this JsonNode value)
+    internal static string ToRelaxedJsonString(this JsonNode value)
     {
         return value.ToJsonString(s_relaxedJsonOptions);
     }
@@ -28,7 +28,7 @@ public static class AtsJsonCodeWriter
     /// <summary>
     /// Formats a string literal as JSON using relaxed escaping.
     /// </summary>
-    public static string ToRelaxedJsonString(string value)
+    internal static string ToRelaxedJsonString(string value)
     {
         return JsonValue.Create(value)!.ToJsonString(s_relaxedJsonOptions);
     }

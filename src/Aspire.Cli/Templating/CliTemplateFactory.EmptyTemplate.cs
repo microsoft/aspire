@@ -12,7 +12,7 @@ namespace Aspire.Cli.Templating;
 
 internal sealed partial class CliTemplateFactory
 {
-    private async Task<TemplateResult> ApplyEmptyAppHostTemplateAsync(CallbackTemplate _, TemplateInputs inputs, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<TemplateResult> ApplyEmptyAppHostTemplateAsync(CallbackTemplate template, TemplateInputs inputs, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
         var languageId = inputs.Language;
         if (string.IsNullOrWhiteSpace(languageId))
@@ -31,17 +31,15 @@ internal sealed partial class CliTemplateFactory
         var projectName = inputs.Name;
         if (string.IsNullOrWhiteSpace(projectName))
         {
-            var defaultName = _executionContext.WorkingDirectory.Name;
+            var defaultName = template.Name;
             projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
-        var outputPath = inputs.Output;
-        if (string.IsNullOrWhiteSpace(outputPath))
+        var outputPath = await ResolveOutputPathAsync(inputs, template.PathDeriver, projectName, parseResult, cancellationToken);
+        if (outputPath is null)
         {
-            var defaultOutputPath = $"./{projectName}";
-            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, cancellationToken);
+            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
         }
-        outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 
         _logger.LogDebug("Applying empty AppHost template. LanguageId: {LanguageId}, Language: {LanguageDisplayName}, ProjectName: {ProjectName}, OutputPath: {OutputPath}.", languageId, language.DisplayName, projectName, outputPath);
 

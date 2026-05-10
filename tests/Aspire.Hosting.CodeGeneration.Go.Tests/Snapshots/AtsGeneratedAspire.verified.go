@@ -2337,8 +2337,14 @@ func CreateBuilder() (IDistributedApplicationBuilder, error) {
 
 	resolved := map[string]any{}
 	if _, ok := resolved["Args"]; !ok { resolved["Args"] = os.Args[1:] }
-	if _, ok := resolved["ProjectDirectory"]; !ok {
+	if projectDirectory, ok := resolved["ProjectDirectory"].(string); !ok || projectDirectory == "" {
 		if pwd, err := os.Getwd(); err == nil { resolved["ProjectDirectory"] = pwd }
+	}
+	if appHostFilePath, ok := resolved["AppHostFilePath"].(string); !ok || appHostFilePath == "" {
+		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["AppHostFilePath"] = appHostFilePath }
+	}
+	if dashboardApplicationName, ok := resolved["DashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
+		delete(resolved, "DashboardApplicationName")
 	}
 
 	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})

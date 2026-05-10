@@ -33,13 +33,13 @@ func main() {
 	orleansClient := orleans.AsClient()
 
 	silo := builder.AddContainer("silo", "redis")
-	silo.WithReference(orleansClient)
+	silo.WithOrleansReference(orleans)
 	if err = silo.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
 	client := builder.AddContainer("client", "redis")
-	client.WithReference(orleansClient)
+	client.WithOrleansClientReference(orleansClient)
 	if err = client.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}

@@ -1,3 +1,5 @@
+/// <reference types="mocha" />
+
 import * as assert from 'assert';
 import * as path from 'path';
 import * as sinon from 'sinon';
@@ -305,6 +307,96 @@ suite('AspireCodeLensProvider builder lens', () => {
         for (const lens of builderLenses) {
             assert.strictEqual(lens.range.start.line, 0);
         }
+        harness.dispose();
+    });
+});
+
+suite('AspireCodeLensProvider resource lens anchoring', () => {
+    let getConfigStub: sinon.SinonStub;
+
+    setup(() => {
+        getConfigStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
+            get: () => true,
+            has: () => true,
+            inspect: () => undefined,
+            update: () => Promise.resolve(),
+        } as any);
+    });
+
+    teardown(() => {
+        getConfigStub.restore();
+    });
+
+    function getResourceLenses(lenses: vscode.CodeLens[]): vscode.CodeLens[] {
+        return lenses.filter(l =>
+            l.command?.command !== 'aspire-vscode.codeLensOpenDashboard'
+            && l.command?.command !== 'aspire-vscode.codeLensViewAppHostLogs'
+            && l.command?.command !== 'aspire-vscode.codeLensDebugPipelineStep'
+        );
+    }
+
+    test('single-resource fluent chain anchors lens at the statement-start line, not the .add* call line', () => {
+        const docPath = p('repo', 'AppHost', 'apphost.ts');
+        const hostPath = p('repo', 'AppHost', 'apphost.ts');
+        // Multi-line chain: declaration starts at line 2 ("const nodePlayer = await builder")
+        // and the .addNodeApp(...) call is on line 3. Line 0 carries the createBuilder()
+        // entry point so the parser recognizes this as an AppHost file.
+        const content = [
+            'const builder = await createBuilder();',                               // line 0
+            '',                                                                     // line 1
+            '// Node Knight (Player 2)',                                            // line 2
+            'const nodePlayer = await builder',                                     // line 3
+            '    .addNodeApp("node-player", "./node-player", "src/server.ts")',     // line 4
+            '    .withRunScript("dev");',                                           // line 5
+        ].join('\n');
+
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('node-player')],
+        });
+
+        const doc = createMockDocument(content, docPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const resourceLenses = getResourceLenses(lenses);
+
+        assert.ok(resourceLenses.length > 0, 'expected at least one resource lens for node-player');
+        for (const lens of resourceLenses) {
+            assert.strictEqual(
+                lens.range.start.line,
+                3,
+                `resource lens should anchor at statement-start line 3 (above 'const nodePlayer'), got ${lens.range.start.line}`
+            );
+        }
+        harness.dispose();
+    });
+
+    test('multi-resource fluent chain anchors each resource lens at its own .add* call line', () => {
+        const docPath = p('repo', 'AppHost', 'apphost.ts');
+        const hostPath = p('repo', 'AppHost', 'apphost.ts');
+        // Single fluent chain declaring two resources. Statement starts at line 2,
+        // pg call is on line 2, db call on line 3. We expect each resource's lens
+        // to anchor at its own .addX line so they don't stack.
+        const content = [
+            'const builder = await createBuilder();',         // line 0
+            '',                                                // line 1
+            'const db = builder.addPostgres("pg")',            // line 2 (statement-start AND pg call)
+            '    .addDatabase("db");',                          // line 3 (db call)
+        ].join('\n');
+
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('pg'), makeResource('db')],
+        });
+
+        const doc = createMockDocument(content, docPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const resourceLenses = getResourceLenses(lenses);
+
+        const lines = new Set(resourceLenses.map(l => l.range.start.line));
+        assert.ok(
+            lines.has(2) && lines.has(3),
+            `expected resource lenses on both line 2 (pg) and line 3 (db) so they don't stack; got lines [${[...lines].join(', ')}]`
+        );
         harness.dispose();
     });
 });

@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -28,6 +31,479 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task IntegrationAddCommandWithHelpArgumentReturnsZero()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration add --help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandWithJsonOptionDoesNotEmitDiscoveryJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("Should not search packages for the removed --json alias.");
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search redis --json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Empty(rawJson);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandRequiresQuery()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("Should not search packages when the required search query is missing.");
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Empty(rawJson);
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandFormatJsonReturnsAvailableIntegrationsWithoutPromptingOrAddingPackage()
+    {
+        var addPackageWasCalled = false;
+        var projectLocatorWasCalled = false;
+        var promptedForIntegration = false;
+        var promptedForVersion = false;
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                {
+                    projectLocatorWasCalled = true;
+                    return Task.FromResult(new AppHostProjectSearchResult(null, []));
+                }
+            };
+
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = (_) =>
+                {
+                    promptedForIntegration = true;
+                    throw new InvalidOperationException("Should not prompt for integration when listing integrations.");
+                };
+                prompter.PromptForIntegrationVersionCallback = (_) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when listing integrations.");
+                };
+                return prompter;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, new[]
+                    {
+                        CreatePackage("Aspire.Hosting.Docker", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.Redis", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.Redis", "9.3.0"),
+                        CreatePackage("Aspire.Hosting.Azure.Redis", "9.2.0")
+                    });
+                };
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(projectLocatorWasCalled);
+        Assert.False(promptedForIntegration);
+        Assert.False(promptedForVersion);
+        Assert.False(addPackageWasCalled);
+
+        var integrations = ReadIntegrationResults(rawJson);
+        Assert.Equal(3, integrations.Length);
+        Assert.Contains(integrations, i => i.Name == "azure-redis" && i.Package == "Aspire.Hosting.Azure.Redis" && i.Version == "9.2.0");
+        Assert.Contains(integrations, i => i.Name == "docker" && i.Package == "Aspire.Hosting.Docker" && i.Version == "9.2.0");
+        Assert.Contains(integrations, i => i.Name == "redis" && i.Package == "Aspire.Hosting.Redis" && i.Version == "9.3.0");
+    }
+
+    [Theory]
+    [InlineData("integration list --format json")]
+    [InlineData("integration search redis --format json")]
+    public async Task IntegrationDiscoveryCommandFormatJsonReturnsEmptyArrayWhenNoIntegrationsAreAvailable(string commandLine)
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) => (0, []);
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Empty(ReadIntegrationResults(rawJson));
+    }
+
+    [Fact]
+    public async Task IntegrationDiscoveryCommandReturnsSearchFailureExitCodeWhenPackageDiscoveryFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("Search failed.");
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToSearchIntegrations, exitCode);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonFiltersAvailableIntegrationsWithoutAddingPackage()
+    {
+        var addPackageWasCalled = false;
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Should not locate an AppHost when searching integrations.")
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, new[]
+                    {
+                        CreatePackage("Aspire.Hosting.Docker", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.Redis", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.Azure.Redis", "9.2.0")
+                    });
+                };
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search redis --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(addPackageWasCalled);
+
+        var integrations = ReadIntegrationResults(rawJson);
+        Assert.Equal(2, integrations.Length);
+        Assert.Contains(integrations, i => i.Package == "Aspire.Hosting.Redis");
+        Assert.Contains(integrations, i => i.Package == "Aspire.Hosting.Azure.Redis");
+        Assert.DoesNotContain(integrations, i => i.Package == "Aspire.Hosting.Docker");
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonUsesFuzzyIntegrationMatching()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, new[]
+                    {
+                        CreatePackage("Aspire.Hosting.Docker", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.Redis", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.RabbitMQ", "9.2.0")
+                    });
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search rdis --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var integrations = ReadIntegrationResults(rawJson);
+        var integration = Assert.Single(integrations);
+        Assert.Equal("redis", integration.Name);
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithAppHostUsesConfiguredChannel()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+        };
+        var dailyCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache)
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("2.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandFormatJsonPrefersImplicitChannelWhenMultipleChannelsContainSameIntegration()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", "test-hive"));
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+        };
+        var explicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache),
+                    PackageChannel.CreateExplicitChannel("test-hive", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "test-hive")], explicitCache)
+                ])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("1.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonReturnsEmptyArrayWhenNoIntegrationsMatch()
+    {
+        var addPackageWasCalled = false;
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Should not locate an AppHost when searching integrations.")
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, new[]
+                    {
+                        CreatePackage("Aspire.Hosting.Docker", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.Redis", "9.2.0")
+                    });
+                };
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search azure --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(addPackageWasCalled);
+
+        var integrations = ReadIntegrationResults(rawJson);
+        Assert.Empty(integrations);
     }
 
     [Fact]
@@ -1140,7 +1616,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var package = new NuGetPackage { Id = packageId, Version = "1.0.0", Source = "test" };
 
         // Act
-        var result = AddCommand.GenerateFriendlyName((package, null!)); // Null is OK for this test.
+        var result = IntegrationPackageSearchService.GenerateFriendlyName((package, null!)); // Null is OK for this test.
 
         // Assert
         Assert.Equal(expectedFriendlyName, result.FriendlyName);
@@ -1493,6 +1969,27 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(promptedForVersion);
         Assert.Equal(cliVersion, selectedPackageVersion);
+    }
+
+    private static NuGetPackage CreatePackage(string id, string version)
+    {
+        return new NuGetPackage
+        {
+            Id = id,
+            Source = "nuget",
+            Version = version
+        };
+    }
+
+    private static (string? Name, string? Package, string? Version)[] ReadIntegrationResults(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.EnumerateArray()
+            .Select(element => (
+                Name: element.GetProperty("name").GetString(),
+                Package: element.GetProperty("package").GetString(),
+                Version: element.GetProperty("version").GetString()))
+            .ToArray();
     }
 }
 

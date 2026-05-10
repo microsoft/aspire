@@ -88,9 +88,9 @@
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
-        <source>[dim]For more information, see: [link]{0}[/][/]</source>
-        <target state="translated">[dim]如需詳細資訊，請參閱: [link]{0}[/][/]</target>
-        <note>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</note>
+        <source>[dim]For more information, see: {0}[/]</source>
+        <target state="needs-review-translation">[dim]如需詳細資訊，請參閱: [link]{0}[/][/]</target>
+        <note>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
         <source>[yellow]A new version of Aspire is available: {0}[/]</source>

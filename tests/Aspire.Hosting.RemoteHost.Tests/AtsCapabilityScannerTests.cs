@@ -340,12 +340,31 @@ public class AtsCapabilityScannerTests
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
         Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
-        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(CommandOptions.Parameter));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == "Parameter");
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.HttpClientName));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.PrepareRequest));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.Method));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.EndpointSelector));
         Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.GetCommandResult));
+    }
+
+    [Fact]
+    public void ScanAssembly_DerivedExportedType_DoesNotRegenerateInheritedProperties()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var baseNameCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/BaseExportedProperties.name", StringComparison.Ordinal));
+
+        Assert.Contains(baseNameCapability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExportedProperties)));
+        Assert.Contains(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/DerivedExportedProperties.framework", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/DerivedExportedProperties.name", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics,
+            d => d.Message.Contains(nameof(DerivedExportedProperties), StringComparison.Ordinal)
+                && d.Message.Contains("has collisions", StringComparison.Ordinal));
     }
 
     #endregion
@@ -531,6 +550,18 @@ public class AtsCapabilityScannerTests
         public TestResource(string name) : base(name)
         {
         }
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private class BaseExportedProperties
+    {
+        public string Name { get; } = "";
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private sealed class DerivedExportedProperties : BaseExportedProperties
+    {
+        public string Framework { get; } = "";
     }
 
     public sealed class AssemblyLevelExportedTestType

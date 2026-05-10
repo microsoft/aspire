@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to [dim]For more information, see: [link]{0}[/][/].
+        ///   Looks up a localized string similar to [dim]For more information, see: {0}[/].
         /// </summary>
         public static string MoreInfoNewCliVersion {
             get {

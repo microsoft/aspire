@@ -9,14 +9,23 @@ await nodeApp.withYarn({ install: false, installArgs: ['--immutable'] });
 await nodeApp.withPnpm({ install: false, installArgs: ['--frozen-lockfile'] });
 await nodeApp.withBuildScript('build', { args: ['--mode', 'production'] });
 await nodeApp.withRunScript('dev', { args: ['--host', '0.0.0.0'] });
+const _nodeAppName = await nodeApp.name();
+const _nodeAppCommand = await nodeApp.command();
+const _nodeAppWorkingDirectory = await nodeApp.workingDirectory();
 
 const javaScriptApp = await builder.addJavaScriptApp('javascript-app', './javascript-app', { runScriptName: 'start' });
 await javaScriptApp.withEnvironment('NODE_ENV', 'development');
+const _javaScriptAppName = await javaScriptApp.name();
+const _javaScriptAppCommand = await javaScriptApp.command();
+const _javaScriptAppWorkingDirectory = await javaScriptApp.workingDirectory();
 
 const viteApp = await builder.addViteApp('vite-app', './vite-app', { runScriptName: 'dev' });
 await viteApp.withViteConfig('./vite.custom.config.ts');
 await viteApp.withPnpm({ install: false, installArgs: ['--prod'] });
 await viteApp.withBuildScript('build', { args: ['--mode', 'production'] });
 await viteApp.withRunScript('dev', { args: ['--host'] });
+const _viteAppName = await viteApp.name();
+const _viteAppCommand = await viteApp.command();
+const _viteAppWorkingDirectory = await viteApp.workingDirectory();
 
 await builder.build().run();

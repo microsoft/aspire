@@ -149,12 +149,12 @@ public static class YarpResourceExtensions
     /// </summary>
     /// <param name="builder">The resource builder for YARP.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withStaticFiles1", MethodName = "withStaticFiles", Description = "Enables static file serving in the YARP resource. Static files are served from the wwwroot folder.")]
+    [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
     public static IResourceBuilder<YarpResource> WithStaticFiles(this IResourceBuilder<YarpResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithEnvironment("YARP_ENABLE_STATIC_FILES", "true");
+        return ConfigureStaticFiles(builder, sourcePath: null);
     }
 
     /// <summary>
@@ -165,13 +165,31 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="sourcePath">The source path containing static files to serve.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withStaticFiles2", MethodName = "withStaticFiles", Description = "Enables static file serving. In run mode: bind mounts  to /wwwroot.")]
+    [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
     public static IResourceBuilder<YarpResource> WithStaticFiles(this IResourceBuilder<YarpResource> builder, string sourcePath)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sourcePath);
 
-        builder.WithStaticFiles();
+        return ConfigureStaticFiles(builder, sourcePath);
+    }
+
+    [AspireExport("withStaticFiles", Description = "Enables static file serving in the YARP resource.")]
+    internal static IResourceBuilder<YarpResource> WithStaticFilesPolyglot(this IResourceBuilder<YarpResource> builder, string? sourcePath = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return ConfigureStaticFiles(builder, sourcePath);
+    }
+
+    private static IResourceBuilder<YarpResource> ConfigureStaticFiles(IResourceBuilder<YarpResource> builder, string? sourcePath)
+    {
+        builder = builder.WithEnvironment("YARP_ENABLE_STATIC_FILES", "true");
+
+        if (sourcePath is null)
+        {
+            return builder;
+        }
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {

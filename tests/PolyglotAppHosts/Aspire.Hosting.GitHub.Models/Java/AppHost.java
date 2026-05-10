@@ -13,7 +13,7 @@ void main() throws Exception {
         var apiKey = builder.addParameter("gh-api-key", new AddParameterOptions().secret(true));
         githubModel.withApiKey(apiKey);
         // 4) enableHealthCheck - integration-specific no-args health check
-        githubModel.withHealthCheck();
+        githubModel.enableHealthCheck();
         // 5) withReference - pass GitHubModelResource as a connection string source to a container
         var container = builder.addContainer("my-service", "mcr.microsoft.com/dotnet/samples:latest");
         container.withReference(githubModel, new WithReferenceOptions());

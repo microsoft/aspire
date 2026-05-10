@@ -209,6 +209,8 @@ internal enum CliInstallQuality
 internal sealed class CliInstallStrategy
 {
     internal const string CliArchiveDirEnvironmentVariableName = "ASPIRE_E2E_CLI_ARCHIVE_DIR";
+    internal const string UbuntuAptMirrorBuildArgName = "UBUNTU_APT_MIRROR";
+    internal const string UbuntuAptMirrorEnvironmentVariableName = "ASPIRE_E2E_UBUNTU_APT_MIRROR";
 
     private const string PreinstalledEnvironmentVariableName = "ASPIRE_E2E_PREINSTALLED";
     /// <summary>
@@ -513,6 +515,7 @@ internal sealed class CliInstallStrategy
     public void ConfigureContainer(DockerContainerOptions config)
     {
         config.BuildArgs["SKIP_SOURCE_BUILD"] = "true";
+        ConfigureUbuntuAptMirrorBuildArg(config.BuildArgs);
 
         switch (Mode)
         {
@@ -556,6 +559,15 @@ internal sealed class CliInstallStrategy
 
             default:
                 throw new InvalidOperationException($"Unknown install mode: {Mode}");
+        }
+    }
+
+    internal static void ConfigureUbuntuAptMirrorBuildArg(IDictionary<string, string> buildArgs)
+    {
+        var ubuntuAptMirror = Environment.GetEnvironmentVariable(UbuntuAptMirrorEnvironmentVariableName);
+        if (!string.IsNullOrWhiteSpace(ubuntuAptMirror))
+        {
+            buildArgs[UbuntuAptMirrorBuildArgName] = ubuntuAptMirror;
         }
     }
 

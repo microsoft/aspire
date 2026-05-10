@@ -12,10 +12,13 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestInteractionService : IInteractionService
 {
+    private readonly object _displayLock = new();
     private readonly Queue<(string Response, ResponseType Type)> _responses = new();
     private bool _shouldCancel;
 
     public ConsoleOutput Console { get; set; }
+
+    public bool SupportsLinks { get; set; }
 
     // Callback hooks
     public Action<string>? DisplaySubtleMessageCallback { get; set; }
@@ -43,6 +46,8 @@ internal sealed class TestInteractionService : IInteractionService
     public List<string> DisplayedErrors { get; } = [];
     public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
     public List<string> DisplayedPlainText { get; } = [];
+    public List<(string Text, ConsoleOutput? ConsoleOverride)> DisplayedRawText { get; } = [];
+    public List<string> DisplayedSuccess { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
 
     // Response queue setup methods
@@ -175,16 +180,26 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayError(string errorMessage)
     {
-        DisplayedErrors.Add(errorMessage);
+        lock (_displayLock)
+        {
+            DisplayedErrors.Add(errorMessage);
+        }
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
     {
-        DisplayedMessages.Add((emoji, message));
+        lock (_displayLock)
+        {
+            DisplayedMessages.Add((emoji, message));
+        }
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
     {
+        lock (_displayLock)
+        {
+            DisplayedSuccess.Add(message);
+        }
     }
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
@@ -231,18 +246,29 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayEmptyLine()
     {
-        DisplayEmptyLineCount++;
+        lock (_displayLock)
+        {
+            DisplayEmptyLineCount++;
+        }
     }
 
     public void DisplayPlainText(string text)
     {
-        DisplayedPlainText.Add(text);
+        lock (_displayLock)
+        {
+            DisplayedPlainText.Add(text);
+        }
     }
 
     public Action<string>? DisplayRawTextCallback { get; set; }
 
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
+        lock (_displayLock)
+        {
+            DisplayedRawText.Add((text, consoleOverride));
+        }
+
         DisplayRawTextCallback?.Invoke(text);
     }
 
