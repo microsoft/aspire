@@ -229,6 +229,42 @@ public class LlmsTxtParserTests
     }
 
     [Fact]
+    public async Task ParseAsync_BashCommentInCodeFence_NotTreatedAsDocumentBoundary()
+    {
+        // Regression: a shell-style "# comment" line inside a fenced code block
+        // must not be interpreted as an H1 document boundary, which would split
+        // the article and truncate its body mid-fence.
+        var content = """
+            # First Document
+
+            Some prose about the first document.
+
+            ```bash
+            # This is a bash comment, not a heading
+            echo "hello"
+
+            # Another bash comment
+            ls -la
+            ```
+
+            Trailing prose that belongs to the first document.
+
+            # Second Document
+
+            Body of the second document.
+            """;
+
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("First Document", result[0].Title);
+        Assert.Equal("Second Document", result[1].Title);
+        Assert.Contains("# This is a bash comment, not a heading", result[0].Content);
+        Assert.Contains("echo \"hello\"", result[0].Content);
+        Assert.Contains("Trailing prose that belongs to the first document.", result[0].Content);
+    }
+
+    [Fact]
     public async Task ParseAsync_H1WithoutSpace_NotRecognizedAsDocument()
     {
         // "#NoSpace" should not be recognized as H1

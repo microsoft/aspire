@@ -116,14 +116,19 @@ internal static partial class LlmsTxtParser
     /// <summary>
     /// Finds the character indices where each H1 header starts.
     /// </summary>
+    /// <remarks>
+    /// Headings inside fenced code blocks (e.g., bash <c>#</c> comments) are skipped so they
+    /// don't get treated as document boundaries.
+    /// </remarks>
     private static List<int> FindDocumentBoundaries(string content)
     {
         var boundaries = new List<int>();
         var span = content.AsSpan();
+        var codeBlocks = FindCodeBlockRegions(span);
         var position = 0;
 
         // Check if content starts with H1
-        if (IsDocumentBoundary(span))
+        if (IsDocumentBoundary(span) && !IsInsideCodeBlock(0, codeBlocks))
         {
             boundaries.Add(0);
         }
@@ -139,7 +144,9 @@ internal static partial class LlmsTxtParser
 
             position += newlineIndex + 1;
 
-            if (position < span.Length && IsDocumentBoundary(span[position..]))
+            if (position < span.Length
+                && !IsInsideCodeBlock(position, codeBlocks)
+                && IsDocumentBoundary(span[position..]))
             {
                 boundaries.Add(position);
             }
