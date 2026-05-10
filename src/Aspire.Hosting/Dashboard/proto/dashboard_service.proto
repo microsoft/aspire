@@ -104,7 +104,6 @@ message ResourceCommandResponse {
     optional string error_message = 2 [deprecated = true];
     optional string message = 3;
     optional ResourceCommandResult result = 4;
-    reserved 5;
 }
 
 message ResourceCommandResult {
