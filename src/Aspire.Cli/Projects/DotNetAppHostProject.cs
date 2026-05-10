@@ -280,8 +280,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
         }
 
-        // Create collector and store in context for exception handling
-        // This must be set BEFORE signaling build completion to avoid a race condition
+        // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
+        // Store the collector first so failures that occur immediately after preparation are not lost
+        // to a race between the AppHost process and RunCommand's UX path.
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
         context.OutputCollector = runOutputCollector;
 
@@ -309,12 +310,16 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Start the apphost - the runner will signal the backchannel when ready
         try
         {
-            // The app host may already have been built above (in the CLI, or by the extension).
-            // For non-watch runs we pass noBuild=true so dotnet run doesn't rebuild. For watch runs
-            // we leave builds enabled unless the user explicitly requested --no-build, so dotnet watch
-            // can perform its own build/incremental build and hot reload even if an up-front build
-            // already happened earlier in this method.
-            // noRestore: only relevant when noBuild is false (since --no-build implies --no-restore)
+            // The AppHost may already have been built above, but watch mode intentionally still
+            // runs with builds enabled. Passing --no-build through to dotnet watch breaks hot reload
+            // because watch owns the incremental build loop and its environment setup.
+            //
+            // This means watch mode can do a second no-op build after the CLI pre-build succeeds.
+            // That tradeoff is intentional: the pre-build makes initial compiler errors terminate
+            // aspire run instead of leaving dotnet watch idle waiting for edits before a backchannel
+            // ever becomes available.
+            //
+            // noRestore is only relevant when noBuild is false because --no-build implies --no-restore.
             var noBuild = !watch || context.NoBuild;
             using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
             return await _runner.RunAsync(
@@ -349,7 +354,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 certActivity.SetDevCertificateEnvironmentVariables(certResult.EnvironmentVariables.Count);
             }
 
-            // Apply any environment variables returned by the certificate service (e.g., SSL_CERT_DIR on Linux)
+            // Certificate trust can add platform-specific variables such as SSL_CERT_DIR on Linux.
+            // These must flow into the AppHost process because the dashboard/resource service may
+            // start immediately after preparation and depend on the same trust roots the CLI just
+            // verified.
             foreach (var kvp in certResult.EnvironmentVariables)
             {
                 env[kvp.Key] = kvp.Value;
@@ -357,7 +365,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
         catch
         {
-            // Signal that build/preparation failed so RunCommand doesn't hang waiting
+            // RunCommand waits on this source before it waits for the AppHost backchannel. Any
+            // exception during preparation must signal failure, otherwise the command can hang
+            // forever on a backchannel that will never be created.
             context.BuildCompletionSource?.TrySetResult(false);
             throw;
         }
@@ -397,7 +407,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
         catch
         {
-            // Signal that build/preparation failed so RunCommand doesn't hang waiting
+            // RunCommand has already started awaiting preparation before the AppHost process exists.
+            // Signal failure for both expected failures and exceptions so callers do not wait for
+            // a backchannel that preparation prevented from starting.
             context.BuildCompletionSource?.TrySetResult(false);
             throw;
         }
@@ -416,10 +428,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return null;
         }
 
-        // Build in CLI if either not running under extension host, or the extension reports 'build-dotnet-using-cli' capability.
         var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
         if (isExtensionHost && !extensionHasBuildCapability)
         {
+            // Older extension hosts own the AppHost build themselves. Building again in the CLI would
+            // duplicate work and could race the extension's diagnostics/launch pipeline. Newer hosts
+            // opt in with build-dotnet-using-cli when they want the CLI to own this pre-build.
             return null;
         }
 
@@ -439,7 +453,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return null;
         }
 
-        // Set OutputCollector so RunCommand can display errors
+        // Preserve the build output before signaling failure. RunCommand reads this collector after
+        // BuildCompletionSource completes so users see the compiler diagnostics instead of only a
+        // generic "project could not be built" message.
         context.OutputCollector = buildOutputCollector;
         context.BuildCompletionSource?.TrySetResult(false);
         return ExitCodeConstants.FailedToBuildArtifacts;
