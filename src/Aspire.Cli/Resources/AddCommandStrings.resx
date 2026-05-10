@@ -154,6 +154,13 @@
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
   </data>
+  <data name="DiscoveryScopeOptionDescription" xml:space="preserve">
+    <value>Integration discovery scope: official, all, or third-party</value>
+  </data>
+  <data name="InvalidDiscoveryScope" xml:space="preserve">
+    <value>Invalid discovery scope '{0}'. Use 'official', 'all', or 'third-party'.</value>
+    <comment>{0} is the invalid discovery scope value provided by the user.</comment>
+  </data>
   <data name="SearchingForAspirePackages" xml:space="preserve">
     <value>Searching for Aspire integrations...</value>
   </data>
@@ -196,6 +203,31 @@
   </data>
   <data name="SelectAnIntegrationToAdd" xml:space="preserve">
     <value>Select an integration to add:</value>
+  </data>
+  <data name="SelectIntegrationDiscoveryScope" xml:space="preserve">
+    <value>Select which integrations to show:</value>
+  </data>
+  <data name="DiscoveryScopeOfficialOnly" xml:space="preserve">
+    <value>Official packages only</value>
+  </data>
+  <data name="DiscoveryScopeIncludeThirdParty" xml:space="preserve">
+    <value>Include third-party packages</value>
+  </data>
+  <data name="ThirdPartyIntegrationWarning" xml:space="preserve">
+    <value>Third-party packages are not owned or supported by the Aspire team. Contact the package owner for support.</value>
+  </data>
+  <data name="ThirdPartyIntegrationConfirmationPrompt" xml:space="preserve">
+    <value>⚠️ The package '{0}' is a third-party integration that is not owned or supported by the Aspire team. Do you want to add it?</value>
+    <comment>{0} is the package ID of the third-party integration.</comment>
+  </data>
+  <data name="ThirdPartyIntegrationConfirmationNo" xml:space="preserve">
+    <value>✗ No, do not add this package</value>
+  </data>
+  <data name="ThirdPartyIntegrationConfirmationYes" xml:space="preserve">
+    <value>✓ Yes, add this package; I understand the risks</value>
+  </data>
+  <data name="ThirdPartyIntegrationDeclined" xml:space="preserve">
+    <value>The third-party package was not added.</value>
   </data>
   <data name="NoPackagesMatchedSearchTerm" xml:space="preserve">
     <value>No packages matched your search term '{0}'. Showing all available packages.</value>

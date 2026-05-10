@@ -25,6 +25,7 @@ internal sealed class AddCommand : BaseCommand
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
     private readonly IAddCommandPrompter _prompter;
     private readonly IDotNetSdkInstaller _sdkInstaller;
+    private readonly IDotNetCliRunner _runner;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IAppHostProjectFactory _projectFactory;
 
@@ -42,14 +43,19 @@ internal sealed class AddCommand : BaseCommand
     {
         Description = AddCommandStrings.SourceArgumentDescription
     };
+    private static readonly Option<string?> s_discoveryScopeOption = new("--discovery-scope")
+    {
+        Description = AddCommandStrings.DiscoveryScopeOptionDescription
+    };
 
-    public AddCommand(IInteractionService interactionService, IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
+    public AddCommand(IInteractionService interactionService, IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IDotNetCliRunner runner, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
         : base("add", AddCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _projectLocator = projectLocator;
         _integrationPackageSearchService = integrationPackageSearchService;
         _prompter = prompter;
         _sdkInstaller = sdkInstaller;
+        _runner = runner;
         _hostEnvironment = hostEnvironment;
         _projectFactory = projectFactory;
 
@@ -57,6 +63,7 @@ internal sealed class AddCommand : BaseCommand
         Options.Add(s_appHostOption);
         Options.Add(s_versionOption);
         Options.Add(s_sourceOption);
+        Options.Add(s_discoveryScopeOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -71,6 +78,7 @@ internal sealed class AddCommand : BaseCommand
             var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
+            var requestedDiscoveryScope = parseResult.GetValue(s_discoveryScopeOption);
 
             var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: false, cancellationToken);
             var effectiveAppHostProjectFile = searchResult.SelectedProjectFile;
@@ -104,9 +112,19 @@ internal sealed class AddCommand : BaseCommand
                 return CommandResult.FromExitCode(exitCode);
             }
 
+            var (discoveryScope, discoveryScopeExitCode) = await ResolveDiscoveryScopeAsync(
+                effectiveAppHostProjectFile.Directory!,
+                requestedDiscoveryScope,
+                integrationName,
+                cancellationToken);
+            if (discoveryScopeExitCode is { } scopeExitCode)
+            {
+                return scopeExitCode;
+            }
+
             var packagesWithChannels = await InteractionService.ShowStatusAsync(
                 AddCommandStrings.SearchingForAspirePackages,
-                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, discoveryScope, cancellationToken));
 
             if (!packagesWithChannels.Any() && integrationName is null)
             {
@@ -114,6 +132,11 @@ internal sealed class AddCommand : BaseCommand
             }
 
             var packagesWithShortName = packagesWithChannels.Select(IntegrationPackageSearchService.GenerateFriendlyName).OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer());
+
+            if (integrationName is null && _hostEnvironment.SupportsInteractiveInput)
+            {
+                packagesWithShortName = await ExcludeInstalledPackagesAsync(effectiveAppHostProjectFile, project, packagesWithShortName, cancellationToken);
+            }
 
             if (!packagesWithShortName.Any() && integrationName is null)
             {
@@ -139,6 +162,7 @@ internal sealed class AddCommand : BaseCommand
                         effectiveAppHostProjectFile.Directory!,
                         integrationName,
                         configuredChannel,
+                        GetExactPackageIdDiscoveryScope(discoveryScope, integrationName),
                         cancellationToken))
                     .Select(IntegrationPackageSearchService.GenerateFriendlyName)
                 ];
@@ -149,7 +173,7 @@ internal sealed class AddCommand : BaseCommand
                 }
             }
 
-            if (!filteredPackagesWithShortName.Any() && integrationName is not null && TryGetBuiltInHostingPackageIdCandidate(integrationName, out var builtInPackageIdCandidate))
+            if (!filteredPackagesWithShortName.Any() && integrationName is not null && discoveryScope.IncludesGroup(IntegrationSearchResultGroup.Microsoft) && TryGetBuiltInHostingPackageIdCandidate(integrationName, out var builtInPackageIdCandidate))
             {
                 var builtInPackageMatches = (await _integrationPackageSearchService.SearchBuiltInPackagesByExactIdWithChannelsAsync(
                         effectiveAppHostProjectFile.Directory!,
@@ -176,7 +200,11 @@ internal sealed class AddCommand : BaseCommand
                 // then try a fuzzy search to create a broader filtered list.
                 // Materialize the query with ToList() to avoid multiple enumerations
                 // (which would recalculate fuzzy scores on each Count()/First() call).
-                filteredPackagesWithShortName = IntegrationPackageSearchService.GetIntegrationSearchMatches(packagesWithShortName, integrationName)
+                var fuzzySearchSource = _hostEnvironment.SupportsInteractiveInput
+                    ? await ExcludeInstalledPackagesAsync(effectiveAppHostProjectFile, project, packagesWithShortName, cancellationToken)
+                    : packagesWithShortName;
+
+                filteredPackagesWithShortName = IntegrationPackageSearchService.GetIntegrationSearchMatches(fuzzySearchSource, integrationName)
                     .Select(x => (x.FriendlyName, x.Package, x.Channel))
                     .ToList();
             }
@@ -198,6 +226,16 @@ internal sealed class AddCommand : BaseCommand
                     => filteredPackagesWithShortName.First(),
                 _ => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, filteredPackagesWithShortName, version, cancellationToken)
             };
+
+            if (IntegrationDisplayHelpers.GetIntegrationGroup(selectedNuGetPackage.Package.Id) is IntegrationSearchResultGroup.ThirdParty)
+            {
+                var thirdPartyConfirmed = await ConfirmThirdPartyIntegrationAsync(selectedNuGetPackage.Package.Id, cancellationToken);
+                if (!thirdPartyConfirmed)
+                {
+                    InteractionService.DisplayError(AddCommandStrings.ThirdPartyIntegrationDeclined);
+                    return ExitCodeConstants.FailedToAddPackage;
+                }
+            }
 
             await EnsureLocalBuildChannelNuGetConfigAsync(source, selectedNuGetPackage.Channel, effectiveAppHostProjectFile.Directory!, cancellationToken);
 
@@ -266,6 +304,126 @@ internal sealed class AddCommand : BaseCommand
             Telemetry.RecordError(errorMessage, ex);
             return CommandResult.Failure(CliExitCodes.FailedToAddPackage, errorMessage);
         }
+    }
+
+    private async Task<(IntegrationDiscoveryScope Scope, int? ExitCode)> ResolveDiscoveryScopeAsync(DirectoryInfo workingDirectory, string? requestedDiscoveryScope, string? integrationName, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedDiscoveryScope))
+        {
+            if (IntegrationDiscoveryScopeHelpers.TryParse(requestedDiscoveryScope, out var parsedScope))
+            {
+                return (parsedScope, ExitCode: null);
+            }
+
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.InvalidDiscoveryScope, requestedDiscoveryScope));
+            return (IntegrationDiscoveryScope.Official, ExitCodeConstants.FailedToAddPackage);
+        }
+
+        var mode = IntegrationDiscoveryScopeHelpers.GetConfiguredThirdPartyMode(workingDirectory);
+        if (mode is ThirdPartyIntegrationDiscoveryMode.Ask && _hostEnvironment.SupportsInteractiveInput && integrationName is null)
+        {
+            var choices = new[]
+            {
+                (Scope: IntegrationDiscoveryScope.Official, Label: AddCommandStrings.DiscoveryScopeOfficialOnly),
+                (Scope: IntegrationDiscoveryScope.All, Label: AddCommandStrings.DiscoveryScopeIncludeThirdParty)
+            };
+
+            var selectedChoice = await InteractionService.PromptForSelectionAsync(
+                AddCommandStrings.SelectIntegrationDiscoveryScope,
+                choices,
+                static choice => choice.Label,
+                cancellationToken: cancellationToken);
+
+            return (selectedChoice.Scope, ExitCode: null);
+        }
+
+        return (IntegrationDiscoveryScopeHelpers.GetConfiguredScope(workingDirectory), ExitCode: null);
+    }
+
+    private async Task<IOrderedEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> ExcludeInstalledPackagesAsync(
+        FileInfo appHostProjectFile,
+        IAppHostProject project,
+        IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages,
+        CancellationToken cancellationToken)
+    {
+        var installedPackageIds = await GetInstalledPackageIdsAsync(appHostProjectFile, project, cancellationToken);
+        if (installedPackageIds.Count == 0)
+        {
+            return packages.OrderBy(package => package.FriendlyName, new CommunityToolkitFirstComparer());
+        }
+
+        return packages
+            .Where(package => !installedPackageIds.Contains(package.Package.Id))
+            .OrderBy(package => package.FriendlyName, new CommunityToolkitFirstComparer());
+    }
+
+    private async Task<HashSet<string>> GetInstalledPackageIdsAsync(FileInfo appHostProjectFile, IAppHostProject project, CancellationToken cancellationToken)
+    {
+        if (project.LanguageId is not KnownLanguageId.CSharp)
+        {
+            return [];
+        }
+
+        var (exitCode, output) = await _runner.GetProjectItemsAndPropertiesAsync(
+            appHostProjectFile,
+            ["PackageReference"],
+            [],
+            new ProcessInvocationOptions { SuppressLogging = true },
+            cancellationToken);
+
+        if (exitCode != 0 || output is null)
+        {
+            return [];
+        }
+
+        var installedPackageIds = new HashSet<string>(StringComparers.NuGetPackageId);
+        if (output.RootElement.TryGetProperty("Items", out var items) &&
+            items.TryGetProperty("PackageReference", out var packageReferences))
+        {
+            foreach (var packageReference in packageReferences.EnumerateArray())
+            {
+                if (packageReference.TryGetProperty("Identity", out var identity) && identity.GetString() is { } packageId)
+                {
+                    installedPackageIds.Add(packageId);
+                }
+            }
+        }
+
+        return installedPackageIds;
+    }
+
+    private static IntegrationDiscoveryScope GetExactPackageIdDiscoveryScope(IntegrationDiscoveryScope discoveryScope, string integrationName)
+    {
+        if (discoveryScope is IntegrationDiscoveryScope.Official && integrationName.Contains('.', StringComparison.Ordinal))
+        {
+            return IntegrationDiscoveryScope.All;
+        }
+
+        return discoveryScope;
+    }
+
+    private async Task<bool> ConfirmThirdPartyIntegrationAsync(string packageId, CancellationToken cancellationToken)
+    {
+        if (!_hostEnvironment.SupportsInteractiveInput)
+        {
+            return false;
+        }
+
+        var choices = new[]
+        {
+            (Confirmed: false, Label: AddCommandStrings.ThirdPartyIntegrationConfirmationNo),
+            (Confirmed: true, Label: AddCommandStrings.ThirdPartyIntegrationConfirmationYes)
+        };
+
+        InteractionService.DisplayEmptyLine();
+
+        var selectedChoice = await InteractionService.PromptForSelectionAsync(
+            string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ThirdPartyIntegrationConfirmationPrompt, packageId),
+            choices,
+            static choice => choice.Label,
+            cancellationToken: cancellationToken);
+
+        return selectedChoice.Confirmed;
     }
 
     private static string? GetPackageSourceForInstall(string? requestedSource, NuGetPackage package, PackageChannel channel)
@@ -468,22 +626,6 @@ internal sealed class AddCommand : BaseCommand
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionNotFoundForPackage, selectedPackage.Package.Id, preferredVersion));
         }
 
-        // When PR hives are present, prefer the package that exactly matches the installed
-        // CLI/SDK version so template- and add-generated projects stay on the same build.
-        var prChannelPackageVersions = packageVersions
-            .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
-            .ToArray();
-
-        if (VersionHelper.TryGetCurrentCliVersionMatch(
-            prChannelPackageVersions,
-            p => p.Package.Version,
-            out var cliVersionPackage,
-            channelName: null,
-            hasPrHives: ExecutionContext.GetHiveCount() > 0))
-        {
-            return cliVersionPackage;
-        }
-
         // In non-interactive mode, prefer the implicit/default channel first to keep
         // package selection aligned with the project's configured feeds. Then select
         // the latest version within the chosen channel.
@@ -492,6 +634,22 @@ internal sealed class AddCommand : BaseCommand
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
+            // When PR hives are present, prefer the package that exactly matches the installed
+            // CLI/SDK version so template- and add-generated projects stay on the same build.
+            var prChannelPackageVersions = packageVersions
+                .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
+                .ToArray();
+
+            if (VersionHelper.TryGetCurrentCliVersionMatch(
+                prChannelPackageVersions,
+                p => p.Package.Version,
+                out var cliVersionPackage,
+                channelName: null,
+                hasPrHives: ExecutionContext.GetPrHiveCount() > 0))
+            {
+                return cliVersionPackage;
+            }
+
             return orderedPackageVersions.First();
         }
 
@@ -539,11 +697,9 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             var choices = items
                 .Select(i => (
                     Label: FormatVersionLabel(i),
-                    Result: i
-                ))
+                    Result: i))
                 .ToArray();
 
-            // Auto-select when there's only one version in the channel
             if (choices.Length == 1)
             {
                 return choices[0].Result;
@@ -558,29 +714,25 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             return selection.Result;
         }
 
-        // Group the incoming package versions by channel and filter to highest version per channel
         var byChannel = packages
             .GroupBy(p => p.Channel)
             .Select(g => new
             {
                 Channel = g.Key,
-                // Keep only the highest version in each channel
                 HighestVersion = g.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer).First()
             })
             .ToArray();
 
-        var implicitGroup = byChannel.FirstOrDefault(g => g.Channel.Type is Packaging.PackageChannelType.Implicit);
+        var implicitGroup = byChannel.FirstOrDefault(g => g.Channel.Type is PackageChannelType.Implicit);
         var explicitGroups = byChannel
-            .Where(g => g.Channel.Type is Packaging.PackageChannelType.Explicit)
+            .Where(g => g.Channel.Type is PackageChannelType.Explicit)
             .ToArray();
 
-        // If there are no explicit channels, automatically select from the implicit channel
         if (explicitGroups.Length == 0 && implicitGroup is not null)
         {
             return implicitGroup.HighestVersion;
         }
 
-        // Build the root menu: implicit channel packages directly, explicit channels as submenus
         var rootChoices = new List<(string Label, Func<CancellationToken, Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> Action)>();
 
         if (implicitGroup is not null)
@@ -588,8 +740,7 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             var captured = implicitGroup.HighestVersion;
             rootChoices.Add((
                 Label: FormatVersionLabel(captured),
-                Action: ct => Task.FromResult(captured)
-            ));
+                Action: ct => Task.FromResult(captured)));
         }
 
         foreach (var channelGroup in explicitGroups)
@@ -599,18 +750,14 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
 
             rootChoices.Add((
                 Label: channel.Name.EscapeMarkup(),
-                // For explicit channels, we still show submenu but with only the highest version
-                Action: ct => PromptForChannelPackagesAsync(channel, new[] { item }, ct)
-            ));
+                Action: ct => PromptForChannelPackagesAsync(channel, [item], ct)));
         }
 
-        // Fallback if no choices for some reason
         if (rootChoices.Count == 0)
         {
             return firstPackage;
         }
 
-        // Auto-select when there's only one option (e.g., single explicit channel)
         if (rootChoices.Count == 1)
         {
             return await rootChoices[0].Action(cancellationToken);

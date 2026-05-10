@@ -82,7 +82,14 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     {
         return GetProjectItemsAndPropertiesAsyncCallback != null
             ? Task.FromResult(GetProjectItemsAndPropertiesAsyncCallback(projectFile, items, properties, options, cancellationToken))
-            : Task.FromResult<(int, JsonDocument?)>((0, JsonDocument.Parse("""{"Properties":{},"Items":{}}""")));
+            : Task.FromResult<(int, JsonDocument?)>((0, JsonDocument.Parse("""
+                {
+                    "Items": {
+                        "PackageReference": []
+                    },
+                    "Properties": {}
+                }
+                """)));
     }
 
     public Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken)

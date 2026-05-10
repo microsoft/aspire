@@ -25,6 +25,10 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
     {
         Description = AddCommandStrings.FormatOptionDescription
     };
+    private readonly Option<string?> _discoveryScopeOption = new("--discovery-scope")
+    {
+        Description = AddCommandStrings.DiscoveryScopeOptionDescription
+    };
 
     protected IntegrationDiscoveryCommand(
         string name,
@@ -41,6 +45,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
         Options.Add(_appHostOption);
         Options.Add(_formatOption);
+        Options.Add(_discoveryScopeOption);
     }
 
     protected override bool UpdateNotificationsEnabled => false;
@@ -56,6 +61,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             var searchTerm = GetSearchTerm(parseResult);
             var passedAppHostProjectFile = parseResult.GetValue(_appHostOption);
             var format = parseResult.GetValue(_formatOption);
+            var requestedDiscoveryScope = parseResult.GetValue(_discoveryScopeOption);
 
             var (workingDirectory, configuredChannel, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
             if (contextExitCode is { } exitCode)
@@ -63,9 +69,19 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 return CommandResult.FromExitCode(exitCode);
             }
 
+            var discoveryScope = IntegrationDiscoveryScopeHelpers.GetConfiguredScope(workingDirectory);
+            if (!string.IsNullOrWhiteSpace(requestedDiscoveryScope))
+            {
+                if (!IntegrationDiscoveryScopeHelpers.TryParse(requestedDiscoveryScope, out discoveryScope))
+                {
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.InvalidDiscoveryScope, requestedDiscoveryScope));
+                    return ExitCodeConstants.FailedToSearchIntegrations;
+                }
+            }
+
             var packagesWithChannels = (await InteractionService.ShowStatusAsync(
                 AddCommandStrings.SearchingForAspirePackages,
-                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
+                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken)))
                 .ToArray();
 
             var packagesWithShortName = packagesWithChannels

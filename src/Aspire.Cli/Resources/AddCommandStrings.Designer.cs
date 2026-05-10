@@ -149,6 +149,22 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string DiscoveryScopeOptionDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("DiscoveryScopeOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string InvalidDiscoveryScope
+        {
+            get
+            {
+                return ResourceManager.GetString("InvalidDiscoveryScope", resourceCulture);
+            }
+        }
+
         public static string SearchingForAspirePackages
         {
             get
@@ -250,6 +266,70 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("SelectAnIntegrationToAdd", resourceCulture);
+            }
+        }
+
+        public static string SelectIntegrationDiscoveryScope
+        {
+            get
+            {
+                return ResourceManager.GetString("SelectIntegrationDiscoveryScope", resourceCulture);
+            }
+        }
+
+        public static string DiscoveryScopeOfficialOnly
+        {
+            get
+            {
+                return ResourceManager.GetString("DiscoveryScopeOfficialOnly", resourceCulture);
+            }
+        }
+
+        public static string DiscoveryScopeIncludeThirdParty
+        {
+            get
+            {
+                return ResourceManager.GetString("DiscoveryScopeIncludeThirdParty", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationWarning
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationWarning", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationConfirmationPrompt
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationConfirmationPrompt", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationConfirmationNo
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationConfirmationNo", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationConfirmationYes
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationConfirmationYes", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationDeclined
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationDeclined", resourceCulture);
             }
         }
 

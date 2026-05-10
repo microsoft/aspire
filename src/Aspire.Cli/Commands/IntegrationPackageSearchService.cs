@@ -15,6 +15,7 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class IntegrationPackageSearchService(
     IPackagingService packagingService,
+    INuGetPackageCache nuGetPackageCache,
     IProjectLocator projectLocator,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
@@ -23,10 +24,12 @@ internal sealed class IntegrationPackageSearchService(
 {
     private const double FuzzyMatchThreshold = 0.3;
     private const int MaxThirdPartyVerificationConcurrency = 16;
+    private const string ThirdPartyChannelName = "third-party";
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken)
     {
-        var channels = await GetApplicableChannelsAsync(configuredChannel, cancellationToken);
+        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken);
+        var thirdPartyPackageAllowlist = IntegrationDiscoveryScopeHelpers.GetConfiguredThirdPartyPackages(workingDirectory);
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
 
@@ -35,11 +38,12 @@ internal sealed class IntegrationPackageSearchService(
             var integrationPackages = (await channel.SearchPackagesAsync(
                 $"tags:{HostingIntegrationMetadata.CanonicalTag}",
                 workingDirectory,
-                static packageId => !HostingIntegrationMetadata.IsKnownNonHostingAspirePackageId(packageId) &&
+                packageId => discoveryScope.IsPackageAllowed(packageId, thirdPartyPackageAllowlist) &&
+                    !HostingIntegrationMetadata.IsKnownNonHostingAspirePackageId(packageId) &&
                     !DeprecatedPackages.IsDeprecated(packageId),
                 ct)).ToArray();
 
-            if (VersionHelper.IsLocalBuildChannel(channel.Name))
+            if (discoveryScope is not IntegrationDiscoveryScope.ThirdParty && VersionHelper.IsLocalBuildChannel(channel.Name))
             {
                 var builtInPackages = await channel.SearchPackagesAsync(
                     "Aspire.Hosting",
@@ -60,9 +64,15 @@ internal sealed class IntegrationPackageSearchService(
         return packages.DistinctBy(static package => $"{package.Channel.Name}\0{package.Package.Id}\0{package.Package.Version}", StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetPackagesByExactIdWithChannelsAsync(DirectoryInfo workingDirectory, string packageId, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetPackagesByExactIdWithChannelsAsync(DirectoryInfo workingDirectory, string packageId, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken)
     {
-        var channels = await GetApplicableChannelsAsync(configuredChannel, cancellationToken);
+        var thirdPartyPackageAllowlist = IntegrationDiscoveryScopeHelpers.GetConfiguredThirdPartyPackages(workingDirectory);
+        if (!discoveryScope.IsPackageAllowed(packageId, thirdPartyPackageAllowlist))
+        {
+            return [];
+        }
+
+        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken);
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
 
@@ -100,7 +110,7 @@ internal sealed class IntegrationPackageSearchService(
             return [];
         }
 
-        var channels = await GetApplicableChannelsAsync(configuredChannel, cancellationToken);
+        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, IntegrationDiscoveryScope.Official, cancellationToken);
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
 
@@ -246,7 +256,7 @@ internal sealed class IntegrationPackageSearchService(
         return verifiedPackages.OfType<NuGetPackage>();
     }
 
-    private async Task<PackageChannel[]> GetApplicableChannelsAsync(string? configuredChannel, CancellationToken cancellationToken)
+    private async Task<PackageChannel[]> GetApplicableChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken)
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
 
@@ -256,10 +266,30 @@ internal sealed class IntegrationPackageSearchService(
         }
 
         var hasHives = executionContext.GetPrHiveCount() > 0;
-        return (hasHives || !string.IsNullOrEmpty(configuredChannel)
+        var channels = (hasHives || !string.IsNullOrEmpty(configuredChannel)
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit ||
                 string.Equals(c.Name, PackageChannelNames.Stable, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        var configuredThirdPartyChannels = GetConfiguredThirdPartyChannels(workingDirectory, configuredChannel, discoveryScope);
+        return [.. channels, .. configuredThirdPartyChannels];
+    }
+
+    private PackageChannel[] GetConfiguredThirdPartyChannels(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope)
+    {
+        if (discoveryScope is IntegrationDiscoveryScope.Official ||
+            (!string.IsNullOrEmpty(configuredChannel) && !string.Equals(configuredChannel, ThirdPartyChannelName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        var feeds = IntegrationDiscoveryScopeHelpers.GetConfiguredThirdPartyFeeds(workingDirectory);
+        return feeds.Select((feed, index) => PackageChannel.CreateExplicitChannel(
+            feeds.Length == 1 ? ThirdPartyChannelName : $"{ThirdPartyChannelName}-{index + 1}",
+            PackageChannelQuality.Stable,
+            [new PackageMapping(PackageMapping.AllPackages, feed)],
+            nuGetPackageCache))
             .ToArray();
     }
 }

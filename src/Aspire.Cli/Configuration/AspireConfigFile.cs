@@ -32,6 +32,9 @@ namespace Aspire.Cli.Configuration;
 ///     "api": { "sitemapUrl": "https://aspire.dev/sitemap-0.xml" }
 ///   },
 ///   "features": { "polyglotSupportEnabled": true },
+///   "integrations": {
+///     "discovery": { "thirdParty": { "mode": "ask" } }
+///   },
 ///   "profiles": {
 ///     "default": {
 ///       "applicationUrl": "https://localhost:17000;http://localhost:15000",
@@ -100,6 +103,13 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("features")]
     [Description("Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).")]
     public Dictionary<string, bool>? Features { get; set; }
+
+    /// <summary>
+    /// Aspire integration discovery configuration.
+    /// </summary>
+    [JsonPropertyName("integrations")]
+    [Description("Configuration for Aspire integration discovery behavior.")]
+    public AspireConfigIntegrations? Integrations { get; set; }
 
     /// <summary>
     /// Documentation source configuration for aspire docs and aspire docs api.
@@ -455,6 +465,59 @@ internal sealed class AspireConfigSdk
     [JsonPropertyName("version")]
     [Description("The Aspire SDK version. Determines the version of Aspire.Hosting packages to use.")]
     public string? Version { get; set; }
+}
+
+/// <summary>
+/// Aspire integration configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigIntegrations
+{
+    /// <summary>
+    /// Integration discovery behavior.
+    /// </summary>
+    [JsonPropertyName("discovery")]
+    [Description("Integration discovery behavior.")]
+    public AspireConfigIntegrationDiscovery? Discovery { get; set; }
+}
+
+/// <summary>
+/// Aspire integration discovery configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigIntegrationDiscovery
+{
+    /// <summary>
+    /// Third-party integration discovery configuration.
+    /// </summary>
+    [JsonPropertyName("thirdParty")]
+    [Description("Third-party integration discovery configuration.")]
+    public AspireConfigThirdPartyIntegrationDiscovery? ThirdParty { get; set; }
+}
+
+/// <summary>
+/// Third-party Aspire integration discovery configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigThirdPartyIntegrationDiscovery
+{
+    /// <summary>
+    /// Third-party discovery mode: off, ask, or on.
+    /// </summary>
+    [JsonPropertyName("mode")]
+    [Description("Third-party discovery mode: off, ask, or on.")]
+    public string? Mode { get; set; }
+
+    /// <summary>
+    /// NuGet feeds allowed for third-party integration discovery.
+    /// </summary>
+    [JsonPropertyName("feeds")]
+    [Description("NuGet feeds allowed for third-party integration discovery.")]
+    public string[]? Feeds { get; set; }
+
+    /// <summary>
+    /// Optional package allowlist for third-party integration discovery.
+    /// </summary>
+    [JsonPropertyName("packages")]
+    [Description("Optional package allowlist for third-party integration discovery.")]
+    public string[]? Packages { get; set; }
 }
 
 /// <summary>

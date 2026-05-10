@@ -191,6 +191,51 @@
       },
       "additionalProperties": false
     },
+    "integrations": {
+      "description": "Configuration for Aspire integration discovery behavior.",
+      "type": "object",
+      "properties": {
+        "discovery": {
+          "description": "Integration discovery behavior.",
+          "type": "object",
+          "properties": {
+            "thirdParty": {
+              "description": "Third-party integration discovery configuration.",
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "description": "Third-party discovery mode. Use 'ask' to prompt interactive users before showing third-party integrations.",
+                  "type": "string",
+                  "enum": [
+                    "off",
+                    "ask",
+                    "on"
+                  ],
+                  "default": "off"
+                },
+                "feeds": {
+                  "description": "NuGet feeds allowed for third-party integration discovery.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "packages": {
+                  "description": "Optional package allowlist for third-party integration discovery.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "packages": {
       "description": "Package references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.",
       "type": "object",

@@ -63,6 +63,36 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.Equal("http://localhost:4321/sitemap-0.xml", result.Docs?.Api?.SitemapUrl);
     }
 
+        [Fact]
+        public void Load_ReturnsConfig_WhenFileContainsIntegrationDiscoveryConfiguration()
+        {
+                using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+                var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+                File.WriteAllText(configPath, """
+                        {
+                            "integrations": {
+                                "discovery": {
+                                    "thirdParty": {
+                                        "mode": "ask",
+                                        "feeds": ["https://example.test/v3/index.json"],
+                                        "packages": ["Contoso.Hosting.MongoDb"]
+                                    }
+                                }
+                            }
+                        }
+                        """);
+
+                var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+                Assert.NotNull(result);
+                var thirdParty = result.Integrations?.Discovery?.ThirdParty;
+                Assert.NotNull(thirdParty);
+                Assert.Equal("ask", thirdParty.Mode);
+                Assert.Equal(new[] { "https://example.test/v3/index.json" }, thirdParty.Feeds);
+                Assert.Equal(new[] { "Contoso.Hosting.MongoDb" }, thirdParty.Packages);
+        }
+
     [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfigurationWithDifferentCasing()
     {

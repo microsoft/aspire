@@ -585,7 +585,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"integration search mongodb --apphost \"{appHostFile.FullName}\" --format json");
+        var result = command.Parse($"integration search mongodb --apphost \"{appHostFile.FullName}\" --format json --discovery-scope all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -750,7 +750,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("integration list --format json");
+        var result = command.Parse("integration list --format json --discovery-scope all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -814,6 +814,125 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task IntegrationListCommandFormatJsonDefaultsToOfficialPackages()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+            {
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
+                    ? new[]
+                    {
+                        CreatePackage("Contoso.Hosting.MongoDb", "1.2.3"),
+                        CreatePackage("Aspire.Hosting.Redis", "9.2.0")
+                    }
+                    : [];
+
+                return Task.FromResult<IEnumerable<NuGetPackage>>(filter is null ? packages : packages.Where(p => filter(p.Id)).ToArray());
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandFormatJsonUsesConfiguredThirdPartyFeedsAndPackageAllowlist()
+    {
+        const string configuredFeed = "https://example.test/v3/index.json";
+
+        var rawJson = string.Empty;
+        string? generatedNuGetConfig = null;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), $$"""
+            {
+              "integrations": {
+                "discovery": {
+                  "thirdParty": {
+                    "mode": "on",
+                    "feeds": ["{{configuredFeed}}"],
+                    "packages": ["Contoso.Hosting.MongoDb"]
+                  }
+                }
+              }
+            }
+            """);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, query, filter, _, nugetConfigFile, _, _) =>
+            {
+                if (nugetConfigFile is not null)
+                {
+                    generatedNuGetConfig = File.ReadAllText(nugetConfigFile.FullName);
+                }
+
+                var packages = query == HostingIntegrationMetadata.DiscoveryQuery
+                    ? new[]
+                    {
+                        CreatePackage("Contoso.Hosting.MongoDb", "1.2.3"),
+                        CreatePackage("Fabrikam.Hosting.Postgres", "2.0.0")
+                    }
+                    : [];
+
+                return Task.FromResult<IEnumerable<NuGetPackage>>(filter is null ? packages : packages.Where(p => filter(p.Id)).ToArray());
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.NuGetPackageCacheFactory = _ => cache;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(generatedNuGetConfig);
+        Assert.Contains(configuredFeed, generatedNuGetConfig);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Contoso.Hosting.MongoDb", integration.Package);
+    }
+
+    [Fact]
     public async Task IntegrationSearchCommandFormatJsonSearchesImplicitSourcesAndNuGetOrgStableChannel()
     {
         var rawJson = string.Empty;
@@ -865,7 +984,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("integration search scalar --format json");
+        var result = command.Parse("integration search scalar --format json --discovery-scope all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1050,7 +1169,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add");
+        var result = command.Parse("add --discovery-scope all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
@@ -1061,6 +1180,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         var promptedForIntegration = false;
         var promptedPackageCount = 0;
+        var promptedForVersion = false;
+        var promptedVersionCount = 0;
         string? addedPackage = null;
         string? addUsedSource = null;
 
@@ -1084,6 +1205,15 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     }
                 };
 
+                prompter.PromptForIntegrationVersionCallback = packages =>
+                {
+                    var packageArray = packages.ToArray();
+                    promptedForVersion = true;
+                    promptedVersionCount = packageArray.Length;
+
+                    return packageArray.First();
+                };
+
                 return prompter;
             };
 
@@ -1094,7 +1224,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner();
                 runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
                 {
-                    return (0, new[] { CreatePackage("AspireQuartz.Hosting", "1.0.1") });
+                    return (0, new[] { CreatePackage("Aspire.Hosting.Redis", "1.0.1") });
                 };
 
                 runner.AddPackageAsyncCallback = (_, packageName, _, nugetSource, _, _, _) =>
@@ -1111,15 +1241,317 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add");
+        var result = command.Parse("add --discovery-scope all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.True(promptedForIntegration);
         Assert.Equal(1, promptedPackageCount);
-        Assert.Equal("AspireQuartz.Hosting", addedPackage);
+        Assert.True(promptedForVersion);
+        Assert.True(promptedVersionCount > 0);
+        Assert.Equal("Aspire.Hosting.Redis", addedPackage);
         Assert.Null(addUsedSource);
+    }
+
+    [Fact]
+    public async Task AddCommandWithoutIntegrationNameDoesNotPromptForInstalledPackages()
+    {
+        string? addedPackage = null;
+        List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? promptedPackages = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>())
+                {
+                    PromptForIntegrationCallback = packages =>
+                    {
+                        promptedPackages = packages.ToList();
+                        return promptedPackages.Single();
+                    },
+                    PromptForIntegrationVersionCallback = packages => packages.Single()
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+                    {
+                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                            ? new[]
+                            {
+                                CreatePackage("Aspire.Hosting.Redis", "9.2.0"),
+                                CreatePackage("Aspire.Hosting.Docker", "9.2.0")
+                            }
+                            : [];
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(filter is null ? packages : packages.Where(package => filter(package.Id)).ToArray());
+                    }
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
+                    {
+                      "Items": {
+                        "PackageReference": [
+                          { "Identity": "Aspire.Hosting.Redis", "Version": "9.2.0" }
+                        ]
+                      },
+                      "Properties": {}
+                    }
+                    """)),
+                AddPackageAsyncCallback = (_, packageName, _, _, _, _, _) =>
+                {
+                    addedPackage = packageName;
+                    return 0;
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(promptedPackages);
+        var promptedPackage = Assert.Single(promptedPackages);
+        Assert.Equal("Aspire.Hosting.Docker", promptedPackage.Package.Id);
+        Assert.Equal("Aspire.Hosting.Docker", addedPackage);
+    }
+
+    [Fact]
+    public async Task AddCommandPrompterSelectsSingleVersionWithoutPrompting()
+    {
+        var promptedForVersion = false;
+        var testInteractionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+            {
+                promptedForVersion = true;
+                throw new InvalidOperationException("Version selection should not be prompted when there is only one version.");
+            }
+        };
+        var prompter = new AddCommandPrompter(testInteractionService);
+        var package = (
+            FriendlyName: "redis",
+            Package: CreatePackage("Aspire.Hosting.Redis", "1.0.1"),
+            Channel: PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache()));
+
+        var selectedPackage = await prompter.PromptForIntegrationVersionAsync([package], CancellationToken.None);
+
+        Assert.False(promptedForVersion);
+        Assert.Equal("1.0.1", selectedPackage.Package.Version);
+    }
+
+    [Fact]
+    public async Task AddCommandWithAskModeCanIncludeThirdPartyPackagesInteractively()
+    {
+        string? addedPackage = null;
+        var scopePromptShown = false;
+        var confirmationPromptShown = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+                var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+                await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "integrations": {
+                "discovery": {
+                  "thirdParty": { "mode": "ask" }
+                }
+              }
+            }
+            """);
+
+        var testInteractionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+            {
+                if (promptText == AddCommandStrings.SelectIntegrationDiscoveryScope)
+                {
+                    scopePromptShown = true;
+                    return choices.Cast<object>().Single(choice => formatter(choice) == AddCommandStrings.DiscoveryScopeIncludeThirdParty);
+                }
+
+                if (promptText == string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ThirdPartyIntegrationConfirmationPrompt, "Contoso.Hosting.MongoDb"))
+                {
+                    confirmationPromptShown = true;
+                    return choices.Cast<object>().Single(choice => formatter(choice) == AddCommandStrings.ThirdPartyIntegrationConfirmationYes);
+                }
+
+                return choices.Cast<object>().First();
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>())
+                {
+                    PromptForIntegrationCallback = packages => packages.Single(package => package.Package.Id == "Contoso.Hosting.MongoDb")
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+                    {
+                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                            ? new[]
+                            {
+                                CreatePackage("Contoso.Hosting.MongoDb", "1.2.3"),
+                                CreatePackage("Aspire.Hosting.Redis", "9.2.0")
+                            }
+                            : [];
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(filter is null ? packages : packages.Where(package => filter(package.Id)).ToArray());
+                    }
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, packageName, _, _, _, _, _) =>
+                {
+                    addedPackage = packageName;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+    var result = command.Parse($"add --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(scopePromptShown);
+        Assert.True(confirmationPromptShown);
+        Assert.Equal(1, testInteractionService.DisplayEmptyLineCount);
+        Assert.Equal("Contoso.Hosting.MongoDb", addedPackage);
+        Assert.DoesNotContain(AddCommandStrings.ThirdPartyIntegrationDeclined, testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task AddCommandWithThirdPartyPackageDoesNotAddWhenConfirmationIsDeclined()
+    {
+        var addPackageWasCalled = false;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var testInteractionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+            {
+                if (promptText == string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ThirdPartyIntegrationConfirmationPrompt, "Contoso.Hosting.MongoDb"))
+                {
+                    return choices.Cast<object>().Single(choice => formatter(choice) == AddCommandStrings.ThirdPartyIntegrationConfirmationNo);
+                }
+
+                return choices.Cast<object>().First();
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>())
+                {
+                    PromptForIntegrationCallback = packages => packages.Single(package => package.Package.Id == "Contoso.Hosting.MongoDb")
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+                    {
+                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                            ? new[] { CreatePackage("Contoso.Hosting.MongoDb", "1.2.3") }
+                            : [];
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(filter is null ? packages : packages.Where(package => filter(package.Id)).ToArray());
+                    }
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\" --discovery-scope all");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.False(addPackageWasCalled);
+        Assert.Contains(AddCommandStrings.ThirdPartyIntegrationDeclined, testInteractionService.DisplayedErrors);
     }
 
     [Fact]
@@ -1609,6 +2041,18 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         string? addedPackageId = null;
         string? addedPackageVersion = null;
         bool? createSettingsFile = null;
+        var testInteractionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+            {
+                if (promptText == string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ThirdPartyIntegrationConfirmationPrompt, packageId))
+                {
+                    return choices.Cast<object>().Single(choice => formatter(choice) == AddCommandStrings.ThirdPartyIntegrationConfirmationYes);
+                }
+
+                return choices.Cast<object>().First();
+            }
+        };
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -1625,7 +2069,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (projectFile, _, requestedCreateSettingsFile, _) =>
@@ -2402,7 +2847,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\"");
+        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\" --discovery-scope all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2588,7 +3033,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\"");
+        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\" --discovery-scope all");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2817,7 +3262,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandWithoutSourceUsesSelectedExplicitChannelSourceWithoutCreatingNuGetConfig()
     {
-        const string packageId = "AspireQuartz.Hosting";
+        const string packageId = "Aspire.Hosting.Redis";
         const string packageVersion = "1.0.1";
         const string nugetOrgSource = "https://api.nuget.org/v3/index.json";
 
@@ -3061,7 +3506,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandPrompter_FiltersToHighestVersionPerChannel()
+    public async Task AddCommandPrompter_SelectsHighestImplicitVersionWithoutPrompting()
     {
         // Arrange
         List<object>? displayedChoices = null;
@@ -3103,9 +3548,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Act
         var result = await prompter.PromptForIntegrationVersionAsync(packages, CancellationToken.None).DefaultTimeout();
 
-        // Assert - For implicit channel with no explicit channels, should automatically select highest version without prompting
-        Assert.Null(displayedChoices); // No prompt should be shown
-        Assert.Equal("9.2.0", result.Package.Version); // Should return highest version
+        // Assert - should select the highest implicit version without prompting
+        Assert.Null(displayedChoices);
+        Assert.Equal("9.2.0", result.Package.Version);
     }
 
     [Fact]
@@ -3155,7 +3600,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Act
         await prompter.PromptForIntegrationVersionAsync(packages, CancellationToken.None).DefaultTimeout();
 
-        // Assert - should show 2 root choices: one for implicit channel, one submenu for explicit channel
+        // Assert - should show 2 choices: one version per channel
         Assert.NotNull(displayedChoices);
         Assert.Equal(2, displayedChoices!.Count);
     }

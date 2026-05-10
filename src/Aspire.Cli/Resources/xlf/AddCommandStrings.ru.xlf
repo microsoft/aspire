@@ -12,6 +12,21 @@
         <target state="needs-review-translation">Добавьте интеграцию размещения в Aspire AppHost.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DiscoveryScopeIncludeThirdParty">
+        <source>Include third-party packages</source>
+        <target state="new">Include third-party packages</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DiscoveryScopeOfficialOnly">
+        <source>Official packages only</source>
+        <target state="new">Official packages only</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DiscoveryScopeOptionDescription">
+        <source>Integration discovery scope: official, all, or third-party</source>
+        <target state="new">Integration discovery scope: official, all, or third-party</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ErrorOccurredWhileAddingPackage">
         <source>An error occurred while adding the package: {0}</source>
         <target state="translated">Произошла ошибка при добавлении пакета: {0}</target>
@@ -107,6 +122,11 @@
         <target state="new">The integration search query.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InvalidDiscoveryScope">
+        <source>Invalid discovery scope '{0}'. Use 'official', 'all', or 'third-party'.</source>
+        <target state="new">Invalid discovery scope '{0}'. Use 'official', 'all', or 'third-party'.</target>
+        <note>{0} is the invalid discovery scope value provided by the user.</note>
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Ни одного пакета интеграции не найдено. Проверьте подключение к Интернету и конфигурацию источника NuGet.</target>
@@ -162,6 +182,11 @@
         <target state="translated">Выберите интеграцию для добавления:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SelectIntegrationDiscoveryScope">
+        <source>Select which integrations to show:</source>
+        <target state="new">Select which integrations to show:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the integration</source>
         <target state="needs-review-translation">Источник NuGet, который следует использовать для интеграции.</target>
@@ -186,6 +211,31 @@
           <source>Stopped a running Aspire AppHost instance to allow package modification.</source>
           <target state="new">Stopped a running Aspire AppHost instance to allow package modification.</target><note />
         </trans-unit>
+      <trans-unit id="ThirdPartyIntegrationConfirmationNo">
+        <source>✗ No, do not add this package</source>
+        <target state="new">✗ No, do not add this package</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ThirdPartyIntegrationConfirmationPrompt">
+        <source>⚠️ The package '{0}' is a third-party integration that is not owned or supported by the Aspire team. Do you want to add it?</source>
+        <target state="new">⚠️ The package '{0}' is a third-party integration that is not owned or supported by the Aspire team. Do you want to add it?</target>
+        <note>{0} is the package ID of the third-party integration.</note>
+      </trans-unit>
+      <trans-unit id="ThirdPartyIntegrationConfirmationYes">
+        <source>✓ Yes, add this package; I understand the risks</source>
+        <target state="new">✓ Yes, add this package; I understand the risks</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ThirdPartyIntegrationDeclined">
+        <source>The third-party package was not added.</source>
+        <target state="new">The third-party package was not added.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ThirdPartyIntegrationWarning">
+        <source>Third-party packages are not owned or supported by the Aspire team. Contact the package owner for support.</source>
+        <target state="new">Third-party packages are not owned or supported by the Aspire team. Contact the package owner for support.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnableToStopRunningInstances">
         <source>Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</source>
         <target state="new">Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again.</target>
