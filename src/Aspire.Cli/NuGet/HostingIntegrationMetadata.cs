@@ -5,7 +5,25 @@ namespace Aspire.Cli.NuGet;
 
 internal static class HostingIntegrationMetadata
 {
-    public const string CanonicalTag = "aspire-hosting";
+    public const string CanonicalTag = "aspire";
+
+    private static readonly string[] s_hostingDependencyPackageIds =
+    [
+        "Aspire.Hosting",
+        "Aspire.Hosting.AppHost"
+    ];
+
+    public static IReadOnlyList<string> HostingDependencyPackageIds => s_hostingDependencyPackageIds;
+
+    public static bool IsHostingDependencyPackageId(string? packageId)
+    {
+        if (string.IsNullOrWhiteSpace(packageId))
+        {
+            return false;
+        }
+
+        return s_hostingDependencyPackageIds.Contains(packageId, StringComparers.NuGetPackageId);
+    }
 
     public static bool IsBuiltInHostingPackageId(string? packageId)
     {

@@ -81,12 +81,12 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
             var packagesWithChannels = (await InteractionService.ShowStatusAsync(
                 AddCommandStrings.SearchingForAspirePackages,
-                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken)))
+                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken: cancellationToken)))
                 .ToArray();
 
             var packagesWithShortName = packagesWithChannels
                 .Select(IntegrationPackageSearchService.GenerateFriendlyName)
-                .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
+                .OrderBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
@@ -116,7 +116,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             .Select(IntegrationPackageSearchService.SelectPreferredIntegrationPackage);
 
         var orderedMatches = searchTerm is null
-            ? matches.OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer()).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
+            ? matches.OrderBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
             : matches;
 
         var results = orderedMatches
@@ -183,7 +183,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             table.AddBoldColumn(AddCommandStrings.HeaderPackage);
             table.AddBoldColumn(AddCommandStrings.HeaderVersion);
 
-            foreach (var result in group.OrderBy(static result => result.Name, new CommunityToolkitFirstComparer()).ThenBy(static result => result.Package, StringComparer.OrdinalIgnoreCase))
+            foreach (var result in group.OrderBy(static result => result.Name, StringComparer.OrdinalIgnoreCase).ThenBy(static result => result.Package, StringComparer.OrdinalIgnoreCase))
             {
                 table.AddRow(
                     Markup.Escape(result.Name),

@@ -1342,6 +1342,87 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandWithoutIntegrationNameSortsPackagesByFriendlyName()
+    {
+        List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? promptedPackages = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>())
+                {
+                    PromptForIntegrationCallback = packages =>
+                    {
+                        promptedPackages = packages.ToList();
+                        return promptedPackages.First();
+                    },
+                    PromptForIntegrationVersionCallback = packages => packages.Single()
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) => Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) =>
+                    {
+                        var packages = query == $"tags:{HostingIntegrationMetadata.CanonicalTag}"
+                            ? new[]
+                            {
+                                CreatePackage("Aspire.Hosting.Zookeeper", "9.2.0"),
+                                CreatePackage("CommunityToolkit.Aspire.Hosting.Cosmos", "9.2.0")
+                            }
+                            : [];
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(filter is null ? packages : packages.Where(package => filter(package.Id)).ToArray());
+                    }
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
+                    {
+                      "Items": {
+                        "PackageReference": []
+                      },
+                      "Properties": {}
+                    }
+                    """)),
+                AddPackageAsyncCallback = (_, _, _, _, _, _, _) => 0
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(promptedPackages);
+        Assert.Collection(
+            promptedPackages,
+            package => Assert.Equal("communitytoolkit-cosmos", package.FriendlyName),
+            package => Assert.Equal("zookeeper", package.FriendlyName));
+    }
+
+    [Fact]
     public async Task AddCommandPrompterSelectsSingleVersionWithoutPrompting()
     {
         var promptedForVersion = false;
@@ -2133,13 +2214,29 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                         {
                           "catalogEntry": {
                             "version": "1.3.0",
-                            "tags": "database aspire-hosting aspire"
+                            "tags": "database aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
                           }
                         },
                         {
                           "catalogEntry": {
                             "version": "1.2.3",
-                            "tags": "database aspire-hosting aspire"
+                            "tags": "database aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
                           }
                         }
                       ]
@@ -2163,6 +2260,308 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(packageVersion, addedPackageVersion);
         Assert.NotNull(createSettingsFile);
         Assert.False(createSettingsFile.Value);
+    }
+
+    [Fact]
+    public async Task ExactPackageIdSearchAcceptsThirdPartyPackageWithHostingDependencyMetadata()
+    {
+        const string packageId = "Contoso.Aspire.Hosting.MongoDb";
+        const string packageVersion = "1.2.3";
+        const string source = "https://example.test/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var nugetConfigFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"));
+        File.WriteAllText(nugetConfigFile.FullName, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="test" value="{{source}}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, queriedPackageId, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(queriedPackageId switch
+                    {
+                        packageId => [CreatePackage(packageId, packageVersion)],
+                        _ => []
+                    })
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [nugetConfigFile.FullName])
+            };
+        });
+        using var handler = new MockHttpMessageHandler(request => request.RequestUri?.AbsoluteUri switch
+        {
+            source => CreateJsonResponse("""
+                {
+                  "resources": [
+                    {
+                      "@id": "https://example.test/v3/registration-semver2/",
+                      "@type": "RegistrationsBaseUrl/Versioned"
+                    }
+                  ]
+                }
+                """),
+            "https://example.test/v3/registration-semver2/contoso.aspire.hosting.mongodb/index.json" => CreateJsonResponse("""
+                {
+                  "items": [
+                    {
+                      "catalogEntry": {
+                        "version": "1.2.3",
+                        "tags": "database",
+                        "dependencyGroups": [
+                          {
+                            "targetFramework": "net10.0",
+                            "dependencies": [
+                              { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """),
+            _ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+        });
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var searchService = provider.GetRequiredService<IntegrationPackageSearchService>();
+
+        var matches = (await searchService.GetPackagesByExactIdWithChannelsAsync(
+            workspace.WorkspaceRoot,
+            packageId,
+            configuredChannel: null,
+            IntegrationDiscoveryScope.All,
+            CancellationToken.None)).ToArray();
+
+        var match = Assert.Single(matches);
+        Assert.Equal(packageId, match.Package.Id);
+        Assert.Equal(packageVersion, match.Package.Version);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExactPackageIdSearchRejectsThirdPartyPackageWithoutHostingDependencyMetadata(bool includeHostingTag)
+    {
+        const string packageId = "Contoso.Aspire.Hosting.MongoDb";
+        const string packageVersion = "1.2.3";
+        const string source = "https://example.test/v3/index.json";
+
+        var tags = includeHostingTag ? $"database {HostingIntegrationMetadata.CanonicalTag}" : "database";
+        const string dependencyGroups = "[]";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var nugetConfigFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"));
+        File.WriteAllText(nugetConfigFile.FullName, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="test" value="{{source}}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.PackagingServiceFactory = _ =>
+            {
+                var cache = new FakeNuGetPackageCache
+                {
+                    GetPackagesAsyncCallback = (_, queriedPackageId, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(queriedPackageId switch
+                    {
+                        packageId => [CreatePackage(packageId, packageVersion)],
+                        _ => []
+                    })
+                };
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [nugetConfigFile.FullName])
+            };
+        });
+        using var handler = new MockHttpMessageHandler(request => request.RequestUri?.AbsoluteUri switch
+        {
+            source => CreateJsonResponse("""
+                {
+                  "resources": [
+                    {
+                      "@id": "https://example.test/v3/registration-semver2/",
+                      "@type": "RegistrationsBaseUrl/Versioned"
+                    }
+                  ]
+                }
+                """),
+            "https://example.test/v3/registration-semver2/contoso.aspire.hosting.mongodb/index.json" => CreateJsonResponse($$"""
+                {
+                  "items": [
+                    {
+                      "catalogEntry": {
+                        "version": "1.2.3",
+                        "tags": "{{tags}}",
+                        "dependencyGroups": {{dependencyGroups}}
+                      }
+                    }
+                  ]
+                }
+                """),
+            _ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+        });
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var searchService = provider.GetRequiredService<IntegrationPackageSearchService>();
+
+        var matches = (await searchService.GetPackagesByExactIdWithChannelsAsync(
+            workspace.WorkspaceRoot,
+            packageId,
+            configuredChannel: null,
+            IntegrationDiscoveryScope.All,
+            CancellationToken.None)).ToArray();
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public async Task AddCommandExactPackageIdSearchUsesRequestedSourceForDependencyMetadata()
+    {
+        const string packageId = "Contoso.Aspire.Hosting.MongoDb";
+        const string packageVersion = "1.2.3";
+        const string source = "https://example.test/v3/index.json";
+
+        string? addedPackageId = null;
+        string? addedPackageVersion = null;
+        string? addedPackageSource = null;
+        var testInteractionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (promptText, choices, formatter, _) =>
+            {
+                var confirmationChoice = choices.Cast<object>().FirstOrDefault(choice => formatter(choice) == AddCommandStrings.ThirdPartyIntegrationConfirmationYes);
+                if (confirmationChoice is not null)
+                {
+                    return confirmationChoice;
+                }
+
+                return choices.Cast<object>().First();
+            }
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, queriedPackageId, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(queriedPackageId switch
+            {
+                packageId => [CreatePackage(packageId, packageVersion)],
+                _ => []
+            })
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DisabledFeatures = [KnownFeatures.UpdateNotificationsEnabled];
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.NuGetPackageCacheFactory = _ => cache;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (projectFile, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(projectFile ?? appHostFile, [projectFile ?? appHostFile]))
+            };
+            options.PackagingServiceFactory = _ =>
+            {
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)])
+                };
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [])
+                };
+                runner.AddPackageAsyncCallback = (_, packageName, version, nugetSource, _, _, _) =>
+                {
+                    addedPackageId = packageName;
+                    addedPackageVersion = version;
+                    addedPackageSource = nugetSource;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var handler = new MockHttpMessageHandler(request => request.RequestUri?.AbsoluteUri switch
+        {
+            source => CreateJsonResponse("""
+                {
+                  "resources": [
+                    {
+                      "@id": "https://example.test/v3/registration-semver2/",
+                      "@type": "RegistrationsBaseUrl/Versioned"
+                    }
+                  ]
+                }
+                """),
+            "https://example.test/v3/registration-semver2/contoso.aspire.hosting.mongodb/index.json" => CreateJsonResponse("""
+                {
+                  "items": [
+                    {
+                      "catalogEntry": {
+                        "version": "1.2.3",
+                        "tags": "database",
+                        "dependencyGroups": [
+                          {
+                            "targetFramework": "net10.0",
+                            "dependencies": [
+                              { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """),
+            _ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+        });
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add {packageId} --version {packageVersion} --apphost \"{appHostFile.FullName}\" --source {source}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.True(exitCode == ExitCodeConstants.Success, string.Join(Environment.NewLine, testInteractionService.DisplayedErrors));
+        Assert.Equal(packageId, addedPackageId);
+        Assert.Equal(packageVersion, addedPackageVersion);
+        Assert.Equal(source, addedPackageSource);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
     }
 
     [Fact]

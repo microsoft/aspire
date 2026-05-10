@@ -17,6 +17,7 @@ namespace Aspire.Cli.NuGet;
 internal interface IPackageTagMetadataService
 {
     Task<bool> HasTagAsync(PackageChannel channel, DirectoryInfo workingDirectory, string packageId, string? packageVersion, string tag, CancellationToken cancellationToken);
+    Task<bool> HasAnyDependencyAsync(PackageChannel channel, DirectoryInfo workingDirectory, string packageId, string? packageVersion, IReadOnlyCollection<string> dependencyPackageIds, CancellationToken cancellationToken);
 }
 
 internal sealed class PackageTagMetadataService(
@@ -52,6 +53,41 @@ internal sealed class PackageTagMetadataService(
             {
                 var tags = await TryGetPackageTagsAsync(source, packageId, versionToCheck, cancellationToken);
                 if (tags?.Contains(tag, StringComparer.OrdinalIgnoreCase) == true)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    public async Task<bool> HasAnyDependencyAsync(PackageChannel channel, DirectoryInfo workingDirectory, string packageId, string? packageVersion, IReadOnlyCollection<string> dependencyPackageIds, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+        ArgumentNullException.ThrowIfNull(dependencyPackageIds);
+
+        if (string.IsNullOrWhiteSpace(packageId) || dependencyPackageIds.Count == 0)
+        {
+            return false;
+        }
+
+        var versionToCheck = await ResolvePackageVersionAsync(channel, workingDirectory, packageId, packageVersion, cancellationToken);
+        if (versionToCheck is null)
+        {
+            return false;
+        }
+
+        var cacheKey = $"PackageDependencies:{channel.Name}:{workingDirectory.FullName}:{packageId}:{versionToCheck}:{string.Join('|', dependencyPackageIds.Order(StringComparer.OrdinalIgnoreCase))}";
+        return await cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = s_cacheEntryLifetime;
+
+            foreach (var source in await GetCandidateSourcesAsync(channel, workingDirectory, packageId, cancellationToken))
+            {
+                var dependencies = await TryGetPackageDependenciesAsync(source, packageId, versionToCheck, cancellationToken);
+                if (dependencies?.Any(dependency => dependencyPackageIds.Contains(dependency, StringComparers.NuGetPackageId)) == true)
                 {
                     return true;
                 }
@@ -225,6 +261,16 @@ internal sealed class PackageTagMetadataService(
         return TryGetLocalPackageTags(source, packageId, packageVersion);
     }
 
+    private async Task<string[]?> TryGetPackageDependenciesAsync(string source, string packageId, string packageVersion, CancellationToken cancellationToken)
+    {
+        if (UrlHelper.IsHttpUrl(source))
+        {
+            return await TryGetRemotePackageDependenciesAsync(source, packageId, packageVersion, cancellationToken);
+        }
+
+        return TryGetLocalPackageDependencies(source, packageId, packageVersion);
+    }
+
     private async Task<string[]?> TryGetRemotePackageTagsAsync(string source, string packageId, string packageVersion, CancellationToken cancellationToken)
     {
         try
@@ -248,6 +294,33 @@ internal sealed class PackageTagMetadataService(
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
             logger.LogDebug(ex, "Failed to load package metadata for '{PackageId}' from '{Source}'.", packageId, source);
+            return null;
+        }
+    }
+
+    private async Task<string[]?> TryGetRemotePackageDependenciesAsync(string source, string packageId, string packageVersion, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = httpClientFactory.CreateClient();
+            var registrationBaseUrl = await GetRegistrationBaseUrlAsync(client, source, packageId, cancellationToken);
+            if (registrationBaseUrl is null)
+            {
+                return null;
+            }
+
+            var registrationIndex = new Uri($"{registrationBaseUrl.TrimEnd('/')}/{packageId.ToLowerInvariant()}/index.json", UriKind.Absolute);
+            var registrationDocument = await GetJsonDocumentAsync(client, registrationIndex, packageId, source, cancellationToken);
+            if (registrationDocument is null)
+            {
+                return null;
+            }
+
+            return await FindDependenciesInRegistrationAsync(client, registrationDocument.RootElement, packageVersion, packageId, source, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        {
+            logger.LogDebug(ex, "Failed to load package dependency metadata for '{PackageId}' from '{Source}'.", packageId, source);
             return null;
         }
     }
@@ -294,6 +367,41 @@ internal sealed class PackageTagMetadataService(
                 ?.Value;
 
             return ParseTags(tags);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or XmlException)
+        {
+            return null;
+        }
+    }
+
+    private static string[]? TryGetLocalPackageDependencies(string source, string packageId, string packageVersion)
+    {
+        var packageFiles = GetCandidatePackageFiles(source);
+        var packageFile = packageFiles.FirstOrDefault(path => MatchesPackageIdentity(path, packageId, packageVersion));
+        if (packageFile is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var archive = ZipFile.OpenRead(packageFile);
+            var nuspecEntry = archive.Entries.FirstOrDefault(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+            if (nuspecEntry is null)
+            {
+                return null;
+            }
+
+            using var stream = nuspecEntry.Open();
+            var document = XDocument.Load(stream);
+            return document
+                .Descendants()
+                .Where(static element => element.Name.LocalName == "dependency")
+                .Select(static element => element.Attribute("id")?.Value)
+                .OfType<string>()
+                .Where(static dependencyId => !string.IsNullOrWhiteSpace(dependencyId))
+                .Distinct(StringComparers.NuGetPackageId)
+                .ToArray();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or XmlException)
         {
@@ -447,6 +555,52 @@ internal sealed class PackageTagMetadataService(
         return null;
     }
 
+    private async Task<string[]?> FindDependenciesInRegistrationAsync(HttpClient client, JsonElement registrationElement, string packageVersion, string packageId, string source, CancellationToken cancellationToken)
+    {
+        if (TryGetDependenciesFromCatalogEntry(registrationElement, packageVersion, out var dependencies))
+        {
+            return dependencies;
+        }
+
+        if (!registrationElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var item in items.EnumerateArray())
+        {
+            if (TryGetDependenciesFromCatalogEntry(item, packageVersion, out dependencies))
+            {
+                return dependencies;
+            }
+
+            if (item.TryGetProperty("items", out _))
+            {
+                dependencies = await FindDependenciesInRegistrationAsync(client, item, packageVersion, packageId, source, cancellationToken);
+                if (dependencies is not null)
+                {
+                    return dependencies;
+                }
+            }
+            else if (item.TryGetProperty("@id", out var pageId) && pageId.ValueKind == JsonValueKind.String && Uri.TryCreate(pageId.GetString(), UriKind.Absolute, out var pageUri))
+            {
+                var pageDocument = await GetJsonDocumentAsync(client, pageUri, packageId, source, cancellationToken);
+                if (pageDocument is null)
+                {
+                    continue;
+                }
+
+                dependencies = await FindDependenciesInRegistrationAsync(client, pageDocument.RootElement, packageVersion, packageId, source, cancellationToken);
+                if (dependencies is not null)
+                {
+                    return dependencies;
+                }
+            }
+        }
+
+        return null;
+    }
+
     private static bool TryGetTagsFromCatalogEntry(JsonElement element, string packageVersion, out string[]? tags)
     {
         tags = null;
@@ -471,6 +625,51 @@ internal sealed class PackageTagMetadataService(
             : [];
 
         return true;
+    }
+
+    private static bool TryGetDependenciesFromCatalogEntry(JsonElement element, string packageVersion, out string[]? dependencies)
+    {
+        dependencies = null;
+
+        if (!element.TryGetProperty("catalogEntry", out var catalogEntry) || catalogEntry.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if (!catalogEntry.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        if (!VersionsMatch(version.GetString(), packageVersion))
+        {
+            return false;
+        }
+
+        dependencies = catalogEntry.TryGetProperty("dependencyGroups", out var dependencyGroups)
+            ? ParseDependencies(dependencyGroups)
+            : [];
+
+        return true;
+    }
+
+    private static string[] ParseDependencies(JsonElement dependencyGroups)
+    {
+        if (dependencyGroups.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return dependencyGroups.EnumerateArray()
+            .Where(static group => group.ValueKind == JsonValueKind.Object)
+            .Where(static group => group.TryGetProperty("dependencies", out var dependencies) && dependencies.ValueKind == JsonValueKind.Array)
+            .SelectMany(static group => group.GetProperty("dependencies").EnumerateArray())
+            .Where(static dependency => dependency.ValueKind == JsonValueKind.Object)
+            .Select(static dependency => dependency.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null)
+            .OfType<string>()
+            .Where(static dependencyId => !string.IsNullOrWhiteSpace(dependencyId))
+            .Distinct(StringComparers.NuGetPackageId)
+            .ToArray();
     }
 
     private static string[] ParseTags(JsonElement tags)

@@ -553,7 +553,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UpdateProjectFileAsync_UpdatesTaggedThirdPartyHostingPackagesFromMetadata()
+    public async Task UpdateProjectFileAsync_UpdatesVerifiedThirdPartyHostingPackagesFromMetadata()
     {
         const string source = "https://example.test/v3/index.json";
 
@@ -648,7 +648,15 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                           "catalogEntry": {
                             "version": "1.0.0",
-                            "tags": "redis aspire-hosting aspire"
+                            "tags": "redis aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
                           }
                         }
                       ]
@@ -664,7 +672,15 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                           "catalogEntry": {
                             "version": "2.0.0",
-                            "tags": "postgres aspire-hosting aspire"
+                            "tags": "postgres aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
                           }
                         }
                       ]
@@ -820,7 +836,15 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                           "catalogEntry": {
                             "version": "1.0.0",
-                            "tags": "redis aspire-hosting aspire"
+                            "tags": "redis aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
                           }
                         }
                       ]

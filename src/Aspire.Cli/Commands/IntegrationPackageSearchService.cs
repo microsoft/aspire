@@ -24,11 +24,12 @@ internal sealed class IntegrationPackageSearchService(
 {
     private const double FuzzyMatchThreshold = 0.3;
     private const int MaxThirdPartyVerificationConcurrency = 16;
+    private const string RequestedSourceChannelName = "source";
     private const string ThirdPartyChannelName = "third-party";
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken)
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, string? requestedSource = null, CancellationToken cancellationToken = default)
     {
-        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken);
+        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken, requestedSource);
         var thirdPartyPackageAllowlist = IntegrationDiscoveryScopeHelpers.GetConfiguredThirdPartyPackages(workingDirectory);
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
@@ -64,7 +65,7 @@ internal sealed class IntegrationPackageSearchService(
         return packages.DistinctBy(static package => $"{package.Channel.Name}\0{package.Package.Id}\0{package.Package.Version}", StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetPackagesByExactIdWithChannelsAsync(DirectoryInfo workingDirectory, string packageId, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken)
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetPackagesByExactIdWithChannelsAsync(DirectoryInfo workingDirectory, string packageId, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken, string? requestedSource = null)
     {
         var thirdPartyPackageAllowlist = IntegrationDiscoveryScopeHelpers.GetConfiguredThirdPartyPackages(workingDirectory);
         if (!discoveryScope.IsPackageAllowed(packageId, thirdPartyPackageAllowlist))
@@ -72,7 +73,7 @@ internal sealed class IntegrationPackageSearchService(
             return [];
         }
 
-        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken);
+        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken, requestedSource);
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
 
@@ -103,14 +104,14 @@ internal sealed class IntegrationPackageSearchService(
         return packages.DistinctBy(static package => $"{package.Channel.Name}\0{package.Package.Id}\0{package.Package.Version}", StringComparer.OrdinalIgnoreCase);
     }
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> SearchBuiltInPackagesByExactIdWithChannelsAsync(DirectoryInfo workingDirectory, string packageId, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> SearchBuiltInPackagesByExactIdWithChannelsAsync(DirectoryInfo workingDirectory, string packageId, string? configuredChannel, CancellationToken cancellationToken, string? requestedSource = null)
     {
         if (!HostingIntegrationMetadata.IsBuiltInHostingPackageId(packageId))
         {
             return [];
         }
 
-        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, IntegrationDiscoveryScope.Official, cancellationToken);
+        var channels = await GetApplicableChannelsAsync(workingDirectory, configuredChannel, IntegrationDiscoveryScope.Official, cancellationToken, requestedSource);
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
 
@@ -210,7 +211,7 @@ internal sealed class IntegrationPackageSearchService(
             .Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: GetIntegrationSearchScore(searchTerm, p)))
             .Where(p => p.SearchScore > FuzzyMatchThreshold)
             .OrderByDescending(p => p.SearchScore)
-            .ThenByDescending(p => p.FriendlyName, new CommunityToolkitFirstComparer());
+            .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase);
     }
 
     public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore) SelectPreferredIntegrationPackage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> packages)
@@ -247,7 +248,7 @@ internal sealed class IntegrationPackageSearchService(
             async (index, ct) =>
             {
                 var package = candidates[index];
-                if (await packageTagMetadataService.HasTagAsync(channel, workingDirectory, package.Id, package.Version, HostingIntegrationMetadata.CanonicalTag, ct))
+                if (await IsVerifiedThirdPartyHostingPackageAsync(channel, workingDirectory, package.Id, package.Version, ct))
                 {
                     verifiedPackages[index] = package;
                 }
@@ -256,7 +257,12 @@ internal sealed class IntegrationPackageSearchService(
         return verifiedPackages.OfType<NuGetPackage>();
     }
 
-    private async Task<PackageChannel[]> GetApplicableChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken)
+    private async Task<bool> IsVerifiedThirdPartyHostingPackageAsync(PackageChannel channel, DirectoryInfo workingDirectory, string packageId, string? packageVersion, CancellationToken cancellationToken)
+    {
+        return await packageTagMetadataService.HasAnyDependencyAsync(channel, workingDirectory, packageId, packageVersion, HostingIntegrationMetadata.HostingDependencyPackageIds, cancellationToken);
+    }
+
+    private async Task<PackageChannel[]> GetApplicableChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken, string? requestedSource = null)
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
 
@@ -273,7 +279,24 @@ internal sealed class IntegrationPackageSearchService(
             .ToArray();
 
         var configuredThirdPartyChannels = GetConfiguredThirdPartyChannels(workingDirectory, configuredChannel, discoveryScope);
-        return [.. channels, .. configuredThirdPartyChannels];
+        var requestedSourceChannel = CreateRequestedSourceChannel(requestedSource);
+        return requestedSourceChannel is null
+            ? [.. channels, .. configuredThirdPartyChannels]
+            : [.. channels, .. configuredThirdPartyChannels, requestedSourceChannel];
+    }
+
+    private PackageChannel? CreateRequestedSourceChannel(string? requestedSource)
+    {
+        if (string.IsNullOrWhiteSpace(requestedSource))
+        {
+            return null;
+        }
+
+        return PackageChannel.CreateExplicitChannel(
+            RequestedSourceChannelName,
+            PackageChannelQuality.Both,
+            [new PackageMapping(PackageMapping.AllPackages, requestedSource)],
+            nuGetPackageCache);
     }
 
     private PackageChannel[] GetConfiguredThirdPartyChannels(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope)

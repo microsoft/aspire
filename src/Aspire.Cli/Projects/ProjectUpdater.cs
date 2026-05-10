@@ -946,7 +946,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         return await context.GetOrAddThirdPartyPackageEligibilityAsync(
             packageId,
             packageVersion,
-            () => packageTagMetadataService.HasTagAsync(context.Channel, workingDirectory, packageId, packageVersion, HostingIntegrationMetadata.CanonicalTag, cancellationToken));
+            () => IsThirdPartyHostingPackageAsync(context.Channel, workingDirectory, packageId, packageVersion, cancellationToken));
+    }
+
+    private async Task<bool> IsThirdPartyHostingPackageAsync(PackageChannel channel, DirectoryInfo workingDirectory, string packageId, string? packageVersion, CancellationToken cancellationToken)
+    {
+        return await packageTagMetadataService.HasAnyDependencyAsync(channel, workingDirectory, packageId, packageVersion, HostingIntegrationMetadata.HostingDependencyPackageIds, cancellationToken);
     }
 
     private static CentralPackageManagementInfo DetectCentralPackageManagement(FileInfo projectFile)

@@ -61,6 +61,50 @@ public sealed class PackageTagMetadataServiceTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
+    public async Task HasAnyDependencyAsync_ImplicitChannelReadsRelativeLocalSourcePackageMetadata()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var nuGetConfigFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"));
+
+        await CreatePackageAsync(packagesDirectory, "Contoso.Hosting.MongoDb", "1.2.3", "database", "Aspire.Hosting.AppHost");
+        await File.WriteAllTextAsync(
+            nuGetConfigFile.FullName,
+            """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="packages" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [nuGetConfigFile.FullName])
+        };
+
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        using var handler = new MockHttpMessageHandler(new InvalidOperationException("Unexpected HTTP request."));
+
+        var service = new PackageTagMetadataService(
+            runner,
+            new MockHttpClientFactory(handler),
+            cache,
+            NullLogger<PackageTagMetadataService>.Instance);
+
+        var hasDependency = await service.HasAnyDependencyAsync(
+            PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache()),
+            workspace.WorkspaceRoot,
+            "Contoso.Hosting.MongoDb",
+            "1.2.3",
+            HostingIntegrationMetadata.HostingDependencyPackageIds,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(hasDependency);
+    }
+
+    [Fact]
     public async Task HasTagAsync_ExplicitChannelFollowsPagedRegistrationItems()
     {
         const string source = "https://example.test/v3/index.json";
@@ -136,6 +180,89 @@ public sealed class PackageTagMetadataServiceTests(ITestOutputHelper outputHelpe
             CancellationToken.None).DefaultTimeout();
 
         Assert.True(hasTag);
+        Assert.Contains(page, requestedUris);
+    }
+
+    [Fact]
+    public async Task HasAnyDependencyAsync_ExplicitChannelFollowsPagedRegistrationItems()
+    {
+        const string source = "https://example.test/v3/index.json";
+        const string page = "https://example.test/v3/registration-semver2/contoso.hosting.mongodb/page/1.json";
+
+        var requestedUris = new ConcurrentBag<string>();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            requestedUris.Add(request.RequestUri?.AbsoluteUri ?? string.Empty);
+
+            return request.RequestUri?.AbsoluteUri switch
+            {
+                source => CreateJsonResponse("""
+                    {
+                      "resources": [
+                        {
+                          "@id": "https://example.test/v3/registration-semver2/",
+                          "@type": "RegistrationsBaseUrl/Versioned"
+                        }
+                      ]
+                    }
+                    """),
+                "https://example.test/v3/registration-semver2/contoso.hosting.mongodb/index.json" => CreateJsonResponse($$"""
+                    {
+                      "items": [
+                        {
+                          "@id": "{{page}}"
+                        }
+                      ]
+                    }
+                    """),
+                page => CreateJsonResponse("""
+                    {
+                      "items": [
+                        {
+                          "catalogEntry": {
+                            "version": "1.2.3",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" },
+                                  { "id": "Microsoft.Extensions.Http", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                    """),
+                _ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+            };
+        });
+
+        var service = new PackageTagMetadataService(
+            new TestDotNetCliRunner(),
+            new MockHttpClientFactory(handler),
+            cache,
+            NullLogger<PackageTagMetadataService>.Instance);
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily",
+            PackageChannelQuality.Both,
+            [new PackageMapping("Contoso.Hosting.*", source)],
+            new FakeNuGetPackageCache());
+
+        var hasDependency = await service.HasAnyDependencyAsync(
+            channel,
+            workspace.WorkspaceRoot,
+            "Contoso.Hosting.MongoDb",
+            "1.2.3",
+            HostingIntegrationMetadata.HostingDependencyPackageIds,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(hasDependency);
         Assert.Contains(page, requestedUris);
     }
 
@@ -325,9 +452,23 @@ public sealed class PackageTagMetadataServiceTests(ITestOutputHelper outputHelpe
         Assert.Equal(1, requestedUris.Count(uri => uri == source));
     }
 
-    private static async Task CreatePackageAsync(DirectoryInfo packageDirectory, string packageId, string version, string tags)
+    private static async Task CreatePackageAsync(DirectoryInfo packageDirectory, string packageId, string version, string tags, params string[] dependencies)
     {
         var packagePath = Path.Combine(packageDirectory.FullName, $"{packageId}.{version}.nupkg");
+
+        var dependencyItems = string.Join(
+            Environment.NewLine,
+            dependencies.Select(static dependency => $"                    <dependency id=\"{dependency}\" version=\"[9.0.0, )\" />"));
+        var dependencyXml = dependencies.Length == 0
+            ? string.Empty
+            : string.Join(
+                Environment.NewLine,
+                string.Empty,
+                "                <dependencies>",
+                "                  <group targetFramework=\"net10.0\">",
+                dependencyItems,
+                "                  </group>",
+                "                </dependencies>");
 
         using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
         var nuspecEntry = archive.CreateEntry($"{packageId}.nuspec");
@@ -343,6 +484,7 @@ public sealed class PackageTagMetadataServiceTests(ITestOutputHelper outputHelpe
                 <authors>Test</authors>
                 <description>Test package</description>
                 <tags>{{tags}}</tags>
+            {{dependencyXml}}
               </metadata>
             </package>
             """);
