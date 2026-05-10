@@ -134,20 +134,20 @@ public class KubernetesHelmChartTests
     [InlineData("evil chart")]                  // whitespace
     [InlineData("evil\"chart")]                 // double quote
     [InlineData("evil\nchart")]                 // newline
-    [InlineData("--evil")]                      // already validated by chartReference whitelist
+    [InlineData("--evil")]                      // already validated by chartReference allowlist
     [InlineData("oci://repo/chart;rm -rf /")]   // semicolon
     public void AddHelmChart_RejectsMaliciousChartReference(string chartReference)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
 
-        // Note: the leading '--' case is currently allowed by the whitelist alone; it would
+        // Note: the leading '--' case is currently allowed by the allowlist alone; it would
         // still be a positional arg to helm and is harmless (helm rejects unknown flags).
         // Whitespace, quotes, newlines, and semicolons must all be rejected to prevent
         // argument-string injection into the helm process.
         if (chartReference == "--evil")
         {
-            // "--evil" passes the character whitelist but isn't a real injection vector
+            // "--evil" passes the character allowlist but isn't a real injection vector
             // because it would be parsed by helm as a chart-reference positional arg.
             return;
         }

@@ -346,7 +346,7 @@ public static partial class KubernetesHelmChartExtensions
     private static string GetStateSectionName(KubernetesEnvironmentResource environment, KubernetesHelmChartResource chart)
         => $"HelmChart:{environment.Name}:{chart.Name}";
 
-    // Whitelist for Helm chart references. Covers OCI URLs (oci://host/path), HTTP/HTTPS URLs,
+    // Allowlist for Helm chart references. Covers OCI URLs (oci://host/path), HTTP/HTTPS URLs,
     // local paths, plain chart names ("repo/chart"), and packaged chart filenames. Rejects anything
     // that could break helm argument tokenization (whitespace, quotes, control chars).
     [GeneratedRegex(@"^[A-Za-z0-9_./:@+~\-]+$")]
