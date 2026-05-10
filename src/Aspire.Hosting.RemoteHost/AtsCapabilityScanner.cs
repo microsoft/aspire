@@ -1039,6 +1039,7 @@ public static class AtsCapabilityScanner
             }
 
             var propDescription = GetXmlDocSummary(xmlDoc, $"P:{type.FullName}.{prop.Name}");
+            var isOptional = !prop.CanWrite || Nullable.GetUnderlyingType(prop.PropertyType) is not null;
 
             properties.Add(new AtsDtoPropertyInfo
             {
@@ -1047,7 +1048,7 @@ public static class AtsCapabilityScanner
                 IsCallback = isCallback,
                 CallbackParameters = callbackParameters,
                 CallbackReturnType = callbackReturnType,
-                IsOptional = !prop.CanWrite, // If no setter, it's likely init-only and required
+                IsOptional = isOptional,
                 Description = propDescription
             });
         }

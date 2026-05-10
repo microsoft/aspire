@@ -12803,7 +12803,7 @@ public class InteractionInput implements JsonSerializable {
     private String placeholder;
     private boolean allowCustomChoice;
     private boolean disabled;
-    private double maxLength;
+    private Double maxLength;
 
     public String getName() { return name; }
     public void setName(String value) { this.name = value; }
@@ -12829,8 +12829,8 @@ public class InteractionInput implements JsonSerializable {
     public void setAllowCustomChoice(boolean value) { this.allowCustomChoice = value; }
     public boolean getDisabled() { return disabled; }
     public void setDisabled(boolean value) { this.disabled = value; }
-    public double getMaxLength() { return maxLength; }
-    public void setMaxLength(double value) { this.maxLength = value; }
+    public Double getMaxLength() { return maxLength; }
+    public void setMaxLength(Double value) { this.maxLength = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -14073,12 +14073,12 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     private String[] arguments;
     private String workingDirectory;
     private ProcessCommandEnvironmentVariable[] environmentVariables;
-    private boolean inheritEnvironmentVariables;
+    private Boolean inheritEnvironmentVariables;
     private String standardInputContent;
-    private boolean killEntireProcessTree;
+    private Boolean killEntireProcessTree;
     private CommandOptions commandOptions;
-    private double maxOutputLineCount;
-    private boolean displayImmediately;
+    private Double maxOutputLineCount;
+    private Boolean displayImmediately;
 
     public String getExecutablePath() { return executablePath; }
     public void setExecutablePath(String value) { this.executablePath = value; }
@@ -14088,18 +14088,18 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     public void setWorkingDirectory(String value) { this.workingDirectory = value; }
     public ProcessCommandEnvironmentVariable[] getEnvironmentVariables() { return environmentVariables; }
     public void setEnvironmentVariables(ProcessCommandEnvironmentVariable[] value) { this.environmentVariables = value; }
-    public boolean getInheritEnvironmentVariables() { return inheritEnvironmentVariables; }
-    public void setInheritEnvironmentVariables(boolean value) { this.inheritEnvironmentVariables = value; }
+    public Boolean getInheritEnvironmentVariables() { return inheritEnvironmentVariables; }
+    public void setInheritEnvironmentVariables(Boolean value) { this.inheritEnvironmentVariables = value; }
     public String getStandardInputContent() { return standardInputContent; }
     public void setStandardInputContent(String value) { this.standardInputContent = value; }
-    public boolean getKillEntireProcessTree() { return killEntireProcessTree; }
-    public void setKillEntireProcessTree(boolean value) { this.killEntireProcessTree = value; }
+    public Boolean getKillEntireProcessTree() { return killEntireProcessTree; }
+    public void setKillEntireProcessTree(Boolean value) { this.killEntireProcessTree = value; }
     public CommandOptions getCommandOptions() { return commandOptions; }
     public void setCommandOptions(CommandOptions value) { this.commandOptions = value; }
-    public double getMaxOutputLineCount() { return maxOutputLineCount; }
-    public void setMaxOutputLineCount(double value) { this.maxOutputLineCount = value; }
-    public boolean getDisplayImmediately() { return displayImmediately; }
-    public void setDisplayImmediately(boolean value) { this.displayImmediately = value; }
+    public Double getMaxOutputLineCount() { return maxOutputLineCount; }
+    public void setMaxOutputLineCount(Double value) { this.maxOutputLineCount = value; }
+    public Boolean getDisplayImmediately() { return displayImmediately; }
+    public void setDisplayImmediately(Boolean value) { this.displayImmediately = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -16057,7 +16057,7 @@ public class ResourceEventDto implements JsonSerializable {
     private String state;
     private String stateStyle;
     private String healthStatus;
-    private double exitCode;
+    private Double exitCode;
 
     public String getResourceName() { return resourceName; }
     public void setResourceName(String value) { this.resourceName = value; }
@@ -16069,8 +16069,8 @@ public class ResourceEventDto implements JsonSerializable {
     public void setStateStyle(String value) { this.stateStyle = value; }
     public String getHealthStatus() { return healthStatus; }
     public void setHealthStatus(String value) { this.healthStatus = value; }
-    public double getExitCode() { return exitCode; }
-    public void setExitCode(double value) { this.exitCode = value; }
+    public Double getExitCode() { return exitCode; }
+    public void setExitCode(Double value) { this.exitCode = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();

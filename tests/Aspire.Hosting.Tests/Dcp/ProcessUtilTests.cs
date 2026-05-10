@@ -105,6 +105,30 @@ public class ProcessUtilTests
     }
 
     [Fact]
+    public async Task Run_IncludesArgumentListInNonZeroExitException()
+    {
+        using var scripts = new TestTempDirectory();
+        var appPath = DotnetFileAppProcess.WriteApp(scripts, "argument-list-failure.cs", """
+            #:sdk Microsoft.NET.Sdk
+            Environment.Exit(7);
+            """);
+        var spec = DotnetFileAppProcess.CreateDcpProcessSpec(
+            appPath,
+            ["failure-argument"],
+            throwOnNonZeroReturnCode: true);
+
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+
+        await using (processDisposable)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.Contains("returned non-zero exit code 7", exception.Message);
+            Assert.Contains("failure-argument", exception.Message);
+        }
+    }
+
+    [Fact]
     public async Task Run_ResolvesExecutableNameFromPathBeforeStartingProcess()
     {
         using var scripts = new TestTempDirectory();

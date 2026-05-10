@@ -231,7 +231,7 @@ type InteractionInput struct {
 	Placeholder string `json:"Placeholder,omitempty"`
 	AllowCustomChoice bool `json:"AllowCustomChoice,omitempty"`
 	Disabled bool `json:"Disabled,omitempty"`
-	MaxLength float64 `json:"MaxLength,omitempty"`
+	MaxLength *float64 `json:"MaxLength,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -249,7 +249,7 @@ func (d *InteractionInput) ToMap() map[string]any {
 	m["Placeholder"] = serializeValue(d.Placeholder)
 	m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice)
 	m["Disabled"] = serializeValue(d.Disabled)
-	m["MaxLength"] = serializeValue(d.MaxLength)
+	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
 	return m
 }
 
@@ -356,7 +356,7 @@ type ResourceEventDto struct {
 	State string `json:"State,omitempty"`
 	StateStyle string `json:"StateStyle,omitempty"`
 	HealthStatus string `json:"HealthStatus,omitempty"`
-	ExitCode float64 `json:"ExitCode,omitempty"`
+	ExitCode *float64 `json:"ExitCode,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -367,7 +367,7 @@ func (d *ResourceEventDto) ToMap() map[string]any {
 	m["State"] = serializeValue(d.State)
 	m["StateStyle"] = serializeValue(d.StateStyle)
 	m["HealthStatus"] = serializeValue(d.HealthStatus)
-	m["ExitCode"] = serializeValue(d.ExitCode)
+	if d.ExitCode != nil { m["ExitCode"] = serializeValue(d.ExitCode) }
 	return m
 }
 
@@ -416,7 +416,7 @@ type CommandOptions struct {
 	Visibility ResourceCommandVisibility `json:"Visibility,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
-	IconVariant IconVariant `json:"IconVariant,omitempty"`
+	IconVariant *IconVariant `json:"IconVariant,omitempty"`
 	IsHighlighted bool `json:"IsHighlighted,omitempty"`
 	UpdateState func(...any) any `json:"UpdateState,omitempty"`
 }
@@ -431,7 +431,7 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m["Visibility"] = serializeValue(d.Visibility)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)
-	m["IconVariant"] = serializeValue(d.IconVariant)
+	if d.IconVariant != nil { m["IconVariant"] = serializeValue(d.IconVariant) }
 	m["IsHighlighted"] = serializeValue(d.IsHighlighted)
 	if d.UpdateState != nil { m["UpdateState"] = serializeValue(d.UpdateState) }
 	return m
@@ -442,7 +442,7 @@ type HttpCommandExportOptions struct {
 	Description string `json:"Description,omitempty"`
 	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
 	IconName string `json:"IconName,omitempty"`
-	IconVariant IconVariant `json:"IconVariant,omitempty"`
+	IconVariant *IconVariant `json:"IconVariant,omitempty"`
 	IsHighlighted bool `json:"IsHighlighted,omitempty"`
 	CommandName string `json:"CommandName,omitempty"`
 	EndpointName string `json:"EndpointName,omitempty"`
@@ -456,7 +456,7 @@ func (d *HttpCommandExportOptions) ToMap() map[string]any {
 	m["Description"] = serializeValue(d.Description)
 	m["ConfirmationMessage"] = serializeValue(d.ConfirmationMessage)
 	m["IconName"] = serializeValue(d.IconName)
-	m["IconVariant"] = serializeValue(d.IconVariant)
+	if d.IconVariant != nil { m["IconVariant"] = serializeValue(d.IconVariant) }
 	m["IsHighlighted"] = serializeValue(d.IsHighlighted)
 	m["CommandName"] = serializeValue(d.CommandName)
 	m["EndpointName"] = serializeValue(d.EndpointName)
@@ -515,12 +515,12 @@ type ProcessCommandExportOptions struct {
 	Arguments []string `json:"Arguments,omitempty"`
 	WorkingDirectory string `json:"WorkingDirectory,omitempty"`
 	EnvironmentVariables []*ProcessCommandEnvironmentVariable `json:"EnvironmentVariables,omitempty"`
-	InheritEnvironmentVariables bool `json:"InheritEnvironmentVariables,omitempty"`
+	InheritEnvironmentVariables *bool `json:"InheritEnvironmentVariables,omitempty"`
 	StandardInputContent string `json:"StandardInputContent,omitempty"`
-	KillEntireProcessTree bool `json:"KillEntireProcessTree,omitempty"`
+	KillEntireProcessTree *bool `json:"KillEntireProcessTree,omitempty"`
 	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
-	MaxOutputLineCount float64 `json:"MaxOutputLineCount,omitempty"`
-	DisplayImmediately bool `json:"DisplayImmediately,omitempty"`
+	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
+	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -530,12 +530,12 @@ func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	if d.Arguments != nil { m["Arguments"] = serializeValue(d.Arguments) }
 	m["WorkingDirectory"] = serializeValue(d.WorkingDirectory)
 	if d.EnvironmentVariables != nil { m["EnvironmentVariables"] = serializeValue(d.EnvironmentVariables) }
-	m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables)
+	if d.InheritEnvironmentVariables != nil { m["InheritEnvironmentVariables"] = serializeValue(d.InheritEnvironmentVariables) }
 	m["StandardInputContent"] = serializeValue(d.StandardInputContent)
-	m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree)
+	if d.KillEntireProcessTree != nil { m["KillEntireProcessTree"] = serializeValue(d.KillEntireProcessTree) }
 	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
-	m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount)
-	m["DisplayImmediately"] = serializeValue(d.DisplayImmediately)
+	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
+	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
 	return m
 }
 

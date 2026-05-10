@@ -72,7 +72,7 @@ internal sealed class ProcessCommandExportOptions
     /// <summary>
     /// A value indicating whether the process should inherit the current environment variables.
     /// </summary>
-    public bool InheritEnvironmentVariables { get; set; } = true;
+    public bool? InheritEnvironmentVariables { get; set; }
 
     /// <summary>
     /// Standard input content to write to the process after it starts.
@@ -82,7 +82,7 @@ internal sealed class ProcessCommandExportOptions
     /// <summary>
     /// A value indicating whether the entire process tree should be killed when the process is disposed.
     /// </summary>
-    public bool KillEntireProcessTree { get; set; } = true;
+    public bool? KillEntireProcessTree { get; set; }
 
     /// <summary>
     /// Optional command configuration.

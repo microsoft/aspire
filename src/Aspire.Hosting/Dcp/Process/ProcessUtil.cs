@@ -125,7 +125,7 @@ internal static partial class ProcessUtil
         try
         {
 #if ASPIRE_EVENTSOURCE
-            AspireEventSource.Instance.ProcessLaunchStart(processSpec.ExecutablePath, processSpec.Arguments ?? "");
+            AspireEventSource.Instance.ProcessLaunchStart(processSpec.ExecutablePath, FormatProcessArguments(processSpec));
 #endif
 
             process.Start();
@@ -156,7 +156,7 @@ internal static partial class ProcessUtil
 
                     if (processSpec.ThrowOnNonZeroReturnCode && process.ExitCode != 0)
                     {
-                        var message = $"Command {processSpec.ExecutablePath} {processSpec.Arguments} returned non-zero exit code {process.ExitCode}";
+                        var message = $"Command {processSpec.ExecutablePath} {FormatProcessArguments(processSpec)} returned non-zero exit code {process.ExitCode}";
 
                         if (outputCapture?.TotalLineCount > 0)
                         {
@@ -180,11 +180,16 @@ internal static partial class ProcessUtil
         {
             startupComplete.Set(); // Allow output/error/exit handlers to start processing data.
 #if ASPIRE_EVENTSOURCE
-            AspireEventSource.Instance.ProcessLaunchStop(processSpec.ExecutablePath, processSpec.Arguments ?? "");
+            AspireEventSource.Instance.ProcessLaunchStop(processSpec.ExecutablePath, FormatProcessArguments(processSpec));
 #endif
         }
 
         return (processLifetimeTcs.Task, new ProcessDisposable(process, processLifetimeTcs.Task, processSpec.KillEntireProcessTree));
+    }
+
+    private static string FormatProcessArguments(ProcessSpec processSpec)
+    {
+        return processSpec.Arguments ?? string.Join(" ", processSpec.ArgumentList ?? []);
     }
 
     private static ProcessResult CreateProcessResult(int exitCode, ProcessOutputCapture? outputCapture)

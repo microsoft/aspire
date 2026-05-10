@@ -713,6 +713,34 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithProcessCommandExport_UnspecifiedBooleanOptionsUseProcessCommandSpecDefaults()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandExport(
+                "export-default-options",
+                "Export default options",
+                new ProcessCommandExportOptions
+                {
+                    ExecutablePath = "export-executable"
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "export-default-options").DefaultTimeout();
+
+        Assert.True(result.Success);
+
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.True(processSpec.InheritEnv);
+        Assert.True(processSpec.KillEntireProcessTree);
+    }
+
+    [Fact]
     public async Task WithProcessCommandExport_InvalidProcessOptions_ReturnsFailureWithoutCreatingProcess()
     {
         var invalidOptions = new (ProcessCommandExportOptions Options, string ExpectedMessage)[]
@@ -1023,7 +1051,8 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
 
         Assert.False(result.Success);
         Assert.True(result.Canceled);
-        Assert.Contains(processRunner.Disposables, disposable => disposable.DisposeCallCount > 0);
+        var disposable = Assert.Single(processRunner.Disposables);
+        Assert.Equal(1, disposable.DisposeCallCount);
     }
 
     private IDistributedApplicationTestingBuilder CreateTestDistributedApplicationBuilder(TestProcessRunner? processRunner = null)

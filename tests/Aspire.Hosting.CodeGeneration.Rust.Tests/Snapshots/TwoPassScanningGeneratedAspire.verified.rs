@@ -531,8 +531,8 @@ pub struct InteractionInput {
     pub allow_custom_choice: bool,
     #[serde(rename = "Disabled")]
     pub disabled: bool,
-    #[serde(rename = "MaxLength")]
-    pub max_length: f64,
+    #[serde(rename = "MaxLength", skip_serializing_if = "Option::is_none")]
+    pub max_length: Option<f64>,
 }
 
 impl InteractionInput {
@@ -550,7 +550,9 @@ impl InteractionInput {
         map.insert("Placeholder".to_string(), serde_json::to_value(&self.placeholder).unwrap_or(Value::Null));
         map.insert("AllowCustomChoice".to_string(), serde_json::to_value(&self.allow_custom_choice).unwrap_or(Value::Null));
         map.insert("Disabled".to_string(), serde_json::to_value(&self.disabled).unwrap_or(Value::Null));
-        map.insert("MaxLength".to_string(), serde_json::to_value(&self.max_length).unwrap_or(Value::Null));
+        if let Some(ref v) = self.max_length {
+            map.insert("MaxLength".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -697,8 +699,8 @@ pub struct ResourceEventDto {
     pub state_style: String,
     #[serde(rename = "HealthStatus")]
     pub health_status: String,
-    #[serde(rename = "ExitCode")]
-    pub exit_code: f64,
+    #[serde(rename = "ExitCode", skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<f64>,
 }
 
 impl ResourceEventDto {
@@ -709,7 +711,9 @@ impl ResourceEventDto {
         map.insert("State".to_string(), serde_json::to_value(&self.state).unwrap_or(Value::Null));
         map.insert("StateStyle".to_string(), serde_json::to_value(&self.state_style).unwrap_or(Value::Null));
         map.insert("HealthStatus".to_string(), serde_json::to_value(&self.health_status).unwrap_or(Value::Null));
-        map.insert("ExitCode".to_string(), serde_json::to_value(&self.exit_code).unwrap_or(Value::Null));
+        if let Some(ref v) = self.exit_code {
+            map.insert("ExitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -779,8 +783,8 @@ pub struct CommandOptions {
     pub confirmation_message: String,
     #[serde(rename = "IconName")]
     pub icon_name: String,
-    #[serde(rename = "IconVariant")]
-    pub icon_variant: IconVariant,
+    #[serde(rename = "IconVariant", skip_serializing_if = "Option::is_none")]
+    pub icon_variant: Option<IconVariant>,
     #[serde(rename = "IsHighlighted")]
     pub is_highlighted: bool,
     #[serde(rename = "UpdateState")]
@@ -797,7 +801,9 @@ impl CommandOptions {
         map.insert("Visibility".to_string(), serde_json::to_value(&self.visibility).unwrap_or(Value::Null));
         map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
         map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));
-        map.insert("IconVariant".to_string(), serde_json::to_value(&self.icon_variant).unwrap_or(Value::Null));
+        if let Some(ref v) = self.icon_variant {
+            map.insert("IconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
         map.insert("UpdateState".to_string(), serde_json::to_value(&self.update_state).unwrap_or(Value::Null));
         map
@@ -813,8 +819,8 @@ pub struct HttpCommandExportOptions {
     pub confirmation_message: String,
     #[serde(rename = "IconName")]
     pub icon_name: String,
-    #[serde(rename = "IconVariant")]
-    pub icon_variant: IconVariant,
+    #[serde(rename = "IconVariant", skip_serializing_if = "Option::is_none")]
+    pub icon_variant: Option<IconVariant>,
     #[serde(rename = "IsHighlighted")]
     pub is_highlighted: bool,
     #[serde(rename = "CommandName")]
@@ -833,7 +839,9 @@ impl HttpCommandExportOptions {
         map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
         map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
         map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));
-        map.insert("IconVariant".to_string(), serde_json::to_value(&self.icon_variant).unwrap_or(Value::Null));
+        if let Some(ref v) = self.icon_variant {
+            map.insert("IconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
         map.insert("CommandName".to_string(), serde_json::to_value(&self.command_name).unwrap_or(Value::Null));
         map.insert("EndpointName".to_string(), serde_json::to_value(&self.endpoint_name).unwrap_or(Value::Null));
@@ -914,18 +922,18 @@ pub struct ProcessCommandExportOptions {
     pub working_directory: String,
     #[serde(rename = "EnvironmentVariables")]
     pub environment_variables: Vec<ProcessCommandEnvironmentVariable>,
-    #[serde(rename = "InheritEnvironmentVariables")]
-    pub inherit_environment_variables: bool,
+    #[serde(rename = "InheritEnvironmentVariables", skip_serializing_if = "Option::is_none")]
+    pub inherit_environment_variables: Option<bool>,
     #[serde(rename = "StandardInputContent")]
     pub standard_input_content: String,
-    #[serde(rename = "KillEntireProcessTree")]
-    pub kill_entire_process_tree: bool,
+    #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
+    pub kill_entire_process_tree: Option<bool>,
     #[serde(rename = "CommandOptions")]
     pub command_options: CommandOptions,
-    #[serde(rename = "MaxOutputLineCount")]
-    pub max_output_line_count: f64,
-    #[serde(rename = "DisplayImmediately")]
-    pub display_immediately: bool,
+    #[serde(rename = "MaxOutputLineCount", skip_serializing_if = "Option::is_none")]
+    pub max_output_line_count: Option<f64>,
+    #[serde(rename = "DisplayImmediately", skip_serializing_if = "Option::is_none")]
+    pub display_immediately: Option<bool>,
 }
 
 impl ProcessCommandExportOptions {
@@ -935,12 +943,20 @@ impl ProcessCommandExportOptions {
         map.insert("Arguments".to_string(), serde_json::to_value(&self.arguments).unwrap_or(Value::Null));
         map.insert("WorkingDirectory".to_string(), serde_json::to_value(&self.working_directory).unwrap_or(Value::Null));
         map.insert("EnvironmentVariables".to_string(), serde_json::to_value(&self.environment_variables).unwrap_or(Value::Null));
-        map.insert("InheritEnvironmentVariables".to_string(), serde_json::to_value(&self.inherit_environment_variables).unwrap_or(Value::Null));
+        if let Some(ref v) = self.inherit_environment_variables {
+            map.insert("InheritEnvironmentVariables".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("StandardInputContent".to_string(), serde_json::to_value(&self.standard_input_content).unwrap_or(Value::Null));
-        map.insert("KillEntireProcessTree".to_string(), serde_json::to_value(&self.kill_entire_process_tree).unwrap_or(Value::Null));
+        if let Some(ref v) = self.kill_entire_process_tree {
+            map.insert("KillEntireProcessTree".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("CommandOptions".to_string(), serde_json::to_value(&self.command_options).unwrap_or(Value::Null));
-        map.insert("MaxOutputLineCount".to_string(), serde_json::to_value(&self.max_output_line_count).unwrap_or(Value::Null));
-        map.insert("DisplayImmediately".to_string(), serde_json::to_value(&self.display_immediately).unwrap_or(Value::Null));
+        if let Some(ref v) = self.max_output_line_count {
+            map.insert("MaxOutputLineCount".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.display_immediately {
+            map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }

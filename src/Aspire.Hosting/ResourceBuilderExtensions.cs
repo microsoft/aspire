@@ -2883,7 +2883,6 @@ public static class ResourceBuilderExtensions
             }
             catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
             {
-                await processDisposable.DisposeAsync().ConfigureAwait(false);
                 return CommandResults.Canceled();
             }
         }
@@ -2951,9 +2950,9 @@ public static class ResourceBuilderExtensions
             WorkingDirectory = exportOptions.WorkingDirectory,
             Arguments = arguments.ToArray(),
             EnvironmentVariables = CreateEnvironmentVariables(exportOptions.EnvironmentVariables),
-            InheritEnvironmentVariables = exportOptions.InheritEnvironmentVariables,
+            InheritEnvironmentVariables = exportOptions.InheritEnvironmentVariables ?? true,
             StandardInputContent = exportOptions.StandardInputContent,
-            KillEntireProcessTree = exportOptions.KillEntireProcessTree
+            KillEntireProcessTree = exportOptions.KillEntireProcessTree ?? true
         };
     }
 
