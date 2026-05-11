@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Verify Docker is running
-        run: docker info
+        uses: ./.github/actions/verify-docker
 
       - name: Export GitHub Actions cache runtime
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
