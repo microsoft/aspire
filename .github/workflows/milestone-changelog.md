@@ -542,15 +542,15 @@ with `jq` to see their exact shape.
 | File | Contents |
 |------|----------|
 | `all-milestone-prs.json` | All merged PRs in the `${MILESTONE}` milestone, sorted by `mergedAt` ascending |
-| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs, enriched with `authorAssociation`, `mergedBy`, `files`, and `comments` (not available from `gh pr list`) |
+| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs. Includes `mergedBy` from the initial fetch, plus `authorAssociation`, `files`, and `comments` added by the enrichment step (not available from `gh pr list`) |
 | `all-docs-prs.json` | All merged PRs in `${DOCS_REPO}` since `${MILESTONE_START}`, sorted by `mergedAt` ascending |
 | `batch-docs-prs.json` | Oldest ${BATCH_SIZE} unprocessed docs PRs (same base fields as product PRs plus `files`, but **without** `authorAssociation` or `comments`) |
 
 ## Step 3: Process the batch PRs
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
-unprocessed PRs, sorted by `mergedAt` ascending (oldest first). See Step 2 for the
-full schema of each entry.
+unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Inspect the JSON
+with `jq` to see the exact field names available in each entry.
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
@@ -722,23 +722,6 @@ Then determine whether either of these optional flags applies:
 | **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
 | **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
-### 5c. Determine owner
-
-Every changelog entry has an **owner** — the team member accountable for the
-change. Determine the owner as follows:
-
-1. **Default:** The PR author (`author.login` from the batch data).
-2. **Community contribution:** If the PR author is a community contributor
-   (i.e., `authorAssociation` is not `MEMBER` or `OWNER`), the owner is the
-   person who merged the PR (`mergedBy.login` from the batch data).
-3. **Backport PRs:** Use the original PR's author (per Step 3a item 5). If
-   that author is a community contributor, use the backport PR's `mergedBy`.
-4. **Grouped entries (Step 5e):** When multiple PRs are grouped into one
-   entry, the owner is determined by the **first** (oldest) PR in the group.
-
-Set the `owner` field in the change file (Step 6a) to the owner's GitHub
-username (without `@` prefix).
-
 The `authorAssociation` field is pre-populated in the batch data by the fetch-data
 job. Use it directly — no additional API calls are needed. For **backport PRs**,
 the original PR's author is not in the batch; query:
@@ -778,6 +761,25 @@ non-empty after Step 5g), add a `Docs:` line linking to the docs PRs:
 When multiple docs PRs are linked, separate them with commas. The line order
 within each entry is: `Owner:`, `Changes:`, `Docs:` (if any), then flag lines.
 Keep the `📝 **Documentation required**` flag line as well.
+
+### 5c. Determine owner
+
+Every changelog entry has an **owner** — the team member accountable for the
+change. Determine the owner as follows:
+
+1. **Default:** The PR author (`author.login` from the batch data).
+2. **Community contribution:** If the PR author is a community contributor
+   (i.e., `authorAssociation` is not `MEMBER` or `OWNER`), the owner is the
+   person who merged the PR (`mergedBy.login` from the batch data). If
+   `mergedBy` is null or missing, fall back to the PR author as owner.
+3. **Backport PRs:** Use the original PR's author (per Step 3a item 5). If
+   that author is a community contributor, use the backport PR's `mergedBy`
+   (or the PR author if `mergedBy` is null).
+4. **Grouped entries (Step 5e):** When multiple PRs are grouped into one
+   entry, the owner is determined by the **first** (oldest) PR in the group.
+
+Set the `owner` field in the change file (Step 6a) to the owner's GitHub
+username (without `@` prefix).
 
 ### 5d. Write name and description
 
