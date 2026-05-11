@@ -3,7 +3,7 @@
 
 using BenchmarkDotNet.Running;
 
-namespace LlmsTxtParserBench;
+namespace Aspire.Cli.Benchmarks;
 
 internal static class Program
 {

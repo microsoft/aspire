@@ -1,4 +1,4 @@
-# LlmsTxtParserBench
+# Aspire.Cli.Benchmarks
 
 Profiling harness for `Aspire.Cli.Documentation.Docs.LlmsTxtParser`. Measures
 parse time, allocations, and structural memory amplification on the live
@@ -15,28 +15,28 @@ The harness needs a copy of `llms-full.txt`. It looks for one in this order:
 ### Benchmarks (BDN)
 
 ```bash
-dotnet run -c Release --project tools/LlmsTxtParserBench
+dotnet run -c Release --project benchmarks/Aspire.Cli.Benchmarks
 ```
 
 Release configuration is required — BDN rejects Debug builds. Pass BDN filters
 after `--`:
 
 ```bash
-dotnet run -c Release --project tools/LlmsTxtParserBench -- --filter '*ParseAsync*'
+dotnet run -c Release --project benchmarks/Aspire.Cli.Benchmarks -- --filter '*ParseAsync*'
 ```
 
 ### Inspect structural metrics (no BDN, fast)
 
 ```bash
-dotnet run -c Release --project tools/LlmsTxtParserBench -- --inspect
+dotnet run -c Release --project benchmarks/Aspire.Cli.Benchmarks -- --inspect
 ```
 
 ### Refresh corpus
 
 ```bash
-dotnet run -c Release --project tools/LlmsTxtParserBench -- --refresh
+dotnet run -c Release --project benchmarks/Aspire.Cli.Benchmarks -- --refresh
 ```
 
 ## Note
 
-Not shipped — lives under `tools/` purely for measuring parser changes.
+Not shipped — lives under `benchmarks/` purely for measuring parser changes.

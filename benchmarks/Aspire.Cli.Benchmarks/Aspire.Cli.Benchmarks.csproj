@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>LlmsTxtParserBench</RootNamespace>
-    <AssemblyName>LlmsTxtParserBench</AssemblyName>
+    <RootNamespace>Aspire.Cli.Benchmarks</RootNamespace>
+    <AssemblyName>Aspire.Cli.Benchmarks</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>

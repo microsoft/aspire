@@ -160,7 +160,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
-    <InternalsVisibleTo Include="LlmsTxtParserBench" />
+    <InternalsVisibleTo Include="Aspire.Cli.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>

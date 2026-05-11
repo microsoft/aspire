@@ -8,7 +8,7 @@ using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
 
-namespace LlmsTxtParserBench;
+namespace Aspire.Cli.Benchmarks;
 
 [MemoryDiagnoser]
 [ThreadingDiagnoser]

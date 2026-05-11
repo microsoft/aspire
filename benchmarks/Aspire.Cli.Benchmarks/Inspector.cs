@@ -4,7 +4,7 @@
 using System.Text.Json;
 using Aspire.Cli.Documentation.Docs;
 
-namespace LlmsTxtParserBench;
+namespace Aspire.Cli.Benchmarks;
 
 /// <summary>
 /// Non-benchmark structural analysis of the parser output. Designed to be cheap so
