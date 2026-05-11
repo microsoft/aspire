@@ -600,13 +600,14 @@ aspire update --self --channel daily
 ```
 
 With self-extracting binaries, the update process is:
-1. User selects a channel (stable, staging, daily)
+1. User selects a channel (stable, staging, daily). When invoked without `--channel`, the CLI prompts; the chosen channel applies to this invocation only.
 2. Downloads the new self-extracting CLI binary (platform-specific archive)
 3. Extracts archive to temp, finds new binary
 4. Backs up current binary, swaps in the new one
 5. Verifies new binary with `--version`
 6. Calls `BundleService.ExtractAsync(force: true)` to proactively extract the embedded payload
-7. Saves selected channel to global settings
+
+The selected channel is **not** persisted to global settings. The new binary identifies its own channel via the `AspireCliChannel` assembly metadata baked at build time (read by `IdentityChannelReader`); per-project channel overrides live in the project's `aspire.config.json#channel`. There is no global-channel write step.
 
 The old bundle-update path (downloading a full tarball and applying via `IBundleDownloader`) has been removed. The self-extracting binary IS the bundle — one download, one file, everything included.
 
