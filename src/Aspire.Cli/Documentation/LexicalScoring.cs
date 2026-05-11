@@ -88,7 +88,7 @@ internal static class LexicalScoring
             // Single forward scan: walk match-by-match, remember the first match
             // for the word-boundary bonus, and stop as soon as we've counted enough
             // occurrences to saturate the multi-occurrence bonus. The previous version
-            // did IndexOf to find first match and then a second full-scan CountOccurrences,
+            // did IndexOf to find first match and then a second full-scan count,
             // doubling the bytes scanned in fields that contained a match.
             var startIndex = 0;
             var firstMatchIndex = -1;
@@ -131,32 +131,6 @@ internal static class LexicalScoring
         }
 
         return score;
-    }
-
-    /// <summary>
-    /// Counts the number of occurrences of a token in a span.
-    /// </summary>
-    /// <param name="text">The text to search.</param>
-    /// <param name="token">The token to count.</param>
-    /// <returns>The number of occurrences.</returns>
-    public static int CountOccurrences(ReadOnlySpan<char> text, string token)
-    {
-        var count = 0;
-        var startIndex = 0;
-
-        while (startIndex < text.Length)
-        {
-            var nextIndex = text[startIndex..].IndexOf(token, StringComparison.Ordinal);
-            if (nextIndex < 0)
-            {
-                break;
-            }
-
-            count++;
-            startIndex += nextIndex + token.Length;
-        }
-
-        return count;
     }
 
     /// <summary>

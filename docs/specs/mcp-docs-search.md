@@ -55,7 +55,7 @@ The Aspire MCP server provides tools for interacting with Aspire applications, b
 │  └─ IDocsSearchService- High-level search API                       │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Parsers                                                            │
-│  └─ LlmsTxtParser     - Async parallel parser for llms.txt format   │
+│  └─ LlmsTxtParser     - Parser for llms.txt format                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -199,27 +199,27 @@ internal interface IDocsIndexService
 ```
 
 **Implementation details:**
-- Parses llms.txt using `LlmsTxtParser.ParseAsync` with parallel document processing
+- Parses llms.txt using `LlmsTxtParser.ParseAsync`
 - Pre-indexes documents with lowercase text for faster case-insensitive matching
 - Extracts code identifiers for bonus scoring
 - Uses `ValueTask` for efficient async operations
 
 ### LlmsTxtParser
 
-Async parallel parser for llms.txt format documentation:
+Parser for llms.txt format documentation:
 
 ```csharp
 internal static partial class LlmsTxtParser
 {
-    public static async Task<IReadOnlyList<LlmsDocument>> ParseAsync(
+    public static Task<IReadOnlyList<LlmsDocument>> ParseAsync(
         string content,
         CancellationToken cancellationToken = default);
 }
 ```
 
 **Implementation details:**
-- Finds document boundaries (H1 headers) in single pass
-- Parses each document in parallel using `Task.WhenAll`
+- Finds document boundaries (H1 headers) and fenced-code-block regions in a single pass over the corpus
+- Iterates documents sequentially, slicing the precomputed fence regions per document so `ParseSections` doesn't re-scan for ``` runs
 - Uses `ReadOnlySpan<char>` throughout for zero-allocation parsing
 - Uses `ArrayPool<char>` for slug generation
 
@@ -273,7 +273,7 @@ Search uses weighted field scoring for relevance ranking:
 - Pre-computed lowercase text in `IndexedDocument` and `IndexedSection` classes
 - Pre-computed lowercase slug for fast slug matching
 - Pre-computed slug segments (`SlugSegments`) to avoid per-score allocations during slug relevance scoring
-- Span-based `CountOccurrences` method for zero-allocation matching
+- Span-based scoring for zero-allocation matching
 - Static lambdas to avoid closure allocations
 - Pre-extracted code spans and identifiers
 

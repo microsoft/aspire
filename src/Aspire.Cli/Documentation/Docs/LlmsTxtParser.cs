@@ -58,7 +58,7 @@ internal sealed class LlmsSection
 }
 
 /// <summary>
-/// Parser for llms.txt format documentation with parallel document processing.
+/// Parser for llms.txt format documentation.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -118,7 +118,7 @@ internal static partial class LlmsTxtParser
     private const int MaxDocumentTitleLength = 200;
 
     /// <summary>
-    /// Parses llms.txt content into a collection of documents using parallel processing.
+    /// Parses llms.txt content into a collection of documents.
     /// </summary>
     /// <param name="content">The raw llms.txt content.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
@@ -315,10 +315,7 @@ internal static partial class LlmsTxtParser
 
         return trimmed[0] is '#'
             && trimmed[1] is not '#'
-            // Either "# " (a normal heading) or a bare "#" at end-of-input — the
-            // latter only happens in test fixtures, but accepting it keeps
-            // IsH1Start total over short spans.
-            && (trimmed[1] is ' ' || trimmed.Length is 1);
+            && trimmed[1] is ' ';
     }
 
     /// <summary>
