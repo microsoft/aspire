@@ -474,24 +474,50 @@ internal static partial class LlmsTxtParser
     /// Checks if a position is inside any code block region.
     /// </summary>
     private static bool IsInsideCodeBlock(int position, List<(int Start, int End)> codeBlocks)
+        => TryGetContainingCodeBlock(position, codeBlocks, out _);
+
+    /// <summary>
+    /// If <paramref name="position"/> lies inside one of the (sorted, non-overlapping)
+    /// fenced code block regions in <paramref name="codeBlocks"/>, returns <see langword="true"/>
+    /// and sets <paramref name="end"/> to that region's exclusive end. Otherwise returns
+    /// <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// Uses binary search over the region list (regions are added in ascending start order
+    /// by <c>FindCodeBlockRegions</c>). This is called in two hot loops:
+    /// <list type="bullet">
+    ///   <item><c>FindDocumentBoundaries</c> tests every newline in the full corpus.</item>
+    ///   <item><c>FindSectionHeadings</c> tests every potential heading position and, on a
+    ///   hit, must jump to the end of the containing fence. Returning the end here lets that
+    ///   callsite skip a second linear walk over the same list.</item>
+    /// </list>
+    /// </remarks>
+    private static bool TryGetContainingCodeBlock(int position, List<(int Start, int End)> codeBlocks, out int end)
     {
-        foreach (var (start, end) in codeBlocks)
+        var lo = 0;
+        var hi = codeBlocks.Count - 1;
+
+        while (lo <= hi)
         {
-            if (position >= start && position < end)
+            var mid = lo + ((hi - lo) >> 1);
+            var (start, blockEnd) = codeBlocks[mid];
+
+            if (position < start)
             {
+                hi = mid - 1;
+            }
+            else if (position >= blockEnd)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                end = blockEnd;
                 return true;
             }
-
-            // Code blocks are sorted, so if we're past this one, check next
-            if (position >= end)
-            {
-                continue;
-            }
-
-            // We're before this code block, and all remaining are after
-            break;
         }
 
+        end = -1;
         return false;
     }
 
@@ -524,19 +550,10 @@ internal static partial class LlmsTxtParser
 
         while (position < docSpan.Length)
         {
-            // Skip if inside code block
-            if (IsInsideCodeBlock(position, codeBlocks))
+            // Skip if inside code block — jump straight to the fence's end in one binary search.
+            if (TryGetContainingCodeBlock(position, codeBlocks, out var blockEnd))
             {
-                // Jump to end of this code block
-                foreach (var (start, end) in codeBlocks)
-                {
-                    if (position >= start && position < end)
-                    {
-                        position = end;
-                        break;
-                    }
-                }
-
+                position = blockEnd;
                 continue;
             }
 
