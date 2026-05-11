@@ -71,7 +71,7 @@ USAGE:
                                 The directory must contain CLI archive files (aspire-cli-*.tar.gz or .zip)
                                 and optionally NuGet packages (*.nupkg).
     --hive-label LABEL          Override the NuGet hive label (default: pr-<PR_NUMBER>, run-<RUN_ID>,
-                                or run-<GITHUB_RUN_ID> (or run-local if GITHUB_RUN_ID is unset) for --local-dir)
+                                or local for --local-dir)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
                                 CLI installs to: <install-path>/bin
                                 NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages (or run-<RUN_ID>)
@@ -442,36 +442,6 @@ install_archive() {
     fi
 
     say_verbose "Successfully installed archive"
-}
-
-# Function to save global settings using the aspire CLI
-# Uses 'aspire config set -g' to set global configuration values
-# Parameters:
-#   $1 - cli_path: Path to the aspire CLI executable
-#   $2 - key: The configuration key to set
-#   $3 - value: The value to set
-# Expected schema of ~/.aspire/globalsettings.json:
-# {
-#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
-# }
-save_global_settings() {
-    local cli_path="$1"
-    local key="$2"
-    local value="$3"
-    
-    if [[ "$DRY_RUN" == true ]]; then
-        say_info "[DRY RUN] Would run: $cli_path config set -g $key $value"
-        return 0
-    fi
-    
-    say_verbose "Setting global config: $key = $value"
-    
-    if ! "$cli_path" config set -g "$key" "$value" 2>/dev/null; then
-        say_warn "Failed to set global config via aspire CLI"
-        return 1
-    fi
-    
-    say_verbose "Global config saved: $key = $value"
 }
 
 # Function to add PATH to shell configuration file
@@ -1017,10 +987,17 @@ install_from_local_dir() {
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
-    elif [[ -n "${GITHUB_RUN_ID:-}" ]]; then
-        hive_label="run-$GITHUB_RUN_ID"
     else
-        hive_label="run-local"
+        # Auto-detect PR identity from .nupkg filenames (e.g. "13.4.0-pr.16820.g3703c5c4")
+        # so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
+        # resolves to ("pr-<N>"). Falls back to "local" for true local-dev builds.
+        local detected_suffix
+        if detected_suffix=$(extract_version_suffix_from_packages "$local_dir") \
+            && [[ "$detected_suffix" =~ ^pr\.([0-9]+)\.[0-9a-g]+$ ]]; then
+            hive_label="pr-${BASH_REMATCH[1]}"
+        else
+            hive_label="local"
+        fi
     fi
     local nuget_hive_dir="$INSTALL_PREFIX/hives/$hive_label/packages"
 
@@ -1074,17 +1051,6 @@ install_from_local_dir() {
         say_info "Package version suffix: $version_suffix"
     else
         say_warn "Could not extract version suffix from local packages"
-    fi
-
-    # Save the global channel setting
-    if [[ "$HIVE_ONLY" != true ]]; then
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
-        else
-            cli_path="$cli_install_dir/aspire"
-        fi
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 
@@ -1197,20 +1163,6 @@ download_and_install_from_pr() {
         if check_vscode_cli_dependency; then
             install_aspire_extension "$extension_download_dir"
         fi
-    fi
-
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if [[ "$HIVE_ONLY" != true ]]; then
-        # Determine CLI path
-        local cli_path
-        if [[ -f "$cli_install_dir/aspire.exe" ]]; then
-            cli_path="$cli_install_dir/aspire.exe"
-        else
-            cli_path="$cli_install_dir/aspire"
-        fi
-        # Non-fatal: channel can be set manually if this fails
-        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 

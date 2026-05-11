@@ -24,7 +24,7 @@
     Mutually exclusive with PRNumber and WorkflowRunId.
 
 .PARAMETER HiveLabel
-    Override the NuGet hive label (default: pr-PRNUMBER, run-RUNID, or run-GITHUB_RUN_ID for LocalDir).
+    Override the NuGet hive label (default: pr-PRNUMBER, run-RUNID, or local for LocalDir).
 
 .PARAMETER InstallPath
     Directory prefix to install (default: $HOME/.aspire on Unix, %USERPROFILE%\.aspire on Windows)
@@ -109,7 +109,7 @@ param(
     [Parameter(HelpMessage = "Use pre-downloaded artifacts from a local directory instead of downloading from GitHub")]
     [string]$LocalDir = "",
 
-    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or run-<GITHUB_RUN_ID> (run-local when GITHUB_RUN_ID is unset))")]
+    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or local for --LocalDir)")]
     [string]$HiveLabel = "",
 
     [Parameter(HelpMessage = "Directory prefix to install")]
@@ -742,37 +742,6 @@ function Remove-TempDirectory {
 # END: Shared code
 # =============================================================================
 
-# Function to save global settings using the aspire CLI
-# Uses 'aspire config set -g' to set global configuration values
-# Expected schema of ~/.aspire/globalsettings.json:
-# {
-#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
-# }
-function Save-GlobalSettings {
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$CliPath,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$Key,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$Value
-    )
-    
-    if ($PSCmdlet.ShouldProcess("$Key = $Value", "Set global config via aspire CLI")) {
-        Write-Message "Setting global config: $Key = $Value" -Level Verbose
-        
-        $output = & $CliPath config set -g $Key $Value 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Message "Failed to set global config via aspire CLI" -Level Warning
-            return
-        }
-        Write-Message "Global config saved: $Key = $Value" -Level Verbose
-    }
-}
-
 # Function to check if gh command is available
 function Test-GitHubCLIDependency {
     [CmdletBinding()]
@@ -1268,10 +1237,21 @@ function Start-InstallFromLocalDir {
     $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
-    } elseif ($env:GITHUB_RUN_ID) {
-        "run-$($env:GITHUB_RUN_ID)"
     } else {
-        "run-local"
+        # Auto-detect PR identity from .nupkg filenames (e.g. "13.4.0-pr.16820.g3703c5c4")
+        # so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
+        # resolves to ("pr-<N>"). Falls back to "local" for true local-dev builds.
+        $detectedLabel = "local"
+        try {
+            $detectedSuffix = Get-VersionSuffixFromPackages -DownloadDir $LocalDirPath
+            if ($detectedSuffix -match '^pr\.(\d+)\.[0-9a-g]+$') {
+                $detectedLabel = "pr-$($Matches[1])"
+            }
+        }
+        catch {
+            # No PR-style packages in the local dir; keep "local".
+        }
+        $detectedLabel
     }
     $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
 
@@ -1296,13 +1276,6 @@ function Start-InstallFromLocalDir {
     }
     catch {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
-    }
-
-    # Save the global channel setting
-    if (-not $HiveOnly) {
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
     # Update PATH environment variables
@@ -1397,15 +1370,6 @@ function Start-DownloadAndInstall {
         if (Test-VSCodeCLIDependency -UseInsiders:$UseInsiders) {
             Install-AspireExtensionFromDownload -DownloadDir $extensionDownloadDir -UseInsiders:$UseInsiders
         }
-    }
-
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if (-not $HiveOnly) {
-        # Determine CLI path
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
     # Update PATH environment variables

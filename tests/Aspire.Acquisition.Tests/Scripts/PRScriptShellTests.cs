@@ -417,4 +417,30 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task LocalDir_DryRun_WithGitHubRunIdEnvSet_UsesLocalHiveLabel()
+    {
+        // Regression guard: the GITHUB_RUN_ID env var must NOT influence the hive label
+        // when --local-dir is used. Without this test, re-introducing a GITHUB_RUN_ID
+        // branch would produce "run-99999" silently instead of the expected "local"
+        // hive label.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "local-artifacts");
+        Directory.CreateDirectory(localDir);
+        await FakeArchiveHelper.CreateFakeNupkgAsync(localDir, "Aspire.Cli", "13.3.0-local.1");
+
+        // Inject GITHUB_RUN_ID only into the launched process — not the test process environment.
+        cmd.WithEnvironmentVariable("GITHUB_RUN_ID", "99999");
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--hive-only",
+            "--dry-run");
+
+        result.EnsureSuccessful();
+        Assert.Contains("local", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("run-99999", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
 }
