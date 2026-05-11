@@ -119,6 +119,16 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     // Changelog/What's New penalty - these pages mention many terms and shouldn't outrank dedicated docs
     private const float WhatsNewPenaltyMultiplier = 0.3f;   // Apply 0.3x to whats-new pages
 
+    // Cache schema version for the LlmsTxtParser output. Bump this constant whenever a
+    // change to LlmsTxtParser would produce different indexed documents for the same
+    // input (slug shape, content slicing, section structure, etc.). The fingerprint
+    // mixes this version into the hash so previously-cached indices are invalidated on
+    // first launch with the new CLI; otherwise users keep stale slugs/content until the
+    // upstream llms-full.txt changes.
+    //   v1 — original LlmsTxtParser output.
+    //   v2 — slug disambiguation suffixes + fenced-bash-comment H1 fix.
+    private const int IndexSchemaVersion = 2;
+
     private readonly IDocsFetcher _docsFetcher = docsFetcher;
     private readonly IDocsCache _docsCache = docsCache;
     private readonly string _llmsTxtUrl = DocsSourceConfiguration.GetLlmsTxtUrl(configuration);
@@ -174,7 +184,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
                 return;
             }
 
-            var currentFingerprint = SourceContentFingerprint.Compute(content);
+            var currentFingerprint = SourceContentFingerprint.Compute(content, IndexSchemaVersion);
             if (cachedDocuments is not null && string.Equals(cachedFingerprint, currentFingerprint, StringComparison.Ordinal))
             {
                 _indexedDocuments = [.. cachedDocuments.Select(static d => new IndexedDocument(d))];
