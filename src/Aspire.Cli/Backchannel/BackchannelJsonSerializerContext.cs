@@ -110,6 +110,14 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(ListTerminalsResponse))]
 [JsonSerializable(typeof(TerminalSummary))]
 [JsonSerializable(typeof(TerminalSummary[]))]
+[JsonSerializable(typeof(GetPipelineResourcesRequest))]
+[JsonSerializable(typeof(GetPipelineResourcesResponse))]
+[JsonSerializable(typeof(PipelineInput))]
+[JsonSerializable(typeof(PipelineInput[]))]
+[JsonSerializable(typeof(GetPipelineInputsRequest))]
+[JsonSerializable(typeof(GetPipelineInputsResponse))]
+[JsonSerializable(typeof(ApplyPipelineInputValuesRequest))]
+[JsonSerializable(typeof(Dictionary<string, string?>))]
 internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
 {
     [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "Using the Json source generator.")]

@@ -572,7 +572,7 @@ internal sealed class RenderCommand : BaseCommand
     {
         var command = CreateTestPipelineCommand();
         var activities = CreateFakePublishingActivities(cancellationToken);
-        var succeeded = await command.ProcessPublishingActivitiesDebugAsync(activities, backchannel: null!, cancellationToken);
+        var succeeded = await command.ProcessPublishingActivitiesDebugAsync(activities, backchannel: null!, PipelineCommandBase.PipelineParameterArguments.Empty, cancellationToken);
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplaySubtleMessage($"ProcessPublishingActivitiesDebugAsync returned succeeded={succeeded}", allowMarkup: false);
         return CliExitCodes.Success;
@@ -582,7 +582,7 @@ internal sealed class RenderCommand : BaseCommand
     {
         var command = CreateTestPipelineCommand();
         var activities = CreateFakePublishingActivities(cancellationToken);
-        var succeeded = await command.ProcessAndDisplayPublishingActivitiesAsync(activities, backchannel: null!, isDebugOrTraceLoggingEnabled: true, cancellationToken);
+        var succeeded = await command.ProcessAndDisplayPublishingActivitiesAsync(activities, backchannel: null!, PipelineCommandBase.PipelineParameterArguments.Empty, isDebugOrTraceLoggingEnabled: true, cancellationToken);
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplaySubtleMessage($"ProcessAndDisplayPublishingActivitiesAsync returned succeeded={succeeded}", allowMarkup: false);
         return CliExitCodes.Success;

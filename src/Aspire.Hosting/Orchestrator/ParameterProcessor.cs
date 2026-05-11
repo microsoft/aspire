@@ -51,9 +51,30 @@ public sealed class ParameterProcessor(
     /// <returns>A task that completes when all parameters are resolved (if waitForResolution is true) or when initialization is complete.</returns>
     public async Task InitializeParametersAsync(IEnumerable<ParameterResource> parameterResources, bool waitForResolution = false)
     {
+        await InitializeParametersAsync(parameterResources, waitForResolution, saveToDeploymentState: false, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    internal async Task InitializeParametersAsync(
+        DistributedApplicationModel model,
+        IReadOnlyCollection<IResource>? scopedResources,
+        bool waitForResolution = false,
+        CancellationToken cancellationToken = default)
+    {
+        var allParameters = await PipelineParameterResolver.GetParameterResourcesAsync(model, executionContext, scopedResources, cancellationToken).ConfigureAwait(false);
+
+        await InitializeParametersAsync(allParameters, waitForResolution, executionContext.IsPublishMode, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task InitializeParametersAsync(
+        IEnumerable<ParameterResource> parameterResources,
+        bool waitForResolution,
+        bool saveToDeploymentState,
+        CancellationToken cancellationToken)
+    {
         // Initialize all parameter resources by setting their WaitForValueTcs.
         // This allows them to be processed asynchronously later.
-        foreach (var parameterResource in parameterResources)
+        var parameters = parameterResources.ToList();
+        foreach (var parameterResource in parameters)
         {
             parameterResource.WaitForValueTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -71,6 +92,11 @@ public sealed class ParameterProcessor(
             {
                 await task.ConfigureAwait(false);
             }
+        }
+
+        if (saveToDeploymentState && parameters.Count > 0)
+        {
+            await SaveParametersToDeploymentStateAsync(parameters, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -110,42 +136,7 @@ public sealed class ParameterProcessor(
     /// <returns>A task that completes when all parameters are resolved (if waitForResolution is true) or when initialization is complete.</returns>
     public async Task InitializeParametersAsync(DistributedApplicationModel model, bool waitForResolution = false, CancellationToken cancellationToken = default)
     {
-        var referencedParameters = new Dictionary<string, ParameterResource>();
-
-        await CollectDependentParameterResourcesAsync(model, referencedParameters, cancellationToken).ConfigureAwait(false);
-
-        // Combine explicit parameters with dependent parameters
-        var explicitParameters = model.Resources.OfType<ParameterResource>();
-        var dependentParameters = referencedParameters.Values.Where(p => !explicitParameters.Contains(p));
-        var allParameters = explicitParameters.Concat(dependentParameters).ToList();
-
-        if (allParameters.Any())
-        {
-            await InitializeParametersAsync(allParameters, waitForResolution).ConfigureAwait(false);
-        }
-
-        // In publish mode, save all parameter values at the end
-        if (executionContext.IsPublishMode && allParameters.Any())
-        {
-            await SaveParametersToDeploymentStateAsync(allParameters, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private async Task CollectDependentParameterResourcesAsync(DistributedApplicationModel model, Dictionary<string, ParameterResource> referencedParameters, CancellationToken cancellationToken)
-    {
-        foreach (var resource in model.Resources)
-        {
-            if (resource.IsExcludedFromPublish())
-            {
-                continue;
-            }
-
-            var dependencies = await resource.GetResourceDependenciesAsync(executionContext, ResourceDependencyDiscoveryMode.Recursive, cancellationToken).ConfigureAwait(false);
-            foreach (var parameter in dependencies.OfType<ParameterResource>())
-            {
-                referencedParameters.TryAdd(parameter.Name, parameter);
-            }
-        }
+        await InitializeParametersAsync(model, scopedResources: null, waitForResolution, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ProcessParameterAsync(ParameterResource parameterResource)

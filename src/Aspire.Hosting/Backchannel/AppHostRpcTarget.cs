@@ -19,6 +19,7 @@ internal class AppHostRpcTarget(
     IServiceProvider serviceProvider,
     ProfilingTelemetry profilingTelemetry,
     PipelineActivityReporter activityReporter,
+    BackchannelPipelineExecutionBarrier pipelineExecutionBarrier,
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options,
     AppHostStartupState startupState,
@@ -76,6 +77,8 @@ internal class AppHostRpcTarget(
         {
             yield break;
         }
+
+        pipelineExecutionBarrier.AllowExecution();
 
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
@@ -230,10 +233,81 @@ internal class AppHostRpcTarget(
         return Task.FromResult(new string[] {
             "baseline.v2",
             "pipeline-steps.v1",
-            "pipeline-steps.v2"
+            "pipeline-steps.v2",
+            "pipeline-resources.v1",
+            "pipeline-inputs.v1"
             });
     }
 #pragma warning restore CA1822
+
+    public Task<GetPipelineResourcesResponse> GetPipelineResourcesAsync(GetPipelineResourcesRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken;
+
+        logger.LogDebug("Resolving publish-mode resources for list-resources request.");
+
+        var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var resources = model.Resources.ToArray();
+        var snapshots = resources
+            .Select(CreatePipelineResourceSnapshot)
+            .Where(snapshot => request?.IncludeHidden == true || !IsHiddenResource(snapshot))
+            .OrderBy(static snapshot => snapshot.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return Task.FromResult(new GetPipelineResourcesResponse
+        {
+            Resources = snapshots
+        });
+    }
+
+    public async Task<GetPipelineInputsResponse> GetPipelineInputsAsync(GetPipelineInputsRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        logger.LogDebug("Resolving pipeline inputs for step '{StepName}'.", request?.Step);
+
+        var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+        var resolvedSteps = await ResolvePipelineStepsAsync(step: null, model, executionContext, cancellationToken).ConfigureAwait(false);
+        var stepResources = PipelineParameterResolver.GetScopedResourcesForStep(request?.Step, resolvedSteps);
+        var parameters = await PipelineParameterResolver.GetParameterResourcesAsync(model, executionContext, stepResources, cancellationToken).ConfigureAwait(false);
+
+        return new GetPipelineInputsResponse
+        {
+            Inputs = [.. parameters.Select(parameter => CreatePipelineParameterInput(parameter, configuration))]
+        };
+    }
+
+    public async Task ApplyPipelineInputValuesAsync(ApplyPipelineInputValuesRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Values.Count == 0)
+        {
+            return;
+        }
+
+        var configurationManager = serviceProvider.GetService<IConfiguration>() as IConfigurationManager
+            ?? throw new InvalidOperationException("Unable to apply pipeline input values because the AppHost configuration does not support mutation.");
+
+        var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+        var parameters = await PipelineParameterResolver.GetParameterResourcesAsync(model, executionContext, scopedResources: null, cancellationToken).ConfigureAwait(false);
+        var parametersByName = parameters.ToDictionary(parameter => parameter.Name, StringComparer.OrdinalIgnoreCase);
+
+        var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (parameterName, value) in request.Values)
+        {
+            if (!parametersByName.TryGetValue(parameterName, out var parameter))
+            {
+                throw new InvalidOperationException($"Parameter '{parameterName}' was not found in the application model.");
+            }
+
+            values[parameter.ConfigurationKey] = value;
+        }
+
+        configurationManager.AddInMemoryCollection(values);
+        logger.LogDebug("Applied {InputCount} pipeline input value(s).", values.Count);
+    }
 
     public async Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken = default)
     {
@@ -293,35 +367,9 @@ internal class AppHostRpcTarget(
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetPipelineStepsAsync), streaming: false, request?.TraceContext);
         logger.LogDebug("Resolving pipeline steps for list-steps request.");
 
-#pragma warning disable ASPIREPIPELINES001
-        var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>() as DistributedApplicationPipeline
-            ?? throw new InvalidOperationException("Pipeline is not a DistributedApplicationPipeline.");
-
         var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
         var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
-
-        var pipelineContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
-
-        var resolvedSteps = await pipeline.ResolveStepsAsync(pipelineContext).ConfigureAwait(false);
-
-        // If a target step is specified, filter to its transitive dependencies
-        if (!string.IsNullOrEmpty(request?.Step))
-        {
-            var stepsByName = resolvedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
-            if (stepsByName.TryGetValue(request.Step, out var targetStep))
-            {
-                resolvedSteps = DistributedApplicationPipeline.ComputeTransitiveDependencies(targetStep, stepsByName);
-            }
-            else
-            {
-                var availableSteps = string.Join(", ", resolvedSteps.Select(s => $"'{s.Name}'"));
-                throw new InvalidOperationException(
-                    $"Step '{request.Step}' not found in pipeline. Available steps: {availableSteps}");
-            }
-        }
-
-        var orderedSteps = DistributedApplicationPipeline.GetTopologicalOrder(resolvedSteps);
-#pragma warning restore ASPIREPIPELINES001
+        var orderedSteps = await ResolvePipelineStepsAsync(request?.Step, model, executionContext, cancellationToken).ConfigureAwait(false);
 
         return new GetPipelineStepsResponse
         {
@@ -335,4 +383,160 @@ internal class AppHostRpcTarget(
             }).ToArray()
         };
     }
+
+    private static ResourceSnapshot CreatePipelineResourceSnapshot(IResource resource)
+    {
+        var snapshot = resource.Annotations.OfType<ResourceSnapshotAnnotation>().LastOrDefault()?.InitialSnapshot
+            ?? new CustomResourceSnapshot
+            {
+                ResourceType = resource.GetResourceType(),
+                Properties = [],
+                Relationships = ApplicationModel.ResourceSnapshotBuilder.BuildRelationships(resource)
+            };
+
+        var relationships = ApplicationModel.ResourceSnapshotBuilder.BuildRelationships(resource)
+            .Select(static relationship => new ResourceSnapshotRelationship
+            {
+                ResourceName = relationship.ResourceName,
+                Type = relationship.Type
+            })
+            .ToArray();
+
+        var urls = snapshot.Urls
+            .Where(static url => !url.IsInactive && !string.IsNullOrEmpty(url.Url))
+            .Select(static url => new ResourceSnapshotUrl
+            {
+                Name = url.Name ?? "default",
+                Url = url.Url,
+                IsInternal = url.IsInternal,
+                DisplayProperties = new ResourceSnapshotUrlDisplayProperties
+                {
+                    DisplayName = string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? null : url.DisplayProperties.DisplayName,
+                    SortOrder = url.DisplayProperties.SortOrder
+                }
+            })
+            .ToArray();
+
+        var healthReports = snapshot.HealthReports
+            .Select(static healthReport => new ResourceSnapshotHealthReport
+            {
+                Name = healthReport.Name,
+                Status = healthReport.Status?.ToString(),
+                Description = healthReport.Description,
+                ExceptionText = healthReport.ExceptionText
+            })
+            .ToArray();
+
+        var volumes = snapshot.Volumes
+            .Select(static volume => new ResourceSnapshotVolume
+            {
+                Source = volume.Source,
+                Target = volume.Target,
+                MountType = volume.MountType,
+                IsReadOnly = volume.IsReadOnly
+            })
+            .ToArray();
+
+        var environmentVariables = snapshot.EnvironmentVariables
+            .Select(static environmentVariable => new ResourceSnapshotEnvironmentVariable
+            {
+                Name = environmentVariable.Name,
+                Value = environmentVariable.Value,
+                IsFromSpec = environmentVariable.IsFromSpec
+            })
+            .ToArray();
+
+        var properties = new Dictionary<string, System.Text.Json.Nodes.JsonNode?>();
+        foreach (var property in snapshot.Properties)
+        {
+            properties[property.Name] = property.IsSensitive
+                ? null
+                : AuxiliaryBackchannelRpcTarget.ConvertPropertyValueToJsonNode(property.Value);
+        }
+
+        return new ResourceSnapshot
+        {
+            Name = resource.Name,
+            DisplayName = resource.Name,
+            ResourceType = snapshot.ResourceType,
+            State = snapshot.State?.Text,
+            StateStyle = snapshot.State?.Style,
+            HealthStatus = snapshot.HealthStatus?.ToString(),
+            ExitCode = snapshot.ExitCode,
+            CreatedAt = snapshot.CreationTimeStamp,
+            StartedAt = snapshot.StartTimeStamp,
+            StoppedAt = snapshot.StopTimeStamp,
+            Urls = urls,
+            Relationships = relationships,
+            HealthReports = healthReports,
+            Volumes = volumes,
+            EnvironmentVariables = environmentVariables,
+            Properties = properties,
+            IsHidden = snapshot.IsHidden || resource.IsExcludedFromPublish()
+        };
+    }
+
+    private static bool IsHiddenResource(ResourceSnapshot snapshot) =>
+        snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
+
+    private static PipelineInput CreatePipelineParameterInput(ParameterResource parameter, IConfiguration configuration)
+    {
+        var input = parameter.CreateInput();
+        var value = configuration.GetValueWithNormalizedKey(parameter.ConfigurationKey);
+        var required = string.IsNullOrEmpty(value) && parameter.Default is null;
+        var hasConfiguredValue = !string.IsNullOrEmpty(value);
+
+        return new PipelineInput
+        {
+            Name = parameter.Name,
+            Kind = "parameter",
+            ConfigurationKey = parameter.ConfigurationKey,
+            Label = input.Label,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            InputType = input.InputType.ToString(),
+            Required = required,
+            Value = parameter.Secret ? null : value,
+            HasValue = hasConfiguredValue || parameter.Default is not null,
+            ValueSource = hasConfiguredValue ? "configuration" : parameter.Default is not null ? "default" : null,
+            Options = input.Options?.ToDictionary(static option => option.Key, static option => (string?)option.Value, StringComparer.Ordinal),
+            AllowCustomChoice = input.AllowCustomChoice,
+            DynamicallyLoaded = input.DynamicLoading is not null,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength
+        };
+    }
+
+#pragma warning disable ASPIREPIPELINES001
+    private async Task<IReadOnlyList<PipelineStep>> ResolvePipelineStepsAsync(
+        string? step,
+        DistributedApplicationModel model,
+        DistributedApplicationExecutionContext executionContext,
+        CancellationToken cancellationToken)
+    {
+        var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>() as DistributedApplicationPipeline
+            ?? throw new InvalidOperationException("Pipeline is not a DistributedApplicationPipeline.");
+
+        var pipelineContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
+
+        var resolvedSteps = await pipeline.ResolveStepsAsync(pipelineContext).ConfigureAwait(false);
+
+        if (!string.IsNullOrEmpty(step))
+        {
+            var stepsByName = resolvedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+            if (stepsByName.TryGetValue(step, out var targetStep))
+            {
+                resolvedSteps = DistributedApplicationPipeline.ComputeTransitiveDependencies(targetStep, stepsByName);
+            }
+            else
+            {
+                var availableSteps = string.Join(", ", resolvedSteps.Select(s => $"'{s.Name}'"));
+                throw new InvalidOperationException(
+                    $"Step '{step}' not found in pipeline. Available steps: {availableSteps}");
+            }
+        }
+
+        return DistributedApplicationPipeline.GetTopologicalOrder(resolvedSteps);
+    }
+#pragma warning restore ASPIREPIPELINES001
 }

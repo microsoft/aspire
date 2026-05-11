@@ -28,6 +28,9 @@ internal interface IAppHostCliBackchannel
     Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken);
     Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken);
+    Task<GetPipelineResourcesResponse> GetPipelineResourcesAsync(bool includeHidden, CancellationToken cancellationToken);
+    Task<GetPipelineInputsResponse> GetPipelineInputsAsync(string? step, CancellationToken cancellationToken);
+    Task ApplyPipelineInputValuesAsync(IReadOnlyDictionary<string, string?> values, CancellationToken cancellationToken);
 }
 
 internal sealed class AppHostCliBackchannel(
@@ -591,6 +594,55 @@ internal sealed class AppHostCliBackchannel(
         logger.LogDebug("File uploaded with ID {FileId}", response.FileId);
 
         return response;
+    }
+
+    public async Task<GetPipelineInputsResponse> GetPipelineInputsAsync(string? step, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Requesting pipeline inputs.");
+
+        var response = await rpc.InvokeWithCancellationAsync<GetPipelineInputsResponse>(
+            "GetPipelineInputsAsync",
+            [new GetPipelineInputsRequest { Step = step }],
+            cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Received {InputCount} pipeline input(s).", response.Inputs.Length);
+
+        return response;
+    }
+
+    public async Task<GetPipelineResourcesResponse> GetPipelineResourcesAsync(bool includeHidden, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Requesting pipeline resources.");
+
+        var response = await rpc.InvokeWithCancellationAsync<GetPipelineResourcesResponse>(
+            "GetPipelineResourcesAsync",
+            [new GetPipelineResourcesRequest { IncludeHidden = includeHidden }],
+            cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Received {ResourceCount} pipeline resource(s).", response.Resources.Length);
+
+        return response;
+    }
+
+    public async Task ApplyPipelineInputValuesAsync(IReadOnlyDictionary<string, string?> values, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Applying {InputCount} pipeline input value(s).", values.Count);
+
+        await rpc.InvokeWithCancellationAsync(
+            "ApplyPipelineInputValuesAsync",
+            [new ApplyPipelineInputValuesRequest { Values = new Dictionary<string, string?>(values, StringComparer.OrdinalIgnoreCase) }],
+            cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Applied pipeline input values.");
     }
 
 }

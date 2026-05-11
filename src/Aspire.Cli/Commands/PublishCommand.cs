@@ -87,5 +87,5 @@ internal sealed class PublishCommand : PipelineCommandBase
 
     protected override string? GetTargetStepName(ParseResult parseResult) => "publish";
 
-    protected override string GetProgressMessage(ParseResult parseResult) => "Executing step publish";
+    protected override string GetProgressMessage(ParseResult parseResult) => GetListProgressMessage(parseResult) ?? "Executing step publish";
 }

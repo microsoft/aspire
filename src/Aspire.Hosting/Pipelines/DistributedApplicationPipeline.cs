@@ -53,7 +53,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             {
                 // Parameter processing - ensure all parameters are initialized and resolved
                 var parameterProcessor = context.Services.GetRequiredService<ParameterProcessor>();
-                await parameterProcessor.InitializeParametersAsync(context.Model, waitForResolution: true, context.CancellationToken).ConfigureAwait(false);
+                var pipelineOptions = context.Services.GetService<IOptions<PipelineOptions>>();
+                var scopedResources = PipelineParameterResolver.GetScopedResourcesForStep(pipelineOptions?.Value.Step, context.PipelineContext.ResolvedSteps);
+                await parameterProcessor.InitializeParametersAsync(context.Model, scopedResources, waitForResolution: true, context.CancellationToken).ConfigureAwait(false);
             }
         };
         parameterPromptingStep.RequiredBy(WellKnownPipelineSteps.DeployPrereq);
@@ -571,6 +573,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     public async Task ExecuteAsync(PipelineContext context)
     {
         var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
+        context.ResolvedSteps = allSteps;
 
         if (allSteps.Count == 0)
         {
@@ -594,6 +597,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         PipelineContext context)
     {
         var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
+        context.ResolvedSteps = allSteps;
 
         if (allSteps.Count == 0)
         {
