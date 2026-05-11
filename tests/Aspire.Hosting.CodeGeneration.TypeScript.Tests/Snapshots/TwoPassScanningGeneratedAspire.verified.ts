@@ -588,6 +588,7 @@ export interface ProcessCommandExportOptions {
     commandOptions?: CommandOptions;
     maxOutputLineCount?: number;
     displayImmediately?: boolean;
+    successExitCodes?: number[];
 }
 
 /** DTO interface for ReferenceEnvironmentInjectionOptions */

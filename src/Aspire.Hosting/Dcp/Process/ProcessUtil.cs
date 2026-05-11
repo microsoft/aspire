@@ -226,7 +226,7 @@ internal static partial class ProcessUtil
             {
                 if (!_process.CloseMainWindow())
                 {
-                    _process.Kill(_entireProcessTree);
+                    Kill(_process, _entireProcessTree);
                 }
             }
             else
@@ -238,16 +238,39 @@ internal static partial class ProcessUtil
             {
                 await _processLifetimeTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
             }
-            catch (TimeoutException) when (!_process.HasExited)
+            catch (TimeoutException)
             {
-                _process.Kill(entireProcessTree: true);
-                await _processLifetimeTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
+                if (!_process.HasExited)
+                {
+                    Kill(_process, entireProcessTree: true);
+                }
+
+                try
+                {
+                    await _processLifetimeTask.WaitAsync(s_processExitTimeout).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    // The process may have exited while inherited stdout/stderr pipes are still held open by descendants.
+                    // Do not let cleanup throw and skip the final kill attempt below.
+                }
             }
 
             if (!_process.HasExited)
             {
                 // Always try to kill the entire process tree here if all of the above has failed.
-                _process.Kill(entireProcessTree: true);
+                Kill(_process, entireProcessTree: true);
+            }
+        }
+
+        private static void Kill(System.Diagnostics.Process process, bool entireProcessTree)
+        {
+            try
+            {
+                process.Kill(entireProcessTree);
+            }
+            catch (InvalidOperationException) when (process.HasExited)
+            {
             }
         }
     }

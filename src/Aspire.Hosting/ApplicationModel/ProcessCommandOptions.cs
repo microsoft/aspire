@@ -12,6 +12,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public class ProcessCommandOptions : CommandOptions
 {
     private int _maxOutputLineCount = 50;
+    private IReadOnlyList<int> _successExitCodes = [0];
 
     internal static new ProcessCommandOptions Default { get; } = new();
 
@@ -22,6 +23,9 @@ public class ProcessCommandOptions : CommandOptions
     /// <para>
     /// Standard output and standard error are captured together in the order observed by the process runner. The returned
     /// command result contains the retained tail of the combined output as plain text.
+    /// </para>
+    /// <para>
+    /// This option is not applied by default result handling when <see cref="GetCommandResult"/> is specified.
     /// </para>
     /// </remarks>
     public int MaxOutputLineCount
@@ -38,9 +42,46 @@ public class ProcessCommandOptions : CommandOptions
     /// Gets or sets a value indicating whether returned command output should be displayed immediately in the dashboard.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The default value is <see langword="true"/>.
+    /// </para>
+    /// <para>
+    /// This option is not applied by default result handling when <see cref="GetCommandResult"/> is specified.
+    /// </para>
     /// </remarks>
     public bool DisplayImmediately { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the exit codes that are treated as a successful command invocation when <see cref="GetCommandResult"/> is not specified.
+    /// </summary>
+    /// <remarks>
+    /// The default value is <c>[0]</c>.
+    /// </remarks>
+    public IReadOnlyList<int> SuccessExitCodes
+    {
+        get => _successExitCodes;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+
+            if (value.Count == 0)
+            {
+                throw new ArgumentException("At least one process command success exit code must be specified.", nameof(value));
+            }
+
+            _successExitCodes = value.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a callback to be invoked after the process exits to determine the result of the command invocation.
+    /// </summary>
+    /// <remarks>
+    /// When specified, <see cref="SuccessExitCodes"/>, <see cref="MaxOutputLineCount"/>, and <see cref="DisplayImmediately"/>
+    /// are not applied by the default result handling. The callback can use <see cref="ProcessCommandResultContext.GetFormattedOutput"/>
+    /// to format retained process output.
+    /// </remarks>
+    public Func<ProcessCommandResultContext, Task<ExecuteCommandResult>>? GetCommandResult { get; set; }
 }
 
 /// <summary>
@@ -98,4 +139,9 @@ internal sealed class ProcessCommandExportOptions
     /// A value indicating whether returned command output should be displayed immediately in the dashboard.
     /// </summary>
     public bool? DisplayImmediately { get; set; }
+
+    /// <summary>
+    /// The exit codes that are treated as a successful command invocation.
+    /// </summary>
+    public IReadOnlyList<int>? SuccessExitCodes { get; set; }
 }

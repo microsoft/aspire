@@ -2727,10 +2727,12 @@ public static class ResourceBuilderExtensions
     /// Use <see cref="ExecuteCommandContext.Arguments"/> to read values supplied by the command caller.
     /// </para>
     /// <para>
-    /// Standard output and standard error are streamed to the command logger and a bounded tail of the combined output is
-    /// returned as command result data. Configure <see cref="ProcessCommandOptions.MaxOutputLineCount"/> to control the
-    /// number of returned output lines. Configure <see cref="ProcessCommandOptions.DisplayImmediately"/> to control
-    /// whether returned output opens automatically in the dashboard.
+    /// Standard output and standard error are streamed to the command logger at <see cref="LogLevel.Debug"/> and a bounded tail
+    /// of the combined output is returned as command result data. Configure <see cref="ProcessCommandOptions.SuccessExitCodes"/>
+    /// to control which exit codes are treated as success. Configure <see cref="ProcessCommandOptions.MaxOutputLineCount"/>
+    /// to control the number of returned output lines. Configure <see cref="ProcessCommandOptions.DisplayImmediately"/> to
+    /// control whether returned output opens automatically in the dashboard. Configure <see cref="ProcessCommandOptions.GetCommandResult"/>
+    /// to create a custom command result from the process exit code and output.
     /// </para>
     /// <para>This C# callback overload is not available in polyglot app hosts.</para>
     /// </remarks>
@@ -2784,10 +2786,12 @@ public static class ResourceBuilderExtensions
     /// Use <see cref="ExecuteCommandContext.Arguments"/> to read values supplied by the command caller.
     /// </para>
     /// <para>
-    /// Standard output and standard error are streamed to the command logger and a bounded tail of the combined output is
-    /// returned as command result data. Configure <see cref="ProcessCommandOptions.MaxOutputLineCount"/> to control the
-    /// number of returned output lines. Configure <see cref="ProcessCommandOptions.DisplayImmediately"/> to control
-    /// whether returned output opens automatically in the dashboard.
+    /// Standard output and standard error are streamed to the command logger at <see cref="LogLevel.Debug"/> and a bounded tail
+    /// of the combined output is returned as command result data. Configure <see cref="ProcessCommandOptions.SuccessExitCodes"/>
+    /// to control which exit codes are treated as success. Configure <see cref="ProcessCommandOptions.MaxOutputLineCount"/>
+    /// to control the number of returned output lines. Configure <see cref="ProcessCommandOptions.DisplayImmediately"/> to
+    /// control whether returned output opens automatically in the dashboard. Configure <see cref="ProcessCommandOptions.GetCommandResult"/>
+    /// to create a custom command result from the process exit code and output.
     /// </para>
     /// <para>This C# callback overload is not available in polyglot app hosts.</para>
     /// </remarks>
@@ -2879,7 +2883,7 @@ public static class ResourceBuilderExtensions
             try
             {
                 var processResult = await pendingProcessResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                return GetProcessCommandResult(processCommandSpec.ExecutablePath, processResult, commandOptions);
+                return await GetProcessCommandResultAsync(context, processCommandSpec, processResult, commandOptions).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
             {
@@ -2923,6 +2927,13 @@ public static class ResourceBuilderExtensions
         if (exportOptions.DisplayImmediately is { } displayImmediately)
         {
             commandOptions.DisplayImmediately = displayImmediately;
+        }
+
+        // Some generated clients serialize default collection values as empty arrays. Treat an empty exported list as
+        // omitted so those clients preserve the default [0] success code.
+        if (exportOptions.SuccessExitCodes is { Count: > 0 } successExitCodes)
+        {
+            commandOptions.SuccessExitCodes = successExitCodes.ToArray();
         }
 
         return commandOptions;
@@ -3018,12 +3029,34 @@ public static class ResourceBuilderExtensions
             ThrowOnNonZeroReturnCode = false,
             ResolveExecutablePath = true,
             RetainedOutputLineCount = commandOptions.MaxOutputLineCount,
-            OnOutputData = output => context.Logger.LogInformation("{ExecutablePath} (stdout): {Output}", processCommandSpec.ExecutablePath, output),
-            OnErrorData = error => context.Logger.LogInformation("{ExecutablePath} (stderr): {Error}", processCommandSpec.ExecutablePath, error)
+            OnOutputData = output => context.Logger.LogDebug("{ExecutablePath} (stdout): {Output}", processCommandSpec.ExecutablePath, output),
+            OnErrorData = error => context.Logger.LogDebug("{ExecutablePath} (stderr): {Error}", processCommandSpec.ExecutablePath, error)
         };
     }
 
-    internal static ExecuteCommandResult GetProcessCommandResult(string executablePath, ProcessResult processResult, ProcessCommandOptions commandOptions)
+    private static async Task<ExecuteCommandResult> GetProcessCommandResultAsync(ExecuteCommandContext context, ProcessCommandSpec processCommandSpec, ProcessResult processResult, ProcessCommandOptions commandOptions)
+    {
+        if (commandOptions.GetCommandResult is { } getCommandResult)
+        {
+            var resultContext = new ProcessCommandResultContext
+            {
+                ServiceProvider = context.ServiceProvider,
+                ResourceName = context.ResourceName,
+                Logger = context.Logger,
+                CancellationToken = context.CancellationToken,
+                ProcessCommandSpec = processCommandSpec,
+                ExitCode = processResult.ExitCode,
+                Output = processResult.ProcessOutput,
+                TotalOutputLineCount = processResult.TotalProcessOutputLineCount
+            };
+
+            return await getCommandResult(resultContext).ConfigureAwait(false);
+        }
+
+        return GetDefaultProcessCommandResult(processCommandSpec.ExecutablePath, processResult, commandOptions);
+    }
+
+    internal static ExecuteCommandResult GetDefaultProcessCommandResult(string executablePath, ProcessResult processResult, ProcessCommandOptions commandOptions)
     {
         var formattedOutput = processResult.GetFormattedOutput(commandOptions.MaxOutputLineCount);
         var resultData = string.IsNullOrEmpty(formattedOutput)
@@ -3035,14 +3068,20 @@ public static class ResourceBuilderExtensions
                 DisplayImmediately = commandOptions.DisplayImmediately
             };
 
-        if (processResult.ExitCode == 0)
+        var successExitCodes = commandOptions.SuccessExitCodes;
+        if (successExitCodes is null || successExitCodes.Count == 0)
+        {
+            throw new InvalidOperationException("Process command success exit codes must contain at least one value.");
+        }
+
+        if (successExitCodes.Contains(processResult.ExitCode))
         {
             return resultData is null
                 ? CommandResults.Success()
                 : new ExecuteCommandResult { Success = true, Data = resultData };
         }
 
-        var message = $"Command '{executablePath}' returned non-zero exit code {processResult.ExitCode}.";
+        var message = $"Command '{executablePath}' exited with code {processResult.ExitCode}, which is not in the configured success exit codes [{string.Join(", ", successExitCodes)}].";
 
         return resultData is null
             ? CommandResults.Failure(message)

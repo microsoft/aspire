@@ -521,6 +521,7 @@ type ProcessCommandExportOptions struct {
 	CommandOptions *CommandOptions `json:"CommandOptions,omitempty"`
 	MaxOutputLineCount *float64 `json:"MaxOutputLineCount,omitempty"`
 	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
+	SuccessExitCodes []float64 `json:"SuccessExitCodes,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -536,6 +537,7 @@ func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	if d.CommandOptions != nil { m["CommandOptions"] = serializeValue(d.CommandOptions) }
 	if d.MaxOutputLineCount != nil { m["MaxOutputLineCount"] = serializeValue(d.MaxOutputLineCount) }
 	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
+	if d.SuccessExitCodes != nil { m["SuccessExitCodes"] = serializeValue(d.SuccessExitCodes) }
 	return m
 }
 

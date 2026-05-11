@@ -1818,6 +1818,7 @@ class ProcessCommandExportOptions(typing.TypedDict, total=False):
     CommandOptions: CommandOptions
     MaxOutputLineCount: int
     DisplayImmediately: bool
+    SuccessExitCodes: typing.Iterable[int]
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool

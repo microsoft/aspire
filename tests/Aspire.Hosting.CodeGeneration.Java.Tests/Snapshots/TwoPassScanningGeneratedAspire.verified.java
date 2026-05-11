@@ -14053,6 +14053,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     private CommandOptions commandOptions;
     private Double maxOutputLineCount;
     private Boolean displayImmediately;
+    private double[] successExitCodes;
 
     public String getExecutablePath() { return executablePath; }
     public void setExecutablePath(String value) { this.executablePath = value; }
@@ -14074,6 +14075,8 @@ public class ProcessCommandExportOptions implements JsonSerializable {
     public void setMaxOutputLineCount(Double value) { this.maxOutputLineCount = value; }
     public Boolean getDisplayImmediately() { return displayImmediately; }
     public void setDisplayImmediately(Boolean value) { this.displayImmediately = value; }
+    public double[] getSuccessExitCodes() { return successExitCodes; }
+    public void setSuccessExitCodes(double[] value) { this.successExitCodes = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -14087,6 +14090,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         map.put("CommandOptions", AspireClient.serializeValue(commandOptions));
         map.put("MaxOutputLineCount", AspireClient.serializeValue(maxOutputLineCount));
         map.put("DisplayImmediately", AspireClient.serializeValue(displayImmediately));
+        map.put("SuccessExitCodes", AspireClient.serializeValue(successExitCodes));
         return map;
     }
 }

@@ -235,7 +235,8 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.True(firstResult.Success);
         Assert.Contains("first-output", firstResult.Data?.Value);
         Assert.False(secondResult.Success);
-        Assert.Contains("returned non-zero exit code 3", secondResult.Message);
+        Assert.Contains("exited with code 3", secondResult.Message);
+        Assert.Contains("configured success exit codes [0]", secondResult.Message);
         Assert.Contains("second-output", secondResult.Data?.Value);
 
         Assert.Collection(
@@ -354,8 +355,47 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "fail-no-output").DefaultTimeout();
 
         Assert.False(result.Success);
-        Assert.Contains("returned non-zero exit code 9", result.Message);
+        Assert.Contains("exited with code 9", result.Message);
+        Assert.Contains("configured success exit codes [0]", result.Message);
         Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task WithProcessCommand_SuccessExitCodes_TreatsConfiguredExitCodeAsSuccess()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(exitCode: 5, output: ["accepted-output"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommand(
+                "accepted-exit-code",
+                "Accepted exit code",
+                _ => CreateProcessCommandSpec(),
+                new ProcessCommandOptions
+                {
+                    SuccessExitCodes = [0, 5]
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "accepted-exit-code").DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Contains("accepted-output", result.Data?.Value);
+    }
+
+    [Fact]
+    public void WithProcessCommand_EmptySuccessExitCodes_ThrowsWhenConfiguringOptions()
+    {
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new ProcessCommandOptions
+            {
+                SuccessExitCodes = []
+            });
+
+        Assert.Contains("At least one process command success exit code must be specified.", exception.Message);
     }
 
     [Fact]
@@ -417,6 +457,68 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithProcessCommand_GetCommandResult_CanCustomizeResultFromProcessOutput()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(
+            exitCode: 42,
+            outputEvents:
+            [
+                Output("""{"status":"custom"}"""),
+                Error("diagnostic-line")
+            ]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        ProcessCommandResultContext? capturedContext = null;
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommand(
+                "custom-result",
+                "Custom result",
+                _ => CreateProcessCommandSpec(arguments: ["custom-argument"]),
+                new ProcessCommandOptions
+                {
+                    SuccessExitCodes = [0],
+                    GetCommandResult = context =>
+                    {
+                        capturedContext = context;
+
+                        return Task.FromResult(new ExecuteCommandResult
+                        {
+                            Success = true,
+                            Data = new CommandResultData
+                            {
+                                Value = context.Output[0],
+                                Format = CommandResultFormat.Json,
+                                DisplayImmediately = false
+                            }
+                        });
+                    }
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "custom-result").DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal(CommandResultFormat.Json, result.Data?.Format);
+        Assert.False(result.Data?.DisplayImmediately);
+        Assert.Equal("""{"status":"custom"}""", result.Data?.Value);
+
+        Assert.NotNull(capturedContext);
+        Assert.Equal(42, capturedContext.ExitCode);
+        Assert.Equal(resource.Resource.Name, capturedContext.ResourceName);
+        Assert.NotNull(capturedContext.ServiceProvider);
+        Assert.NotNull(capturedContext.Logger);
+        Assert.Equal(["custom-argument"], capturedContext.ProcessCommandSpec.Arguments);
+        Assert.Equal(["{\"status\":\"custom\"}", "diagnostic-line"], capturedContext.Output);
+        Assert.Equal(2, capturedContext.TotalOutputLineCount);
+        var formattedOutput = capturedContext.GetFormattedOutput(maxLines: 1);
+        Assert.Contains("Command output truncated: showing last 1 of 2 lines.", formattedOutput);
+        Assert.Contains("diagnostic-line", formattedOutput);
+    }
+
+    [Fact]
     public async Task WithProcessCommand_ReturnsOutputInRunnerObservedOrder()
     {
         var processRunner = new TestProcessRunner();
@@ -472,7 +574,8 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.False(result.Success);
         Assert.False(result.Canceled);
         Assert.NotEqual("Unhandled exception thrown.", result.Message);
-        Assert.Contains("returned non-zero exit code 7", result.Message);
+        Assert.Contains("exited with code 7", result.Message);
+        Assert.Contains("configured success exit codes [0]", result.Message);
         Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
         Assert.True(result.Data?.DisplayImmediately);
         Assert.Contains("failed-line", result.Data?.Value);
@@ -684,7 +787,8 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
                     StandardInputContent = "from-export-stdin",
                     KillEntireProcessTree = false,
                     MaxOutputLineCount = 10,
-                    DisplayImmediately = false
+                    DisplayImmediately = false,
+                    SuccessExitCodes = [0, 17]
                 });
 
         using var app = builder.Build();
@@ -706,6 +810,32 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("from-export-stdin", processSpec.StandardInputContent);
         Assert.False(processSpec.KillEntireProcessTree);
         Assert.Equal(10, processSpec.RetainedOutputLineCount);
+    }
+
+    [Fact]
+    public async Task WithProcessCommandExport_SuccessExitCodes_TreatsConfiguredExitCodeAsSuccess()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(exitCode: 17, output: ["export-accepted-output"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandExport(
+                "export-accepted-exit-code",
+                "Export accepted exit code",
+                new ProcessCommandExportOptions
+                {
+                    ExecutablePath = "export-executable",
+                    SuccessExitCodes = [0, 17]
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "export-accepted-exit-code").DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Contains("export-accepted-output", result.Data?.Value);
     }
 
     [Fact]
@@ -815,6 +945,32 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
                     }));
 
         Assert.Contains("output line count must be greater than zero", exception.Message);
+    }
+
+    [Fact]
+    public async Task WithProcessCommandExport_EmptySuccessExitCodesUseDefault()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(exitCode: 1);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandExport(
+                "default-success-exit-codes",
+                "Default success exit codes",
+                new ProcessCommandExportOptions
+                {
+                    ExecutablePath = "test-command",
+                    SuccessExitCodes = []
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "default-success-exit-codes").DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Contains("configured success exit codes [0]", result.Message);
     }
 
     [Fact]

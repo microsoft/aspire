@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -934,6 +934,8 @@ pub struct ProcessCommandExportOptions {
     pub max_output_line_count: Option<f64>,
     #[serde(rename = "DisplayImmediately", skip_serializing_if = "Option::is_none")]
     pub display_immediately: Option<bool>,
+    #[serde(rename = "SuccessExitCodes")]
+    pub success_exit_codes: Vec<f64>,
 }
 
 impl ProcessCommandExportOptions {
@@ -957,6 +959,7 @@ impl ProcessCommandExportOptions {
         if let Some(ref v) = self.display_immediately {
             map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
+        map.insert("SuccessExitCodes".to_string(), serde_json::to_value(&self.success_exit_codes).unwrap_or(Value::Null));
         map
     }
 }
