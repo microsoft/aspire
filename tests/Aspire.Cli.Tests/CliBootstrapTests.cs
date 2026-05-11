@@ -19,7 +19,7 @@ namespace Aspire.Cli.Tests;
 /// </summary>
 public class CliBootstrapTests
 {
-    private static readonly string[] s_validChannels = ["stable", "staging", "daily", "pr", "local"];
+    private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
 
     private static async Task<IHost> BuildHostAsync()
     {
@@ -46,7 +46,12 @@ public class CliBootstrapTests
 
         var channel = reader.ReadChannel();
 
-        Assert.Contains(channel, s_validChannels);
+        // Test host can be built with /p:AspireCliChannel=<anything in the accepted set>;
+        // assert shape, not a single literal, so this test stops being an accidental
+        // regression for non-default builds (including pr-<N> when the test host is a PR build).
+        Assert.True(
+            s_fixedChannels.Contains(channel) || channel.StartsWith("pr-", StringComparison.Ordinal),
+            $"Unexpected channel '{channel}'; expected one of stable|staging|daily|local|pr-<N>.");
     }
 
     [Fact]
@@ -81,13 +86,13 @@ public class CliBootstrapTests
     [Fact]
     public async Task BuildApplication_LocallyBuiltCli_ChannelMatchesTestHostAssemblyMetadata()
     {
-        // The Aspire.Cli.csproj defaults AspireCliChannel to "daily" when not overridden by
+        // The Aspire.Cli.csproj defaults AspireCliChannel to "local" when not overridden by
         // CI; the test csproj forwards $(AspireCliChannel) the same way (see csproj comment).
         // The test host and production assembly therefore stay in lockstep regardless of
         // whether the build runs under /p:AspireCliChannel=stable or unspecified — both pick
         // up the same value. We assert the bootstrapped context's channel matches the
         // *test host's* baked metadata, NOT a hard-coded literal, so the test stops being
-        // an accidental regression for any non-default build.
+        // an accidental regression for any non-default build (including pr-<N>).
         using var host = await BuildHostAsync();
 
         var entryAssembly = Assembly.GetEntryAssembly();
@@ -101,17 +106,6 @@ public class CliBootstrapTests
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
         Assert.Equal(bakedChannel, context.Channel);
-        // PrNumber is non-null only when the test host is itself a PR build. In a local
-        // dev build (and the default CI path) it should be null. We assert the contract:
-        // PrNumber.HasValue iff the channel resolved to "pr-<N>".
-        if (context.IdentityChannel == "pr")
-        {
-            Assert.NotNull(context.PrNumber);
-        }
-        else
-        {
-            Assert.Null(context.PrNumber);
-        }
     }
 
     [Fact]

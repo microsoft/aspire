@@ -99,19 +99,10 @@ public class ChannelReseedTests
 
     private static CliExecutionContext CreateExecutionContext(string channel)
     {
-        // For "pr-<N>" we still call through the regular ctor with channel="pr" + prNumber
-        // so that CliExecutionContext.Channel resolves option-(a). For non-pr values the
-        // channel is passed verbatim.
-        if (channel.StartsWith("pr-", StringComparison.Ordinal) &&
-            int.TryParse(channel.AsSpan(3), out var prNumber))
-        {
-            return BuildContext(channel: "pr", prNumber: prNumber);
-        }
-
-        return BuildContext(channel: channel, prNumber: null);
+        return BuildContext(channel);
     }
 
-    private static CliExecutionContext BuildContext(string channel, int? prNumber)
+    private static CliExecutionContext BuildContext(string channel)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         return new CliExecutionContext(
@@ -121,8 +112,7 @@ public class ChannelReseedTests
             sdksDirectory: dir,
             logsDirectory: dir,
             logFilePath: "test.log",
-            channel: channel,
-            prNumber: prNumber);
+            channel: channel);
     }
 
     private static ScaffoldingService CreateScaffoldingService(CliExecutionContext executionContext)

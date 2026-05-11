@@ -30,7 +30,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     private static void ConfigureImplicitTemplateChannel(CliServiceCollectionTestOptions options, string version = "13.3.0")
     {
         options.CliExecutionContextFactory = _ =>
-            BuildExecutionContext(options.WorkingDirectory, channel: "default", prNumber: null);
+            BuildExecutionContext(options.WorkingDirectory, channel: "default");
 
         options.PackagingServiceFactory = _ =>
         {
@@ -645,7 +645,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ =>
-                BuildExecutionContext(options.WorkingDirectory, channel: "default", prNumber: null);
+                BuildExecutionContext(options.WorkingDirectory, channel: "default");
 
             options.PackagingServiceFactory = _ =>
             {
@@ -717,7 +717,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ =>
-                BuildExecutionContext(options.WorkingDirectory, channel: "default", prNumber: null);
+                BuildExecutionContext(options.WorkingDirectory, channel: "default");
 
             options.InteractionServiceFactory = _ => interactionService;
 
@@ -831,7 +831,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CliExecutionContextFactory = _ => BuildExecutionContext(workspace.WorkspaceRoot, channel: "pr", prNumber: 12345);
+            options.CliExecutionContextFactory = _ => BuildExecutionContext(workspace.WorkspaceRoot, channel: "pr-12345");
             options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("pr-12345");
 
             options.DotNetCliRunnerFactory = _ =>
@@ -1007,7 +1007,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             // Pin the running CLI's identity channel to "local" — the value baked into a CLI
             // built without an explicit /p:AspireCliChannel= override.
             options.CliExecutionContextFactory = _ =>
-                BuildExecutionContext(options.WorkingDirectory, channel: "local", prNumber: null);
+                BuildExecutionContext(options.WorkingDirectory, channel: "local");
 
             options.PackagingServiceFactory = _ =>
             {
@@ -1057,16 +1057,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext CreateExecutionContextForChannel(DirectoryInfo workingDirectory, string contextChannel)
     {
-        if (contextChannel.StartsWith("pr-", StringComparison.Ordinal) &&
-            int.TryParse(contextChannel.AsSpan(3), out var prNumber))
-        {
-            return BuildExecutionContext(workingDirectory, channel: "pr", prNumber: prNumber);
-        }
-
-        return BuildExecutionContext(workingDirectory, channel: contextChannel, prNumber: null);
+        return BuildExecutionContext(workingDirectory, channel: contextChannel);
     }
 
-    private static CliExecutionContext BuildExecutionContext(DirectoryInfo workingDirectory, string channel, int? prNumber)
+    private static CliExecutionContext BuildExecutionContext(DirectoryInfo workingDirectory, string channel)
     {
         var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
         var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
@@ -1081,8 +1075,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             sdksDirectory: sdksDirectory,
             logsDirectory: logsDirectory,
             logFilePath: logFilePath,
-            channel: channel,
-            prNumber: prNumber);
+            channel: channel);
     }
 
     private static TestPackagingService CreateNamedChannelPackagingService(string channelName)

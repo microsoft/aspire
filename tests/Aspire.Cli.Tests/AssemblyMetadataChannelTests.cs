@@ -2,17 +2,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Packaging;
 
 namespace Aspire.Cli.Tests;
 
 public class AssemblyMetadataChannelTests
 {
-    private static readonly string[] s_validChannels = ["stable", "staging", "daily", "pr", "local"];
-
     [Fact]
-    public void AspireCliChannel_AssemblyMetadata_IsOneOfExpectedValues()
+    public void AspireCliChannel_AssemblyMetadata_HasValidShape()
     {
+        // The baked AspireCliChannel must match the shape IdentityChannelReader.IsValidChannel
+        // accepts: one of `stable`, `staging`, `daily`, `local`, or `pr-<digits>`. This is
+        // the smoke test that protects against a CI misconfiguration emitting the legacy
+        // literal `pr` (no `-<N>` suffix) — which would build successfully and then mis-route
+        // packages at runtime.
         var assembly = typeof(Aspire.Cli.Program).Assembly;
 
         var metadata = assembly
@@ -20,7 +24,10 @@ public class AssemblyMetadataChannelTests
             .FirstOrDefault(a => a.Key == "AspireCliChannel");
 
         Assert.NotNull(metadata);
-        Assert.Contains(metadata.Value, s_validChannels);
+        Assert.False(string.IsNullOrEmpty(metadata.Value), "AspireCliChannel must have a non-empty value.");
+        Assert.True(
+            IdentityChannelReader.IsValidChannel(metadata.Value),
+            $"AspireCliChannel value '{metadata.Value}' is not in the accepted set (stable|staging|daily|local|pr-<N>).");
     }
 
     [Fact]
@@ -33,9 +40,9 @@ public class AssemblyMetadataChannelTests
             .FirstOrDefault(a => a.Key == "AspireCliChannel");
 
         Assert.NotNull(metadata);
-        // Exact equality (not set-membership) — guards the csproj default
-        // <AspireCliChannel>local</AspireCliChannel>. The membership test above passes
-        // for "daily" too; this one fails if the csproj default reverts.
+        // Exact equality (not just shape) — guards the csproj default
+        // <AspireCliChannel>local</AspireCliChannel>. The shape test above passes
+        // for "daily" or "pr-1234" too; this one fails if the csproj default reverts.
         Assert.Equal(PackageChannelNames.Local, metadata.Value);
     }
 }

@@ -83,15 +83,28 @@ jobs:
               $ErrorActionPreference = 'Stop'
               $reason = '$(Build.Reason)'
               $sourceBranch = '$(Build.SourceBranch)'
+              $prNumber = '$(System.PullRequest.PullRequestNumber)'
               Write-Host "Build.Reason: '$reason'"
               Write-Host "Build.SourceBranch: '$sourceBranch'"
+              Write-Host "System.PullRequest.PullRequestNumber: '$prNumber'"
 
               $versionKind = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
               $versionKind = $versionKind.Trim()
               Write-Host "DotNetFinalVersionKind: '$versionKind'"
 
               if ($reason -eq 'PullRequest') {
-                $channel = 'pr'
+                # Defense in depth: validate digit-only PR number rather than just
+                # non-emptiness. If the agent ever returns the literal macro string
+                # (e.g. '$(System.PullRequest.PullRequestNumber)' unresolved) this
+                # catches it at compute time rather than letting an invalid
+                # AspireCliChannel value reach the build and be rejected later by
+                # IdentityChannelReader.IsValidChannel — clearer failure attribution.
+                if ($prNumber -notmatch '^\d+$') {
+                  throw "Build.Reason is 'PullRequest' but System.PullRequest.PullRequestNumber was not a numeric PR number: '$prNumber'."
+                }
+                # Bake the resolved hive label directly into AspireCliChannel. The CLI
+                # consumes this verbatim and avoids the legacy "pr" + parsed-PrNumber join.
+                $channel = "pr-$prNumber"
               } elseif ($versionKind -eq 'release') {
                 $channel = 'stable'
               } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {

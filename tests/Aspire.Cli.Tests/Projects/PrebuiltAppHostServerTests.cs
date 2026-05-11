@@ -248,13 +248,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     // PSM-guard cross-product tests.
-    // Guard predicate: IdentityChannel == "local"
+    // Guard predicate: Channel == "local"
     //   → fires only for locally-built CLIs; TryCreateTemporaryNuGetConfigAsync returns null.
-    // For every other identity channel (stable, staging, daily, pr) PSM must emit so restore
-    // honors the channel's package source mappings, even when channelName == IdentityChannel.
+    // For every other channel (stable, staging, daily, pr-*) PSM must emit so restore
+    // honors the channel's package source mappings, even when channelName == Channel.
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_LocalIdentityChannel_LocalChannelName_ReturnsNull()
+    public async Task TryCreateTemporaryNuGetConfig_LocalChannel_LocalChannelName_ReturnsNull()
     {
         // Locally-built CLI consuming its own local hive — only case the guard should fire.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -268,9 +268,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_LocalIdentityChannel_PrChannelName_ReturnsNull()
+    public async Task TryCreateTemporaryNuGetConfig_LocalChannel_PrChannelName_ReturnsNull()
     {
-        // IdentityChannel == "local" — guard always fires regardless of the requested channel.
+        // Channel == "local" — guard always fires regardless of the requested channel.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var executionContext = CreateContextWithChannel("local");
@@ -282,7 +282,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_StableIdentityChannel_AnyChannel_ReturnsConfig()
+    public async Task TryCreateTemporaryNuGetConfig_StableChannel_AnyChannel_ReturnsConfig()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -295,11 +295,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_DailyIdentityChannel_DailyChannel_ReturnsConfig()
+    public async Task TryCreateTemporaryNuGetConfig_DailyChannel_DailyChannel_ReturnsConfig()
     {
         // A 'daily' CLI consuming the 'daily' channel must still get a per-channel NuGet config.
-        // The local-hive guard fires only when both the identity channel AND the requested
-        // channel are 'local'; with identity=='daily' the guard must not trip.
+        // The local-hive guard fires only when both the running CLI channel AND the requested
+        // channel are 'local'; with running channel == 'daily' the guard must not trip.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var executionContext = CreateContextWithChannel("daily");
@@ -311,12 +311,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TryCreateTemporaryNuGetConfig_PrIdentityChannel_PrChannelName_ReturnsConfig()
+    public async Task TryCreateTemporaryNuGetConfig_PrChannel_PrChannelName_ReturnsConfig()
     {
-        // PR-build CLI installing a different PR's hive — guard does not fire (identity != "local").
+        // PR-build CLI installing a different PR's hive — guard does not fire (channel != "local").
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var executionContext = CreateContextWithChannel("pr", prNumber: 12345);
+        var executionContext = CreateContextWithChannel("pr-12345");
         var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
@@ -324,15 +324,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result);
     }
 
-    private static CliExecutionContext CreateContextWithChannel(string channel, int? prNumber = null) =>
+    private static CliExecutionContext CreateContextWithChannel(string channel) =>
         new(new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
             "test.log",
-            channel: channel,
-            prNumber: prNumber);
+            channel: channel);
 
     private static PrebuiltAppHostServer CreateServerWithExplicitChannel(
         TemporaryWorkspace workspace,

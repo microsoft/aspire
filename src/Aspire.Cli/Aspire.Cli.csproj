@@ -25,8 +25,10 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
-    <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for
-         (stable | staging | daily | pr | local). Local devs and ./build.sh default to 'local'
+    <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for.
+         For non-PR builds the value is one of: stable | staging | daily | local. For PR
+         builds CI emits the per-PR hive label directly as `pr-<PR_NUMBER>` (no separate
+         PrNumber parse / join at runtime). Local devs and ./build.sh default to 'local'
          so a locally-built CLI does not impersonate the real 'daily' channel (which would
          cause PSM guards keyed on identity==channel to short-circuit silently). CI overrides
          via /p:AspireCliChannel=$(aspireCliChannel). The value is baked into the assembly via

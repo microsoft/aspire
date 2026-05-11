@@ -15,11 +15,13 @@ public class IdentityChannelReaderTests
     [InlineData("stable")]
     [InlineData("staging")]
     [InlineData("daily")]
-    [InlineData("pr")]
     [InlineData("local")]
-    public void ReadChannel_AssemblyHasMetadataForKnownChannel_ReturnsValue(string channel)
+    [InlineData("pr-1")]
+    [InlineData("pr-12345")]
+    [InlineData("pr-2147483647")]
+    public void ReadChannel_AssemblyHasMetadataForValidChannel_ReturnsValue(string channel)
     {
-        var assembly = BuildFakeAssemblyWithChannelMetadata($"FakeCli_{channel}", channel);
+        var assembly = BuildFakeAssemblyWithChannelMetadata($"FakeCli_{channel.Replace('-', '_')}", channel);
 
         var reader = new IdentityChannelReader(assembly);
 
@@ -50,17 +52,28 @@ public class IdentityChannelReaderTests
         Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void ReadChannel_ChannelMetadataValueIsUnknownString_ReturnedVerbatim()
+    [Theory]
+    [InlineData("foobar")]                       // free-form garbage
+    [InlineData("pr")]                           // legacy literal "pr" without "-<N>" suffix
+    [InlineData("pr-")]                          // prefix with no digits
+    [InlineData("pr-abc")]                       // non-digits after prefix
+    [InlineData("pr-12a")]                       // mixed digits + non-digits
+    [InlineData("pr-12.34")]                     // dot inside the number
+    [InlineData("PR-12345")]                     // wrong case for the prefix
+    [InlineData("   ")]                          // whitespace-only
+    [InlineData(" pr-12345")]                    // leading whitespace
+    [InlineData("pr-12345 ")]                    // trailing whitespace
+    public void ReadChannel_InvalidChannelValue_Throws(string channelValue)
     {
-        // The reader does not validate the value — invalid values are caught at build time
-        // by AssemblyMetadataChannelTests (the smoke test). Document the
-        // intentional "trust the build" behavior here.
-        var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Foobar", "foobar");
+        // The reader is the single gate on the channel shape. The runtime
+        // must fail loudly here rather than letting an unrecognised value
+        // become a hive label and silently misroute packages.
+        var assembly = BuildFakeAssemblyWithChannelMetadata($"FakeCli_Invalid_{Math.Abs(channelValue.GetHashCode())}", channelValue);
 
         var reader = new IdentityChannelReader(assembly);
 
-        Assert.Equal("foobar", reader.ReadChannel());
+        var ex = Assert.Throws<InvalidOperationException>(reader.ReadChannel);
+        Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -71,25 +84,11 @@ public class IdentityChannelReaderTests
         // this so future changes don't silently flip ordering.
         var assembly = BuildFakeAssemblyWithChannelMetadata(
             "FakeCli_DualChannel",
-            channelValues: ["staging", "pr"]);
+            channelValues: ["staging", "pr-12345"]);
 
         var reader = new IdentityChannelReader(assembly);
 
         Assert.Equal("staging", reader.ReadChannel());
-    }
-
-    [Fact]
-    public void ReadChannel_ChannelMetadataValueIsWhitespaceOnly_ReturnedVerbatim()
-    {
-        // Production reader treats only null/empty as "missing" (string.IsNullOrEmpty), not
-        // string.IsNullOrWhiteSpace. A whitespace-only value is therefore returned. This is
-        // a known but low-risk gap — the build-time smoke test catches it. Documenting the
-        // current behavior here so any future tightening is a deliberate decision.
-        var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Whitespace", "   ");
-
-        var reader = new IdentityChannelReader(assembly);
-
-        Assert.Equal("   ", reader.ReadChannel());
     }
 
     [Fact]
@@ -105,54 +104,47 @@ public class IdentityChannelReaderTests
         Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
     }
 
-    // GitHub Actions PR builds emit `InformationalVersion` of the form
-    // `<base>-pr.<N>.g<SHA>(+<sha>)?` (set via `/p:VersionSuffix=pr.$PR_NUMBER.g$SHORT_SHA`).
-    // The parser MUST accept that real shape and extract <N>. The legacy no-separator
-    // `-pr<N>.<sha>` form is also accepted for back-compat with assemblies built from
-    // local dev shells.
+    // IsValidChannel is the gate for the baked value. We assert its exact
+    // truth table here so the reader's contract is testable without round-
+    // tripping through a fake assembly. The Throws-based tests above cover
+    // the integration through ResolveChannel.
     [Theory]
-    [InlineData("0.0.0-pr12345.deadbeef", 12345)]               // legacy no-separator
-    [InlineData("0.0.0-pr.5", 5)]                                // CI shape, short
-    [InlineData("0.0.0-pr.12345.gabcd1234", 12345)]              // real GH Actions shape
-    [InlineData("0.0.0-pr.12345.gabcd1234+abc", 12345)]          // with build metadata
-    [InlineData("1.2.3-preview.5", null)]                        // -preview must NOT match
-    [InlineData(null, null)]
-    [InlineData("0.0.0-pr0", 0)]
-    [InlineData("", null)]
-    [InlineData("0.0.0", null)]
-    [InlineData("0.0.0-pr", null)]                               // marker but no digits
-    [InlineData("0.0.0-pr-12345", null)]                         // hyphen separator NOT accepted
-    [InlineData("0.0.0-pr12345abc", 12345)]
-    [InlineData("0.0.0-pr2147483647", int.MaxValue)]
-    [InlineData("0.0.0-pr2147483648", null)]                     // overflow → null
-    [InlineData("0.0.0-prabc.def", null)]                        // marker followed by non-digits
-    [InlineData("1.0.0-rc.1.pr12345", null)]                     // `.pr` (no leading `-`) must NOT match
-    // The parser is the gatekeeper for the bootstrap path in Program.cs; it MUST return null cleanly
-    // (never throw) for every shape a caller might hand us — whitespace, free-form garbage, the dot-
-    // separated `-pr.<garbage>` form (CI-shape with a non-numeric tail), and overflow inputs that are
-    // dot-separated (the legacy no-separator overflow case is already covered by `0.0.0-pr2147483648`).
-    [InlineData("   ", null)]                                    // whitespace-only
-    [InlineData("not-a-version", null)]                          // free-form garbage
-    [InlineData("1.0.0-pr.abc", null)]                           // CI-shape marker with non-numeric tail
-    [InlineData("1.0.0-pr.99999999999999999999", null)]          // CI-shape overflow → null (no throw)
-    public void ParsePrNumber_ReturnsExpected(string? input, int? expected)
+    [InlineData("stable", true)]
+    [InlineData("staging", true)]
+    [InlineData("daily", true)]
+    [InlineData("local", true)]
+    [InlineData("pr-1", true)]
+    [InlineData("pr-12345", true)]
+    [InlineData("pr-0", true)]                                  // zero is permitted; build pipeline never emits it but the reader does not gate on positivity
+    [InlineData("pr-99999999999999999999", true)]               // arbitrarily long digit run is accepted; range check is not the reader's job
+    [InlineData("pr-0123", true)]                               // leading zeros are permitted; locks in the "any ASCII-digit run" contract
+    [InlineData("pr", false)]                                   // legacy literal — the change this test guards against regressing
+    [InlineData("pr-", false)]
+    [InlineData("pr-abc", false)]
+    [InlineData("pr-12a", false)]
+    [InlineData("pr-12.34", false)]
+    [InlineData("pr-+1", false)]                                // sign chars are not ASCII digits — guards against a "support signed numerics" regression
+    [InlineData("pr--1", false)]
+    [InlineData("pr-1 2", false)]                               // embedded space inside the digit portion
+    [InlineData("pr-1\n", false)]                               // trailing control char inside the digit portion
+    [InlineData("pr-١", false)]                                 // Arabic-Indic digit U+0661 — ASCII-only contract, not Unicode-digit
+    [InlineData("Pr-12345", false)]                             // case-sensitive prefix
+    [InlineData("PR-12345", false)]
+    [InlineData("Stable", false)]                               // literals are case-sensitive (ordinal)
+    [InlineData("STABLE", false)]
+    [InlineData("Local", false)]
+    [InlineData(" stable", false)]                              // leading whitespace on a literal — symmetric with the existing pr-12345 whitespace cases
+    [InlineData("stable ", false)]
+    [InlineData("local-foo", false)]                            // literal-as-prefix must not match; only "pr-" is a recognised prefix
+    [InlineData("foobar", false)]
+    [InlineData("default", false)]                              // PackageChannelNames.Default is for runtime PSM, never baked
+    [InlineData("   ", false)]
+    [InlineData("", false)]
+    [InlineData(" pr-12345", false)]
+    [InlineData("pr-12345 ", false)]
+    public void IsValidChannel_MatchesExpectedTruthTable(string value, bool expected)
     {
-        Assert.Equal(expected, IdentityChannelReader.ParsePrNumber(input));
-    }
-
-    [Fact]
-    public void ParsePrNumber_RealCliInformationalVersion_DoesNotThrow()
-    {
-        // Defensive smoke: whatever the test-host CLI assembly's InformationalVersion looks
-        // like today, ParsePrNumber must never throw. It either returns a positive number
-        // (when the host happens to be a PR build) or null.
-        var infoVersion = typeof(Aspire.Cli.Program).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion;
-
-        var prNumber = IdentityChannelReader.ParsePrNumber(infoVersion);
-
-        Assert.True(prNumber is null or >= 0);
+        Assert.Equal(expected, IdentityChannelReader.IsValidChannel(value));
     }
 
     private static Assembly BuildFakeAssemblyWithChannelMetadata(string assemblyName, string? channelValue)
