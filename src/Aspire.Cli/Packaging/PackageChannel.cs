@@ -86,6 +86,28 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        // For local hive channels the Aspire* source is a flat folder of .nupkg files.
+        // dotnet package search does not support local folder sources and returns no results.
+        // When a pinned version is set, enumerate the .nupkg files directly instead.
+        if (PinnedVersion is not null)
+        {
+            var aspireMapping = Mappings?.FirstOrDefault(m =>
+                m.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
+                m.PackageFilter != PackageMapping.AllPackages &&
+                !UrlHelper.IsHttpUrl(m.Source));
+
+            if (aspireMapping is not null && Directory.Exists(aspireMapping.Source))
+            {
+                return Directory.EnumerateFiles(aspireMapping.Source, "*.nupkg", SearchOption.TopDirectoryOnly)
+                    .Select(TryGetPackageIdentityFromPackageFileName)
+                    .Where(p => p.HasValue)
+                    .Select(p => p!.Value)
+                    .Where(p => p.PackageId.Contains("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
+                    .Select(p => new NuGetPackage { Id = p.PackageId, Version = PinnedVersion, Source = aspireMapping.Source })
+                    .ToList();
+            }
+        }
+
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
         using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
