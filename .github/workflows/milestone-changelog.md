@@ -42,7 +42,7 @@ env:
   MILESTONE_START: "2026-05-08"
   MILESTONE: "13.4"
   PREVIOUS_MILESTONE: "13.3"
-  RELEASE_NOTES_URL: "https://aspire.dev/whats-new/upgrade-aspire/"
+  RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
 on:
@@ -1201,7 +1201,7 @@ Use this exact format:
 
 ---
 
-*This changelog is automatically generated. To provide feedback, comment on the
+*To provide feedback, comment on the
 [Changelog feedback](<link to the "[${MILESTONE}] Changelog feedback" issue in this repo>) issue
 (e.g., "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678").*
 
