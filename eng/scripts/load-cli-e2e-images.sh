@@ -7,6 +7,9 @@ github_env="${GITHUB_ENV:-}"
 require_dotnet="false"
 require_polyglot="false"
 require_java="false"
+require_python="false"
+require_go="false"
+require_rust="false"
 
 usage() {
   cat <<'EOF'
@@ -21,6 +24,9 @@ Options:
   --require-dotnet <mode>     true, false, or auto. Defaults to false.
   --require-polyglot <mode>   true, false, or auto. Defaults to false.
   --require-java <mode>       true, false, or auto. Defaults to false.
+  --require-python <mode>     true, false, or auto. Defaults to false.
+  --require-go <mode>         true, false, or auto. Defaults to false.
+  --require-rust <mode>       true, false, or auto. Defaults to false.
 
 Mode behavior:
   true   The tarball must exist. Load it, export IMAGE and REQUIRE=true.
@@ -105,6 +111,30 @@ while [[ $# -gt 0 ]]; do
       require_java="$(normalize_mode "--require-java" "${1#*=}")"
       shift
       ;;
+    --require-python)
+      require_python="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
+      shift 2
+      ;;
+    --require-python=*)
+      require_python="$(normalize_mode "--require-python" "${1#*=}")"
+      shift
+      ;;
+    --require-go)
+      require_go="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
+      shift 2
+      ;;
+    --require-go=*)
+      require_go="$(normalize_mode "--require-go" "${1#*=}")"
+      shift
+      ;;
+    --require-rust)
+      require_rust="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
+      shift 2
+      ;;
+    --require-rust=*)
+      require_rust="$(normalize_mode "--require-rust" "${1#*=}")"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -184,3 +214,21 @@ load_image "Java polyglot" "$require_java" \
   "aspire-cli-e2e-polyglot-java:prebuilt" \
   "ASPIRE_E2E_POLYGLOT_JAVA_IMAGE" \
   "ASPIRE_E2E_REQUIRE_POLYGLOT_JAVA_IMAGE"
+
+load_image "Python polyglot" "$require_python" \
+  "aspire-cli-e2e-polyglot-python.tar.gz" \
+  "aspire-cli-e2e-polyglot-python:prebuilt" \
+  "ASPIRE_E2E_POLYGLOT_PYTHON_IMAGE" \
+  "ASPIRE_E2E_REQUIRE_POLYGLOT_PYTHON_IMAGE"
+
+load_image "Go polyglot" "$require_go" \
+  "aspire-cli-e2e-polyglot-go.tar.gz" \
+  "aspire-cli-e2e-polyglot-go:prebuilt" \
+  "ASPIRE_E2E_POLYGLOT_GO_IMAGE" \
+  "ASPIRE_E2E_REQUIRE_POLYGLOT_GO_IMAGE"
+
+load_image "Rust polyglot" "$require_rust" \
+  "aspire-cli-e2e-polyglot-rust.tar.gz" \
+  "aspire-cli-e2e-polyglot-rust:prebuilt" \
+  "ASPIRE_E2E_POLYGLOT_RUST_IMAGE" \
+  "ASPIRE_E2E_REQUIRE_POLYGLOT_RUST_IMAGE"

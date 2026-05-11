@@ -747,11 +747,6 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             [
                 "- name: Build with packages",
             ],
-            [".github/workflows/polyglot-validation.yml"] =
-            [
-                "- name: Build Python validation image",
-                "- name: Run TypeScript SDK validation",
-            ],
             [".github/workflows/ci.yml"] =
             [
                 "name: Final Results",

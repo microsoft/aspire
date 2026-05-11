@@ -192,13 +192,6 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
 
-  polyglot_validation:
-    name: Polyglot SDK Validation
-    uses: ./.github/workflows/polyglot-validation.yml
-    needs: [build_packages, build_cli_archive_linux]
-    with:
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-
   cli_starter_validation_windows:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
@@ -335,7 +328,6 @@ jobs:
       tests_requires_nugets_windows,
       tests_requires_nugets_macos,
       tests_requires_cli_archive,
-      polyglot_validation,
     ]
     steps:
       - name: Checkout code
@@ -417,8 +409,7 @@ jobs:
                   needs.tests_requires_nugets_macos.result == 'skipped') ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
                   needs.build_cli_e2e_image.result == 'skipped') ||
-                 needs.tests_requires_cli_archive.result == 'skipped' ||
-                 needs.polyglot_validation.result == 'skipped')) ||
+                 needs.tests_requires_cli_archive.result == 'skipped')) ||
                (github.event_name != 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
@@ -426,8 +417,7 @@ jobs:
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                  needs.tests_requires_nugets_macos.result == 'skipped') ||
-                 needs.polyglot_validation.result == 'skipped'))) }}
+                  needs.tests_requires_nugets_macos.result == 'skipped')))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

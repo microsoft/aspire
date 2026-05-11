@@ -23,6 +23,12 @@ env:
   CLI_E2E_POLYGLOT_IMAGE_TAG: aspire-cli-e2e-polyglot:prebuilt
   CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT: cli-e2e-polyglot-java-image
   CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG: aspire-cli-e2e-polyglot-java:prebuilt
+  CLI_E2E_POLYGLOT_PYTHON_IMAGE_ARTIFACT: cli-e2e-polyglot-python-image
+  CLI_E2E_POLYGLOT_PYTHON_IMAGE_TAG: aspire-cli-e2e-polyglot-python:prebuilt
+  CLI_E2E_POLYGLOT_GO_IMAGE_ARTIFACT: cli-e2e-polyglot-go-image
+  CLI_E2E_POLYGLOT_GO_IMAGE_TAG: aspire-cli-e2e-polyglot-go:prebuilt
+  CLI_E2E_POLYGLOT_RUST_IMAGE_ARTIFACT: cli-e2e-polyglot-rust-image
+  CLI_E2E_POLYGLOT_RUST_IMAGE_TAG: aspire-cli-e2e-polyglot-rust:prebuilt
   CLI_E2E_POLYGLOT_BASE_IMAGE_TAG: aspire-e2e-polyglot-base:latest
   CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-base
   CLI_E2E_INCLUDE_POLYGLOT_IMAGES: ${{ inputs.includePolyglotImages }}
@@ -103,6 +109,42 @@ jobs:
               .
           }
 
+          # All extended polyglot images (java, python, go, rust) layer on top of the
+          # polyglot base. They each install a language toolchain via apt or via a
+          # multi-stage COPY from the official language image, so we drive them through
+          # a single helper that handles the optional Ubuntu apt mirror retry.
+          build_extended_polyglot_image() {
+            local display_name="$1"
+            local dockerfile="$2"
+            local tag="$3"
+            local mirror="$4"
+            local -a build_args=()
+
+            if [[ -n "$mirror" ]]; then
+              echo "Building $display_name with Ubuntu apt mirror: $mirror"
+              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
+            else
+              echo "Building $display_name with the default Ubuntu apt sources"
+            fi
+
+            DOCKER_BUILDKIT=1 docker build \
+              "${build_args[@]}" \
+              -f "$dockerfile" \
+              -t "$tag" \
+              .
+          }
+
+          build_extended_polyglot_with_mirror_retry() {
+            local display_name="$1"
+            local dockerfile="$2"
+            local tag="$3"
+
+            if ! build_extended_polyglot_image "$display_name" "$dockerfile" "$tag" "http://azure.archive.ubuntu.com/ubuntu/"; then
+              echo "$display_name build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
+              build_extended_polyglot_image "$display_name" "$dockerfile" "$tag" ""
+            fi
+          }
+
           build_with_mirror_retry() {
             local display_name="$1"
             local dockerfile="$2"
@@ -125,6 +167,10 @@ jobs:
               echo "Java polyglot image build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
               build_java_image ""
             fi
+
+            build_extended_polyglot_with_mirror_retry "Python polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-python" "$CLI_E2E_POLYGLOT_PYTHON_IMAGE_TAG"
+            build_extended_polyglot_with_mirror_retry "Go polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-go" "$CLI_E2E_POLYGLOT_GO_IMAGE_TAG"
+            build_extended_polyglot_with_mirror_retry "Rust polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-rust" "$CLI_E2E_POLYGLOT_RUST_IMAGE_TAG"
           fi
 
       - name: Save CLI E2E Docker image tarballs
@@ -138,6 +184,9 @@ jobs:
           if [[ "$CLI_E2E_INCLUDE_POLYGLOT_IMAGES" == "true" ]]; then
             docker save "$CLI_E2E_POLYGLOT_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
             docker save "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
+            docker save "$CLI_E2E_POLYGLOT_PYTHON_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-python.tar.gz
+            docker save "$CLI_E2E_POLYGLOT_GO_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-go.tar.gz
+            docker save "$CLI_E2E_POLYGLOT_RUST_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-rust.tar.gz
           fi
 
       - name: Upload CLI E2E .NET Docker image
@@ -162,4 +211,28 @@ jobs:
         with:
           name: ${{ env.CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT }}
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
+          retention-days: 1
+
+      - name: Upload CLI E2E Python Docker image
+        if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.CLI_E2E_POLYGLOT_PYTHON_IMAGE_ARTIFACT }}
+          path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-python.tar.gz
+          retention-days: 1
+
+      - name: Upload CLI E2E Go Docker image
+        if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.CLI_E2E_POLYGLOT_GO_IMAGE_ARTIFACT }}
+          path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-go.tar.gz
+          retention-days: 1
+
+      - name: Upload CLI E2E Rust Docker image
+        if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.CLI_E2E_POLYGLOT_RUST_IMAGE_ARTIFACT }}
+          path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-rust.tar.gz
           retention-days: 1

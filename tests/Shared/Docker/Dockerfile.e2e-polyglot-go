@@ -1,0 +1,21 @@
+# Polyglot Dockerfile for Go AppHost E2E tests.
+# Extends the shared polyglot base with the Go toolchain.
+
+# golang:1 always resolves to the latest stable Go 1.x. Using the official image
+# as a builder stage lets us copy the full toolchain into the runtime image
+# without depending on the Ubuntu apt golang package (which lags upstream).
+FROM golang:1 AS go-toolchain
+
+FROM aspire-e2e-polyglot-base
+
+ARG UBUNTU_APT_MIRROR=
+
+COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+
+COPY --from=go-toolchain /usr/local/go /usr/local/go
+
+ENV GOROOT=/usr/local/go
+ENV GOPATH=/root/go
+ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
+RUN mkdir -p "$GOPATH/bin"
