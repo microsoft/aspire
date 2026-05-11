@@ -79,8 +79,9 @@ internal static class LexicalScoring
 
         // Cap on how many occurrences we ever count toward the multi-occurrence bonus.
         // The bonus saturates at maxOccurrenceBonus, so beyond that one extra occurrence
-        // there is no scoring reason to keep walking (and "Content" fields can be ~10KB
-        // per section, ~7 sections per doc, ~469 docs — so every avoided IndexOf matters).
+        // there is no scoring reason to keep walking. Content fields can run several KB
+        // and ScoreField is invoked once per (doc × field × query token), so capping the
+        // per-field scan compounds across the whole corpus.
         var occurrenceLimit = maxOccurrenceBonus + 1;
 
         foreach (var token in queryTokens)
