@@ -86,6 +86,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        if (TryGetLocalAspirePackageSource(out var localPackageSource))
+        {
+            return GetIntegrationPackagesFromLocalPackageSource(localPackageSource, cancellationToken);
+        }
+
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
         using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
@@ -124,6 +129,55 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         return filteredPackages;
+    }
+
+    private bool TryGetLocalAspirePackageSource(out DirectoryInfo packageSource)
+    {
+        if (Type is PackageChannelType.Explicit && Mappings is not null)
+        {
+            foreach (var mapping in Mappings)
+            {
+                if (IsScopedAspireMapping(mapping) && Directory.Exists(mapping.Source))
+                {
+                    packageSource = new DirectoryInfo(mapping.Source);
+                    return true;
+                }
+            }
+        }
+
+        packageSource = null!;
+        return false;
+    }
+
+    private IEnumerable<NuGetPackage> GetIntegrationPackagesFromLocalPackageSource(DirectoryInfo packageSource, CancellationToken cancellationToken)
+    {
+        // Local hive channels are flat folders of nupkg files plus nuget.org for non-Aspire packages.
+        // Searching them through NuGet blends the local folder with nuget.org and can produce phantom
+        // Aspire.Hosting.* rows that cannot restore after package source mapping routes Aspire* locally.
+        var packageMetadata = packageSource
+            .EnumerateFiles("*.nupkg", SearchOption.TopDirectoryOnly)
+            .Select(file =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return GetPackageFileMetadata(file.FullName);
+            })
+            .OfType<PackageFileMetadata>()
+            .Where(metadata => IsIntegrationPackageId(metadata.PackageId));
+
+        if (PinnedVersion is not null)
+        {
+            packageMetadata = packageMetadata
+                .Where(metadata => string.Equals(metadata.Version.ToString(), PinnedVersion, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var source = packageSource.FullName.Replace('\\', '/');
+
+        return packageMetadata
+            .GroupBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
+            .Select(group => group.OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer).First())
+            .OrderBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
+            .Select(metadata => new NuGetPackage { Id = metadata.PackageId, Version = PinnedVersion ?? metadata.Version.ToString(), Source = source })
+            .ToArray();
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -427,6 +481,21 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     {
         return mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal);
+    }
+
+    private static bool IsIntegrationPackageId(string packageId)
+    {
+        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
+            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal);
+
+        var isExcluded = packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.Ordinal) ||
+            DeprecatedPackages.IsDeprecated(packageId);
+
+        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
     public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
