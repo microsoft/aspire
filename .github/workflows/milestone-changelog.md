@@ -536,8 +536,7 @@ to determine what work is available.
 
 ## Step 2: Review the pre-computed data
 
-All paths are under `/tmp/gh-aw/pr-data/`. Inspect the JSON files directly
-with `jq` to see their exact shape.
+All paths are under `/tmp/gh-aw/pr-data/`.
 
 | File | Contents |
 |------|----------|
@@ -548,21 +547,21 @@ with `jq` to see their exact shape.
 
 Each entry in `batch-prs.json` contains:
 
-| Field | Type | Source | Description |
-|-------|------|--------|-------------|
-| `number` | number | `gh pr list` | PR number |
-| `title` | string | `gh pr list` | PR title |
-| `body` | string | `gh pr list` | PR description/body text |
-| `author` | object | `gh pr list` | `{login, is_bot}` — PR author |
-| `mergedBy` | object \| null | `gh pr list` | `{login, is_bot}` — user who merged the PR (null if unavailable) |
-| `mergedAt` | string | `gh pr list` | ISO 8601 UTC merge timestamp |
-| `labels` | array | `gh pr list` | Array of `{name}` objects |
-| `additions` | number | `gh pr list` | Total lines added |
-| `deletions` | number | `gh pr list` | Total lines deleted |
-| `changedFiles` | number | `gh pr list` | Number of files changed |
-| `authorAssociation` | string | enrichment | `"MEMBER"`, `"CONTRIBUTOR"`, or `"UNKNOWN"` |
-| `files` | array | enrichment | Array of `{path, additions, deletions, changeType}` objects |
-| `comments` | array | enrichment | Array of `{author, body, createdAt}` objects |
+| Field | Type | Description |
+|-------|------|-------------|
+| `number` | number | PR number |
+| `title` | string | PR title |
+| `body` | string | PR description/body text |
+| `author` | object | `{login, is_bot}` — PR author |
+| `mergedBy` | object | null | `{login, is_bot}` — user who merged the PR (null if unavailable) |
+| `mergedAt` | string | ISO 8601 UTC merge timestamp |
+| `labels` | array | Array of `{name}` objects |
+| `additions` | number | Total lines added |
+| `deletions` | number | Total lines deleted |
+| `changedFiles` | number | Number of files changed |
+| `authorAssociation` | string | `"MEMBER"`, `"CONTRIBUTOR"`, or `"UNKNOWN"` |
+| `files` | array | Array of `{path, additions, deletions, changeType}` objects |
+| `comments` | array | Array of `{author, body, createdAt}` objects |
 
 Entries in `batch-docs-prs.json` have the same base fields (from `gh pr list`)
 but **without** `authorAssociation` or `comments`.
