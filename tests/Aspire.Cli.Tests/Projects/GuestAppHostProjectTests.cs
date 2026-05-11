@@ -552,6 +552,15 @@ public class GuestAppHostProjectTests : IDisposable
 
         var logFilePath = Path.Combine(_workspace.WorkspaceRoot.FullName, $"test-guest-{Guid.NewGuid()}.log");
 
+        var workspace = new DirectoryInfo(AppContext.BaseDirectory);
+        var executionContext = new CliExecutionContext(
+            workingDirectory: workspace,
+            hivesDirectory: workspace,
+            cacheDirectory: workspace,
+            sdksDirectory: workspace,
+            logsDirectory: workspace,
+            logFilePath: logFilePath);
+
         return new GuestAppHostProject(
             language: language,
             interactionService: new TestInteractionService(),
@@ -563,6 +572,7 @@ public class GuestAppHostProjectTests : IDisposable
             configuration: _configuration,
             features: new Features(_configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
+            executionContext: executionContext,
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry);
