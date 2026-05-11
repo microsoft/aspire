@@ -757,6 +757,93 @@ public class KubernetesPublisherTests()
         await settingsTask;
     }
 
+    [Fact]
+    public async Task PublishAsync_WithPvcStorageType_GeneratesValidPersistentVolumeAndClaim()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/14096 (PV emits empty
+        // claimRef/hostPath/local/nodeAffinity blocks) and
+        // https://github.com/microsoft/aspire/issues/16504 (PVC emits empty
+        // dataSource/dataSourceRef/selector blocks). Both are caused by eager `= new()`
+        // initialization of complex sub-properties on V1 spec types; once those properties are
+        // nullable the YAML serializer's OmitNull configuration suppresses the empty mappings.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithProperties(env =>
+            {
+                env.DefaultStorageType = "pvc";
+                env.DefaultStorageClassName = "managed-csi";
+                env.DefaultStorageSize = "10Gi";
+                env.DefaultStorageReadWritePolicy = "ReadWriteOnce";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/service/deployment.yaml",
+            "templates/service/data-pv.yaml",
+            "templates/service/data-pvc.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+
+            // Empty `{ }` mappings are the failure mode the bug fixes address; assert against
+            // them explicitly so a regression is obvious without snapshot-diffing.
+            Assert.DoesNotContain("{}", content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithHostPathStorageType_GeneratesValidPersistentVolumeAndClaim()
+    {
+        // Regression test that exercises the hostPath emission path of
+        // CreatePersistentVolume in addition to the PVC path. With the bug fixes the rendered
+        // PV correctly contains a populated `hostPath` mapping while still omitting the empty
+        // `claimRef`/`local`/`nodeAffinity` blocks that previously broke `kubectl apply`.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithProperties(env =>
+            {
+                env.DefaultStorageType = "hostpath";
+                env.DefaultStorageSize = "5Gi";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("logs", "/var/log/service");
+
+        var app = builder.Build();
+        app.Run();
+
+        var deploymentPath = Path.Combine(tempDir.Path, "templates", "service", "deployment.yaml");
+        Assert.True(File.Exists(deploymentPath));
+
+        var deploymentContent = await File.ReadAllTextAsync(deploymentPath);
+        Assert.DoesNotContain("{}", deploymentContent);
+
+        await Verify(deploymentContent, "yaml");
+    }
+
     private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
     {
         public string ValueExpression => "test-condition";
