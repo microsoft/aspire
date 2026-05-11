@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #16888 - matched to public-azureroleassignmentresource-type entry",
+  "mergedAt": "2026-05-11T15:39:42Z",
+  "number": 896,
+  "runDate": "2026-05-11T16:54:10Z",
+  "status": "included",
+  "title": "[docs] Add AzureRoleAssignmentResource documentation to Azure role assignments guide"
+}
