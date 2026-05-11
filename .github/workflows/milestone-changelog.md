@@ -565,7 +565,7 @@ Each entry in `batch-prs.json` contains:
 | `comments` | array | enrichment | Array of `{author, body, createdAt}` objects |
 
 Entries in `batch-docs-prs.json` have the same base fields (from `gh pr list`)
-plus `files`, but **without** `authorAssociation` or `comments`.
+but **without** `authorAssociation` or `comments`.
 
 ## Step 3: Process the batch PRs
 
