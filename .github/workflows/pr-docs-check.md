@@ -44,10 +44,12 @@ checkout:
     # Fetch release/* refs in addition to the default branch so the
     # `Resolve target aspire.dev branch` pre-agent step (and the agent
     # itself, when it switches the workspace to the effective branch) can
-    # see whether the resolved release branch (for example, release/13.3)
-    # exists on microsoft/aspire.dev. With the default shallow checkout,
-    # only the default branch ref is available locally, which would cause
-    # the existence check to always fall back to main.
+    # enumerate aspire.dev's release/* branches locally from
+    # `refs/remotes/origin/release/*`. If this fetch silently produces
+    # nothing (e.g., the action ignores the refspec), the resolver still
+    # falls back to a `gh api /repos/microsoft/aspire.dev/branches` call
+    # using the aspire-bot installation token, so target-branch selection
+    # remains correct — the local refs are just a faster, offline path.
     fetch: ["release/*"]
   - repository: microsoft/aspire.dev
     path: _repos/aspire.dev
@@ -417,9 +419,18 @@ pre-agent-steps:
         echo "ERROR: PR_NUMBER is empty; cannot resolve target branch." >&2
         exit 1
       fi
+      # PR_NUMBER reaches this script either from `github.event.pull_request.number`
+      # (already an integer at the GitHub Actions layer) or from the
+      # `workflow_dispatch` `pr_number` string input (free-form, supplied by a
+      # maintainer). Reject anything that isn't a positive integer up front so
+      # downstream `jq --argjson` and `gh api` calls produce a clear error
+      # instead of an opaque parse failure.
+      if ! [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: PR_NUMBER '${PR_NUMBER}' is not a positive integer." >&2
+        exit 1
+      fi
 
       echo "Resolving target microsoft/aspire.dev branch for microsoft/aspire#${PR_NUMBER}"
-
       # --- 1. Fetch source PR metadata from microsoft/aspire ---------------
       # We need the PR's own milestone, base branch, and body. The body is
       # later scanned for `Closes/Fixes/Resolves #N` linked-issue refs.
@@ -434,12 +445,18 @@ pre-agent-steps:
       echo "PR base ref  : '${PR_BASE_REF}'"
 
       # --- 2. Extract linked issue numbers from the PR body ----------------
-      # GitHub recognizes these closing keywords (case-insensitive) followed
-      # by an optional `owner/repo` and `#N`:
+      # GitHub recognizes these closing keywords (case-insensitive), with an
+      # optional `:` after the keyword, optional `owner/repo`, and a `#N`:
       #
       #   close, closes, closed,
       #   fix,   fixes,  fixed,
       #   resolve, resolves, resolved
+      #
+      # Examples it must accept:
+      #   Fixes #123
+      #   Fixes: #123
+      #   Closes microsoft/aspire#456
+      #   Resolves: microsoft/aspire#789
       #
       # See:
       # https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword
@@ -450,14 +467,18 @@ pre-agent-steps:
       #
       # Implemented in python3 (preinstalled on ubuntu-latest) because POSIX
       # grep -E lacks reliable case-insensitive multiline matching with the
-      # exact keyword set we need.
+      # exact keyword set we need. We deliberately do NOT swallow parser
+      # errors with `|| true`: if python3 fails (e.g., missing on the runner,
+      # body too large to pass as argv), the resolver should fail loudly
+      # rather than silently pick the wrong branch from an empty linked-issue
+      # set.
       LINKED_FILE="$(mktemp)"
       : > "${LINKED_FILE}"
-      python3 - "${PR_BODY}" > "${LINKED_FILE}" <<'PY' || true
+      python3 - "${PR_BODY}" > "${LINKED_FILE}" <<'PY'
       import re, sys
       body = sys.argv[1] if len(sys.argv) > 1 else ""
       pat = re.compile(
-          r'\b(close[sd]?|fix(?:es|ed)?|resolve[sd]?)\s+'
+          r'\b(close[sd]?|fix(?:es|ed)?|resolve[sd]?)\s*:?\s+'
           r'(?:([A-Za-z0-9._-]+/[A-Za-z0-9._-]+))?#(\d+)\b',
           re.IGNORECASE,
       )
