@@ -100,14 +100,27 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
 
     private static string SanitizeForFileName(string value)
     {
-        var result = new char[value.Length];
         for (var i = 0; i < value.Length; i++)
         {
             var c = value[i];
-            result[i] = char.IsLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '_';
+            if (char.IsLetterOrDigit(c) || c is '.' or '-' or '_')
+            {
+                continue;
+            }
+
+            var result = value.ToCharArray();
+            result[i] = '_';
+
+            for (var j = i + 1; j < result.Length; j++)
+            {
+                c = result[j];
+                result[j] = char.IsLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '_';
+            }
+
+            return new string(result);
         }
 
-        return new string(result);
+        return value;
     }
 
     private static DocsCache CreateCache(TemporaryWorkspace workspace, IMemoryCache memoryCache)
