@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-30T23:36:05Z",
+  "number": 16612,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Fallback to junctions if either creating OR evaluating symlinks fails"
+}

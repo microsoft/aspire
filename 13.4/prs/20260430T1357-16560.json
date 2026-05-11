@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-30T13:57:22Z",
+  "number": 16560,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Normalize CLI yes/no prompts"
+}

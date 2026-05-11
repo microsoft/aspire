@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-30T22:20:57Z",
+  "number": 16570,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Publish native Aspire CLI tool packages"
+}

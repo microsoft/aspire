@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-29T19:53:46Z",
+  "number": 15991,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Store polyglot artifacts under the workspace .aspire folder"
+}

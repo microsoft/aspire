@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Internal contributor tooling, not user-facing",
+  "mergedAt": "2026-04-30T04:01:40Z",
+  "number": 16581,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Add backport-pr Copilot skill"
+}

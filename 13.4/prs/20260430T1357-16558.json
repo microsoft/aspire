@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-30T13:57:37Z",
+  "number": 16558,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Fix TypeScript AppHost package manager detection"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only changes",
+  "mergedAt": "2026-05-01T07:15:57Z",
+  "number": 16505,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Add CLI stable AppHost compatibility smoke tests"
+}

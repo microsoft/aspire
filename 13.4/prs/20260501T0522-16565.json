@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-05-01T05:22:03Z",
+  "number": 16565,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Add BrowserLogs tracked browser sessions"
+}

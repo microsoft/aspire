@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-30T01:14:11Z",
+  "number": 16551,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Gateway TLS without hostname (FQDN discovery) + TS AppHost endpoint fix"
+}

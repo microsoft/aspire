@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-05-11T04:34:31Z",
+  "number": 897,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "[docs] Update custom-resource-commands to use new CommandResults.Success displayImmediately overload"
+}

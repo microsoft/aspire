@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine CI workflow maintenance after branching for 13.3",
+  "mergedAt": "2026-04-29T17:52:11Z",
+  "number": 16567,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Update scheduled workflows for the 13.3 release"
+}

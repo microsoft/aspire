@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-29T23:42:52Z",
+  "number": 16580,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Ensure compute environment prepare waits for validation"
+}

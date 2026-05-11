@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry - internal docs infra change",
+  "mergedAt": "2026-05-08T14:26:53Z",
+  "number": 881,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Use pnpm instead of npm in check-data-files.mjs"
+}

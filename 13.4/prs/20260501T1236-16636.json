@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-05-01T12:36:37Z",
+  "number": 16636,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Drop nuget.config alongside single-file apphost.cs in aspire init"
+}

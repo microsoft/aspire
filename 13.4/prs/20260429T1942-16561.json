@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-04-29T19:42:39Z",
+  "number": 16561,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Fix Windows detached AppHost launcher"
+}

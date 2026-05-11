@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine CI maintenance - playground/test Dockerfile annotations",
+  "mergedAt": "2026-04-29T17:29:08Z",
+  "number": 16245,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Suppress container security analysis for non-production Dockerfiles"
+}

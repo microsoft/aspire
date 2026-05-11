@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "No matching changelog entry - documents features backported to 13.3",
+  "mergedAt": "2026-05-08T15:58:37Z",
+  "number": 887,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Add Hot Reload and watch guidance"
+}

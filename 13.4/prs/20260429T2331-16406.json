@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for --apphost flag resolution in stop-side CLI commands",
+  "mergedAt": "2026-04-29T23:31:42Z",
+  "number": 16406,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "included",
+  "title": "Fix --apphost directory resolution for commands"
+}

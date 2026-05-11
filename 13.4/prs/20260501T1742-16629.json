@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backported to release/13.3",
+  "mergedAt": "2026-05-01T17:42:43Z",
+  "number": 16629,
+  "runDate": "2026-05-11T07:15:23Z",
+  "status": "excluded",
+  "title": "Fix TypeScript AppHost generated port ranges"
+}
