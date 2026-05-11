@@ -428,10 +428,86 @@ public class EFMigrationPipelineTests
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             EFMigrationResourceBuilderExtensions.GenerateDockerfile(migrations.Resource));
-        Assert.Contains("multiple", ex.Message);
-        Assert.Contains("unrelated", ex.Message);
+        Assert.Contains("multiple resources", ex.Message);
         Assert.Contains("'db1'", ex.Message);
         Assert.Contains("'db2'", ex.Message);
+    }
+
+    [Fact]
+    public void GeneratedDockerfileUsesReferencedConnectionStringResource()
+    {
+        // .WithReference(db) is the explicit way for the user to declare which connection
+        // string the bundle should target. It must be honored even when no .WaitFor is set.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null);
+        var db = builder.AddResource(new TestDatabaseResource("mydb"));
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WithReference(db)
+            .PublishAsMigrationBundle(publishContainer: true);
+
+        var dockerfile = EFMigrationResourceBuilderExtensions.GenerateDockerfile(migrations.Resource);
+
+        Assert.Contains("ConnectionStrings__mydb", dockerfile);
+    }
+
+    [Fact]
+    public void GeneratedDockerfilePrefersReferencedResourceOverWaitedOnResource()
+    {
+        // When the user explicitly references one database via .WithReference(db) and waits on
+        // another via .WaitFor(other), the explicit reference is the user's stated target and
+        // must win — the waited-on resource is just an ordering signal, not a target selection.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null);
+        var referenced = builder.AddResource(new TestDatabaseResource("referenced"));
+        var waited = builder.AddResource(new TestDatabaseResource("waited"));
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WithReference(referenced)
+            .WaitFor(waited)
+            .PublishAsMigrationBundle(publishContainer: true);
+
+        var dockerfile = EFMigrationResourceBuilderExtensions.GenerateDockerfile(migrations.Resource);
+
+        Assert.Contains("ConnectionStrings__referenced", dockerfile);
+        Assert.DoesNotContain("ConnectionStrings__waited", dockerfile);
+    }
+
+    [Fact]
+    public void GeneratedDockerfileFailsWhenMultipleUnrelatedReferencedConnectionStringResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null);
+        var db1 = builder.AddResource(new TestDatabaseResource("db1"));
+        var db2 = builder.AddResource(new TestDatabaseResource("db2"));
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WithReference(db1)
+            .WithReference(db2)
+            .PublishAsMigrationBundle(publishContainer: true);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            EFMigrationResourceBuilderExtensions.GenerateDockerfile(migrations.Resource));
+        Assert.Contains("multiple resources", ex.Message);
+        Assert.Contains("'db1'", ex.Message);
+        Assert.Contains("'db2'", ex.Message);
+    }
+
+    [Fact]
+    public void GeneratedDockerfilePrefersLeafWhenReferencedChildAndParent()
+    {
+        // Mirrors the WaitFor leaf-vs-ancestor test: when the user .WithReference's both a
+        // child database and its parent server, the leaf (child) is the one whose connection
+        // string targets the actual database, so it wins.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null);
+        var server = builder.AddResource(new TestDatabaseResource("sql"));
+        var database = builder.AddResource(new TestChildDatabaseResource("sqldata", server.Resource));
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WithReference(server)
+            .WithReference(database)
+            .PublishAsMigrationBundle(publishContainer: true);
+
+        var dockerfile = EFMigrationResourceBuilderExtensions.GenerateDockerfile(migrations.Resource);
+
+        Assert.Contains("ConnectionStrings__sqldata", dockerfile);
     }
 
     [Fact]

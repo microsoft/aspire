@@ -30,7 +30,7 @@ public static class EFResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds EF Core migration management for a specific DbContext type identified by name.
+    /// Adds EF Core migration management for a specific DbContext type.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
@@ -38,14 +38,8 @@ public static class EFResourceBuilderExtensions
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations for this context type have already been added.</exception>
     /// <remarks>
-    /// <para>
     /// Multiple calls to this method with different context types are supported, allowing you to manage
     /// migrations for multiple DbContexts in the same project.
-    /// </para>
-    /// <para>
-    /// This overload is useful when the DbContext type is not available at compile time, such as when
-    /// using runtime-discovered context types.
-    /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
@@ -61,7 +55,7 @@ public static class EFResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds EF Core migration management for a specific DbContext type identified by name.
+    /// Adds EF Core migration management for a specific DbContext type.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
@@ -70,14 +64,8 @@ public static class EFResourceBuilderExtensions
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations for this context type have already been added.</exception>
     /// <remarks>
-    /// <para>
     /// Multiple calls to this method with different context types are supported, allowing you to manage
     /// migrations for multiple DbContexts in the same project.
-    /// </para>
-    /// <para>
-    /// This overload is useful when the DbContext type is not available at compile time, such as when
-    /// using runtime-discovered context types.
-    /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
@@ -94,11 +82,12 @@ public static class EFResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds EF Core migration management for auto-detected DbContext types.
+    /// Adds EF Core migration management for the only DbContext type in the target project.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if migrations have already been added for any DbContext type on this project.</exception>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
@@ -113,7 +102,7 @@ public static class EFResourceBuilderExtensions
     /// <summary>
     /// Adds EF Core migration management for polyglot app hosts.
     /// </summary>
-    [AspireExport("addEFMigrations", Description = "Adds EF Core migration management for auto-detected DbContext types or for a specific DbContext type identified by name")]
+    [AspireExport("addEFMigrations", Description = "Adds EF Core migration management for a singular DbContext type or for a specific DbContext type identified by name")]
     internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
@@ -131,12 +120,13 @@ public static class EFResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds EF Core migration management for auto-detected DbContext types.
+    /// Adds EF Core migration management for the only DbContext type in the target project.
     /// </summary>
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
     /// <param name="configureToolResource">Optional callback to configure the dotnet-ef tool resource used for migrations.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if migrations have already been added for any DbContext type on this project.</exception>
     [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
@@ -155,33 +145,35 @@ public static class EFResourceBuilderExtensions
         string? dbContextTypeName,
         Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
     {
-        // Check for duplicate context types and null/non-null conflicts
-        var existingMigrations = builder.ApplicationBuilder.Resources
+        var existingMigrationResources = builder.ApplicationBuilder.Resources
             .OfType<EFMigrationResource>()
             .Where(r => r.ProjectResource == builder.Resource)
             .ToList();
 
         if (dbContextTypeName != null)
         {
-            if (existingMigrations.Any(r => r.DbContextTypeName == dbContextTypeName))
+            if (existingMigrationResources.Any(r => r.DbContextTypeName == dbContextTypeName))
             {
                 throw new InvalidOperationException(
                     $"The DbContext type '{GetShortTypeName(dbContextTypeName)}' has already been registered for EF migrations on resource '{builder.Resource.Name}'.");
             }
 
-            if (existingMigrations.Any(r => r.DbContextTypeName == null))
+            if (existingMigrationResources.Any(r => r.DbContextTypeName == null))
             {
                 throw new InvalidOperationException(
-                    $"Cannot add migrations for a specific DbContext type when auto-detected migrations have already been registered on resource '{builder.Resource.Name}'.");
+                    $"Cannot register a specific DbContext type for migrations when they have already been registered without a context type on resource '{builder.Resource.Name}'.");
             }
         }
-        else
+        else if (existingMigrationResources.Count != 0)
         {
-            if (existingMigrations.Any())
+            if (existingMigrationResources.Any(r => r.DbContextTypeName == null))
             {
                 throw new InvalidOperationException(
-                    $"Cannot add auto-detected migrations when migrations for specific DbContext types have already been registered on resource '{builder.Resource.Name}'.");
+                     $"Cannot register migrations without a context type when they have already been registered without a context type on resource '{builder.Resource.Name}'.");
             }
+            
+            throw new InvalidOperationException(
+                $"Cannot register migrations without a context type when they have already been registered for specific DbContext types on resource '{builder.Resource.Name}'.");
         }
 
         var migrationResource = new EFMigrationResource(name, builder.Resource, dbContextTypeName)
@@ -246,7 +238,8 @@ public static class EFResourceBuilderExtensions
         if (migrationResource.PublishAsMigrationBundle)
         {
             var generateStepName = $"{migrationResource.Name}-generate-migration-bundle";
-            var publishesContainer = migrationResource.PublishBundleContainer;
+            var publishesContainer = migrationResource.PublishBundleContainer
+                && context.PipelineContext.ExecutionContext.IsPublishMode;
 
             List<string> requiredBy = publishesContainer
                 ? [WellKnownPipelineSteps.Publish, $"build-{migrationResource.Name}"]
@@ -341,7 +334,6 @@ public static class EFResourceBuilderExtensions
 
         try
         {
-
             var executableAnnotation = toolResource.Annotations.OfType<ExecutableAnnotation>().LastOrDefault();
             if (executableAnnotation is null)
             {
@@ -459,7 +451,8 @@ public static class EFResourceBuilderExtensions
             await notificationService.PublishUpdateAsync(toolResource, s => s with
             {
                 State = finalState,
-                StopTimeStamp = DateTime.UtcNow
+                StopTimeStamp = DateTime.UtcNow,
+                ExitCode = process.ExitCode
             }).ConfigureAwait(false);
 
             if (process.ExitCode != 0)

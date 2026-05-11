@@ -317,8 +317,8 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
                 // Check if the command succeeded
                 var snapshot = resourceEvent.Snapshot;
-                var exitCode = snapshot.Properties.FirstOrDefault(p => p.Name == "ExitCode")?.Value?.ToString();
-                if ((exitCode != null && exitCode != "0") || snapshot.State?.Text == KnownResourceStates.FailedToStart)
+                var exitCode = snapshot.ExitCode;
+                if ((exitCode != null && exitCode.Value != 0) || snapshot.State?.Text == KnownResourceStates.FailedToStart)
                 {
                     return new EFOperationResult
                     {
