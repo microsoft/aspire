@@ -77,13 +77,17 @@ public static partial class KubernetesHelmChartExtensions
 
         chartBuilder.WithAnnotation(new PipelineStepAnnotation(_ =>
         {
+            // Resolve and validate release/namespace at step-creation time so the user
+            // gets a clear error before the helm CLI ever runs.
+            var (releaseName, @namespace) = ResolveReleaseAndNamespace(resource);
+
             var steps = new List<PipelineStep>();
 
             var installStep = new PipelineStep
             {
                 Name = $"helm-install-{name}",
                 Description = $"Installs Helm chart '{name}' ({resource.ChartReference}:{resource.ChartVersion})",
-                Action = ctx => InstallHelmChartAsync(ctx, environment, resource)
+                Action = ctx => InstallHelmChartAsync(ctx, environment, resource, releaseName, @namespace)
             };
 
             installStep.DependsOn($"helm-deploy-{environment.Name}");
@@ -95,8 +99,8 @@ public static partial class KubernetesHelmChartExtensions
                 var uninstallStep = new PipelineStep
                 {
                     Name = $"helm-uninstall-{name}",
-                    Description = $"Uninstalls Helm chart '{name}' from namespace '{resource.Namespace ?? name}'",
-                    Action = ctx => UninstallHelmChartAsync(ctx, environment, resource),
+                    Description = $"Uninstalls Helm chart '{name}' from namespace '{@namespace}'",
+                    Action = ctx => UninstallHelmChartAsync(ctx, environment, resource, releaseName, @namespace),
                     DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
                 };
                 uninstallStep.RequiredBy(WellKnownPipelineSteps.Destroy);
@@ -209,12 +213,12 @@ public static partial class KubernetesHelmChartExtensions
     private static async Task InstallHelmChartAsync(
         PipelineStepContext context,
         KubernetesEnvironmentResource environment,
-        KubernetesHelmChartResource chart)
+        KubernetesHelmChartResource chart,
+        string releaseName,
+        string @namespace)
     {
         var logger = context.Services.GetRequiredService<ILogger<KubernetesHelmChartResource>>();
         var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
-
-        var (releaseName, @namespace) = ResolveReleaseAndNamespace(chart);
 
         logger.LogInformation(
             "Installing Helm chart '{ChartName}' ({ChartRef}:{ChartVersion}) into namespace '{Namespace}'.",
@@ -281,7 +285,9 @@ public static partial class KubernetesHelmChartExtensions
     private static async Task UninstallHelmChartAsync(
         PipelineStepContext context,
         KubernetesEnvironmentResource environment,
-        KubernetesHelmChartResource chart)
+        KubernetesHelmChartResource chart,
+        string defaultReleaseName,
+        string defaultNamespace)
     {
         var logger = context.Services.GetRequiredService<ILogger<KubernetesHelmChartResource>>();
         var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
@@ -293,9 +299,8 @@ public static partial class KubernetesHelmChartExtensions
         var savedReleaseName = stateSection.Data["ReleaseName"]?.ToString();
         var savedNamespace = stateSection.Data["Namespace"]?.ToString();
 
-        // Fall back to the resource configuration when no state was persisted (e.g., the
-        // user opted in to destroy after deploying without it). This is best-effort.
-        var (defaultReleaseName, defaultNamespace) = ResolveReleaseAndNamespace(chart);
+        // Fall back to the values resolved at step-creation time when no state was persisted
+        // (e.g., the user opted in to destroy after deploying without it). This is best-effort.
         var releaseName = !string.IsNullOrEmpty(savedReleaseName) ? savedReleaseName : defaultReleaseName;
         var @namespace = !string.IsNullOrEmpty(savedNamespace) ? savedNamespace : defaultNamespace;
 
@@ -341,7 +346,46 @@ public static partial class KubernetesHelmChartExtensions
     }
 
     private static (string ReleaseName, string Namespace) ResolveReleaseAndNamespace(KubernetesHelmChartResource chart)
-        => (chart.ReleaseName ?? chart.Name, chart.Namespace ?? chart.Name);
+    {
+        var releaseName = chart.ReleaseName ?? chart.Name;
+        var @namespace = chart.Namespace ?? chart.Name;
+
+        // The fallback to chart.Name can produce a value that isn't a valid Helm release name or
+        // Kubernetes namespace (uppercase, too long, etc.) — Aspire resource names allow more than
+        // DNS labels do. Validate here so the caller gets a clear ArgumentException pointing at
+        // WithReleaseName / WithNamespace instead of an opaque helm CLI failure.
+        if (chart.ReleaseName is null)
+        {
+            try
+            {
+                HelmChartOptions.ValidateReleaseName(releaseName, nameof(chart.ReleaseName));
+            }
+            catch (ArgumentException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot derive a Helm release name from resource name '{chart.Name}'. " +
+                    $"Set an explicit release name via WithReleaseName(...). {ex.Message}",
+                    ex);
+            }
+        }
+
+        if (chart.Namespace is null)
+        {
+            try
+            {
+                HelmChartOptions.ValidateNamespace(@namespace, nameof(chart.Namespace));
+            }
+            catch (ArgumentException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot derive a Kubernetes namespace from resource name '{chart.Name}'. " +
+                    $"Set an explicit namespace via WithNamespace(...). {ex.Message}",
+                    ex);
+            }
+        }
+
+        return (releaseName, @namespace);
+    }
 
     private static string GetStateSectionName(KubernetesEnvironmentResource environment, KubernetesHelmChartResource chart)
         => $"HelmChart:{environment.Name}:{chart.Name}";

@@ -156,6 +156,26 @@ public class KubernetesHelmChartTests
     }
 
     [Theory]
+    [InlineData("oci://quay.io/jetstack/charts/cert-manager")]   // OCI URL
+    [InlineData("oci://ghcr.io/stefanprodan/charts/podinfo")]    // OCI URL with ghcr.io
+    [InlineData("https://charts.example.com/repo/chart")]        // HTTPS URL
+    [InlineData("http://charts.example.com/repo/chart")]         // HTTP URL
+    [InlineData("myrepo/mychart")]                               // repo/chart
+    [InlineData("mychart-1.0.0.tgz")]                            // packaged chart filename
+    [InlineData("./local-chart")]                                // relative local path
+    [InlineData("chart+extra~tag")]                              // plus and tilde chars
+    [InlineData("oci://registry:5000/charts/app")]               // registry with port
+    [InlineData("oci://user@registry.io/charts/app")]            // registry with @
+    public void AddHelmChart_AcceptsValidChartReferences(string chartReference)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var chart = k8s.AddHelmChart("test", chartReference, "1.0.0");
+        Assert.Equal(chartReference, chart.Resource.ChartReference);
+    }
+
+    [Theory]
     [InlineData("not-a-version")]
     [InlineData("1.2.3.4")]
     [InlineData("1.2.3-")]
@@ -377,6 +397,70 @@ public class KubernetesHelmChartTests
         var installStep = Assert.Single(steps, s => s.Name == "helm-install-test");
         Assert.Contains("oci://example.com/chart", installStep.Description);
         Assert.Contains("1.2.3", installStep.Description);
+    }
+
+    [Fact]
+    public async Task PipelineStepFactory_UninstallStepDescription_FallsBackToResourceNameForNamespace()
+    {
+        // When Namespace is not set, the uninstall step description should fall back to using
+        // the resource name as the namespace (the same fallback used at install time).
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var chart = k8s.AddHelmChart("my-release", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        Assert.Null(chart.Resource.Namespace);
+
+        var steps = await CreateStepsAsync(builder, chart.Resource);
+
+        var uninstallStep = Assert.Single(steps, s => s.Name == "helm-uninstall-my-release");
+        Assert.Contains("my-release", uninstallStep.Description);
+    }
+
+    [Fact]
+    public async Task PipelineStepFactory_UninstallStepDescription_UsesExplicitNamespace()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var chart = k8s.AddHelmChart("my-release", "oci://example.com/chart", "1.0.0")
+            .WithNamespace("custom-ns")
+            .WithDestroy();
+
+        var steps = await CreateStepsAsync(builder, chart.Resource);
+
+        var uninstallStep = Assert.Single(steps, s => s.Name == "helm-uninstall-my-release");
+        Assert.Contains("custom-ns", uninstallStep.Description);
+    }
+
+    [Theory]
+    [InlineData("MyChart")]                                                     // uppercase — valid Aspire name, invalid DNS label
+    [InlineData("abcdefghij-abcdefghij-abcdefghij-abcdefghij-abcdefghij")]      // 54 chars — valid Aspire (<=64), exceeds Helm release name limit (53)
+    public async Task PipelineStepFactory_RejectsResourceNameThatIsNotValidDnsLabel(string resourceName)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var chart = k8s.AddHelmChart(resourceName, "oci://example.com/chart", "1.0.0");
+
+        // The factory should refuse to derive release/namespace from a resource name that
+        // can't be used as a DNS label, surfacing a clear error before helm runs.
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => CreateStepsAsync(builder, chart.Resource));
+        Assert.Contains(resourceName, ex.Message);
+        Assert.Contains("WithReleaseName", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PipelineStepFactory_AcceptsInvalidResourceNameWhenOverridesProvided()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var chart = k8s.AddHelmChart("MyChart", "oci://example.com/chart", "1.0.0")
+            .WithReleaseName("my-release")
+            .WithNamespace("my-ns");
+
+        // With explicit overrides the resource name is never used as a fallback, so the
+        // step factory must not throw.
+        var steps = await CreateStepsAsync(builder, chart.Resource);
+        Assert.Single(steps);
     }
 
     private static async Task<List<PipelineStep>> CreateStepsAsync(

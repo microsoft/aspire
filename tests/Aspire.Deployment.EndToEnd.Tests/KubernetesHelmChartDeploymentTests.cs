@@ -315,7 +315,7 @@ builder.Build().Run();
     {
         try
         {
-            var process = new System.Diagnostics.Process
+            using var process = new System.Diagnostics.Process
             {
                 StartInfo = new System.Diagnostics.ProcessStartInfo
                 {
