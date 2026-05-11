@@ -464,16 +464,10 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         DashboardRunCommand.RenderDashboardSummary(interactionService, dashboardInfo, logFilePath);
 
         var outputString = output.ToString();
-        // SafeFileLink percent-encodes brackets so the resulting OSC 8 hyperlink target
-        // is valid; mirror that here so the assertion exactly matches what was emitted.
-        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
-            .Replace("[", "%5B", StringComparison.Ordinal)
-            .Replace("]", "%5D", StringComparison.Ordinal);
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
 
         Assert.Contains("Logs", outputString);
-        Assert.Contains($";{fileUri}\u001b\\", outputString);
-        Assert.Contains(logFilePath, outputString);
-        Assert.Contains("\u001b]8;;\u001b\\", outputString);
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
     }
 
     private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(

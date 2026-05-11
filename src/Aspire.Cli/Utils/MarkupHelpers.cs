@@ -67,17 +67,8 @@ internal static class MarkupHelpers
             return filePath.EscapeMarkup();
         }
 
-        // Uri.AbsoluteUri does not percent-encode '[' or ']' inside the path component
-        // (those characters are reserved by RFC 3986 for IP-literals only, but the BCL
-        // is permissive in file paths). Spectre.Console treats unescaped brackets inside
-        // a [link=...] markup tag as the start of a new tag, which corrupts the
-        // hyperlink. Replacing them with their percent-encoded forms keeps both the
-        // OSC 8 hyperlink and the surrounding markup well-formed.
-        var fileUri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri
-            .Replace("[", "%5B", StringComparison.Ordinal)
-            .Replace("]", "%5D", StringComparison.Ordinal);
+        var fileUri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri;
 
         return SafeLink(supportsLinks: true, fileUri, filePath);
     }
 }
-

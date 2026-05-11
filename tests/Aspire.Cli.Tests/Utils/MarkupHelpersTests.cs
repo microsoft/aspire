@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using System.Text.RegularExpressions;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 
@@ -59,11 +58,7 @@ public class MarkupHelpersTests
         console.MarkupLine(result);
 
         var rendered = output.ToString().Trim();
-        // OSC 8 format: ESC]8;id=N;url ESC\ text ESC]8;; ESC\
-        var escapedLink = Regex.Escape(link);
-        var escapedText = Regex.Escape(expectedText);
-        var pattern = $"\\x1b]8;id=\\d+;{escapedLink}\\x1b\\\\{escapedText}\\x1b]8;;\\x1b\\\\";
-        Assert.Matches(pattern, rendered);
+        TerminalLinkAssert.ContainsLink(rendered, link, expectedText);
     }
 
     [Theory]
@@ -132,22 +127,14 @@ public class MarkupHelpersTests
     }
 
     [Fact]
-    public void SafeFileLink_WhenSupportsLinks_PercentEncodesBracketsInUri()
+    public void SafeFileLink_WhenSupportsLinks_EscapesBracketsInUriMarkup()
     {
-        // Bracket characters in file paths are not percent-encoded by Uri.AbsoluteUri,
-        // but they would otherwise be parsed by Spectre.Console as the start of a new
-        // markup tag inside [link=...]. SafeFileLink must encode them to keep both the
-        // OSC 8 hyperlink and the surrounding markup well-formed.
         var path = Path.Combine(Path.GetTempPath(), "logs", "cli [Dev].log");
 
         var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
 
-        var expectedUri = new Uri(Path.GetFullPath(path)).AbsoluteUri
-            .Replace("[", "%5B", StringComparison.Ordinal)
-            .Replace("]", "%5D", StringComparison.Ordinal);
-        Assert.Contains("%5B", expectedUri);
-        Assert.Contains("%5D", expectedUri);
-        Assert.Equal($"[link={expectedUri}]{path.EscapeMarkup()}[/]", result);
+        var expectedUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        Assert.Equal($"[link={expectedUri.EscapeMarkup()}]{path.EscapeMarkup()}[/]", result);
     }
 
     [Fact]
@@ -161,10 +148,7 @@ public class MarkupHelpersTests
         console.MarkupLine(result);
 
         var rendered = output.ToString().Trim();
-        var fileUri = new Uri(Path.GetFullPath(path)).AbsoluteUri
-            .Replace("[", "%5B", StringComparison.Ordinal)
-            .Replace("]", "%5D", StringComparison.Ordinal);
-        var pattern = $"\\x1b]8;id=\\d+;{Regex.Escape(fileUri)}\\x1b\\\\{Regex.Escape(path)}\\x1b]8;;\\x1b\\\\";
-        Assert.Matches(pattern, rendered);
+        var fileUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
+        TerminalLinkAssert.ContainsLink(rendered, fileUri, path);
     }
 }

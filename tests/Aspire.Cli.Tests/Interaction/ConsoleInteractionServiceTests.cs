@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
@@ -500,12 +501,8 @@ public class ConsoleInteractionServiceTests
             allowMarkup: true);
 
         var outputString = output.ToString();
-        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
-            .Replace("[", "%5B", StringComparison.Ordinal)
-            .Replace("]", "%5D", StringComparison.Ordinal);
-        Assert.Contains($";{fileUri}\u001b\\", outputString);
-        Assert.Contains(logFilePath, outputString);
-        Assert.Contains("\u001b]8;;\u001b\\", outputString);
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
     }
 
     [Fact]
@@ -529,13 +526,9 @@ public class ConsoleInteractionServiceTests
         interactionService.DisplayError($"Build failed. Logs: {fileLinkMarkup}", allowMarkup: true);
 
         var outputString = output.ToString();
-        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri
-            .Replace("[", "%5B", StringComparison.Ordinal)
-            .Replace("]", "%5D", StringComparison.Ordinal);
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
         Assert.Contains("Build failed.", outputString);
-        Assert.Contains(logFilePath, outputString);
-        Assert.Contains($";{fileUri}\u001b\\", outputString);
-        Assert.Contains("\u001b]8;;\u001b\\", outputString);
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
     }
 
     [Fact]
