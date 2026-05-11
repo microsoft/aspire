@@ -94,6 +94,14 @@ internal static class TelemetryCommandHelpers
     };
 
     /// <summary>
+    /// Full-text search option for filtering across all telemetry fields.
+    /// </summary>
+    internal static Option<string?> CreateSearchOption() => new("--search")
+    {
+        Description = TelemetryCommandStrings.SearchOptionDescription
+    };
+
+    /// <summary>
     /// Dashboard URL option for connecting directly to a standalone dashboard.
     /// </summary>
     internal static Option<string?> CreateDashboardUrlOption() => new("--dashboard-url")

@@ -34,6 +34,7 @@ internal static class StringComparers
     public static StringComparer InteractionInputName => StringComparer.OrdinalIgnoreCase;
     public static StringComparer NetworkID => StringComparer.Ordinal;
     public static StringComparer NuGetPackageId => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer FullTextSearch => StringComparer.OrdinalIgnoreCase;
 }
 
 internal static class StringComparisons
@@ -65,4 +66,5 @@ internal static class StringComparisons
     public static StringComparison InteractionInputName => StringComparison.OrdinalIgnoreCase;
     public static StringComparison NetworkID => StringComparison.Ordinal;
     public static StringComparison NuGetPackageId => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison FullTextSearch => StringComparison.OrdinalIgnoreCase;
 }

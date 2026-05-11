@@ -29,6 +29,10 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 "resourceName": {
                   "type": "string",
                   "description": "The resource name."
+                },
+                "search": {
+                  "type": "string",
+                  "description": "Full-text search to filter log content."
                 }
               },
               "required": ["resourceName"]
@@ -52,6 +56,12 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
             throw new McpProtocolException("The resourceName parameter is required.", McpErrorCode.InvalidParams);
         }
 
+        string? search = null;
+        if (arguments is not null && arguments.TryGetValue("search", out var searchElement))
+        {
+            search = searchElement.GetString();
+        }
+
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
         if (connection is null)
         {
@@ -71,6 +81,16 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
             }
 
             var entries = logEntries.GetEntries().ToList();
+
+            // Apply full-text search filter on log content
+            if (!string.IsNullOrEmpty(search))
+            {
+                entries = entries.Where(e =>
+                    (e.Content is not null && e.Content.Contains(search, StringComparisons.FullTextSearch)) ||
+                    (e.RawContent is not null && e.RawContent.Contains(search, StringComparisons.FullTextSearch)))
+                    .ToList();
+            }
+
             var totalLogsCount = entries.Count == 0 ? 0 : entries.Last().LineNumber;
             var (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
                 entries,

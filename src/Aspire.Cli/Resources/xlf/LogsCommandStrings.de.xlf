@@ -42,6 +42,11 @@
         <target state="translated">Ein Ressourcenname ist erforderlich, wenn --follow nicht verwendet wird. Verwenden Sie --follow, um Protokolle aller Ressourcen zu streamen.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">Protokolle streamen von</target>

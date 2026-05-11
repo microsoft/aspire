@@ -42,6 +42,11 @@
         <target state="translated">--follow를 사용하지 않을 경우 리소스 이름은 필수 항목입니다. --follow를 사용하여 모든 리소스의 로그를 스트리밍합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">에서 로그 스트리밍</target>

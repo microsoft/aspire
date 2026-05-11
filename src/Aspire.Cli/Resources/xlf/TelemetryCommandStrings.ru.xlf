@@ -167,6 +167,11 @@
         <target state="needs-review-translation">Фильтровать по имени ресурса.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search across attribute values, names, source, IDs, and other text fields</source>
+        <target state="new">Full-text search across attribute values, names, source, IDs, and other text fields</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>view telemetry for</source>
         <target state="translated">просмотреть телеметрию для</target>
