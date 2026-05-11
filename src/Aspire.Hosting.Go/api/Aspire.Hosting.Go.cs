@@ -36,6 +36,10 @@ namespace Aspire.Hosting
         [AspireExport(Description = "Runs go vet ./... before starting the application to catch static analysis issues")]
         public static ApplicationModel.IResourceBuilder<T> WithVetTool<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : Go.GoAppResource { throw null; }
+
+        [AspireExport(Description = "Configures private Go module authentication for publish-time Dockerfile generation")]
+        public static ApplicationModel.IResourceBuilder<T> WithGoPrivate<T>(this ApplicationModel.IResourceBuilder<T> builder, string[] privatePatterns, string authHost, string usernameArgName = "GIT_USER", string tokenSecretId = "gittoken")
+            where T : Go.GoAppResource { throw null; }
     }
 }
 

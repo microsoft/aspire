@@ -163,10 +163,29 @@ public static class GoHostingExtensions
                     var buildCmd = BuildDockerGoCommand(ctx.Resource);
                     var hasGoMod = File.Exists(Path.Combine(appDirectory, "go.mod"));
                     var hasGoSum = File.Exists(Path.Combine(appDirectory, "go.sum"));
+                    var hasPrivate = ctx.Resource.TryGetLastAnnotation<GoPrivateAnnotation>(out var privateAnnotation);
 
                     var buildStage = ctx.Builder
                         .From(buildImage, "build")
-                        .WorkDir("/app");
+                        .WorkDir("/app")
+                        // CGO_ENABLED=0 produces a fully static binary; GOOS=linux ensures the
+                        // correct target even when building on macOS or Windows hosts.
+                        .Env("CGO_ENABLED", "0")
+                        .Env("GOOS", "linux");
+
+                    if (hasPrivate)
+                    {
+                        // ARG carries the non-sensitive username; the token comes via --mount=type=secret.
+                        buildStage.Arg(privateAnnotation!.UsernameArgName);
+                        // GOPRIVATE implicitly sets GONOSUMCHECK and GONOPROXY for the listed paths,
+                        // so the toolchain fetches them directly rather than going through the public proxy.
+                        buildStage.Env("GOPRIVATE", string.Join(",", privateAnnotation.PrivatePatterns));
+                        // git is required for private module fetching over HTTPS.
+                        if (buildImage.Contains("alpine", StringComparison.OrdinalIgnoreCase))
+                        {
+                            buildStage.Run("apk add --no-cache git");
+                        }
+                    }
 
                     if (hasGoMod)
                     {
@@ -177,12 +196,39 @@ public static class GoHostingExtensions
                             buildStage.Copy("go.sum", "./");
                         }
 
-                        buildStage.Run("go mod download");
+                        if (hasPrivate)
+                        {
+                            // Write .netrc from ARG + secret, download modules, then remove .netrc
+                            // — all in one layer so credentials never persist in the image.
+                            var usernameRef = "${" + privateAnnotation!.UsernameArgName + "}";
+                            var downloadCmd = string.Join(" && ",
+                                $"GH_TOKEN=$(cat /run/secrets/{privateAnnotation.TokenSecretId})",
+                                $"echo \"machine {privateAnnotation.AuthHost} login {usernameRef} password ${{GH_TOKEN}}\" >> $HOME/.netrc",
+                                "go mod download",
+                                "rm -f $HOME/.netrc");
+
+                            buildStage.RunWithMounts(
+                                downloadCmd,
+                                "type=cache,target=/root/go/pkg/mod",
+                                $"type=secret,id={privateAnnotation.TokenSecretId}");
+                        }
+                        else
+                        {
+                            // Cache the module download so repeated builds don't re-fetch the internet.
+                            buildStage.RunWithMounts(
+                                "go mod download",
+                                "type=cache,target=/root/go/pkg/mod");
+                        }
                     }
 
                     buildStage
                         .Copy(".", ".")
-                        .Run(buildCmd);
+                        // Cache the Go build cache and the module cache across builds for fast
+                        // incremental compilation inside Docker.
+                        .RunWithMounts(
+                            buildCmd,
+                            "type=cache,target=/root/.cache/go-build",
+                            "type=cache,target=/root/go/pkg/mod");
 
                     // Add intermediate FROM stages for any container files sources
                     // (e.g. FROM frontend AS frontend_stage).
@@ -408,6 +454,74 @@ public static class GoHostingExtensions
         }
 
         return builder;
+    }
+
+    /// <summary>
+    /// Configures private Go module authentication for publish-time Dockerfile generation.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="privatePatterns">
+    /// One or more module path patterns that should bypass the public proxy and checksum database,
+    /// e.g. <c>"*.mycompany.com"</c> or <c>"github.com/myorg"</c>.
+    /// Passed verbatim to <c>GOPRIVATE</c>, which implicitly covers <c>GONOSUMCHECK</c> and <c>GONOPROXY</c>.
+    /// </param>
+    /// <param name="authHost">The Git host that requires authentication, e.g. <c>"github.com"</c>.</param>
+    /// <param name="usernameArgName">
+    /// The Docker build-arg name for the Git username. Defaults to <c>"GIT_USER"</c>.
+    /// Pass it at build time with <c>--build-arg GIT_USER=myuser</c>.
+    /// </param>
+    /// <param name="tokenSecretId">
+    /// The BuildKit secret ID for the Git access token. Defaults to <c>"gittoken"</c>.
+    /// Pass it at build time with <c>--secret id=gittoken,src=/path/to/token</c>.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// Only affects the generated Dockerfile — has no effect in run mode, where the local
+    /// Go toolchain picks up credentials from the developer's own <c>~/.netrc</c> or git
+    /// credential helper.
+    /// </para>
+    /// <para>
+    /// The generated build stage writes a temporary <c>.netrc</c> file from the username
+    /// build-arg and the token secret, runs <c>go mod download</c>, then removes the file —
+    /// all in a single layer so credentials never persist in the image.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithGoPrivate(["github.com/myorg"], "github.com");
+    /// </code>
+    /// Build with:
+    /// <code lang="sh">
+    /// docker build --build-arg GIT_USER=myuser --secret id=gittoken,src=~/.git-token .
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Configures private Go module authentication for publish-time Dockerfile generation")]
+    public static IResourceBuilder<T> WithGoPrivate<T>(
+        this IResourceBuilder<T> builder,
+        string[] privatePatterns,
+        string authHost,
+        string usernameArgName = "GIT_USER",
+        string tokenSecretId = "gittoken")
+        where T : GoAppResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(privatePatterns);
+        ArgumentException.ThrowIfNullOrEmpty(authHost);
+        ArgumentException.ThrowIfNullOrEmpty(usernameArgName);
+        ArgumentException.ThrowIfNullOrEmpty(tokenSecretId);
+
+        return builder.WithAnnotation(
+            new GoPrivateAnnotation
+            {
+                PrivatePatterns = privatePatterns,
+                AuthHost = authHost,
+                UsernameArgName = usernameArgName,
+                TokenSecretId = tokenSecretId,
+            },
+            ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>

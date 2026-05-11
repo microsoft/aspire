@@ -556,6 +556,59 @@ public class AddGoAppTests
         Assert.DoesNotContain("alpine", content);
     }
 
+    // ---- Publish: private module authentication --------------------------------
+
+    [Fact]
+    public async Task VerifyPublish_WithGoPrivate_GeneratesNetrcAndGoprivate()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path)
+               .WithGoPrivate(["github.com/myorg"], "github.com", usernameArgName: "GIT_USER", tokenSecretId: "gittoken");
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        // Build ARG carries the non-sensitive username.
+        Assert.Contains("ARG GIT_USER", content);
+        // GOPRIVATE routes private paths away from the public proxy.
+        Assert.Contains("GOPRIVATE=github.com/myorg", content);
+        // git is required for private module fetching on Alpine.
+        Assert.Contains("apk add --no-cache git", content);
+        // Secret mount + inline .netrc write + cleanup must be in the mod download step.
+        Assert.Contains("type=secret,id=gittoken", content);
+        Assert.Contains("machine github.com login", content);
+        Assert.Contains("rm -f $HOME/.netrc", content);
+        // Standard binary still built correctly.
+        Assert.Contains("go build", content);
+    }
+
+    [Fact]
+    public async Task VerifyPublish_WithGoPrivate_CustomTokenSecretId()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path)
+               .WithGoPrivate(["gitlab.mycompany.com"], "gitlab.mycompany.com", tokenSecretId: "gl_token");
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        Assert.Contains("GOPRIVATE=gitlab.mycompany.com", content);
+        Assert.Contains("type=secret,id=gl_token", content);
+        Assert.Contains("machine gitlab.mycompany.com login", content);
+    }
+
     // ---- Container files (IContainerFilesDestinationResource) ---------------
 
     [Fact]
