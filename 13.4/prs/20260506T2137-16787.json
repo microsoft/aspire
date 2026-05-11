@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Prebuilt shared Docker image for CLI E2E tests",
+  "mergedAt": "2026-05-06T21:37:25Z",
+  "number": 16787,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Prebuild CLI E2E Docker image"
+}

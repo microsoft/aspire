@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Trivial CI cache warmer workflow - no user-visible impact",
+  "mergedAt": "2026-05-07T14:45:57Z",
+  "number": 16843,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "excluded",
+  "title": "Warm CLI E2E image cache on main"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fixed code generation bugs for Go, Java, Python polyglot AppHosts",
+  "mergedAt": "2026-05-08T02:40:27Z",
+  "number": 16691,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Fix polyglot AppHost builder and callback generation"
+}

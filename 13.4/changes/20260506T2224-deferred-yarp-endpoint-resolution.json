@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "YARP cluster target resolution for resource, endpoint, and external service destinations is now deferred until environment configuration is generated. This ensures late endpoint scheme changes (e.g., AddUvicornApp upgrading to HTTPS) are correctly picked up by YARP.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd00",
+  "firstMergedAt": "2026-05-06T22:24:04Z",
+  "lastMergedAt": "2026-05-06T22:24:04Z",
+  "name": "Deferred YARP resource endpoint resolution",
+  "owner": "danegsta",
+  "prs": [
+    16834
+  ]
+}

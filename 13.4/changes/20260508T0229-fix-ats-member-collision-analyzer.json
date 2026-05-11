@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the ATS (App Type System) analyzer incorrectly flagging generated member names as collisions when they were not actually conflicting, reducing false-positive warnings in polyglot AppHost projects.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd2c",
+  "firstMergedAt": "2026-05-08T02:29:52Z",
+  "lastMergedAt": "2026-05-08T02:29:52Z",
+  "name": "Fix ATS generated member collision analyzer",
+  "owner": "sebastienros",
+  "prs": [
+    16864
+  ]
+}

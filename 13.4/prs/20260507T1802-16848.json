@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Tooling version update - no user-visible impact",
+  "mergedAt": "2026-05-07T18:02:56Z",
+  "number": 16848,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "excluded",
+  "title": "Update gh-aw to v0.72.0"
+}

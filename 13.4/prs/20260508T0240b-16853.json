@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improved CLI link rendering with graceful degradation",
+  "mergedAt": "2026-05-08T02:40:33Z",
+  "number": 16853,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Use MarkupHelpers.SafeLink for graceful link degradation in CLI"
+}

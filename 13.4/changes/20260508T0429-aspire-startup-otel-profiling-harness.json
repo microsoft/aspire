@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "\ud83d\udd27",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added an OpenTelemetry-based startup profiling harness that measures Aspire application startup performance. The harness exports startup spans, includes a validator script, and integrates with the CLI backchannel for accurate end-to-end timing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u23f1\ufe0f",
+  "firstMergedAt": "2026-05-08T04:29:29Z",
+  "lastMergedAt": "2026-05-08T04:29:29Z",
+  "name": "Aspire startup OTEL profiling harness",
+  "owner": "davidfowl",
+  "prs": [
+    16775
+  ]
+}

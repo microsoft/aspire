@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "\ud83d\udd27",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI E2E tests now use a prebuilt shared Docker image instead of building the image from scratch in each isolated CI job, reducing redundant apt/docker build work and speeding up E2E test runs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc33",
+  "firstMergedAt": "2026-05-06T21:37:25Z",
+  "lastMergedAt": "2026-05-06T21:37:25Z",
+  "name": "Prebuilt CLI E2E Docker image",
+  "owner": "sebastienros",
+  "prs": [
+    16787
+  ]
+}

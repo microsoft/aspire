@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix for dev.localhost URL handling in aspire run",
+  "mergedAt": "2026-05-07T04:46:06Z",
+  "number": 16828,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Fix #16725: aspire run honours dev.localhost URLs from aspire.config.json"
+}

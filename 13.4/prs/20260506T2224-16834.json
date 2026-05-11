@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Improved YARP endpoint resolution timing",
+  "mergedAt": "2026-05-06T22:24:04Z",
+  "number": 16834,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Defer YARP resource endpoint resolution"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added a new aspire integration command group with aspire integration list and aspire integration search <query> subcommands for discovering available Aspire hosting integrations without modifying an AppHost project.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd0d",
+  "firstMergedAt": "2026-05-07T06:39:16Z",
+  "lastMergedAt": "2026-05-07T06:39:16Z",
+  "name": "Integration search and list commands",
+  "owner": "davidfowl",
+  "prs": [
+    16845
+  ]
+}

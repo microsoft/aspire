@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "\ud83d\udd27",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Added a release-driven agentic workflow that automatically updates the support.mdx page when a stable release is published, and fixed PR docs check to include a drafted-PR link and SME reviewer assignment.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccb",
+  "firstMergedAt": "2026-05-07T20:05:40Z",
+  "lastMergedAt": "2026-05-07T20:05:40Z",
+  "name": "Release-driven support docs workflow",
+  "owner": "IEvangelist",
+  "prs": [
+    16778
+  ]
+}

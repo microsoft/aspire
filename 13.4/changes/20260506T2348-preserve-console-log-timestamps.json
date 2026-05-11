@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "DCP system log timestamps are no longer dropped when formatting [sys] messages, fixing sort order in the dashboard. Terminal-oriented output (such as curl progress bars) is no longer split on carriage returns into timestamp-less fragments.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd50",
+  "firstMergedAt": "2026-05-06T23:48:32Z",
+  "lastMergedAt": "2026-05-06T23:48:32Z",
+  "name": "Preserve console log timestamps and normalize carriage-return output",
+  "owner": "karolz-ms",
+  "prs": [
+    16796
+  ]
+}

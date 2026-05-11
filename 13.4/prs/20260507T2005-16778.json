@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Release-driven support docs workflow and PR docs check improvements",
+  "mergedAt": "2026-05-07T20:05:40Z",
+  "number": 16778,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Add release-driven support.mdx workflow + pr-docs-check fixes (drafted-PR link, SME reviewer)"
+}

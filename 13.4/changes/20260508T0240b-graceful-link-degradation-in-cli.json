@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI output now uses MarkupHelpers.SafeLink for graceful link degradation, rendering clickable hyperlinks in terminals that support them while falling back to plain text in terminals that do not.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd17",
+  "firstMergedAt": "2026-05-08T02:40:33Z",
+  "lastMergedAt": "2026-05-08T02:40:33Z",
+  "name": "Graceful link degradation in CLI output",
+  "owner": "JamesNK",
+  "prs": [
+    16853
+  ]
+}

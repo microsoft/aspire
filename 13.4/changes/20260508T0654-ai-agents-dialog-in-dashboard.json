@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added an AI Agents dialog accessible from the dashboard header, providing quick access to AI agent information and actions within the Aspire dashboard.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83e\udd16",
+  "firstMergedAt": "2026-05-08T06:54:53Z",
+  "lastMergedAt": "2026-05-08T06:54:53Z",
+  "name": "AI Agents dialog in dashboard header",
+  "owner": "JamesNK",
+  "prs": [
+    16869
+  ]
+}

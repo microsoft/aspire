@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Shell integration for terminal commands in VS Code extension",
+  "mergedAt": "2026-05-06T21:25:28Z",
+  "number": 16835,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Use shell integration for Aspire terminal commands"
+}

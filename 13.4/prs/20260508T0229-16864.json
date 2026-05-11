@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fixed false-positive collision detection in ATS analyzer",
+  "mergedAt": "2026-05-08T02:29:52Z",
+  "number": 16864,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Fix ATS generated member collision analyzer"
+}

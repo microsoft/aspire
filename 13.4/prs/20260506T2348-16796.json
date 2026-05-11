@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Bug fix for log timestamp preservation and carriage-return handling",
+  "mergedAt": "2026-05-06T23:48:32Z",
+  "number": 16796,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Preserve console log timestamps and normalize carriage-return output"
+}

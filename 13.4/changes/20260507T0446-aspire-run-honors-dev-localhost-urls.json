@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed aspire run ignoring *.dev.localhost URLs configured in aspire.config.json. After creating a project with --localhost-tld, aspire run now correctly opens the dashboard at the configured dev.localhost address instead of the default localhost URL.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-05-07T04:46:06Z",
+  "lastMergedAt": "2026-05-07T04:46:06Z",
+  "name": "aspire run honors dev.localhost URLs from aspire.config.json",
+  "owner": "mitchdenny",
+  "prs": [
+    16828
+  ]
+}

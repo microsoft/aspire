@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New OTEL-based startup performance profiling harness",
+  "mergedAt": "2026-05-08T04:29:29Z",
+  "number": 16775,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "included",
+  "title": "Add Aspire startup OTEL profiling harness"
+}

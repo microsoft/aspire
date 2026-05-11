@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed bugs in the polyglot AppHost builder and callback generation for Go, Java, and Python AppHosts, including transport fixes that bring Go polyglot support to parity with TypeScript.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd27",
+  "firstMergedAt": "2026-05-08T02:40:27Z",
+  "lastMergedAt": "2026-05-08T02:40:27Z",
+  "name": "Fix polyglot AppHost builder and callback generation",
+  "owner": "sebastienros",
+  "prs": [
+    16691
+  ]
+}

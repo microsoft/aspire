@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Trivial CI pipeline fix",
+  "mergedAt": "2026-05-08T02:13:46Z",
+  "number": 16865,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "excluded",
+  "title": "Skip log publish for WinGet/Homebrew installer jobs"
+}

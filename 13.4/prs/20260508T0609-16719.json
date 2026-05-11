@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documentation-only update to internal agent skill reference",
+  "mergedAt": "2026-05-08T06:09:00Z",
+  "number": 16719,
+  "runDate": "2026-05-11T08:31:01Z",
+  "status": "excluded",
+  "title": "Document aspire export zip archive contents in monitoring.md"
+}

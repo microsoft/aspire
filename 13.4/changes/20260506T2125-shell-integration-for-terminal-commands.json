@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "VS Code terminal shell integration is now used when sending Aspire CLI commands to the Aspire terminal, allowing VS Code to interrupt running commands more cleanly. When shell integration is unavailable, the previous Ctrl+C fallback is used.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1a",
+  "firstMergedAt": "2026-05-06T21:25:28Z",
+  "lastMergedAt": "2026-05-06T21:25:28Z",
+  "name": "Shell integration for Aspire terminal commands",
+  "owner": "adamint",
+  "prs": [
+    16835
+  ]
+}
