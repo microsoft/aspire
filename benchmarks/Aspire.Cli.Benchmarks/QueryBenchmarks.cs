@@ -86,7 +86,7 @@ public class QueryBenchmarks
         return result?.Content.Length ?? 0;
     }
 
-    [Benchmark(Description = "ListDocuments - all 469")]
+    [Benchmark(Description = "ListDocuments - all docs")]
     public async ValueTask<int> ListDocuments()
     {
         var items = await _service.ListDocumentsAsync().ConfigureAwait(false);

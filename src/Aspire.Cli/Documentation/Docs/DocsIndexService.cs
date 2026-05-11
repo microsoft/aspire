@@ -732,10 +732,10 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             Sections = [.. source.Sections.Select(static s => new IndexedSection(s))];
 
             // Build a single concatenated lowercase haystack used ONLY as an early-reject
-            // pre-filter in SearchAsync. With ~469 docs and 5-10KB of section content each,
-            // probing each query token against every section's ContentLower scans ~32MB
-            // per token; an O(1)-per-doc Contains check on this single haystack lets us
-            // skip the full per-section scoring for docs that can't possibly match.
+            // pre-filter in SearchAsync. Probing each query token against every section's
+            // ContentLower scales with every section in every document; one per-doc haystack
+            // check lets us skip the full per-section scoring for docs that can't possibly
+            // match.
             //
             // CORRECTNESS: We include every substring that ScoreDocument could ever match:
             //   - SlugLower (ScoreSlugMatch)

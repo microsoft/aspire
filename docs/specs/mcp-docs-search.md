@@ -218,7 +218,7 @@ internal static partial class LlmsTxtParser
 ```
 
 **Implementation details:**
-- Finds document boundaries (H1 headers) and fenced-code-block regions in a single pass over the corpus
+- Computes fenced-code-block regions once, then reuses them while finding document and section boundaries
 - Iterates documents sequentially, slicing the precomputed fence regions per document so `ParseSections` doesn't re-scan for ``` runs
 - Uses `ReadOnlySpan<char>` throughout for zero-allocation parsing
 - Uses `ArrayPool<char>` for slug generation
