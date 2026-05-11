@@ -54,7 +54,7 @@ public class CliBootstrapTests
     {
         // Program.BuildApplicationAsync registers IIdentityChannelReader as a singleton,
         // backed by the default IdentityChannelReader (which reads from
-        // Assembly.GetEntryAssembly()).
+        // typeof(Aspire.Cli.Program).Assembly).
         using var host = await BuildHostAsync();
 
         var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
@@ -119,9 +119,10 @@ public class CliBootstrapTests
     {
         // End-to-end coherence: the channel flowing through the DI container must equal the
         // value baked into the entry assembly by [AssemblyMetadata("AspireCliChannel", "...")].
-        // The bootstrap registers the default IdentityChannelReader, which reads from
-        // Assembly.GetEntryAssembly(); under `dotnet test` that's the test host (which mirrors
-        // the production "daily" via the test csproj's AssemblyMetadata item).
+        // IdentityChannelReader reads from typeof(Aspire.Cli.Program).Assembly. This test
+        // reads Assembly.GetEntryAssembly() directly and the comparison works because
+        // Aspire.Cli.csproj and the test csproj forward the same $(AspireCliChannel) MSBuild
+        // property — keeping both assemblies in lockstep regardless of the build configuration.
         var entryAssembly = Assembly.GetEntryAssembly();
         Assert.NotNull(entryAssembly);
         var bakedChannel = entryAssembly

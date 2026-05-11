@@ -60,12 +60,13 @@ internal sealed partial class CliTemplateFactory
                     await CopyTemplateTreeToDiskAsync("ts-starter", outputPath, ApplyAllTokens, cancellationToken);
 
                     // Persist the template SDK version before restore so integration and codegen package
-                    // resolution stays aligned with the project we just created.
+                    // resolution stays aligned with the project we just created. Seed the channel:
+                    // explicit input wins; otherwise default to the channel baked into the running
+                    // CLI (CliExecutionContext.Channel).
                     var config = AspireConfigFile.LoadOrCreate(outputPath, aspireVersion);
-                    if (!string.IsNullOrEmpty(inputs.Channel))
-                    {
-                        config.Channel = inputs.Channel;
-                    }
+                    config.Channel = !string.IsNullOrEmpty(inputs.Channel)
+                        ? inputs.Channel
+                        : _executionContext.Channel;
                     config.Save(outputPath);
 
                     var appHostProject = _projectFactory.TryGetProject(new FileInfo(Path.Combine(outputPath, "apphost.ts")));
