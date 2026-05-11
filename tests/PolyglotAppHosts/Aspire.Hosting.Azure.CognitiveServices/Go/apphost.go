@@ -23,7 +23,7 @@ func main() {
 	}
 
 	api := builder.AddContainer("api", "redis:latest").
-		WithRoleAssignments(openai, []aspire.AzureOpenAIRole{aspire.AzureOpenAIRoleCognitiveServicesOpenAIUser})
+		WithCognitiveServicesRoleAssignments(openai, []aspire.AzureOpenAIRole{aspire.AzureOpenAIRoleCognitiveServicesOpenAIUser})
 	if api.Err() != nil {
 		log.Fatalf(aspire.FormatError(api.Err()))
 	}

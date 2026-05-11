@@ -22,7 +22,6 @@ using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Exec;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
@@ -30,6 +29,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
@@ -242,7 +242,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var aspireDir = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
 
         ConfigurePipelineOptions(options);
-        var isExecMode = ConfigureExecOptions(options);
 
         // Compute the dashboard application name - use DashboardApplicationName if set for file-based apps,
         // otherwise fall back to the environment's ApplicationName
@@ -315,13 +314,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         if (ExecutionContext.IsPublishMode)
         {
             LoadDeploymentState(appHostPathSha);
-        }
-
-        // exec
-        if (isExecMode)
-        {
-            _innerBuilder.Services.AddSingleton<ExecResourceManager>();
-            Eventing.Subscribe<BeforeStartEvent>(ExecEventingHandlers.InitializeExecResources);
         }
 
         // Core things
@@ -403,7 +395,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         ConfigureHealthChecks();
 
-        if (ExecutionContext.IsRunMode && !isExecMode)
+        if (ExecutionContext.IsRunMode)
         {
             // Dashboard
             if (!options.DisableDashboard)
@@ -522,8 +514,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         // Publishing support
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>("docker");
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>("podman");
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
@@ -767,42 +759,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 _innerBuilder.Configuration["AppHost:Operation"] = "Publish";
             }
         }
-    }
-
-    private bool ConfigureExecOptions(DistributedApplicationOptions options)
-    {
-        var switchMappings = new Dictionary<string, string>()
-        {
-            { "--operation", "AppHost:Operation" },
-            { "--resource", "Exec:ResourceName" },
-            { "--start-resource", "Exec:ResourceName" },
-            { "--command", "Exec:Command" },
-            { "--workdir", "Exec:WorkingDirectory" }
-        };
-        _innerBuilder.Configuration.AddCommandLine(options.Args ?? [], switchMappings);
-
-        var execOptionsSection = _innerBuilder.Configuration.GetSection(ExecOptions.SectionName);
-        _innerBuilder.Services
-            .Configure<ExecOptions>(execOptionsSection)
-            .PostConfigure<ExecOptions>(execOptions =>
-        {
-            if (options.Args is null || !options.Args.Any())
-            {
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(execOptions.Command))
-            {
-                execOptions.Enabled = true;
-            }
-
-            if (options.Args.Contains("--start-resource"))
-            {
-                execOptions.StartResource = true;
-            }
-        });
-
-        return options.Args?.Any(arg => arg == "--command") ?? false;
     }
 
     /// <inheritdoc />

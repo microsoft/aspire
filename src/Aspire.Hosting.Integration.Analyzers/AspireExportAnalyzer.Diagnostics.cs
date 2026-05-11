@@ -146,7 +146,7 @@ public partial class AspireExportAnalyzer
         internal static readonly DiagnosticDescriptor s_duplicateGeneratedMethodName = new(
             id: DuplicateGeneratedMethodNameId,
             title: "Duplicate generated polyglot member name",
-            messageFormat: "Generated polyglot member name '{0}' is already used for target type '{1}' by multiple exports: {2}. Use a unique MethodName, or use a shared MethodName only when every overload has a unique non-default export ID.",
+            messageFormat: "Generated polyglot member name '{0}' is already used for target type '{1}' by multiple exports: {2}. Use a unique MethodName, or combine overloads into a single export with optional parameters.",
             category: "Design",
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,

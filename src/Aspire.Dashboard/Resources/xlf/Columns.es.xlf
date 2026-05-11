@@ -34,6 +34,11 @@ Para obtener más información, consulte https://aka.ms/dotnet/aspire/container-
         <target state="translated">{0} se cerró inesperadamente con el código de salida {1}</target>
         <note>{0} is a resource type, {1} is a number</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceFailedToStart">
+        <source>{0} failed to start</source>
+        <target state="new">{0} failed to start</target>
+        <note>{0} is a resource type</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
         <source>Resource has not started because it's configured to not automatically start.</source>
         <target state="translated">El recurso no se ha iniciado porque está configurado para no iniciarse automáticamente.</target>

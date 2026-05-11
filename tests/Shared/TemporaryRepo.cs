@@ -60,7 +60,7 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
         {
             DeleteDirectoryWithRetries(repoDirectory);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             outputHelper.WriteLine($"Failed to delete temporary workspace '{repoDirectory.FullName}': {ex.Message}");
         }
@@ -86,14 +86,16 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
                 // that removed the directory but still threw). Nothing to clean up.
                 return;
             }
-            catch (IOException) when (i < maxRetries - 1)
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && i < maxRetries - 1)
             {
+                ResetReadOnlyAttributes(directory);
                 Thread.Sleep(500 * (i + 1));
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Bulk delete failed after all retries. Delete files individually
                 // to surface the exact file name that is still locked.
+                ResetReadOnlyAttributes(directory);
                 DeleteContentsIndividually(directory);
                 return;
             }
@@ -116,9 +118,10 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
         {
             try
             {
+                file.Attributes &= ~FileAttributes.ReadOnly;
                 file.Delete();
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 throw new IOException($"Cannot delete '{file.FullName}': {ex.Message}", ex);
             }
@@ -126,11 +129,46 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
 
         try
         {
+            directory.Attributes &= ~FileAttributes.ReadOnly;
             directory.Delete(false);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new IOException($"Cannot delete directory '{directory.FullName}': {ex.Message}", ex);
+        }
+    }
+
+    private static void ResetReadOnlyAttributes(DirectoryInfo directory)
+    {
+        if (!OperatingSystem.IsWindows() || !directory.Exists)
+        {
+            return;
+        }
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0
+        };
+
+        foreach (var entry in directory.EnumerateFileSystemInfos("*", options))
+        {
+            TryResetReadOnlyAttribute(entry);
+        }
+
+        TryResetReadOnlyAttribute(directory);
+    }
+
+    private static void TryResetReadOnlyAttribute(FileSystemInfo entry)
+    {
+        try
+        {
+            entry.Attributes &= ~FileAttributes.ReadOnly;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort: deletion below will surface persistent locks or permission issues.
         }
     }
 

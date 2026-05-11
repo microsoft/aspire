@@ -248,12 +248,6 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await Task.Delay(1, cancellationToken).ConfigureAwait(false);
-        yield return new CommandOutput { Text = "test", IsErrorMessage = false, LineNumber = 0 };
-    }
-
     public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken)
     {
         GetPipelineStepsAsyncCalled?.SetResult();

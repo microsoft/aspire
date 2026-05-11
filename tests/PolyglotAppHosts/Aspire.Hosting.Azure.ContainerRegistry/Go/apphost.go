@@ -25,7 +25,7 @@ func main() {
 
 	environment := builder.AddAzureContainerAppEnvironment("environment")
 	environment.WithAzureContainerRegistry(registry)
-	environment.WithRoleAssignments(registry, []aspire.AzureContainerRegistryRole{
+	environment.WithContainerRegistryRoleAssignments(registry, []aspire.AzureContainerRegistryRole{
 		aspire.AzureContainerRegistryRoleAcrPull,
 		aspire.AzureContainerRegistryRoleAcrPush,
 	})

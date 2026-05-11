@@ -396,7 +396,10 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private IEnumerable<DisplayedResourcePropertyViewModel> GetResourceProperties(bool ordered)
     {
         var vms = _displayedResourcePropertyViewModels
-            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 });
+            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 }
+                // State has a custom component (ResourceStateValue) that renders "Unknown" when the value is null,
+                // so always include it in the property list.
+                || string.Equals(vm.KnownProperty?.Key, KnownProperties.Resource.State, StringComparisons.ResourcePropertyName));
 
         return ordered
             ? vms.OrderBy(vm => vm.Priority).ThenBy(vm => vm.DisplayName)

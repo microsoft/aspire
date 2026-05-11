@@ -552,6 +552,7 @@ internal partial class MarkdownToSpectreConverter
         {
             var contentStart = builder.Length;
             AppendInlinesToMarkup(builder, link, markdown);
+            TrimAppendedWhitespace(builder, contentStart);
 
             var appendedLength = builder.Length - contentStart;
             if (appendedLength == 0 || appendedLength == link.Url.Length && AppendedTextEquals(builder, contentStart, link.Url))
@@ -576,6 +577,7 @@ internal partial class MarkdownToSpectreConverter
 
         var linkContentStart = builder.Length;
         AppendInlinesToMarkup(builder, link, markdown);
+        TrimAppendedWhitespace(builder, linkContentStart);
         if (builder.Length == linkContentStart)
         {
             AppendEscapedMarkup(builder, link.Url.AsSpan());

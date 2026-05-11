@@ -708,8 +708,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     public async Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        options ??= new ExecuteResourceCommandOptions();
+
         var rpc = EnsureConnected();
 
         _logger?.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
@@ -717,7 +720,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         var request = new ExecuteResourceCommandRequest
         {
             ResourceName = resourceName,
-            CommandName = commandName
+            CommandName = commandName,
+            Arguments = options.Arguments,
+            ValidateOnly = options.ValidateOnly,
+            NonInteractive = options.NonInteractive
         };
 
         var response = await rpc.InvokeWithCancellationAsync<ExecuteResourceCommandResponse>(

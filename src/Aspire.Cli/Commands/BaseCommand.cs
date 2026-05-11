@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
@@ -102,5 +104,18 @@ internal abstract class BaseCommand : Command
         telemetry.RecordError(errorMessage, ex);
         interactionService.DisplayError(errorMessage);
         return exitCode;
+    }
+
+    internal static void AddNonInteractiveRequiresYesValidator(Command command, Option<bool> yesOption)
+    {
+        command.Validators.Add(result =>
+        {
+            var nonInteractive = result.GetValue(RootCommand.NonInteractiveOption);
+            var yes = result.GetValue(yesOption);
+            if (nonInteractive && !yes)
+            {
+                result.AddError(string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, command.Name));
+            }
+        });
     }
 }

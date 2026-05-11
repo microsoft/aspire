@@ -36,6 +36,7 @@ internal sealed class ResourcesOutput
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(ResourceRelationshipJson))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
+[JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

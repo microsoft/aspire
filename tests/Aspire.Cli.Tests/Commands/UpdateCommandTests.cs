@@ -36,6 +36,25 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
+    [Theory]
+    [InlineData("update --non-interactive")]
+    [InlineData("--non-interactive update")]
+    public async Task UpdateCommandFailsFastWhenNonInteractiveWithoutYes(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse(commandLine);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, "update"), error.Message);
+    }
+
     [Fact]
     public async Task UpdateCommand_WhenProjectOptionSpecified_PassesProjectFileToProjectLocator()
     {

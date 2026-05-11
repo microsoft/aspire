@@ -1,4 +1,4 @@
-﻿// ===== AddContainerOptions.java =====
+// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1265,6 +1265,8 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription", (h, c) -> new DistributedApplicationEventSubscription(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext", (h, c) -> new DistributedApplicationExecutionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContextOptions", (h, c) -> new DistributedApplicationExecutionContextOptions(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InteractionInputCollection", (h, c) -> new InteractionInputCollection(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", (h, c) -> new InputsDialogValidationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", (h, c) -> new ProjectResourceOptions(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", (h, c) -> new IUserSecretsManager(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", (h, c) -> new PipelineConfigurationContext(h, c));
@@ -3204,6 +3206,9 @@ import java.util.function.*;
 public class CommandOptions implements JsonSerializable {
     private String description;
     private Object parameter;
+    private InteractionInput[] arguments;
+    private Object validateArguments;
+    private ResourceCommandVisibility visibility;
     private String confirmationMessage;
     private String iconName;
     private IconVariant iconVariant;
@@ -3214,6 +3219,12 @@ public class CommandOptions implements JsonSerializable {
     public void setDescription(String value) { this.description = value; }
     public Object getParameter() { return parameter; }
     public void setParameter(Object value) { this.parameter = value; }
+    public InteractionInput[] getArguments() { return arguments; }
+    public void setArguments(InteractionInput[] value) { this.arguments = value; }
+    public Object getValidateArguments() { return validateArguments; }
+    public void setValidateArguments(Object value) { this.validateArguments = value; }
+    public ResourceCommandVisibility getVisibility() { return visibility; }
+    public void setVisibility(ResourceCommandVisibility value) { this.visibility = value; }
     public String getConfirmationMessage() { return confirmationMessage; }
     public void setConfirmationMessage(String value) { this.confirmationMessage = value; }
     public String getIconName() { return iconName; }
@@ -3229,6 +3240,9 @@ public class CommandOptions implements JsonSerializable {
         Map<String, Object> map = new HashMap<>();
         map.put("Description", AspireClient.serializeValue(description));
         map.put("Parameter", AspireClient.serializeValue(parameter));
+        map.put("Arguments", AspireClient.serializeValue(arguments));
+        map.put("ValidateArguments", AspireClient.serializeValue(validateArguments));
+        map.put("Visibility", AspireClient.serializeValue(visibility));
         map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
         map.put("IconName", AspireClient.serializeValue(iconName));
         map.put("IconVariant", AspireClient.serializeValue(iconVariant));
@@ -3510,18 +3524,6 @@ public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase 
         return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.resource", reqArgs);
     }
 
-    /** Sets the Resource property */
-    public ContainerImagePushOptionsCallbackContext setResource(IResource value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (ContainerImagePushOptionsCallbackContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource", reqArgs);
-    }
-
-    public ContainerImagePushOptionsCallbackContext setResource(ResourceBuilderBase value) {
-        return setResource(new IResource(value.getHandle(), value.getClient()));
-    }
-
     /** Gets the CancellationToken property */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -3529,29 +3531,11 @@ public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase 
         return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken", reqArgs);
     }
 
-    /** Sets the CancellationToken property */
-    public ContainerImagePushOptionsCallbackContext setCancellationToken(CancellationToken value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", getClient().registerCancellation(value));
-        }
-        return (ContainerImagePushOptionsCallbackContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setCancellationToken", reqArgs);
-    }
-
     /** Gets the Options property */
     public ContainerImagePushOptions options() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ContainerImagePushOptions) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.options", reqArgs);
-    }
-
-    /** Sets the Options property */
-    public ContainerImagePushOptionsCallbackContext setOptions(ContainerImagePushOptions value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (ContainerImagePushOptionsCallbackContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions", reqArgs);
     }
 
 }
@@ -8078,14 +8062,6 @@ public class EndpointReference extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage", reqArgs);
     }
 
-    /** Sets the ErrorMessage property */
-    public EndpointReference setErrorMessage(String value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (EndpointReference) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.setErrorMessage", reqArgs);
-    }
-
     /** Gets the IsAllocated property */
     public boolean isAllocated() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10016,31 +9992,11 @@ public class ExecuteCommandContext extends HandleWrapperBase {
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", reqArgs);
     }
 
-    /** Sets the ServiceProvider property */
-    public ExecuteCommandContext setServiceProvider(IServiceProvider value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (ExecuteCommandContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setServiceProvider", reqArgs);
-    }
-
-    public ExecuteCommandContext setServiceProvider(HandleWrapperBase value) {
-        return setServiceProvider(new IServiceProvider(value.getHandle(), value.getClient()));
-    }
-
     /** Gets the ResourceName property */
     public String resourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName", reqArgs);
-    }
-
-    /** Sets the ResourceName property */
-    public ExecuteCommandContext setResourceName(String value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (ExecuteCommandContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setResourceName", reqArgs);
     }
 
     /** Gets the CancellationToken property */
@@ -10050,16 +10006,6 @@ public class ExecuteCommandContext extends HandleWrapperBase {
         return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken", reqArgs);
     }
 
-    /** Sets the CancellationToken property */
-    public ExecuteCommandContext setCancellationToken(CancellationToken value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", getClient().registerCancellation(value));
-        }
-        return (ExecuteCommandContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken", reqArgs);
-    }
-
     /** Gets the Logger property */
     public ILogger logger() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10067,16 +10013,11 @@ public class ExecuteCommandContext extends HandleWrapperBase {
         return (ILogger) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger", reqArgs);
     }
 
-    /** Sets the Logger property */
-    public ExecuteCommandContext setLogger(ILogger value) {
+    /** Gets the Arguments property */
+    public InteractionInputCollection arguments() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (ExecuteCommandContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setLogger", reqArgs);
-    }
-
-    public ExecuteCommandContext setLogger(HandleWrapperBase value) {
-        return setLogger(new ILogger(value.getHandle(), value.getClient()));
+        return (InteractionInputCollection) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments", reqArgs);
     }
 
 }
@@ -12703,6 +12644,170 @@ public class InitializeResourceEvent extends HandleWrapperBase {
 
 }
 
+// ===== InputType.java =====
+// InputType.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InputType enum. */
+public enum InputType implements WireValueEnum {
+    TEXT("Text"),
+    SECRET_TEXT("SecretText"),
+    CHOICE("Choice"),
+    BOOLEAN("Boolean"),
+    NUMBER("Number");
+
+    private final String value;
+
+    InputType(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static InputType fromValue(String value) {
+        for (InputType e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== InputsDialogValidationContext.java =====
+// InputsDialogValidationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext. */
+public class InputsDialogValidationContext extends HandleWrapperBase {
+    InputsDialogValidationContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Inputs property */
+    public InteractionInputCollection inputs() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (InteractionInputCollection) getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.inputs", reqArgs);
+    }
+
+    /** Gets the CancellationToken property */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.cancellationToken", reqArgs);
+    }
+
+    /** Invokes the AddValidationError method */
+    public void addValidationError(String inputName, String errorMessage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("inputName", AspireClient.serializeValue(inputName));
+        reqArgs.put("errorMessage", AspireClient.serializeValue(errorMessage));
+        getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.addValidationError", reqArgs);
+    }
+
+}
+
+// ===== InteractionInput.java =====
+// InteractionInput.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InteractionInput DTO. */
+public class InteractionInput implements JsonSerializable {
+    private String name;
+    private String label;
+    private String description;
+    private boolean enableDescriptionMarkdown;
+    private InputType inputType;
+    private boolean required;
+    private Object[] options;
+    private Object dynamicLoading;
+    private String value;
+    private String placeholder;
+    private boolean allowCustomChoice;
+    private boolean disabled;
+    private double maxLength;
+
+    public String getName() { return name; }
+    public void setName(String value) { this.name = value; }
+    public String getLabel() { return label; }
+    public void setLabel(String value) { this.label = value; }
+    public String getDescription() { return description; }
+    public void setDescription(String value) { this.description = value; }
+    public boolean getEnableDescriptionMarkdown() { return enableDescriptionMarkdown; }
+    public void setEnableDescriptionMarkdown(boolean value) { this.enableDescriptionMarkdown = value; }
+    public InputType getInputType() { return inputType; }
+    public void setInputType(InputType value) { this.inputType = value; }
+    public boolean getRequired() { return required; }
+    public void setRequired(boolean value) { this.required = value; }
+    public Object[] getOptions() { return options; }
+    public void setOptions(Object[] value) { this.options = value; }
+    public Object getDynamicLoading() { return dynamicLoading; }
+    public void setDynamicLoading(Object value) { this.dynamicLoading = value; }
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+    public String getPlaceholder() { return placeholder; }
+    public void setPlaceholder(String value) { this.placeholder = value; }
+    public boolean getAllowCustomChoice() { return allowCustomChoice; }
+    public void setAllowCustomChoice(boolean value) { this.allowCustomChoice = value; }
+    public boolean getDisabled() { return disabled; }
+    public void setDisabled(boolean value) { this.disabled = value; }
+    public double getMaxLength() { return maxLength; }
+    public void setMaxLength(double value) { this.maxLength = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Name", AspireClient.serializeValue(name));
+        map.put("Label", AspireClient.serializeValue(label));
+        map.put("Description", AspireClient.serializeValue(description));
+        map.put("EnableDescriptionMarkdown", AspireClient.serializeValue(enableDescriptionMarkdown));
+        map.put("InputType", AspireClient.serializeValue(inputType));
+        map.put("Required", AspireClient.serializeValue(required));
+        map.put("Options", AspireClient.serializeValue(options));
+        map.put("DynamicLoading", AspireClient.serializeValue(dynamicLoading));
+        map.put("Value", AspireClient.serializeValue(value));
+        map.put("Placeholder", AspireClient.serializeValue(placeholder));
+        map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
+        map.put("Disabled", AspireClient.serializeValue(disabled));
+        map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        return map;
+    }
+}
+
+// ===== InteractionInputCollection.java =====
+// InteractionInputCollection.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.InteractionInputCollection. */
+public class InteractionInputCollection extends HandleWrapperBase {
+    InteractionInputCollection(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Invokes the ToArray method */
+    public InteractionInput[] toArray() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (InteractionInput[]) getClient().invokeCapability("Aspire.Hosting/InteractionInputCollection.toArray", reqArgs);
+    }
+
+}
+
 // ===== JsonSerializable.java =====
 // JsonSerializable.java - GENERATED CODE - DO NOT EDIT
 
@@ -13706,31 +13811,11 @@ public class PipelineStepContext extends HandleWrapperBase {
         return (PipelineContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.pipelineContext", reqArgs);
     }
 
-    /** Sets the PipelineContext property */
-    public PipelineStepContext setPipelineContext(PipelineContext value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (PipelineStepContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.setPipelineContext", reqArgs);
-    }
-
     /** Gets the ReportingStep property */
     public IReportingStep reportingStep() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IReportingStep) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.reportingStep", reqArgs);
-    }
-
-    /** Sets the ReportingStep property */
-    public PipelineStepContext setReportingStep(IReportingStep value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (PipelineStepContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.setReportingStep", reqArgs);
-    }
-
-    public PipelineStepContext setReportingStep(HandleWrapperBase value) {
-        return setReportingStep(new IReportingStep(value.getHandle(), value.getClient()));
     }
 
     /** Gets the Model property */
@@ -13798,31 +13883,11 @@ public class PipelineStepFactoryContext extends HandleWrapperBase {
         return (PipelineContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.pipelineContext", reqArgs);
     }
 
-    /** Sets the PipelineContext property */
-    public PipelineStepFactoryContext setPipelineContext(PipelineContext value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (PipelineStepFactoryContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setPipelineContext", reqArgs);
-    }
-
     /** Gets the Resource property */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IResource) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.resource", reqArgs);
-    }
-
-    /** Sets the Resource property */
-    public PipelineStepFactoryContext setResource(IResource value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (PipelineStepFactoryContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setResource", reqArgs);
-    }
-
-    public PipelineStepFactoryContext setResource(ResourceBuilderBase value) {
-        return setResource(new IResource(value.getHandle(), value.getClient()));
     }
 
 }
@@ -15712,6 +15777,66 @@ import java.util.*;
 public class ResourceBuilderBase extends HandleWrapperBase {
     ResourceBuilderBase(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+}
+
+// ===== ResourceCommandState.java =====
+// ResourceCommandState.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** ResourceCommandState enum. */
+public enum ResourceCommandState implements WireValueEnum {
+    ENABLED("Enabled"),
+    DISABLED("Disabled"),
+    HIDDEN("Hidden");
+
+    private final String value;
+
+    ResourceCommandState(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static ResourceCommandState fromValue(String value) {
+        for (ResourceCommandState e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== ResourceCommandVisibility.java =====
+// ResourceCommandVisibility.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** ResourceCommandVisibility enum. */
+public enum ResourceCommandVisibility implements WireValueEnum {
+    NONE("None"),
+    UI("UI"),
+    API("Api");
+
+    private final String value;
+
+    ResourceCommandVisibility(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static ResourceCommandVisibility fromValue(String value) {
+        for (ResourceCommandVisibility e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
     }
 }
 
@@ -21799,18 +21924,6 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider", reqArgs);
     }
 
-    /** Sets the ServiceProvider property */
-    public UpdateCommandStateContext setServiceProvider(IServiceProvider value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (UpdateCommandStateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.setServiceProvider", reqArgs);
-    }
-
-    public UpdateCommandStateContext setServiceProvider(HandleWrapperBase value) {
-        return setServiceProvider(new IServiceProvider(value.getHandle(), value.getClient()));
-    }
-
 }
 
 // ===== UrlDisplayLocation.java =====
@@ -22722,6 +22835,10 @@ public final class WithVolumeOptions {
 .modules/IconVariant.java
 .modules/ImagePullPolicy.java
 .modules/InitializeResourceEvent.java
+.modules/InputType.java
+.modules/InputsDialogValidationContext.java
+.modules/InteractionInput.java
+.modules/InteractionInputCollection.java
 .modules/JsonSerializable.java
 .modules/LogFacade.java
 .modules/OtlpProtocol.java
@@ -22742,6 +22859,8 @@ public final class WithVolumeOptions {
 .modules/ReferenceExpression.java
 .modules/ReferenceExpressionBuilder.java
 .modules/ResourceBuilderBase.java
+.modules/ResourceCommandState.java
+.modules/ResourceCommandVisibility.java
 .modules/ResourceEndpointsAllocatedEvent.java
 .modules/ResourceEventDto.java
 .modules/ResourceLoggerService.java
@@ -22789,3 +22908,4 @@ public final class WithVolumeOptions {
 .modules/WithPipelineStepFactoryOptions.java
 .modules/WithReferenceOptions.java
 .modules/WithVolumeOptions.java
+

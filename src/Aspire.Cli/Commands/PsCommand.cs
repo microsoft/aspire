@@ -40,6 +40,7 @@ internal sealed class AppHostDisplayInfo
 [JsonSerializable(typeof(ResourceRelationshipJson))]
 [JsonSerializable(typeof(ResourceHealthReportJson))]
 [JsonSerializable(typeof(ResourceCommandJson))]
+[JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]

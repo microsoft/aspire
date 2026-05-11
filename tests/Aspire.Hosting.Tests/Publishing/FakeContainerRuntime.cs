@@ -11,9 +11,9 @@ namespace Aspire.Hosting.Tests.Publishing;
 
 using Aspire.Hosting.ApplicationModel;
 
-public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true) : IContainerRuntime, IContainerRuntimeResolver
+public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true, string name = "fake-runtime") : IContainerRuntime, IContainerRuntimeResolver
 {
-    public string Name => "fake-runtime";
+    public string Name => name;
     public bool WasHealthCheckCalled { get; private set; }
     public int CheckIfRunningCallCount { get; private set; }
     public bool WasTagImageCalled { get; private set; }

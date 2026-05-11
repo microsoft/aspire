@@ -132,22 +132,22 @@ func main() {
 	_ = aspire.AzureServiceBusFilterTypeSqlFilter
 	_ = aspire.AzureServiceBusFilterTypeCorrelationFilter
 
-	// ── 7. WithRoleAssignments — enum-based role assignment shim ───────────────
+	// ── 7. WithServiceBusRoleAssignments — enum-based role assignment shim ────
 	// On the parent ServiceBus resource (all 3 roles)
-	serviceBus.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	serviceBus.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataOwner,
 		aspire.AzureServiceBusRoleAzureServiceBusDataSender,
 		aspire.AzureServiceBusRoleAzureServiceBusDataReceiver,
 	})
 
 	// On child resources
-	queue.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	queue.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataReceiver,
 	})
-	topic.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	topic.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataSender,
 	})
-	subscription.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	subscription.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataReceiver,
 	})
 

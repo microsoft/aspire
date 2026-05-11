@@ -153,7 +153,8 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
-        Assert.Contains(result.Errors, error => string.Equals(error.Message, DestroyCommandStrings.NonInteractiveRequiresYes, StringComparison.Ordinal));
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, "destroy"), error.Message);
         Assert.False(appHostStarted);
     }
 

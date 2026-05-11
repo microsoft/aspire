@@ -160,10 +160,11 @@ public class FieldTelemetryFilter : TelemetryFilter
         }
         else
         {
-            // And
+            // And — both values must satisfy the not-equal/not-contains condition.
+            // When Value2 is null (most fields only have one value), Value1 alone is sufficient.
             if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition))
             {
-                if (fieldValue.Value2 != null && IsMatch(fieldValue.Value2, Value, Condition))
+                if (fieldValue.Value2 is null || IsMatch(fieldValue.Value2, Value, Condition))
                 {
                     return true;
                 }

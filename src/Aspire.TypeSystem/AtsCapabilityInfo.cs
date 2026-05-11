@@ -449,6 +449,24 @@ public sealed class AtsDtoPropertyInfo
     public required AtsTypeRef Type { get; init; }
 
     /// <summary>
+    /// Gets or sets whether this property is a callback delegate.
+    /// Callbacks are inferred from delegate types (Func, Action, custom delegates).
+    /// </summary>
+    public bool IsCallback { get; init; }
+
+    /// <summary>
+    /// Gets or sets the parameters of the callback delegate.
+    /// Only populated when <see cref="IsCallback"/> is true.
+    /// </summary>
+    public IReadOnlyList<AtsCallbackParameterInfo>? CallbackParameters { get; init; }
+
+    /// <summary>
+    /// Gets or sets the return type for the callback delegate.
+    /// Only populated when <see cref="IsCallback"/> is true.
+    /// </summary>
+    public AtsTypeRef? CallbackReturnType { get; init; }
+
+    /// <summary>
     /// Gets or sets a description of this property.
     /// </summary>
     public string? Description { get; init; }

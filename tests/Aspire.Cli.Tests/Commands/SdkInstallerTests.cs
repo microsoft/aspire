@@ -175,29 +175,6 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ExecCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
-            options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
-            {
-                CheckAsyncCallback = _ => (false, null, "9.0.302") // SDK not installed
-            };
-
-            options.InteractionServiceFactory = _ => new TestInteractionService();
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("exec");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.SdkNotInstalled, exitCode);
-    }
-
-    [Fact]
     public async Task RunCommand_WhenSdkInstalled_ContinuesNormalExecution()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
