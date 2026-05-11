@@ -57,6 +57,60 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
         Assert.Equal("staging", resolved);
     }
 
+    [Fact]
+    public void PrebuiltAppHostServer_ResolveChannelName_FallsBackToLegacyAspireSettings_WhenAspireConfigJsonMissing()
+    {
+        // Migration safety: projects scaffolded before the per-project aspire.config.json
+        // landed wrote their channel into .aspire/settings.json (AspireJsonConfiguration).
+        // PrebuiltAppHostServer must still resolve that legacy file so existing on-disk
+        // projects keep working until they're migrated. The new file is preferred when
+        // both exist (asserted by the next test).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+
+        var legacy = new AspireJsonConfiguration { Channel = "daily", SdkVersion = "13.3.0" };
+        legacy.Save(appHostDirectory.FullName);
+
+        // Sanity check the precondition: the new-format file must NOT exist for this test
+        // to exercise the legacy branch — otherwise it would pass for the wrong reason.
+        Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName)));
+
+        var server = CreateServer(appHostDirectory.FullName);
+
+        var resolveChannelName = typeof(PrebuiltAppHostServer)
+            .GetMethod("ResolveChannelName", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        var resolved = (string?)resolveChannelName.Invoke(server, parameters: null);
+
+        Assert.Equal("daily", resolved);
+    }
+
+    [Fact]
+    public void PrebuiltAppHostServer_ResolveChannelName_PrefersAspireConfigJsonOverLegacyAspireSettings()
+    {
+        // When both files exist (e.g. during/after migration), the new format wins. This
+        // anchors the precedence and prevents an accidental swap of the `??` operands in
+        // PrebuiltAppHostServer.ResolveChannelName from going unnoticed.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+
+        var legacy = new AspireJsonConfiguration { Channel = "daily", SdkVersion = "13.3.0" };
+        legacy.Save(appHostDirectory.FullName);
+
+        var config = AspireConfigFile.LoadOrCreate(appHostDirectory.FullName);
+        config.Channel = "staging";
+        config.Save(appHostDirectory.FullName);
+
+        var server = CreateServer(appHostDirectory.FullName);
+
+        var resolveChannelName = typeof(PrebuiltAppHostServer)
+            .GetMethod("ResolveChannelName", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        var resolved = (string?)resolveChannelName.Invoke(server, parameters: null);
+
+        Assert.Equal("staging", resolved);
+    }
+
     private static PrebuiltAppHostServer CreateServer(string appPath)
     {
         var nugetService = new BundleNuGetService(

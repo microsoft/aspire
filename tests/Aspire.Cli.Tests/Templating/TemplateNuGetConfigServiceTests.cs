@@ -5,6 +5,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Templating;
@@ -18,7 +19,7 @@ namespace Aspire.Cli.Tests.Templating;
 /// may resolve a channel by reading from a global identity-channel source; channel input
 /// must come from the caller-supplied argument or fall back to the implicit channel only.
 /// </summary>
-public class TemplateNuGetConfigServiceTests
+public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task PromptToCreateOrUpdateNuGetConfigAsync_NullChannelName_ShortCircuits()
@@ -154,12 +155,173 @@ public class TemplateNuGetConfigServiceTests
             async () => await service.ResolveTemplatePackageAsync(query, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_IncludePrHivesTrue_WithHivesPresent_AllChannelsParticipate()
+    {
+        // The `aspire new` code path opts into hives via IncludePrHives: true. When a hive
+        // is actually on disk (GetHiveCount() > 0), the resolver must consider every
+        // registered channel — not just the implicit. Verified by registering implicit
+        // (version 1.0.0) and an explicit pr-12345 (pinned 2.0.0), and asserting that the
+        // explicit channel's higher version wins (which is only reachable if it
+        // participated in the candidate set).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var executionContext = CreateExecutionContextWithHives(workspace.WorkspaceRoot, hivesDir);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                    [
+                        new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "1.0.0", Source = "implicit-src" }
+                    ])
+                });
+                var hiveCh = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", "pr-src")],
+                    new FakeNuGetPackageCache(),
+                    pinnedVersion: "2.0.0");
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, hiveCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var query = new TemplatePackageQuery(
+            ChannelOverride: null,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: true);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("2.0.0", selection.Package.Version);
+        Assert.Equal(PackageChannelType.Explicit, selection.Channel.Type);
+        Assert.Equal("pr-12345", selection.Channel.Name);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_IncludePrHivesTrue_NoHivesOnDisk_RestrictsToImplicit()
+    {
+        // Opt-in alone is not enough: the user must also have hive directories. Without
+        // them, even with IncludePrHives: true, the resolver must still restrict to the
+        // implicit channel. This is what protects developers running `aspire new` on a
+        // clean machine from accidentally pulling from an explicit channel that was
+        // registered but never installed.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        // Intentionally do NOT create a hives directory. This is the precondition under
+        // test — GetHiveCount() must return 0 so the AND short-circuits to false.
+
+        var executionContext = CreateExecutionContextWithHives(
+            workspace.WorkspaceRoot,
+            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives")));
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                    [
+                        new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "1.0.0", Source = "implicit-src" }
+                    ])
+                });
+                var hiveCh = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", "pr-src")],
+                    new FakeNuGetPackageCache(),
+                    pinnedVersion: "2.0.0");
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, hiveCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var query = new TemplatePackageQuery(
+            ChannelOverride: null,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: true);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("1.0.0", selection.Package.Version);
+        Assert.Equal(PackageChannelType.Implicit, selection.Channel.Type);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_IncludePrHivesFalse_IgnoresHivesEvenWhenPresent()
+    {
+        // The `aspire init` code path passes IncludePrHives: false intentionally so a
+        // developer with stale ~/.aspire/hives/* doesn't get a different template than on
+        // a clean machine. Even with a hive present, the resolver must restrict to the
+        // implicit channel.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var executionContext = CreateExecutionContextWithHives(workspace.WorkspaceRoot, hivesDir);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                    [
+                        new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "1.0.0", Source = "implicit-src" }
+                    ])
+                });
+                var hiveCh = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", "pr-src")],
+                    new FakeNuGetPackageCache(),
+                    pinnedVersion: "2.0.0");
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, hiveCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var query = new TemplatePackageQuery(
+            ChannelOverride: null,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: false);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("1.0.0", selection.Package.Version);
+        Assert.Equal(PackageChannelType.Implicit, selection.Channel.Type);
+    }
+
+    private static CliExecutionContext CreateExecutionContextWithHives(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory)
+    {
+        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
+        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
+        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
+        return new CliExecutionContext(
+            workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory,
+            Path.Combine(logsDirectory.FullName, "test.log"));
+    }
+
     private static TemplateNuGetConfigService CreateService(
-        TestPackagingService? packagingService = null)
+        TestPackagingService? packagingService = null,
+        CliExecutionContext? executionContext = null)
     {
         return new TemplateNuGetConfigService(
             new TestInteractionService(),
-            TestExecutionContextFactory.CreateTestContext(),
+            executionContext ?? TestExecutionContextFactory.CreateTestContext(),
             packagingService ?? MockPackagingServiceFactory.Create(),
             new StubTemplateVersionPrompter(),
             new StubCliHostEnvironment());

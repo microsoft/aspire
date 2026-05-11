@@ -1413,6 +1413,142 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("staging", updatedWithChannel);
     }
 
+    [Fact]
+    public async Task UpdateCommand_WithHivesAndConfiguredChannel_DoesNotPromptForSelection()
+    {
+        // Hive presence enables the channel picker, but a configured channel (here from
+        // the --channel flag) must short-circuit the picker before it is ever surfaced.
+        // This is the configured-channel × hive-present intersection that the rest of
+        // the channel-resolution tests don't cover — the no-hive tests pass trivially
+        // because the prompt branch is unreachable, and the with-hive tests don't
+        // configure a channel.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: "update --channel daily");
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(promptInvoked, "Channel selection prompt should not be shown when --channel is specified even if hives are present");
+        Assert.Equal("daily", updatedWithChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WithHivesAndLocallyConfiguredChannel_DoesNotPromptForSelection()
+    {
+        // Same precedence rule, but the channel comes from local aspire.config.json
+        // instead of the command line. Covers the (hive-present, project-config-set)
+        // intersection which is the most common interactive PR-build flow.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{ "channel": "staging" }""");
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: "update");
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally, even with hives present");
+        Assert.Equal("staging", updatedWithChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WithHives_PromptOffersChannelsInPackagingServiceOrder()
+    {
+        // Establishes the prompt-content contract: the channels passed to
+        // `PromptForSelectionAsync` are exactly the sequence returned by
+        // `PackagingService.GetChannelsAsync`, in the same order, with the
+        // user-facing label following the documented "Name (SourceDetails)"
+        // format. Without this assertion, a regression that reorders channels
+        // or relabels them (e.g. drops the SourceDetails suffix) is silently
+        // green — every other prompt test on this code path checks only that
+        // the callback was invoked.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        List<PackageChannel>? capturedChoices = null;
+        Func<object, string>? capturedFormatter = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService()
+            {
+                PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+                {
+                    capturedChoices = choices.Cast<PackageChannel>().ToList();
+                    capturedFormatter = formatter;
+                    return capturedChoices.First();
+                }
+            };
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (ct) =>
+                {
+                    var fakeCache = new FakeNuGetPackageCache();
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache);
+                    var hiveChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings: null, fakeCache);
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, stableChannel, dailyChannel, hiveChannel });
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(capturedChoices);
+        Assert.NotNull(capturedFormatter);
+
+        // Channels must be presented in the order PackagingService returns them.
+        // The implicit channel's display name is "default" (see PackageChannelNames).
+        Assert.Equal(
+            new[] { "default", "stable", "daily", "pr-12345" },
+            capturedChoices!.Select(c => c.Name).ToArray());
+
+        // Each prompt row must include both the channel name and its source details
+        // (the documented "Name (SourceDetails)" format from UpdateCommand.cs).
+        foreach (var channel in capturedChoices)
+        {
+            var rendered = capturedFormatter!(channel);
+            Assert.Contains(channel.Name, rendered);
+            Assert.Contains(channel.SourceDetails, rendered);
+        }
+    }
+
     private Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked)> RunUpdateAndCaptureChannelAsync(
         TemporaryWorkspace workspace,
         string updateArgs)
