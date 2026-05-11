@@ -21,7 +21,15 @@ internal static class CorpusLoader
             return envPath;
         }
 
-        return Path.Combine(Path.GetTempPath(), DefaultFileName);
+        // No persistent cache: create a fresh, securely-randomized temp subdirectory
+        // per process so every benchmark run gets an isolated download location. This
+        // matches the repo guidance in .github/instructions/temp-directory.instructions.md
+        // (prefer Directory.CreateTempSubdirectory() over composing fixed names under
+        // Path.GetTempPath()). The benchmark is invoked rarely, so re-downloading the
+        // ~5 MB corpus each run is acceptable; pass --input or set LLMS_FULL_TXT to
+        // point at a local copy when iterating.
+        var tempDir = Directory.CreateTempSubdirectory("aspire-bench-");
+        return Path.Combine(tempDir.FullName, DefaultFileName);
     }
 
     public static async Task<string> EnsureCorpusAsync(RunOptions options, CancellationToken cancellationToken = default)
