@@ -11,7 +11,7 @@ namespace Aspire.Hosting
     public static partial class GoHostingExtensions
     {
         [AspireExport(Description = "Adds a Go application resource")]
-        public static ApplicationModel.IResourceBuilder<Go.GoAppResource> AddGoApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string[]? buildTags = null, string? ldFlags = null, string? gcFlags = null, bool raceDetector = false) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Go.GoAppResource> AddGoApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string packagePath = ".", string[]? buildTags = null, string? ldFlags = null, string? gcFlags = null, bool raceDetector = false) { throw null; }
 
         [AspireExport(Description = "Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)")]
         public static ApplicationModel.IResourceBuilder<T> WithAppArgs<T>(this ApplicationModel.IResourceBuilder<T> builder, params string[] args)

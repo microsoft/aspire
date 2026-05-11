@@ -49,6 +49,52 @@ public class AddGoAppTests
         Assert.Equal(expected, manifest.ToString());
     }
 
+    // ---- Manifest: packagePath ----------------------------------------------
+
+    [Fact]
+    public async Task VerifyManifest_AddGoApp_PackagePath()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory, packagePath: "./cmd/server");
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "go",
+              "args": [
+                "run",
+                "./cmd/server"
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyPublish_PackagePath_UsedInDockerfileBuildCommand()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path, packagePath: "./cmd/server");
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        // Build context is the module root (sourceDir) — go.mod is found.
+        Assert.Contains("go mod download", content);
+        // go build targets the sub-package, not the module root.
+        Assert.Contains("-o /app/server ./cmd/server", content);
+    }
+
     // ---- Manifest: AddGoApp build params ------------------------------------
 
     [Fact]

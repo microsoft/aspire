@@ -108,6 +108,56 @@ public class GoPublicApiTests
         Assert.Equal(["run", "."], args);
     }
 
+    // ---- packagePath --------------------------------------------------------
+
+    [Fact]
+    public async Task AddGoApp_PackagePath_DefaultsToRunDot()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "."], args);
+    }
+
+    [Fact]
+    public async Task AddGoApp_PackagePath_UsedInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory, packagePath: "./cmd/server");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "./cmd/server"], args);
+    }
+
+    [Fact]
+    public async Task AddGoApp_PackagePath_UsedInDelveMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory, packagePath: "./cmd/server")
+                         .WithDelveServer(port: 2345);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["--headless=true", "--listen=127.0.0.1:2345", "--api-version=2", "debug", "./cmd/server"], args);
+    }
+
+    [Fact]
+    public async Task AddGoApp_PackagePath_CombinedWithBuildFlags()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory,
+                         packagePath: "./cmd/server",
+                         buildTags: ["netgo"],
+                         raceDetector: true);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
+
+        Assert.Equal(["run", "-race", "-tags=netgo", "./cmd/server"], args);
+    }
+
     [Fact]
     public async Task AddGoApp_BuildTagsParam_InjectsTagsFlag()
     {

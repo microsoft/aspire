@@ -24,7 +24,17 @@ public static class GoHostingExtensions
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to add the resource to.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="appDirectory">The path to the directory containing the Go application source, which typically includes a <c>go.mod</c> file for standard <c>go run .</c> execution.</param>
+    /// <param name="appDirectory">
+    /// The path to the directory that acts as both the Go module root (where <c>go.mod</c> lives)
+    /// and the Docker build context for <c>aspire publish</c>.
+    /// </param>
+    /// <param name="packagePath">
+    /// The Go package to run or build, relative to <paramref name="appDirectory"/>.
+    /// Defaults to <c>"."</c> (the module root itself).
+    /// Use a sub-path such as <c>"./cmd/server"</c> when the main package is not at the module root
+    /// (e.g. <c>api/cmd/server/main.go</c> with <c>api/go.mod</c>).
+    /// This value is passed to <c>go run</c>, <c>dlv debug</c>, and <c>go build</c> consistently.
+    /// </param>
     /// <param name="buildTags">Optional build tags passed to the compiler via <c>-tags</c> (e.g. <c>"netgo"</c>, <c>"integration"</c>).</param>
     /// <param name="ldFlags">Optional linker flags passed via <c>-ldflags</c> (e.g. <c>"-X main.version=1.0.0"</c>).</param>
     /// <param name="gcFlags">Optional compiler flags passed via <c>-gcflags</c> (e.g. <c>"all=-N -l"</c> to disable optimisations for Delve).</param>
@@ -62,6 +72,7 @@ public static class GoHostingExtensions
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         string appDirectory,
+        string packagePath = ".",
         string[]? buildTags = null,
         string? ldFlags = null,
         string? gcFlags = null,
@@ -69,6 +80,7 @@ public static class GoHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(packagePath);
         ArgumentException.ThrowIfNullOrEmpty(appDirectory);
 
         appDirectory = Path.GetFullPath(appDirectory, builder.AppHostDirectory);
@@ -82,11 +94,14 @@ public static class GoHostingExtensions
                     : [];
 
                 var hasDelve = ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation);
+                var pkg = ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
+                    ? pkgAnnotation.PackagePath
+                    : ".";
 
                 if (hasDelve)
                 {
                     // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
-                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--build-flags=...] . [-- args]
+                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--build-flags=...] <pkg> [-- args]
                     // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
                     ctx.Args.Add("--headless=true");
                     ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
@@ -99,7 +114,7 @@ public static class GoHostingExtensions
                         ctx.Args.Add($"--build-flags={buildFlags}");
                     }
 
-                    ctx.Args.Add(".");
+                    ctx.Args.Add(pkg);
 
                     if (programArgs.Length > 0)
                     {
@@ -112,7 +127,7 @@ public static class GoHostingExtensions
                 }
                 else
                 {
-                    // Normal run mode: go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] . [args]
+                    // Normal run mode: go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [args]
                     ctx.Args.Add("run");
 
                     if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
@@ -135,7 +150,7 @@ public static class GoHostingExtensions
                         ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
                     }
 
-                    ctx.Args.Add(".");
+                    ctx.Args.Add(pkg);
 
                     foreach (var arg in programArgs)
                     {
@@ -160,7 +175,10 @@ public static class GoHostingExtensions
                     var buildImage = baseImageAnnotation?.BuildImage ?? $"golang:{goVersion}-alpine";
                     var runtimeImage = baseImageAnnotation?.RuntimeImage ?? "alpine:latest";
 
-                    var buildCmd = BuildDockerGoCommand(ctx.Resource);
+                    // packagePath comes from the AddGoApp closure — ctx.Resource is the
+                    // ContainerResource created by PublishAsDockerFile and does not carry
+                    // the GoPackagePathAnnotation from the original GoAppResource.
+                    var buildCmd = BuildDockerGoCommand(ctx.Resource, packagePath);
                     var hasGoMod = File.Exists(Path.Combine(appDirectory, "go.mod"));
                     var hasGoSum = File.Exists(Path.Combine(appDirectory, "go.sum"));
                     var hasPrivate = ctx.Resource.TryGetLastAnnotation<GoPrivateAnnotation>(out var privateAnnotation);
@@ -253,6 +271,11 @@ public static class GoHostingExtensions
                         .Entrypoint(["/app/server"]);
                 });
             });
+
+        if (packagePath != ".")
+        {
+            rb.WithAnnotation(new GoPackagePathAnnotation(packagePath), ResourceAnnotationMutationBehavior.Replace);
+        }
 
         if (buildTags is { Length: > 0 })
         {
@@ -601,11 +624,11 @@ public static class GoHostingExtensions
     /// Builds the <c>go build</c> command for the generated Dockerfile, propagating any
     /// build-time flags that were set on the resource via <see cref="AddGoApp"/>.
     /// </summary>
-    private static string BuildDockerGoCommand(IResource resource)
+    private static string BuildDockerGoCommand(IResource resource, string packagePath = ".")
     {
         var parts = new List<string> { "go", "build" };
         parts.AddRange(BuildFlagParts(resource));
-        parts.AddRange(["-o", "/app/server", "."]);
+        parts.AddRange(["-o", "/app/server", packagePath]);
         return string.Join(" ", parts);
     }
 
