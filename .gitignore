@@ -21,6 +21,7 @@ syntax: glob
 
 artifacts/
 artifacts_stage_1/
+BenchmarkDotNet.Artifacts/
 [Dd]ebug/
 [Rr]elease/
 x64/ !eng/common/cross/x64/
