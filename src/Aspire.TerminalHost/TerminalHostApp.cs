@@ -12,7 +12,7 @@ namespace Aspire.TerminalHost;
 ///
 /// Exposed as a class so tests can drive the host without spawning a process.
 /// </summary>
-internal sealed class TerminalHostApp : IAsyncDisposable
+public sealed class TerminalHostApp : IAsyncDisposable
 {
     private readonly TerminalHostArgs _args;
     private readonly ILogger _logger;
@@ -23,7 +23,7 @@ internal sealed class TerminalHostApp : IAsyncDisposable
     private TerminalHostControlListener? _controlListener;
     private bool _disposed;
 
-    public TerminalHostApp(TerminalHostArgs args, ILoggerFactory loggerFactory)
+    internal TerminalHostApp(TerminalHostArgs args, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(loggerFactory);
@@ -39,7 +39,7 @@ internal sealed class TerminalHostApp : IAsyncDisposable
     /// Snapshot of all replica states, suitable for marshalling to the AppHost
     /// via the control protocol.
     /// </summary>
-    public TerminalHostReplicaInfo[] SnapshotReplicas()
+    internal TerminalHostReplicaInfo[] SnapshotReplicas()
     {
         lock (_gate)
         {

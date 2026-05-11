@@ -35,6 +35,7 @@ internal sealed class TerminalHostEventingSubscriber(
     private Task ResolveTerminalHostsAsync(BeforeStartEvent @event, CancellationToken cancellationToken)
     {
         var terminalHostPath = _dcpOptions.Value.TerminalHostPath;
+        var invocationArgs = ParseInvocationArgs(_dcpOptions.Value.TerminalHostInvocationArgs);
 
         foreach (var host in @event.Model.Resources.OfType<TerminalHostResource>())
         {
@@ -69,15 +70,40 @@ internal sealed class TerminalHostEventingSubscriber(
 
             annotation.Command = terminalHostPath;
 
+            if (invocationArgs.Length > 0)
+            {
+                // Prepend the invocation args (e.g. "terminalhost") so the multi-mode
+                // aspire-managed.exe dispatches to TerminalHostApp.RunAsync. Mirrors how
+                // the Dashboard wires "dashboard" via DashboardEventHandlers.
+                host.Annotations.Add(new CommandLineArgsCallbackAnnotation(args =>
+                {
+                    for (var i = 0; i < invocationArgs.Length; i++)
+                    {
+                        args.Insert(i, invocationArgs[i]);
+                    }
+                }));
+            }
+
             _logger.LogDebug(
-                "Resolved terminal host '{HostName}' for target '{TargetName}' to '{TerminalHostPath}' with {ReplicaCount} replica(s).",
+                "Resolved terminal host '{HostName}' for target '{TargetName}' to '{TerminalHostPath}' (invocation args: '{InvocationArgs}') with {ReplicaCount} replica(s).",
                 host.Name,
                 host.Parent.Name,
                 terminalHostPath,
+                _dcpOptions.Value.TerminalHostInvocationArgs ?? string.Empty,
                 host.Layout.ReplicaCount);
         }
 
         return Task.CompletedTask;
+    }
+
+    private static string[] ParseInvocationArgs(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return [];
+        }
+
+        return raw.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
     private void ValidateReplicaCount(TerminalHostResource host)

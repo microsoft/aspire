@@ -40,6 +40,14 @@ internal sealed class DcpOptions
     public string? TerminalHostPath { get; set; }
 
     /// <summary>
+    /// Optional invocation args that must be prepended when launching <see cref="TerminalHostPath"/>.
+    /// In the CLI bundle case the path is the multi-mode <c>aspire-managed</c> exe and this is set
+    /// to <c>"terminalhost"</c> so the dispatcher routes to <c>TerminalHostApp.RunAsync</c>.
+    /// Empty for the standalone per-RID NuGet package and inner-loop cases.
+    /// </summary>
+    public string? TerminalHostInvocationArgs { get; set; }
+
+    /// <summary>
     /// Optional container runtime to override default runtime for DCP containers.
     /// </summary>
     /// <example>
@@ -145,6 +153,7 @@ internal class ConfigureDefaultDcpOptions(
     private const string DcpExtensionsPathMetadataKey = "DcpExtensionsPath";
     private const string DashboardPathMetadataKey = "aspiredashboardpath";
     private const string TerminalHostPathMetadataKey = "aspireterminalhostpath";
+    private const string TerminalHostInvocationArgsMetadataKey = "aspireterminalhostinvocationargs";
 
     public static string DcpPublisher = nameof(DcpPublisher);
 
@@ -209,6 +218,21 @@ internal class ConfigureDefaultDcpOptions(
         else
         {
             options.TerminalHostPath = GetMetadataValue(assemblyMetadata, TerminalHostPathMetadataKey);
+        }
+
+        // Terminal Host invocation args (used when the binary is the multi-mode aspire-managed exe in the bundle).
+        var configTerminalHostInvocationArgs = configuration["ASPIRE_TERMINAL_HOST_INVOCATION_ARGS"];
+        if (!string.IsNullOrEmpty(configTerminalHostInvocationArgs))
+        {
+            options.TerminalHostInvocationArgs = configTerminalHostInvocationArgs;
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)]))
+        {
+            options.TerminalHostInvocationArgs = dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)];
+        }
+        else
+        {
+            options.TerminalHostInvocationArgs = GetMetadataValue(assemblyMetadata, TerminalHostInvocationArgsMetadataKey);
         }
 
         if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ContainerRuntime)]))
