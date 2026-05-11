@@ -7,11 +7,13 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
@@ -390,6 +392,37 @@ public class ResourceDetailsTests : DashboardTestContext
         var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
         Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
         Assert.Contains(Columns.StateColumnResourceWaiting, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
+    public void Render_NullState_ShowsUnknownStateInResourceDetails()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
+
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.State] = new ResourcePropertyViewModel(
+                KnownProperties.Resource.State,
+                Value.ForNull(),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(KnownProperties.Resource.State, _ => Aspire.Dashboard.Resources.Resources.ResourcesDetailsStateProperty),
+                priority: 0)
+        };
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            properties: properties);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(Aspire.Dashboard.Resources.Resources.ResourcesDetailsStateProperty, resourcePropertyGrid.TextContent);
+        Assert.Contains(Columns.UnknownStateLabel, resourcePropertyGrid.TextContent);
     }
 
     [Fact]
