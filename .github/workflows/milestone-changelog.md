@@ -1154,15 +1154,15 @@ Use this exact format:
 - [💻 CLI](#-cli)
 - [📊 Dashboard](#-dashboard)
 
+> ℹ️ This changelog is automatically generated from merged pull requests and may
+> contain inaccuracies. For official release notes, see
+> [${RELEASE_NOTES_URL}](${RELEASE_NOTES_URL}).
+
 ## What's New
 
 - [2026-04-22 22:48 — 🧭 Feature name](#-apphost)
 - [2026-04-21 07:30 — 🆕 New CLI command](#-cli)
 - [2026-04-20 23:05 — 🚀 Another feature](#-apphost)
-
-> ℹ️ This changelog is automatically generated from merged pull requests and may
-> contain inaccuracies. For official release notes, see
-> [${RELEASE_NOTES_URL}](${RELEASE_NOTES_URL}).
 
 ## 🏠 AppHost
 
