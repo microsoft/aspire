@@ -32,6 +32,7 @@
     <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
 
     <DashboardPublishedArtifactsOutputDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'DashboardArtifacts', '$(Configuration)'))</DashboardPublishedArtifactsOutputDir>
+    <TerminalHostPublishedArtifactsOutputDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'TerminalHostArtifacts', '$(Configuration)'))</TerminalHostPublishedArtifactsOutputDir>
     <WorkloadsPackageSource>$(ArtifactsShippingPackagesDir)</WorkloadsPackageSource>
 
     <!-- Issue: https://github.com/microsoft/aspire/issues/8488 -->

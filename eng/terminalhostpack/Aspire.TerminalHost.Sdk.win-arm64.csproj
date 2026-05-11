@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <TerminalHostRuntime>win-arm64</TerminalHostRuntime>
+    <TerminalHostPlatformType>Windows</TerminalHostPlatformType>
+  </PropertyGroup>
+
+  <Import Project="Common.projitems" />
+
+</Project>

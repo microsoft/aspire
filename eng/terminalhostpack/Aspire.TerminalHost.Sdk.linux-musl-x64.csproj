@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <TerminalHostRuntime>linux-musl-x64</TerminalHostRuntime>
+    <TerminalHostPlatformType>Unix</TerminalHostPlatformType>
+  </PropertyGroup>
+
+  <Import Project="Common.projitems" />
+
+</Project>

@@ -1,0 +1,19 @@
+<Project>
+
+  <!-- *** BEGIN *** -->
+
+  <PropertyGroup>
+    <AspireTerminalHostDir Condition=" '$(AspireTerminalHostDir)' == '' ">$([MSBuild]::NormalizeDirectory($(MSBuildThisFileDirectory), '..', 'tools'))</AspireTerminalHostDir>
+    <AspireTerminalHostDir>$([MSBuild]::EnsureTrailingSlash('$(AspireTerminalHostDir)'))</AspireTerminalHostDir>
+    <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
+    <AspireTerminalHostPath Condition=" '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
+    <AspireTerminalHostPath Condition="$([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectCapability Include="AspireTerminalHost" />
+  </ItemGroup>
+
+  <!-- *** END ***  -->
+
+</Project>

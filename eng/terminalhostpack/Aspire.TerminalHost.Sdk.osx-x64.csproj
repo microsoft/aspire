@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <TerminalHostRuntime>osx-x64</TerminalHostRuntime>
+    <TerminalHostPlatformType>Unix</TerminalHostPlatformType>
+  </PropertyGroup>
+
+  <Import Project="Common.projitems" />
+
+</Project>
