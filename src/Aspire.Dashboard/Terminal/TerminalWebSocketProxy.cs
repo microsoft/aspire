@@ -52,17 +52,11 @@ internal static class TerminalWebSocketProxy
             {
                 // Belt-and-braces: if any exception escapes the inner handler
                 // (e.g. from a code path our nested catches missed), log it
-                // here at error and to stderr. Without this the exception
-                // would reach Kestrel which can take the entire dashboard
-                // down depending on the request state. Phase 9f hardening
-                // for the regression where Stop kills the dashboard.
+                // here at error. Without this the exception would reach
+                // Kestrel which can take the entire dashboard down depending
+                // on the request state. Phase 9f hardening for the regression
+                // where Stop kills the dashboard.
                 logger.LogError(ex, "Terminal WebSocket handler {ConnectionId} crashed.", connectionId);
-                Console.Error.WriteLine($"[dashboard] terminal handler {connectionId} crashed: {ex.GetType().FullName}: {ex.Message}");
-                if (ex.StackTrace is { } stack)
-                {
-                    Console.Error.WriteLine(stack);
-                }
-                Console.Error.Flush();
 
                 // Best-effort response if we haven't started writing one yet.
                 if (!context.Response.HasStarted)

@@ -106,7 +106,10 @@
         <MainSection>
             @if (_selectedResourceHasTerminal && _terminalResourceName is not null)
             {
-                <TerminalView @ref="_terminalViewRef" ResourceName="@_terminalResourceName" ReplicaIndex="@_terminalReplicaIndex" />
+                <TerminalView
+                    @ref="_terminalViewRef"
+                    ResourceName="@_terminalResourceName"
+                    ReplicaIndex="@_terminalReplicaIndex" />
             }
             else
             {

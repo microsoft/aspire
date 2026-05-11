@@ -7,7 +7,7 @@ using Hex1b.Theming;
 using Hex1b.Widgets;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Cli.Commands;
+namespace Aspire.Cli.Tui;
 
 /// <summary>
 /// TUI shell for <c>aspire terminal attach</c>. Hosts an embedded
@@ -238,6 +238,10 @@ internal sealed class TerminalViewerApp
                 // rethrow surfaces _embeddedFault if any, and the
                 // top-level catch in TerminalAttachCommand handles
                 // user-cancellation cleanly.
+                _logger.LogDebug(
+                    "Outer Hex1bApp cancelled (embeddedFaulted={EmbeddedFaulted}, callerRequested={CallerRequested}).",
+                    _embeddedFault is not null,
+                    cancellationToken.IsCancellationRequested);
             }
         }
         finally
@@ -250,7 +254,14 @@ internal sealed class TerminalViewerApp
                     _embeddedCts.Dispose();
                 }
             }
-            catch { /* ignore */ }
+            catch (Exception ex)
+            {
+                // Cancel/Dispose on a CTS shouldn't normally throw, but a
+                // concurrent dispose from another teardown path could
+                // surface ObjectDisposedException. Log so we can spot
+                // teardown ordering bugs without breaking the outer flow.
+                _logger.LogDebug(ex, "Embedded CTS teardown failed ({ExceptionType}).", ex.GetType().FullName);
+            }
 
             try
             {
@@ -261,7 +272,14 @@ internal sealed class TerminalViewerApp
                     await Task.WhenAny(disposeTask, timeout).ConfigureAwait(false);
                 }
             }
-            catch { /* ignore */ }
+            catch (Exception ex)
+            {
+                // Surface failures from Hex1bTerminal.DisposeAsync (transport
+                // already-disposed races, pump observation faults). Logged
+                // at debug because the 2s timeout above also masks "stuck
+                // dispose" cases that we don't want to surface as errors.
+                _logger.LogDebug(ex, "Embedded terminal dispose failed ({ExceptionType}).", ex.GetType().FullName);
+            }
 
             _outerCts?.Dispose();
         }
