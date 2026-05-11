@@ -423,6 +423,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             context);
 
         Assert.Equal(ResourceCommandResponseKind.InvalidArguments, response.Kind);
+        Assert.Equal("Command argument validation failed.", response.Message);
         Assert.False(executed);
     }
 

@@ -52,7 +52,7 @@ message ResourceCommand {
     // or hidden in the UI.
     ResourceCommandState state = 9;
     // Static, ordered input metadata that describes the invocation arguments accepted by the command.
-    // Dashboard clients can render these inputs and send object-shaped values in ResourceCommandRequest.arguments.
+    // Dashboard clients can render these inputs and send a map of Values in ResourceCommandRequest.arguments keyed by InteractionInput.name.
     repeated InteractionInput argument_inputs = 10;
 }
 
