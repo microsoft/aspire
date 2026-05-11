@@ -569,6 +569,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             return content;
         }
 
+        // Replace allocates only when a match is found. The CRLF/CR replacements are
+        // already cheap when absent (llms.txt is LF-only on the wire), so don't bother
+        // gating them.
         content = content.Replace("\r\n", "\n").Replace("\r", "\n");
 
         var builder = new StringBuilder(content.Length + 64);
@@ -583,11 +586,16 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
         builder.Append(NormalizeMarkdownSegment(content[position..]));
 
-        var normalized = TrailingWhitespaceBeforeNewlineRegex().Replace(builder.ToString(), "\n");
-        normalized = BlankLineAfterHeadingRegex().Replace(normalized, "$1\n");
-        normalized = BlankLineAfterTableRegex().Replace(normalized, "$1\n");
-        normalized = BlankLineAfterListRegex().Replace(normalized, "$1\n");
-        normalized = ExcessBlankLinesRegex().Replace(normalized, "\n\n");
+        // Each Regex.Replace in this chain allocates a fresh string the size of the
+        // input when ANY match is found, even if only one. For long documents this is
+        // the dominant allocation source in GetDocumentAsync (≈1.4 MB per call before
+        // these IsMatch gates). For docs that don't contain tables/lists/etc. the
+        // corresponding pass becomes a single forward scan with no allocation.
+        var normalized = ReplaceIfMatches(builder.ToString(), TrailingWhitespaceBeforeNewlineRegex(), "\n");
+        normalized = ReplaceIfMatches(normalized, BlankLineAfterHeadingRegex(), "$1\n");
+        normalized = ReplaceIfMatches(normalized, BlankLineAfterTableRegex(), "$1\n");
+        normalized = ReplaceIfMatches(normalized, BlankLineAfterListRegex(), "$1\n");
+        normalized = ReplaceIfMatches(normalized, ExcessBlankLinesRegex(), "\n\n");
 
         return normalized.Trim();
     }
@@ -599,17 +607,23 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             return content;
         }
 
-        content = InlineHeadingRegex().Replace(content, "\n\n$1");
-        content = SectionTitledBookmarkRegex().Replace(content, "\n\n");
-        content = InlineOrderedListRegex().Replace(content, "\n$1");
-        content = InlineUnorderedListRegex().Replace(content, "\n* ");
-        content = InlineTableStartRegex().Replace(content, "$1\n$2");
-        content = InlineTableRowBoundaryRegex().Replace(content, "\n");
-        content = InlineTableEndRegex().Replace(content, "$1\n$2");
-        content = LeadingWhitespaceRegex().Replace(content, "");
+        // See NormalizeContent for the rationale: IsMatch is a no-allocation scan
+        // that short-circuits at the first match, so when a pattern doesn't apply
+        // we avoid both the rebuild and the allocation.
+        content = ReplaceIfMatches(content, InlineHeadingRegex(), "\n\n$1");
+        content = ReplaceIfMatches(content, SectionTitledBookmarkRegex(), "\n\n");
+        content = ReplaceIfMatches(content, InlineOrderedListRegex(), "\n$1");
+        content = ReplaceIfMatches(content, InlineUnorderedListRegex(), "\n* ");
+        content = ReplaceIfMatches(content, InlineTableStartRegex(), "$1\n$2");
+        content = ReplaceIfMatches(content, InlineTableRowBoundaryRegex(), "\n");
+        content = ReplaceIfMatches(content, InlineTableEndRegex(), "$1\n$2");
+        content = ReplaceIfMatches(content, LeadingWhitespaceRegex(), "");
 
         return content;
     }
+
+    private static string ReplaceIfMatches(string input, Regex regex, string replacement)
+        => regex.IsMatch(input) ? regex.Replace(input, replacement) : input;
 
     private static string NormalizeCodeBlock(string codeBlock)
     {
