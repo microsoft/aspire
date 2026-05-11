@@ -313,9 +313,10 @@ internal sealed class UpdateCommand : BaseCommand
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
-        // If channel is not specified, always prompt the user to select one.
-        // This ensures they consciously choose a channel that will be saved to global settings
-        // for future 'aspire new' and 'aspire init' commands.
+        // If channel is not specified, prompt the user to select one. The choice
+        // applies only to this self-update invocation; subsequent 'aspire new'
+        // and 'aspire init' commands resolve channel per-project from
+        // aspire.config.json, not from any global setting.
         if (string.IsNullOrEmpty(channel))
         {
             var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
@@ -349,20 +350,6 @@ internal sealed class UpdateCommand : BaseCommand
 
             // Extract and update to $HOME/.aspire/bin
             await ExtractAndUpdateAsync(archivePath, cancellationToken);
-
-            // Save the selected channel to global settings for future use with 'aspire new' and 'aspire init'
-            // For stable channel, clear the setting to leave it blank (like the install scripts do)
-            // For other channels (staging, daily), save the channel name
-            if (string.Equals(channel, PackageChannelNames.Stable, StringComparison.OrdinalIgnoreCase))
-            {
-                await _configurationService.DeleteConfigurationAsync("channel", isGlobal: true, cancellationToken);
-                _logger.LogDebug("Cleared global channel setting for stable channel");
-            }
-            else
-            {
-                await _configurationService.SetConfigurationAsync("channel", channel, isGlobal: true, cancellationToken);
-                _logger.LogDebug("Saved global channel setting: {Channel}", channel);
-            }
 
             return 0;
         }
