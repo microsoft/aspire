@@ -167,6 +167,14 @@ internal sealed class UpdateCommand : BaseCommand
             // must consult the project's directory tree, not the user's launch cwd. The
             // process-wide IConfiguration is rooted at the launch cwd at startup, so using
             // it here would silently read the wrong app's local config (issue #16650).
+            //
+            // Step 3 (global config "channel") is a transitional read-only path: the CLI no
+            // longer WRITES the global channel (acquisition scripts and `aspire update --self`
+            // both stopped seeding it), and identity-channel is baked into the binary via
+            // AspireCliChannel metadata. The global read remains so users who deliberately ran
+            // `aspire config set -g channel <x>` on the new CLI keep their preference honored.
+            // TODO: revisit removing the step-3 fallback once telemetry confirms global
+            // channel usage is negligible.
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
             var channelFromConfig = false;
             if (string.IsNullOrWhiteSpace(channelName))
