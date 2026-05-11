@@ -187,12 +187,12 @@ internal static partial class LlmsTxtParser
     /// in <paramref name="regions"/> straddles a boundary; every overlapping region is
     /// fully contained. Returns a shared empty list when the document has no fences.
     /// </remarks>
-    private static List<(int Start, int End)> SliceCodeBlocks(
-        List<(int Start, int End)> regions,
+    private static (int Start, int End)[] SliceCodeBlocks(
+        (int Start, int End)[] regions,
         int startIndex,
         int endIndex)
     {
-        if (regions.Count is 0)
+        if (regions.Length is 0)
         {
             return regions;
         }
@@ -215,14 +215,16 @@ internal static partial class LlmsTxtParser
             sliced.Add((s - startIndex, e - startIndex));
         }
 
-        return sliced ?? s_emptyRegions;
+        return sliced?.ToArray() ?? s_emptyRegions;
     }
 
     // Sentinel returned by SliceCodeBlocks for fence-free documents. Most docs in
-    // the live corpus contain zero fenced blocks, so returning a singleton avoids
-    // hundreds of empty List<T> allocations per parse and lets callers iterate
-    // freely without null checks.
-    private static readonly List<(int Start, int End)> s_emptyRegions = [];
+    // the live corpus contain zero fenced blocks, so returning a shared instance
+    // avoids hundreds of empty allocations per parse. Using an array (specifically
+    // Array.Empty) over a shared List<T> is deliberate: a shared mutable list
+    // would be silently corrupted for every caller if any future consumer ever
+    // did Add/Clear on the result. An array is fixed-size and can't grow.
+    private static readonly (int Start, int End)[] s_emptyRegions = Array.Empty<(int Start, int End)>();
 
     /// <summary>
     /// Finds the character indices where each H1 header starts.
@@ -231,7 +233,7 @@ internal static partial class LlmsTxtParser
     /// Headings inside fenced code blocks (e.g., bash <c>#</c> comments) are skipped so they
     /// don't get treated as document boundaries.
     /// </remarks>
-    private static List<int> FindDocumentBoundaries(ReadOnlySpan<char> span, List<(int Start, int End)> codeBlocks)
+    private static List<int> FindDocumentBoundaries(ReadOnlySpan<char> span, (int Start, int End)[] codeBlocks)
     {
         var boundaries = new List<int>();
         var position = 0;
@@ -332,7 +334,7 @@ internal static partial class LlmsTxtParser
     /// is not exercised.</param>
     private static LlmsDocument? ParseDocument(
         ReadOnlySpan<char> docSpan,
-        List<(int Start, int End)> docCodeBlocks,
+        (int Start, int End)[] docCodeBlocks,
         Dictionary<string, int>? slugCounts)
     {
         if (docSpan.IsEmpty)
@@ -458,7 +460,7 @@ internal static partial class LlmsTxtParser
     /// Parses H2+ sections from a document span, supporting both newline-delimited
     /// and inline heading formats. Properly excludes code blocks.
     /// </summary>
-    private static List<LlmsSection> ParseSections(ReadOnlySpan<char> docSpan, List<(int Start, int End)> codeBlocks)
+    private static List<LlmsSection> ParseSections(ReadOnlySpan<char> docSpan, (int Start, int End)[] codeBlocks)
     {
         var sections = new List<LlmsSection>();
 
@@ -498,7 +500,7 @@ internal static partial class LlmsTxtParser
     /// <summary>
     /// Finds all code block regions (```...```) to exclude from heading detection.
     /// </summary>
-    private static List<(int Start, int End)> FindCodeBlockRegions(ReadOnlySpan<char> content)
+    private static (int Start, int End)[] FindCodeBlockRegions(ReadOnlySpan<char> content)
     {
         var regions = new List<(int Start, int End)>();
         var position = 0;
@@ -538,13 +540,15 @@ internal static partial class LlmsTxtParser
             position = absoluteClose;
         }
 
-        return regions;
+        // Convert the build-time List<T> into a fixed-size array so the result is
+        // not silently mutable; downstream call sites only read via indexer.
+        return regions.Count is 0 ? s_emptyRegions : regions.ToArray();
     }
 
     /// <summary>
     /// Checks if a position is inside any code block region.
     /// </summary>
-    private static bool IsInsideCodeBlock(int position, List<(int Start, int End)> codeBlocks)
+    private static bool IsInsideCodeBlock(int position, (int Start, int End)[] codeBlocks)
         => TryGetContainingCodeBlock(position, codeBlocks, out _);
 
     /// <summary>
@@ -563,10 +567,10 @@ internal static partial class LlmsTxtParser
     ///   callsite skip a second linear walk over the same list.</item>
     /// </list>
     /// </remarks>
-    private static bool TryGetContainingCodeBlock(int position, List<(int Start, int End)> codeBlocks, out int end)
+    private static bool TryGetContainingCodeBlock(int position, (int Start, int End)[] codeBlocks, out int end)
     {
         var lo = 0;
-        var hi = codeBlocks.Count - 1;
+        var hi = codeBlocks.Length - 1;
 
         while (lo <= hi)
         {
@@ -598,7 +602,7 @@ internal static partial class LlmsTxtParser
     /// </summary>
     private static List<(int Index, int Level, string Heading)> FindSectionHeadings(
         ReadOnlySpan<char> docSpan,
-        List<(int Start, int End)> codeBlocks)
+        (int Start, int End)[] codeBlocks)
     {
         var sectionStarts = new List<(int Index, int Level, string Heading)>();
 
