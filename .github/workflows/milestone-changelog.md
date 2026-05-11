@@ -141,7 +141,7 @@ jobs:
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-milestone-prs.json"
 
@@ -163,21 +163,32 @@ jobs:
           echo "Already processed: $PROCESSED_COUNT"
           echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
 
-          # 2a. Enrich batch PRs with author_association (not available via gh pr list)
+          # 2a. Enrich batch PRs with author_association, comments, and files.
+          #     Two API calls per PR:
+          #       1. gh pr view --json files,comments  (files + comments in one call)
+          #       2. gh api .../pulls/$NUM              (author_association, not in gh pr view)
           if [ "$BATCH_COUNT" -gt 0 ]; then
-            echo "Enriching batch PRs with author_association..."
-            # Build a JSON lookup object {"number": "association", ...} in one pass
-            ASSOC_JSON="{}"
+            echo "Enriching batch PRs with author_association, comments, and files..."
+            : > "$DATA_DIR/enrichment.jsonl"
             for NUM in $(jq -r '.[].number' "$DATA_DIR/batch-prs.json"); do
+              VIEW=$(gh pr view "$NUM" --repo "$REPO" --json files,comments 2>/dev/null) \
+                || VIEW='{"files":[],"comments":[]}'
               ASSOC=$(gh api "repos/$REPO/pulls/$NUM" --jq '.author_association' 2>/dev/null || echo "UNKNOWN")
-              ASSOC_JSON=$(echo "$ASSOC_JSON" | jq --arg n "$NUM" --arg a "$ASSOC" '. + {($n): $a}')
+              echo "$VIEW" | jq --arg n "$NUM" --arg a "$ASSOC" '{($n): {
+                authorAssociation: $a,
+                comments: [(.comments // [])[] | {author: .author.login, body: .body, createdAt: .createdAt}],
+                files: [(.files // [])[] | {path: .path, additions: .additions, deletions: .deletions, changeType: .changeType}]
+              }}' >> "$DATA_DIR/enrichment.jsonl"
             done
-            # Merge all associations into batch-prs.json in a single rewrite
-            echo "$ASSOC_JSON" | jq --slurpfile prs "$DATA_DIR/batch-prs.json" \
-              '. as $lookup | $prs[0] | map(. + {authorAssociation: ($lookup[(.number | tostring)] // "UNKNOWN")})' \
-              > "$DATA_DIR/batch-prs-tmp.json" \
+            # Merge enrichment lookup into batch-prs.json
+            jq -s 'add // {}' "$DATA_DIR/enrichment.jsonl" \
+              | jq --slurpfile prs "$DATA_DIR/batch-prs.json" '. as $lookup | $prs[0] | map(
+                  ($lookup[(.number | tostring)] // {}) as $e |
+                  . + {authorAssociation: ($e.authorAssociation // "UNKNOWN"), comments: ($e.comments // []), files: ($e.files // [])}
+                )' > "$DATA_DIR/batch-prs-tmp.json" \
               && mv "$DATA_DIR/batch-prs-tmp.json" "$DATA_DIR/batch-prs.json"
-            echo "Enriched $BATCH_COUNT batch PRs with author_association"
+            rm -f "$DATA_DIR/enrichment.jsonl"
+            echo "Enriched $BATCH_COUNT batch PRs with author_association, comments, and files"
           fi
 
           # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date
@@ -185,7 +196,7 @@ jobs:
           MILESTONE_START="${{ env.MILESTONE_START }}"
           gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
             --search "merged:>=${MILESTONE_START}" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-docs-prs.json"
 
@@ -515,8 +526,11 @@ The pre-computation step (in the frontmatter) has already:
 Each entry in `batch-prs.json` contains: `number`, `title`, `body`, `author` (object
 with `login` and `is_bot`), `authorAssociation` (string, e.g. `"MEMBER"`, `"OWNER"`,
 `"CONTRIBUTOR"`, `"NONE"`), `mergedAt`, `labels` (array of objects with `name`),
-`additions`, `deletions`, `changedFiles`, and `files` (array of objects with
-`path`, `additions`, `deletions`, `changeType`) listing the changed file paths.
+`additions`, `deletions`, `changedFiles`, `files` (array of objects with
+`path`, `additions`, `deletions`, `changeType`) listing the changed file paths,
+and `comments` (array of objects with `author`, `body`, `createdAt`) containing
+the PR's issue comments. The `files` and `comments` fields are enriched from
+the REST API during the pre-computation step (not from `gh pr list`).
 
 The pre-computation step has also fetched merged PRs from `${DOCS_REPO}` that
 were merged on or after `${MILESTONE_START}`:
@@ -524,8 +538,8 @@ were merged on or after `${MILESTONE_START}`:
 - Oldest ${BATCH_SIZE} unprocessed docs PRs → `/tmp/gh-aw/pr-data/batch-docs-prs.json`
 
 Each entry in `batch-docs-prs.json` has the same schema as `batch-prs.json`,
-except without the `authorAssociation` field (which is only enriched for
-product PRs).
+except without the `authorAssociation`, `comments`, or `files` fields (which
+are only enriched for product PRs).
 
 ## Step 3: Process the batch PRs
 
@@ -533,9 +547,11 @@ Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_
 unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
 `number`, `title`, `body`, `author` (object with `login` and `is_bot`), `mergedAt`,
 `labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`,
-and `files` (array of objects with `path`, `additions`, `deletions`, `changeType`).
+`files` (array of objects with `path`, `additions`, `deletions`, `changeType`),
+and `comments` (array of objects with `author`, `body`, `createdAt`).
 The batch is also enriched with `authorAssociation` (fetched via REST API in the
-pre-computation step).
+pre-computation step). The `files`, `comments`, and `authorAssociation` fields
+are all fetched per-PR during enrichment, not from `gh pr list`.
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
