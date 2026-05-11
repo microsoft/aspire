@@ -371,7 +371,7 @@ public class AddJavaScriptAppTests
         var dockerfilePath = Path.Combine(tempDir.Path, "pnpm-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
 
-        // Read the generated Dockerfile and verify it contains the corepack enable pnpm command
+        // Read the generated Dockerfile and verify it enables pnpm through Corepack.
         var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
         Assert.Contains("corepack enable pnpm", dockerfileContent);
 
