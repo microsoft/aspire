@@ -767,7 +767,10 @@ internal sealed class DashboardClient : IDashboardClient
 
         if (options.Arguments is { } arguments)
         {
-            request.Arguments.Add(arguments);
+            foreach (var (key, value) in arguments)
+            {
+                request.Arguments.Add(key, value);
+            }
         }
 
         try
