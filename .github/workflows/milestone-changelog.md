@@ -542,15 +542,36 @@ with `jq` to see their exact shape.
 | File | Contents |
 |------|----------|
 | `all-milestone-prs.json` | All merged PRs in the `${MILESTONE}` milestone, sorted by `mergedAt` ascending |
-| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs. Includes `mergedBy` from the initial fetch, plus `authorAssociation`, `files`, and `comments` added by the enrichment step (not available from `gh pr list`) |
+| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs. Includes `authorAssociation`, `files`, and `comments` added by the enrichment step (not available from `gh pr list`) |
 | `all-docs-prs.json` | All merged PRs in `${DOCS_REPO}` since `${MILESTONE_START}`, sorted by `mergedAt` ascending |
 | `batch-docs-prs.json` | Oldest ${BATCH_SIZE} unprocessed docs PRs (same base fields as product PRs plus `files`, but **without** `authorAssociation` or `comments`) |
+
+Each entry in `batch-prs.json` contains:
+
+| Field | Type | Source | Description |
+|-------|------|--------|-------------|
+| `number` | number | `gh pr list` | PR number |
+| `title` | string | `gh pr list` | PR title |
+| `body` | string | `gh pr list` | PR description/body text |
+| `author` | object | `gh pr list` | `{login, is_bot}` — PR author |
+| `mergedBy` | object \| null | `gh pr list` | `{login, is_bot}` — user who merged the PR (null if unavailable) |
+| `mergedAt` | string | `gh pr list` | ISO 8601 UTC merge timestamp |
+| `labels` | array | `gh pr list` | Array of `{name}` objects |
+| `additions` | number | `gh pr list` | Total lines added |
+| `deletions` | number | `gh pr list` | Total lines deleted |
+| `changedFiles` | number | `gh pr list` | Number of files changed |
+| `authorAssociation` | string | enrichment | `"MEMBER"`, `"CONTRIBUTOR"`, or `"UNKNOWN"` |
+| `files` | array | enrichment | Array of `{path, additions, deletions, changeType}` objects |
+| `comments` | array | enrichment | Array of `{author, body, createdAt}` objects |
+
+Entries in `batch-docs-prs.json` have the same base fields (from `gh pr list`)
+plus `files`, but **without** `authorAssociation` or `comments`.
 
 ## Step 3: Process the batch PRs
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
-unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Inspect the JSON
-with `jq` to see the exact field names available in each entry.
+unprocessed PRs, sorted by `mergedAt` ascending (oldest first). See Step 2 for the
+full schema of each entry.
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
