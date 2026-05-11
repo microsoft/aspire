@@ -335,7 +335,7 @@ public class AddGoAppTests
                 "--listen=:2345",
                 "--api-version=2",
                 "debug",
-                "--build-flags=-tags=netgo -ldflags=\u0027-s -w\u0027",
+                "--build-flags=-tags=\u0027netgo\u0027 -ldflags=\u0027-s -w\u0027",
                 "."
               ]
             }
@@ -495,8 +495,29 @@ public class AddGoAppTests
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
         Assert.Contains("-race", content);
-        Assert.Contains("-tags=netgo,osusergo", content);
+        Assert.Contains("-tags='netgo,osusergo'", content);
         Assert.Contains("-ldflags='-X main.version=1.0.0'", content);
+    }
+
+    [Fact]
+    public async Task VerifyPublish_ShellQuote_HandlesEmbeddedSingleQuotes()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        // ldFlags contains an embedded single quote (e.g. a message string).
+        // ShellQuote must escape it using the POSIX '\'' technique so the
+        // generated Dockerfile RUN command is valid shell.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path, ldFlags: "-X main.msg=it's alive");
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+        // POSIX: 'it'\''s' is the correctly escaped form of it's inside single quotes.
+        Assert.Contains("-ldflags='-X main.msg=it'\\''s alive'", content);
     }
 
     [Fact]

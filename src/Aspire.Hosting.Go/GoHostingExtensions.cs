@@ -493,7 +493,7 @@ public static class GoHostingExtensions
 
         if (resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
         {
-            parts.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
+            parts.Add($"-tags={ShellQuote(string.Join(",", tagsAnnotation.Tags))}");
         }
 
         if (resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
@@ -510,34 +510,14 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
-    /// Wraps <paramref name="value"/> as a single POSIX shell token when needed so that
-    /// shell tokenisation in Dockerfile <c>RUN</c> instructions and Delve's
-    /// <c>--build-flags</c> parser do not split it into separate tokens or produce
-    /// invalid syntax for embedded single quotes.
+    /// Wraps <paramref name="value"/> in POSIX single quotes so that all shell
+    /// metacharacters (<c>$</c>, <c>`</c>, <c>\</c>, <c>"</c>, <c>;</c>,
+    /// <c>&amp;</c>, <c>|</c>, space, etc.) are treated as literals in Dockerfile
+    /// <c>RUN</c> shell-form commands and Delve's <c>--build-flags</c> parser.
+    /// Embedded single quotes are escaped with the standard POSIX technique:
+    /// <c>'</c> → <c>'\''</c>.
     /// </summary>
-    private static string ShellQuote(string value)
-    {
-        if (value.Length == 0)
-        {
-            return "''";
-        }
+    private static string ShellQuote(string value) =>
+        $"'{value.Replace("'", "'\\''")}'";
 
-        var requiresQuoting = false;
-
-        foreach (var ch in value)
-        {
-            if (char.IsWhiteSpace(ch) || ch == '\'')
-            {
-                requiresQuoting = true;
-                break;
-            }
-        }
-
-        if (!requiresQuoting)
-        {
-            return value;
-        }
-
-        return $"'{value.Replace("'", "'\"'\"'")}'";
-    }
 }
