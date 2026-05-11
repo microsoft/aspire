@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -20,7 +19,6 @@ internal sealed class TemplateNuGetConfigService(
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IPackagingService packagingService,
-    IConfigurationService configurationService,
     ITemplateVersionPrompter templateVersionPrompter,
     ICliHostEnvironment hostEnvironment)
 {
@@ -67,18 +65,14 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
-    /// Applies NuGet.config create/update behavior for a channel name (option or global config value).
+    /// Applies NuGet.config create/update behavior for a channel name resolved from
+    /// command input (e.g. <c>--channel</c>) or per-project <c>aspire.config.json</c>.
     /// </summary>
     /// <param name="channelName">The optional channel name from command input.</param>
     /// <param name="outputPath">The output path where the project was created.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     public async Task PromptToCreateOrUpdateNuGetConfigAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(channelName))
-        {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
-
         if (string.IsNullOrWhiteSpace(channelName))
         {
             return;
@@ -109,11 +103,6 @@ internal sealed class TemplateNuGetConfigService(
     /// <returns><see langword="true"/> if a NuGet.config was created or updated; otherwise <see langword="false"/>.</returns>
     public async Task<bool> CreateOrUpdateNuGetConfigWithoutPromptAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(channelName))
-        {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
-
         if (string.IsNullOrWhiteSpace(channelName))
         {
             return false;
@@ -153,12 +142,7 @@ internal sealed class TemplateNuGetConfigService(
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
 
-        // Channel override (e.g. --channel) takes priority over the global setting.
         var channelName = query.ChannelOverride;
-        if (string.IsNullOrEmpty(channelName))
-        {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
@@ -171,9 +155,30 @@ internal sealed class TemplateNuGetConfigService(
             var matchingChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
             if (matchingChannel is null)
             {
-                throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                // A locally-built CLI bakes channel="local" into its assembly metadata, but the
+                // matching ~/.aspire/hives/local hive only exists if the developer installed the
+                // build via the dogfood script. On a clean machine the hive is absent and the
+                // PackagingService produces no "local" channel, which would otherwise fail any
+                // caller that forwards CliExecutionContext.Channel as an explicit override
+                // (e.g. `aspire init`). Treat this exact case as a request for the implicit
+                // channel — semantically a CLI with no local hive is just a CLI that uses the
+                // ambient NuGet configuration. The implicit channel is the CLI's own
+                // no-channel default, derived from ambient NuGet, not from any settings file.
+                if (string.Equals(channelName, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+                {
+                    var implicitChannel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
+                        ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}' and no implicit channel is registered. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                    channels = new[] { implicitChannel };
+                }
+                else
+                {
+                    throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                }
             }
-            channels = new[] { matchingChannel };
+            else
+            {
+                channels = new[] { matchingChannel };
+            }
         }
         else
         {
@@ -227,8 +232,9 @@ internal sealed class TemplateNuGetConfigService(
             return new TemplatePackageSelection(cliVersionMatch.Package, cliVersionMatch.Channel);
         }
 
-        // If channel was specified via --channel option or global setting (but no --version),
-        // automatically select the highest version from that channel without prompting.
+        // If channel was specified via --channel option or per-project aspire.config.json
+        // (but no --version), automatically select the highest version from that channel
+        // without prompting.
         if (hasChannelSetting)
         {
             var first = orderedPackagesFromChannels.First();
@@ -306,7 +312,7 @@ internal sealed class TemplateNuGetConfigService(
 /// <summary>
 /// Inputs that control how <see cref="TemplateNuGetConfigService.ResolveTemplatePackageAsync"/> picks a channel and version.
 /// </summary>
-/// <param name="ChannelOverride">Optional channel name override (e.g. from <c>--channel</c>). When null, the global <c>channel</c> configuration is consulted.</param>
+/// <param name="ChannelOverride">Optional channel name override resolved upstream from <c>--channel</c> or per-project <c>aspire.config.json</c>. When null, channel selection proceeds without an explicit override (the resolver's default behavior).</param>
 /// <param name="VersionOverride">Optional explicit template version (e.g. from <c>--version</c>).</param>
 /// <param name="SourceOverride">Optional source override carried for symmetry with <see cref="TemplateInputs"/>; not consulted by resolution today.</param>
 /// <param name="IncludePrHives">When true (e.g. for <c>aspire new</c>), local PR hive directories under <c>~/.aspire/hives</c> participate in channel discovery; when false (e.g. for <c>aspire init</c>), they are ignored.</param>
