@@ -54,6 +54,9 @@ func main() {
 		_, _ = service.ContainerName()
 		_, _ = service.PullPolicy()
 		_, _ = service.Restart()
+		_, _ = service.Configs().Count()
+		_, _ = service.Secrets().Count()
+		_, _ = service.Ulimits().Count()
 	})
 
 	_, _ = compose.DefaultNetworkName()
