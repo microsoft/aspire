@@ -3,9 +3,14 @@
 
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Go;
+using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -81,10 +86,10 @@ public static class GoHostingExtensions
                 if (hasDelve)
                 {
                     // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
-                    //   dlv --headless=true --listen=:PORT --api-version=2 debug [--build-flags=...] . [-- args]
+                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--build-flags=...] . [-- args]
                     // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
                     ctx.Args.Add("--headless=true");
-                    ctx.Args.Add($"--listen=:{delveAnnotation!.Port}");
+                    ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
                     ctx.Args.Add("--api-version=2");
                     ctx.Args.Add("debug");
 
@@ -148,6 +153,7 @@ public static class GoHostingExtensions
 
                 containerBuilder.WithDockerfileBuilder(appDirectory, ctx =>
                 {
+                    var logger = ctx.Services.GetService<ILogger<GoAppResource>>();
                     var goVersion = GoVersionDetector.Detect(appDirectory);
 
                     ctx.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
@@ -178,6 +184,10 @@ public static class GoHostingExtensions
                         .Copy(".", ".")
                         .Run(buildCmd);
 
+                    // Add intermediate FROM stages for any container files sources
+                    // (e.g. FROM frontend AS frontend_stage).
+                    ctx.Builder.AddContainerFilesStages(ctx.Resource, logger);
+
                     var runtimeStage = ctx.Builder.From(runtimeImage);
 
                     // Only use apk when the runtime image is Alpine-based.
@@ -191,6 +201,8 @@ public static class GoHostingExtensions
 
                     runtimeStage
                         .WorkDir("/app")
+                        // Add COPY --from=<source> instructions for each container files source.
+                        .AddContainerFiles(ctx.Resource, "/app", logger)
                         .CopyFrom("build", "/app/server", "/app/server")
                         .Entrypoint(["/app/server"]);
                 });
@@ -215,6 +227,20 @@ public static class GoHostingExtensions
         {
             rb.WithAnnotation(new GoRaceDetectorAnnotation(), ResourceAnnotationMutationBehavior.Replace);
         }
+
+        // Ensure source resources (that provide container files) build before this Go image.
+        rb.WithPipelineConfiguration(context =>
+        {
+            if (rb.Resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(
+                    out var containerFilesAnnotations))
+            {
+                var buildSteps = context.GetSteps(rb.Resource, WellKnownPipelineTags.BuildCompute);
+                foreach (var containerFile in containerFilesAnnotations)
+                {
+                    buildSteps.DependsOn(context.GetSteps(containerFile.Source, WellKnownPipelineTags.BuildCompute));
+                }
+            }
+        });
 
         return rb;
     }
@@ -387,7 +413,7 @@ public static class GoHostingExtensions
     /// <summary>
     /// Starts a headless Delve debug server so that any DAP-compatible client can attach remotely.
     /// The application is launched as
-    /// <c>dlv --headless=true --listen=:&lt;port&gt; --api-version=2 debug .</c>
+    /// <c>dlv --headless=true --listen=127.0.0.1:&lt;port&gt; --api-version=2 debug .</c>
     /// instead of <c>go run .</c>. Delve must be available on the PATH.
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>

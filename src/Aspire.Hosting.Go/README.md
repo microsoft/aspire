@@ -79,7 +79,7 @@ builder.AddGoApp("api", "../go-api")
 
 This launches:
 ```sh
-dlv --headless=true --listen=:2345 --api-version=2 debug .
+dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 debug .
 ```
 
 **GoLand** — create a **Go Remote** run/debug configuration (**Edit | Run Configurations**):

@@ -4,8 +4,8 @@
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 
-using Aspire.Hosting.Utils;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Go.Tests;
 
@@ -301,7 +301,7 @@ public class AddGoAppTests
               "command": "dlv",
               "args": [
                 "--headless=true",
-                "--listen=:2345",
+                "--listen=127.0.0.1:2345",
                 "--api-version=2",
                 "debug",
                 "."
@@ -332,7 +332,7 @@ public class AddGoAppTests
               "command": "dlv",
               "args": [
                 "--headless=true",
-                "--listen=:2345",
+                "--listen=127.0.0.1:2345",
                 "--api-version=2",
                 "debug",
                 "--build-flags=-tags=\u0027netgo\u0027 -ldflags=\u0027-s -w\u0027",
@@ -362,7 +362,7 @@ public class AddGoAppTests
               "command": "dlv",
               "args": [
                 "--headless=true",
-                "--listen=:2345",
+                "--listen=127.0.0.1:2345",
                 "--api-version=2",
                 "debug",
                 "--build-flags=-race",
@@ -392,7 +392,7 @@ public class AddGoAppTests
               "command": "dlv",
               "args": [
                 "--headless=true",
-                "--listen=:2345",
+                "--listen=127.0.0.1:2345",
                 "--api-version=2",
                 "debug",
                 "--build-flags=-gcflags=\u0027all=-N -l\u0027",
@@ -423,7 +423,7 @@ public class AddGoAppTests
               "command": "dlv",
               "args": [
                 "--headless=true",
-                "--listen=:2345",
+                "--listen=127.0.0.1:2345",
                 "--api-version=2",
                 "debug",
                 ".",
@@ -555,4 +555,115 @@ public class AddGoAppTests
         Assert.Contains("FROM debian:bookworm-slim", content);
         Assert.DoesNotContain("alpine", content);
     }
+
+    // ---- Container files (IContainerFilesDestinationResource) ---------------
+
+    [Fact]
+    public void GoAppResource_ImplementsIContainerFilesDestinationResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        Assert.IsType<GoAppResource>(app.Resource, exactMatch: false);
+        Assert.True(app.Resource is IContainerFilesDestinationResource);
+    }
+
+    [Fact]
+    public void PublishWithContainerFiles_AddsAnnotationToGoResource()
+    {
+        using var outputDir = new TestTempDirectory();
+        // PublishWithContainerFiles only adds the annotation in publish mode.
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+
+        var source = builder.AddResource(new GoFilesContainer("frontend", "node", "."))
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
+
+        var api = builder.AddGoApp("api", AppContext.BaseDirectory);
+        api.PublishWithContainerFiles(source, "/app/static");
+
+        Assert.True(
+            api.Resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var annotations),
+            "ContainerFilesDestinationAnnotation should be present after PublishWithContainerFiles");
+
+        var annotation = Assert.Single(annotations);
+        Assert.Same(source.Resource, annotation.Source);
+        Assert.Equal("/app/static", annotation.DestinationPath);
+    }
+
+    [Fact]
+    public async Task VerifyPublish_ContainerFiles_GeneratesFromAndCopyInstructions()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+
+        // A container resource that exposes static files (e.g. a built frontend).
+        var frontend = builder.AddResource(new GoFilesContainer("frontend", "node", "."))
+            .PublishAsDockerFile(c =>
+                c.WithDockerfileBuilder(".", ctx => ctx.Builder.From("scratch"))
+                 .WithImageTag("deterministic-tag"))
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
+
+        var api = builder.AddGoApp("api", sourceDir.Path);
+        api.PublishWithContainerFiles(frontend, "/app/static");
+
+        builder.Build().Run();
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        // The builder stage ARG + FROM should reference the frontend image.
+        Assert.Contains("frontend", dockerfile);
+        // The runtime stage should COPY the static files from the frontend stage.
+        Assert.Contains("COPY --from=", dockerfile);
+        Assert.Contains("/app/dist", dockerfile);
+        Assert.Contains("/app/static", dockerfile);
+    }
+
+    [Fact]
+    public async Task VerifyPublish_ContainerFiles_MultipleSourcesAllPresent()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+
+        var frontend = builder.AddResource(new GoFilesContainer("frontend", "node", "."))
+            .PublishAsDockerFile(c =>
+                c.WithDockerfileBuilder(".", ctx => ctx.Builder.From("scratch"))
+                 .WithImageTag("frontend-tag"))
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
+
+        var assets = builder.AddResource(new GoFilesContainer("assets", "node", "."))
+            .PublishAsDockerFile(c =>
+                c.WithDockerfileBuilder(".", ctx => ctx.Builder.From("scratch"))
+                 .WithImageTag("assets-tag"))
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/public" });
+
+        var api = builder.AddGoApp("api", sourceDir.Path);
+        api.PublishWithContainerFiles(frontend, "/app/static");
+        api.PublishWithContainerFiles(assets, "/app/public");
+
+        builder.Build().Run();
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        // Both sources should have a FROM stage and COPY instruction.
+        Assert.Contains("frontend", dockerfile);
+        Assert.Contains("assets", dockerfile);
+        Assert.Contains("/app/dist", dockerfile);
+        Assert.Contains("/app/public", dockerfile);
+    }
+
+    // Minimal resource that implements IResourceWithContainerFiles so tests can
+    // call PublishWithContainerFiles without depending on a real container integration.
+    private sealed class GoFilesContainer(string name, string command, string workingDirectory)
+        : ExecutableResource(name, command, workingDirectory), IResourceWithContainerFiles;
 }
