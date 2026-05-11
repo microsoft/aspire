@@ -1,9 +1,0 @@
-{
-  "author": "sebastienros",
-  "comment": "Already shipped via backport in milestone 13.3 (PR #16628)",
-  "mergedAt": "2026-05-01T02:27:37Z",
-  "number": 16624,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Remove obsolete ATS export shims"
-}

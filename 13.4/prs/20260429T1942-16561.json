@@ -1,9 +1,0 @@
-{
-  "author": "davidfowl",
-  "comment": "Already shipped via backport in milestone 13.3 (PR #16572)",
-  "mergedAt": "2026-04-29T19:42:39Z",
-  "number": 16561,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Fix Windows detached AppHost launcher"
-}

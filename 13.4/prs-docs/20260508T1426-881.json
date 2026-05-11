@@ -1,9 +1,0 @@
-{
-  "author": "IEvangelist",
-  "comment": "Internal docs tooling change, not a product feature doc",
-  "mergedAt": "2026-05-08T14:26:53Z",
-  "number": 881,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Use pnpm instead of npm in check-data-files.mjs"
-}

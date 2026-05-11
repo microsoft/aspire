@@ -1,9 +1,0 @@
-{
-  "author": "adamint",
-  "comment": "Bug fix for --apphost flag resolution",
-  "mergedAt": "2026-04-29T23:31:42Z",
-  "number": 16406,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "included",
-  "title": "Fix --apphost directory resolution for commands"
-}

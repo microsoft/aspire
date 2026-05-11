@@ -1,9 +1,0 @@
-{
-  "author": "davidfowl",
-  "comment": "New experimental BrowserLogs feature for browser-based resources",
-  "mergedAt": "2026-05-01T05:22:03Z",
-  "number": 16565,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "included",
-  "title": "Add BrowserLogs tracked browser sessions"
-}

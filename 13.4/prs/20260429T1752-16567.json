@@ -1,9 +1,0 @@
-{
-  "author": "joperezr",
-  "comment": "Routine CI maintenance",
-  "mergedAt": "2026-04-29T17:52:11Z",
-  "number": 16567,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Update scheduled workflows for the 13.3 release"
-}

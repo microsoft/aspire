@@ -1,9 +1,0 @@
-{
-  "author": "eerhardt",
-  "comment": "Already shipped via backport in milestone 13.3 (PR #16582)",
-  "mergedAt": "2026-04-30T01:49:37Z",
-  "number": 16541,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Validate build-only container references in the pipeline"
-}

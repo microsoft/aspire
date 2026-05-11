@@ -1,9 +1,0 @@
-{
-  "author": "joperezr",
-  "comment": "Internal CI/security config change, not user-facing",
-  "mergedAt": "2026-04-29T17:29:08Z",
-  "number": 16245,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Suppress container security analysis for non-production Dockerfiles"
-}

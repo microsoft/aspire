@@ -1,9 +1,0 @@
-{
-  "author": "danegsta",
-  "comment": "Windows symlink/junction fallback improvement",
-  "mergedAt": "2026-04-30T23:36:05Z",
-  "number": 16612,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "included",
-  "title": "Fallback to junctions if either creating OR evaluating symlinks fails"
-}

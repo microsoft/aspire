@@ -1,9 +1,0 @@
-{
-  "author": "app/aspire-repo-bot",
-  "comment": "No matching changelog entry in current batch",
-  "mergedAt": "2026-05-11T04:34:31Z",
-  "number": 897,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "[docs] Update custom-resource-commands to use new CommandResults.Success displayImmediately overload"
-}

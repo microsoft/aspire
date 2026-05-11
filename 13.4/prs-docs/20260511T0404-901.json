@@ -1,9 +1,0 @@
-{
-  "author": "app/aspire-repo-bot",
-  "comment": "No matching changelog entry in current batch",
-  "mergedAt": "2026-05-11T04:04:07Z",
-  "number": 901,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "[docs] Remove execCommandEnabled from CLI config settings reference"
-}

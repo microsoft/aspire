@@ -1,9 +1,0 @@
-{
-  "author": "eerhardt",
-  "comment": "Already shipped via backport in milestone 13.3 (PR #16583)",
-  "mergedAt": "2026-04-29T23:42:52Z",
-  "number": 16580,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Ensure compute environment prepare waits for validation"
-}

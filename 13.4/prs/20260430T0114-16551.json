@@ -1,9 +1,0 @@
-{
-  "author": "mitchdenny",
-  "comment": "Gateway TLS FQDN discovery and TypeScript AppHost endpoint fix",
-  "mergedAt": "2026-04-30T01:14:11Z",
-  "number": 16551,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "included",
-  "title": "Gateway TLS without hostname (FQDN discovery) + TS AppHost endpoint fix"
-}

@@ -1,9 +1,0 @@
-{
-  "author": "IEvangelist",
-  "comment": "Workspace-local polyglot CLI artifacts",
-  "mergedAt": "2026-04-29T19:53:46Z",
-  "number": 15991,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "included",
-  "title": "Store polyglot artifacts under the workspace .aspire folder"
-}

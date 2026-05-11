@@ -1,9 +1,0 @@
-{
-  "author": "eerhardt",
-  "comment": "Already shipped via backport in milestone 13.3 (PR #16649)",
-  "mergedAt": "2026-05-01T17:42:43Z",
-  "number": 16629,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "excluded",
-  "title": "Fix TypeScript AppHost generated port ranges"
-}

@@ -1,9 +1,0 @@
-{
-  "author": "radical",
-  "comment": "Build pipeline now publishes native NativeAOT CLI packages",
-  "mergedAt": "2026-04-30T22:20:57Z",
-  "number": 16570,
-  "runDate": "2026-05-11T06:24:43Z",
-  "status": "included",
-  "title": "Publish native Aspire CLI tool packages"
-}
