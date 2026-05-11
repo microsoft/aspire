@@ -1970,6 +1970,167 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.False(promptedForVersion);
         Assert.Equal(cliVersion, selectedPackageVersion);
     }
+    [Fact]
+    public async Task AddCommand_WithLocalHive_PrefersCurrentCliVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var localPackagesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", PackageChannelNames.Local, "packages"));
+        localPackagesDir.Create();
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        // Aspire.Hosting drives GetLocalHivePinnedVersion; Aspire.Hosting.Redis is the integration we add.
+        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
+
+        var selectedPackageVersion = string.Empty;
+        var promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in the local hive.");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                // The local channel enumerates .nupkg files directly and does not call package search.
+                // Implicit channel still goes through search; return a stable that should be ignored.
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
+                {
+                    var implicitPackage = new NuGetPackage
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "implicit",
+                        Version = "13.2.2"
+                    };
+
+                    return (0, new[] { implicitPackage });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
+                {
+                    selectedPackageVersion = packageVersion;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal(cliVersion, selectedPackageVersion);
+    }
+
+    [Fact]
+    public async Task AddCommand_WithLocalAndPrHives_PrefersHiveMatchingCurrentCliVersion()
+    {
+        // F (cross-channel mixing precedence): both `local` and `pr-12345` hives are populated.
+        // The local hive is pinned to the current CLI version; pr-12345 is pinned to a stale version.
+        // AddCommand routes through VersionHelper.TryGetCurrentCliVersionMatch, which iterates
+        // candidates from local-build channels (`IsLocalBuildChannel` = local | pr-* | run-*) and
+        // returns the first version that exactly matches GetDefaultSdkVersion(). Only the local
+        // hive's package matches, so it wins regardless of which channel ran first.
+        //
+        // NOTE on undocumented contract: when BOTH hives contain a CLI-version-exact match,
+        // selection falls through to enumeration order of GetChannelsAsync's
+        // HivesDirectory.GetDirectories() (filesystem-dependent, typically alphabetical),
+        // combined with Parallel.ForEachAsync ordering in IntegrationPackageSearchService.
+        // No deterministic precedence is currently defined for that case. Flagged for policy.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesRoot = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        var localPackagesDir = new DirectoryInfo(Path.Combine(hivesRoot.FullName, PackageChannelNames.Local, "packages"));
+        var prPackagesDir = new DirectoryInfo(Path.Combine(hivesRoot.FullName, "pr-12345", "packages"));
+        localPackagesDir.Create();
+        prPackagesDir.Create();
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        const string staleVersion = "13.0.0-pr.99999.gstale01";
+
+        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
+
+        File.WriteAllText(Path.Combine(prPackagesDir.FullName, $"Aspire.Hosting.{staleVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(prPackagesDir.FullName, $"Aspire.Hosting.Redis.{staleVersion}.nupkg"), string.Empty);
+
+        var selectedPackageVersion = string.Empty;
+        var selectedPackageSource = string.Empty;
+        var promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt; CLI-version match in local hive should win.");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
+                {
+                    var implicitPackage = new NuGetPackage
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "implicit",
+                        Version = "13.2.2"
+                    };
+
+                    return (0, new[] { implicitPackage });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
+                {
+                    selectedPackageVersion = packageVersion;
+                    selectedPackageSource = nugetSource ?? string.Empty;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal(cliVersion, selectedPackageVersion);
+        Assert.NotEqual(staleVersion, selectedPackageVersion);
+    }
 
     private static NuGetPackage CreatePackage(string id, string version)
     {
