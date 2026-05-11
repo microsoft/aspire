@@ -93,11 +93,9 @@ public class HostedAgentConfigurationTests
 
         var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
 
-        Assert.Contains("Foundry hosted agent for target resource 'target'", ex.Message);
-        Assert.Contains("Environment variable names must contain only ASCII letters, digits, or underscores.", ex.Message);
-        Assert.Contains("'INVALID-NAME'", ex.Message);
-        Assert.Contains("'invalid.name'", ex.Message);
-        Assert.DoesNotContain("VALID_NAME_1", ex.Message);
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'target' contains environment variable names that are not supported by Foundry Hosted Agents. Environment variable names must contain only ASCII letters, digits, or underscores. Invalid name(s): 'INVALID-NAME', 'invalid.name'",
+            ex.Message);
     }
 
     [Fact]
