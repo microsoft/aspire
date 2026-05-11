@@ -83,8 +83,16 @@ internal static partial class LlmsTxtParser
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Compute fenced code block regions once over the full content. The regions are
+        // used by FindDocumentBoundaries (so bash `#` comments inside fences are not
+        // mistaken for H1s) and again by ParseSections (so `##`/`###` inside fences are
+        // not mistaken for section headings). Doing it once avoids re-scanning every
+        // document's body for ``` runs.
+        var span = content.AsSpan();
+        var codeBlocks = FindCodeBlockRegions(span);
+
         // Find all document boundaries (line indices where H1 headers start)
-        var docBoundaries = FindDocumentBoundaries(content);
+        var docBoundaries = FindDocumentBoundaries(span, codeBlocks);
         if (docBoundaries.Count is 0)
         {
             return Task.FromResult<IReadOnlyList<LlmsDocument>>([]);
@@ -102,8 +110,14 @@ internal static partial class LlmsTxtParser
                 ? docBoundaries[i + 1]
                 : content.Length;
 
+            // Slice the globally-computed fence regions down to this document's window
+            // and rebase to document-local indices so ParseSections can treat them the
+            // same way it does today. Document boundaries are guaranteed to lie OUTSIDE
+            // fences (we skipped inside-fence H1s above), so no fence spans a boundary.
+            var docCodeBlocks = SliceCodeBlocks(codeBlocks, startIndex, endIndex);
+
             var docContent = content.AsMemory(startIndex, endIndex - startIndex);
-            var document = ParseDocument(docContent.Span, slugCounts);
+            var document = ParseDocument(docContent.Span, docCodeBlocks, slugCounts);
 
             if (document is not null)
             {
@@ -115,17 +129,58 @@ internal static partial class LlmsTxtParser
     }
 
     /// <summary>
+    /// Slices <paramref name="regions"/> down to the document window
+    /// <c>[<paramref name="startIndex"/>, <paramref name="endIndex"/>)</c> and rebases each
+    /// region's <c>Start</c>/<c>End</c> so they are relative to <paramref name="startIndex"/>.
+    /// </summary>
+    /// <remarks>
+    /// Document boundaries are detected to lie outside fenced code blocks, so no fence
+    /// in <paramref name="regions"/> straddles a boundary; every overlapping region is
+    /// fully contained. Returns a shared empty list when the document has no fences.
+    /// </remarks>
+    private static List<(int Start, int End)> SliceCodeBlocks(
+        List<(int Start, int End)> regions,
+        int startIndex,
+        int endIndex)
+    {
+        if (regions.Count is 0)
+        {
+            return regions;
+        }
+
+        List<(int Start, int End)>? sliced = null;
+
+        foreach (var (s, e) in regions)
+        {
+            if (e <= startIndex)
+            {
+                continue;
+            }
+
+            if (s >= endIndex)
+            {
+                break;
+            }
+
+            sliced ??= [];
+            sliced.Add((s - startIndex, e - startIndex));
+        }
+
+        return sliced ?? s_emptyRegions;
+    }
+
+    private static readonly List<(int Start, int End)> s_emptyRegions = [];
+
+    /// <summary>
     /// Finds the character indices where each H1 header starts.
     /// </summary>
     /// <remarks>
     /// Headings inside fenced code blocks (e.g., bash <c>#</c> comments) are skipped so they
     /// don't get treated as document boundaries.
     /// </remarks>
-    private static List<int> FindDocumentBoundaries(string content)
+    private static List<int> FindDocumentBoundaries(ReadOnlySpan<char> span, List<(int Start, int End)> codeBlocks)
     {
         var boundaries = new List<int>();
-        var span = content.AsSpan();
-        var codeBlocks = FindCodeBlockRegions(span);
         var position = 0;
 
         // Check if content starts with H1
@@ -201,11 +256,17 @@ internal static partial class LlmsTxtParser
     /// Parses a single document from a content span.
     /// </summary>
     /// <param name="docSpan">The span over the document's content (starting at its H1).</param>
+    /// <param name="docCodeBlocks">Fenced code-block regions within <paramref name="docSpan"/>,
+    /// rebased to document-local indices. Passed through so <see cref="ParseSections"/> does
+    /// not have to re-scan <paramref name="docSpan"/> for ``` runs.</param>
     /// <param name="slugCounts">Tracks slugs already issued in this parse, so we can append
     /// a numeric suffix when two documents would otherwise share the same slug. The dictionary
     /// is mutated in place. Pass <see langword="null"/> only in tests where collision handling
     /// is not exercised.</param>
-    private static LlmsDocument? ParseDocument(ReadOnlySpan<char> docSpan, Dictionary<string, int>? slugCounts)
+    private static LlmsDocument? ParseDocument(
+        ReadOnlySpan<char> docSpan,
+        List<(int Start, int End)> docCodeBlocks,
+        Dictionary<string, int>? slugCounts)
     {
         if (docSpan.IsEmpty)
         {
@@ -229,8 +290,8 @@ internal static partial class LlmsTxtParser
         var remaining = firstNewline >= 0 ? docSpan[(firstNewline + 1)..] : [];
         var summary = FindSummary(remaining);
 
-        // Parse sections
-        var sections = ParseSections(docSpan);
+        // Parse sections, reusing the pre-computed fence regions for this document.
+        var sections = ParseSections(docSpan, docCodeBlocks);
 
         // Content is the full span as string
         var content = docSpan.ToString();
@@ -330,14 +391,12 @@ internal static partial class LlmsTxtParser
     /// Parses H2+ sections from a document span, supporting both newline-delimited
     /// and inline heading formats. Properly excludes code blocks.
     /// </summary>
-    private static List<LlmsSection> ParseSections(ReadOnlySpan<char> docSpan)
+    private static List<LlmsSection> ParseSections(ReadOnlySpan<char> docSpan, List<(int Start, int End)> codeBlocks)
     {
         var sections = new List<LlmsSection>();
 
-        // Find code block regions to exclude
-        var codeBlocks = FindCodeBlockRegions(docSpan);
-
-        // Find all section headings (H2+)
+        // Find all section headings (H2+) using the pre-computed fence regions
+        // passed down from ParseAsync.
         var sectionStarts = FindSectionHeadings(docSpan, codeBlocks);
 
         // Build sections with content
