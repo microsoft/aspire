@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed polyglot AppHosts (Go, TypeScript) to correctly honor an explicitly configured DCP (Developer Control Plane) path rather than falling back to auto-detection.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd27",
+  "firstMergedAt": "2026-05-05T00:44:49Z",
+  "lastMergedAt": "2026-05-05T00:44:49Z",
+  "name": "Honor explicit DCP config for polyglot AppHosts",
+  "owner": "sebastienros",
+  "prs": [
+    16734
+  ]
+}

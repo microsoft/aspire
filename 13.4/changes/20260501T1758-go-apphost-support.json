@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@edmondshtogu"
+  ],
+  "description": "Completed Go polyglot AppHost support with fixture tests, updated code generator, transport fixes, and a Go starter template \u2014 reaching parity with the TypeScript AppHost implementation.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udc39",
+  "firstMergedAt": "2026-05-01T17:58:52Z",
+  "lastMergedAt": "2026-05-01T17:58:52Z",
+  "name": "Go polyglot AppHost support",
+  "owner": "sebastienros",
+  "prs": [
+    16038
+  ]
+}

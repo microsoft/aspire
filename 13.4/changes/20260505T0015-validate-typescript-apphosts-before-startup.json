@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript AppHosts are now validated (type-checked and compiled) before the application starts up, providing early feedback on build errors rather than failing at runtime.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2705",
+  "firstMergedAt": "2026-05-05T00:15:36Z",
+  "lastMergedAt": "2026-05-05T00:15:36Z",
+  "name": "Validate TypeScript AppHosts before startup",
+  "owner": "sebastienros",
+  "prs": [
+    16689
+  ]
+}

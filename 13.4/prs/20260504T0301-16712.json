@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Engineering improvement for changelog automation",
+  "mergedAt": "2026-05-04T03:01:20Z",
+  "number": 16712,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Support backport PRs in milestone changelog workflow"
+}

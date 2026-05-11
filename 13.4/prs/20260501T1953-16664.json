@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for persistent notification in VS Code extension",
+  "mergedAt": "2026-05-01T19:53:56Z",
+  "number": 16664,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Fix sticky Finding apphosts notification in VS Code extension"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed `aspire init` failing to install templates when using non-stable (preview or CI) CLI builds, ensuring template installation works correctly regardless of build channel.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd29",
+  "firstMergedAt": "2026-05-02T07:08:36Z",
+  "lastMergedAt": "2026-05-02T07:08:36Z",
+  "name": "Fix aspire init template install for non-stable builds",
+  "owner": "mitchdenny",
+  "prs": [
+    16690
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Improved output spacing in the `aspire init` command for a cleaner and more readable terminal experience.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2728",
+  "firstMergedAt": "2026-05-04T08:54:14Z",
+  "lastMergedAt": "2026-05-04T08:54:14Z",
+  "name": "Improve CLI init output spacing",
+  "owner": "JamesNK",
+  "prs": [
+    16718
+  ]
+}

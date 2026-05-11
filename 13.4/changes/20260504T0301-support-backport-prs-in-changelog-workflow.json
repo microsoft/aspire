@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "\ud83d\udd27",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The milestone changelog workflow now correctly detects and processes backport PRs, attributing them to the original PR author and content rather than the backport bot.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd04",
+  "firstMergedAt": "2026-05-04T03:01:20Z",
+  "lastMergedAt": "2026-05-04T03:01:20Z",
+  "name": "Backport PR support in changelog workflow",
+  "owner": "JamesNK",
+  "prs": [
+    16712
+  ]
+}

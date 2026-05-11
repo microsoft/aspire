@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Container tunnel errors are now reported with more diagnostic detail, making it easier to diagnose connection failures when tunneling into containers.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0d",
+  "firstMergedAt": "2026-05-04T17:50:47Z",
+  "lastMergedAt": "2026-05-04T17:50:47Z",
+  "name": "Improved container tunnel error reporting",
+  "owner": "karolz-ms",
+  "prs": [
+    16537
+  ]
+}

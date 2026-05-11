@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,11 +8,11 @@
   "description": "Fixed `--apphost` flag resolution for stop-side CLI commands so explicit AppHost project-file paths go directly to the socket lookup path while directory-valued inputs resolve correctly via project detection.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "🔧",
+  "emoji": "\ud83d\udd27",
   "firstMergedAt": "2026-04-29T23:31:42Z",
   "lastMergedAt": "2026-04-29T23:31:42Z",
   "name": "Fix --apphost directory resolution",
-  "owner": "davidfowl",
+  "owner": "adamint",
   "prs": [
     16406
   ]

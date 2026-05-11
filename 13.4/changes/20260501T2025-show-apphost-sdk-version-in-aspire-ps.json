@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire ps` command now shows the AppHost SDK version alongside each running AppHost, making it easier to identify which version of Aspire is in use.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccb",
+  "firstMergedAt": "2026-05-01T20:25:55Z",
+  "lastMergedAt": "2026-05-01T20:25:55Z",
+  "name": "Show AppHost SDK version in aspire ps",
+  "owner": "adamint",
+  "prs": [
+    16517
+  ]
+}

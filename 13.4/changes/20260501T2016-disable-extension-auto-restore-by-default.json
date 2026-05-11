@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension no longer automatically runs dotnet restore on startup by default, reducing unwanted background activity.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2699\ufe0f",
+  "firstMergedAt": "2026-05-01T20:16:01Z",
+  "lastMergedAt": "2026-05-01T20:16:01Z",
+  "name": "Disable VS Code extension auto-restore by default",
+  "owner": "adamint",
+  "prs": [
+    16658
+  ]
+}

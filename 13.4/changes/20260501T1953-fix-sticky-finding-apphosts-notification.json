@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug in the VS Code extension where the \"Finding apphosts\" notification would remain visible indefinitely instead of disappearing after AppHost discovery completed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd14",
+  "firstMergedAt": "2026-05-01T19:53:56Z",
+  "lastMergedAt": "2026-05-01T19:53:56Z",
+  "name": "Fix sticky Finding apphosts notification",
+  "owner": "adamint",
+  "prs": [
+    16664
+  ]
+}

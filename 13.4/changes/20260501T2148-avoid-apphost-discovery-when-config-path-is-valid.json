@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now skips unnecessary AppHost project discovery when an explicit, valid config path has already been specified, improving startup performance.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\ude80",
+  "firstMergedAt": "2026-05-01T21:48:19Z",
+  "lastMergedAt": "2026-05-01T21:48:19Z",
+  "name": "Avoid AppHost discovery when config path is valid",
+  "owner": "adamint",
+  "prs": [
+    16653
+  ]
+}

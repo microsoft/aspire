@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "AppHost improvement for early TypeScript build validation",
+  "mergedAt": "2026-05-05T00:15:36Z",
+  "number": 16689,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Validate TypeScript AppHosts before startup"
+}

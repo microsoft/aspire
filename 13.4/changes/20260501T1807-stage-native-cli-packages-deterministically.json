@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "\ud83d\udd27",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Native CLI tool packages are now staged deterministically in the build pipeline, improving reproducibility of release builds.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-05-01T18:07:21Z",
+  "lastMergedAt": "2026-05-01T18:07:21Z",
+  "name": "Deterministic native CLI package staging",
+  "owner": "radical",
+  "prs": [
+    16631
+  ]
+}

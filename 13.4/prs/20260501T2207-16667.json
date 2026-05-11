@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New VS Code extension code lens features",
+  "mergedAt": "2026-05-01T22:07:06Z",
+  "number": 16667,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Show AppHost code lenses without opening the panel; add Open Dashboard / View Logs lenses"
+}

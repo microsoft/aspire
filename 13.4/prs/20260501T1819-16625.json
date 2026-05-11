@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Bug fix in Python starter template health check build",
+  "mergedAt": "2026-05-01T18:19:28Z",
+  "number": 16625,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Fix Python starter TypeScript health check build"
+}

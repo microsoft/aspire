@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI UX improvement for init command output",
+  "mergedAt": "2026-05-04T08:54:14Z",
+  "number": 16718,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Improve CLI init output spacing"
+}

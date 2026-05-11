@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix for aspire init template install in non-stable builds",
+  "mergedAt": "2026-05-02T07:08:36Z",
+  "number": 16690,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Fix aspire init template install for non-stable CLI builds (#16654)"
+}

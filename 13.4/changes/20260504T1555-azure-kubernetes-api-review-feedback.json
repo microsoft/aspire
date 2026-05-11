@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Applied API review feedback to the Azure Kubernetes hosting extensions, improving naming consistency and API design for AKS SKU tier and ingress configuration.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2638\ufe0f",
+  "firstMergedAt": "2026-05-04T15:55:20Z",
+  "lastMergedAt": "2026-05-04T15:55:20Z",
+  "name": "Azure Kubernetes API review improvements",
+  "owner": "eerhardt",
+  "prs": [
+    16673
+  ]
+}

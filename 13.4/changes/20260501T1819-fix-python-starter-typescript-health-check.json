@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "\ud83d\udcc4",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a build error in the Python starter template where the TypeScript health check component failed to compile due to missing configuration.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1b",
+  "firstMergedAt": "2026-05-01T18:19:28Z",
+  "lastMergedAt": "2026-05-01T18:19:28Z",
+  "name": "Fix Python starter TypeScript health check build",
+  "owner": "sebastienros",
+  "prs": [
+    16625
+  ]
+}

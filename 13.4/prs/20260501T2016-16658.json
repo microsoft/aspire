@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension behavior improvement",
+  "mergedAt": "2026-05-01T20:16:01Z",
+  "number": 16658,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Disable VS Code extension auto-restore by default"
+}

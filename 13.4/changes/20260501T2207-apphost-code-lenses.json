@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "AppHost code lenses (Run, Stop, Restart) are now shown directly in the editor without requiring the Aspire panel to be open. New Open Dashboard and View Logs code lenses have also been added.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd2d",
+  "firstMergedAt": "2026-05-01T22:07:06Z",
+  "lastMergedAt": "2026-05-01T22:07:06Z",
+  "name": "AppHost code lenses without opening panel",
+  "owner": "adamint",
+  "prs": [
+    16667
+  ]
+}

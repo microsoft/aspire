@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the language picker prompt in `aspire new` when creating an empty AppHost so that it correctly lists and applies the selected language.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-05-05T00:16:55Z",
+  "lastMergedAt": "2026-05-05T00:16:55Z",
+  "name": "Fix aspire new empty AppHost language picker",
+  "owner": "maddymontaquila",
+  "prs": [
+    16666
+  ]
+}

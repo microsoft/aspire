@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "AppHost improvement for container tunnel diagnostics",
+  "mergedAt": "2026-05-04T17:50:47Z",
+  "number": 16537,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Improve error reporting for container tunnel"
+}

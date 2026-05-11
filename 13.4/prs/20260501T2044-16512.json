@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension improvement forwarding debug output",
+  "mergedAt": "2026-05-01T20:44:32Z",
+  "number": 16512,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "included",
+  "title": "Forward VS Code debug output to dashboard logs, apphost errors show in Aspire debug session console"
+}

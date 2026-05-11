@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "VS Code debug adapter output is now forwarded to the Aspire dashboard logs, and AppHost errors are shown directly in the Aspire debug session console for easier diagnostics.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce1",
+  "firstMergedAt": "2026-05-01T20:44:32Z",
+  "lastMergedAt": "2026-05-01T20:44:32Z",
+  "name": "Forward VS Code debug output to dashboard logs",
+  "owner": "adamint",
+  "prs": [
+    16512
+  ]
+}

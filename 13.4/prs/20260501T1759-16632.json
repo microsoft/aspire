@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Trivial test dependency update with no user-facing impact",
+  "mergedAt": "2026-05-01T17:59:49Z",
+  "number": 16632,
+  "runDate": "2026-05-11T08:05:19Z",
+  "status": "excluded",
+  "title": "Update Verify.XunitV3 to avoid invalid artifact paths"
+}
