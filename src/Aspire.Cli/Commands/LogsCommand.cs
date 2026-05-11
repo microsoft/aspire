@@ -309,6 +309,12 @@ internal sealed class LogsCommand : BaseCommand
                 LogsCommandStrings.GettingLogs,
                 async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, cancellationToken).ConfigureAwait(false));
 
+            // Apply full-text search filter before tail so tail count reflects matching entries
+            if (!string.IsNullOrEmpty(search))
+            {
+                entries = entries.Where(e => MatchesSearch(e, search)).ToList();
+            }
+
             // Output last N lines
             var tailedEntries = entries.Count > tail.Value
                 ? entries.Skip(entries.Count - tail.Value)

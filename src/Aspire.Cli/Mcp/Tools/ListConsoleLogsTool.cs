@@ -46,7 +46,8 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
 
         // Get the resource name from arguments
         string? resourceName = null;
-        if (arguments is not null && arguments.TryGetValue("resourceName", out var resourceNameElement))
+        if (arguments is not null && arguments.TryGetValue("resourceName", out var resourceNameElement) &&
+            resourceNameElement.ValueKind == JsonValueKind.String)
         {
             resourceName = resourceNameElement.GetString();
         }
@@ -57,7 +58,8 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
         }
 
         string? search = null;
-        if (arguments is not null && arguments.TryGetValue("search", out var searchElement))
+        if (arguments is not null && arguments.TryGetValue("search", out var searchElement) &&
+            searchElement.ValueKind == JsonValueKind.String)
         {
             search = searchElement.GetString();
         }
@@ -91,7 +93,12 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                     .ToList();
             }
 
-            var totalLogsCount = entries.Count == 0 ? 0 : entries.Last().LineNumber;
+            // When search is applied, total reflects matching entries. Otherwise, use the
+            // last line number which represents the total lines collected by the LogEntries buffer.
+            var totalLogsCount = string.IsNullOrEmpty(search)
+                ? (entries.Count == 0 ? 0 : entries.Last().LineNumber)
+                : entries.Count;
+
             var (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
                 entries,
                 totalLogsCount,

@@ -169,7 +169,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Full-text search across log text, attribute values, names, source, IDs, and other fields.
+        ///   Looks up a localized string similar to Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs.
         /// </summary>
         internal static string SearchOptionDescription {
             get {

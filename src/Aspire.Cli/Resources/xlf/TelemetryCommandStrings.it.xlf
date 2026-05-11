@@ -168,8 +168,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
-        <source>Full-text search across attribute values, names, source, IDs, and other text fields</source>
-        <target state="new">Full-text search across attribute values, names, source, IDs, and other text fields</target>
+        <source>Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</source>
+        <target state="new">Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

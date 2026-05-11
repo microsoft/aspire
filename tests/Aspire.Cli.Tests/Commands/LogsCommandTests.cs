@@ -1090,6 +1090,52 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(logsOutput.Logs);
     }
 
+    [Fact]
+    public async Task LogsCommand_FollowWithTailAndSearch_FiltersTailOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+                connection.GetResourceLogsHandler = (resourceName, follow, cancellationToken) =>
+                    FollowTailSearchLogsAsync(follow, cancellationToken);
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --follow --tail 10 --search timeout");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // The tail output should only contain lines matching the search
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Ready to accept connections", StringComparison.Ordinal));
+        Assert.Contains(outputWriter.Logs, l => l.Contains("Connection timeout error", StringComparison.Ordinal));
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Client connected", StringComparison.Ordinal));
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> FollowTailSearchLogsAsync(
+        bool follow,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (!follow)
+        {
+            // Non-follow: return the initial set of logs (used for --tail)
+            yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false };
+            yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Connection timeout error", IsError = true };
+            yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "Client connected from 127.0.0.1", IsError = false };
+            yield break;
+        }
+
+        // Follow: simulate the stream ending via disposal (no new logs)
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
     private ServiceProvider CreateLogsTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,

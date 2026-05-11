@@ -286,16 +286,15 @@ public class TelemetryApiServiceTests
     public void GetLogs_WithSearch_IsCaseInsensitive()
     {
         var repository = CreateRepository();
-        AddLogs(repository, ["ERROR occurred"], severity: SeverityNumber.Error);
+        AddLogs(repository, ["UPPERCASE warning detected"]);
         AddLogs(repository, ["Normal log"]);
 
         var service = CreateService(repository);
 
-        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: null, search: "error");
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: null, search: "uppercase warning");
 
         Assert.NotNull(result);
-        // Matches "ERROR occurred" message (case-insensitive) and potentially the severity field
-        Assert.True(result.ReturnedCount >= 1);
+        Assert.Equal(1, result.ReturnedCount);
     }
 
     [Fact]
