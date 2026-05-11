@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#16906 which is milestone 13.4, not 13.3. No matching 13.3 changelog entry.",
+  "mergedAt": "2026-05-11T04:34:31Z",
+  "number": 897,
+  "runDate": "2026-05-11T05:20:38Z",
+  "status": "excluded",
+  "title": "[docs] Update custom-resource-commands to use new CommandResults.Success displayImmediately overload"
+}

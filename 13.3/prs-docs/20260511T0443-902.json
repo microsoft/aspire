@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#16829 which is not in 13.3 milestone (max 13.3 PR is #16822). No matching 13.3 changelog entry.",
+  "mergedAt": "2026-05-11T04:43:17Z",
+  "number": 902,
+  "runDate": "2026-05-11T05:20:38Z",
+  "status": "excluded",
+  "title": "[docs] aspire update: document --yes required with --non-interactive"
+}

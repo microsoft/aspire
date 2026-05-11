@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#16921 which is milestone 13.4, not 13.3. No matching 13.3 changelog entry.",
+  "mergedAt": "2026-05-11T04:52:24Z",
+  "number": 904,
+  "runDate": "2026-05-11T05:20:38Z",
+  "status": "excluded",
+  "title": "[docs] Document resource-scoped command help and --include-hidden option"
+}
