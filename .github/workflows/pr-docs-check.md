@@ -621,21 +621,58 @@ pre-agent-steps:
       fi
 
       # --- 6. Compute the effective target branch --------------------------
-      # If the candidate is `main`, it always exists. Otherwise, the candidate
-      # release branch must be present in the enumerated list; if not, fall
-      # back to `main` and record that for the PR description.
-      EFFECTIVE="${CANDIDATE}"
-      FELL_BACK="false"
-      if [ "${CANDIDATE}" != "main" ]; then
-        if ! grep -Fxq "${CANDIDATE}" "${RELEASE_BRANCHES_FILE}"; then
-          echo "Candidate ${CANDIDATE} not present on microsoft/aspire.dev; falling back to main"
-          EFFECTIVE="main"
-          FELL_BACK="true"
-        fi
+      # Policy (in priority order):
+      #   1. exact_match: CANDIDATE is a release/* branch that exists on
+      #      aspire.dev → use it as-is.
+      #   2. latest_release_fallback: aspire.dev has at least one release/*
+      #      branch → use the highest-versioned one. This covers both:
+      #        - CANDIDATE was `main` (no milestone/linked-issue/base-ref
+      #          signal) — docs for upcoming-release work should still land
+      #          on the staged release/* branch, not on aspire.dev's main.
+      #        - CANDIDATE was a release/* (e.g. release/13.3) that no
+      #          longer exists on aspire.dev (already shipped, branch
+      #          deleted). The docs site only keeps a release/* branch for
+      #          the upcoming release; older release-branch content is
+      #          merged into main on aspire.dev as those releases ship.
+      #   3. main_fallback: aspire.dev has no release/* at all → use main.
+      #
+      # Sort release branches with sort -V *after* stripping the
+      # "release/" prefix so the numeric version compares cleanly:
+      # "release/13.4" beats "release/9.5" (without -V, lexicographic
+      # ordering would put 9.5 last; with -V on the bare versions, 13.4
+      # comes last).
+      LATEST_RELEASE=""
+      if [ -s "${RELEASE_BRANCHES_FILE}" ]; then
+        LATEST_RELEASE="$(
+          sed -n 's|^release/||p' "${RELEASE_BRANCHES_FILE}" \
+            | sort -V \
+            | tail -n1 \
+            | sed 's|^|release/|'
+        )"
       fi
+
+      EFFECTIVE=""
+      RESOLUTION=""
+      if [ "${CANDIDATE}" != "main" ] && grep -Fxq "${CANDIDATE}" "${RELEASE_BRANCHES_FILE}"; then
+        EFFECTIVE="${CANDIDATE}"
+        RESOLUTION="exact_match"
+      elif [ -n "${LATEST_RELEASE}" ]; then
+        EFFECTIVE="${LATEST_RELEASE}"
+        RESOLUTION="latest_release_fallback"
+        if [ "${CANDIDATE}" = "main" ]; then
+          echo "Candidate was main; using latest aspire.dev release branch ${EFFECTIVE}"
+        else
+          echo "Candidate ${CANDIDATE} not present on microsoft/aspire.dev; using latest release branch ${EFFECTIVE} instead"
+        fi
+      else
+        EFFECTIVE="main"
+        RESOLUTION="main_fallback"
+        echo "No release/* branches on microsoft/aspire.dev; falling back to main"
+      fi
+
       rm -f "${RELEASE_BRANCHES_FILE}" "${PR_JSON}"
 
-      echo "Effective     : ${EFFECTIVE} (fell_back_to_main=${FELL_BACK})"
+      echo "Effective     : ${EFFECTIVE} (resolution=${RESOLUTION})"
 
       # --- 7. Emit target.json ---------------------------------------------
       jq -n \
@@ -645,7 +682,7 @@ pre-agent-steps:
         --arg candidate_source "${CANDIDATE_SOURCE}" \
         --arg candidate_source_detail "${CANDIDATE_SOURCE_DETAIL}" \
         --arg effective "${EFFECTIVE}" \
-        --argjson fell_back "${FELL_BACK}" \
+        --arg resolution "${RESOLUTION}" \
         --argjson available "${AVAILABLE_BRANCHES_JSON}" \
         --arg enumeration_source "${ENUMERATION_SOURCE}" \
         --argjson linked_issues "${LINKED_ISSUES_JSON}" \
@@ -656,7 +693,7 @@ pre-agent-steps:
            candidate_source: $candidate_source,
            candidate_source_detail: $candidate_source_detail,
            effective_target_branch: $effective,
-           fell_back_to_main: $fell_back,
+           target_resolution: $resolution,
            available_release_branches: $available,
            enumeration_source: $enumeration_source,
            linked_issues: $linked_issues
@@ -788,10 +825,10 @@ Read `.pr-docs-check/target.json`. The fields you will use are:
 | Field | Purpose |
 | --- | --- |
 | `effective_target_branch` | The branch you must base all docs edits and the draft PR on (`main` or `release/X.Y[.Z]`). |
-| `candidate_target_branch` | The branch the resolution *wanted* before checking existence. |
+| `candidate_target_branch` | The branch the resolution *wanted* before checking existence on `microsoft/aspire.dev`. |
 | `candidate_source` | Why `candidate_target_branch` was chosen: `pr_milestone`, `linked_issue_milestone`, `pr_base`, or `fallback_main`. |
 | `candidate_source_detail` | The raw milestone title or base ref that drove the choice (use this in the PR description). |
-| `fell_back_to_main` | `true` if `candidate_target_branch` was a `release/*` branch that does not exist on `microsoft/aspire.dev` and the workflow fell back to `main`. |
+| `target_resolution` | How `effective_target_branch` was finally chosen: `exact_match` (candidate exists on `microsoft/aspire.dev`), `latest_release_fallback` (candidate was `main` or missing on `microsoft/aspire.dev`, so the newest `release/*` was used), or `main_fallback` (no `release/*` exists on `microsoft/aspire.dev`). |
 | `available_release_branches` | The full list of `release/*` branches that exist on `microsoft/aspire.dev` (for context only — don't second-guess the resolution). |
 | `enumeration_source` | How the list was obtained (`git` for the local workspace, `gh_api` for the API fallback, or `empty`). |
 
@@ -919,12 +956,20 @@ modify this value.
 - A prominent link to the source PR: `Documents changes from microsoft/aspire#<number>`
 - The PR author mention: `@<author>`
 - The target branch and how it was chosen, using `candidate_source`,
-  `candidate_source_detail`, and `fell_back_to_main` from
+  `candidate_source_detail`, and `target_resolution` from
   `.pr-docs-check/target.json`. For example:
-  - When `fell_back_to_main` is `false`: "Targeting `release/13.3` based on
-    the source PR milestone `13.3`."
-  - When `fell_back_to_main` is `true`: "Falling back to `main` because
-    `release/13.3` does not exist on `microsoft/aspire.dev`."
+  - When `target_resolution` is `exact_match`: "Targeting `release/13.4`
+    based on the source PR milestone `13.4`."
+  - When `target_resolution` is `latest_release_fallback` and the candidate
+    was a release branch: "Targeting `release/13.4` — the latest release
+    branch on `microsoft/aspire.dev` — because `release/13.3` (from the
+    source PR milestone `13.3`) does not exist there."
+  - When `target_resolution` is `latest_release_fallback` and the candidate
+    was `main`: "Targeting `release/13.4` — the latest release branch on
+    `microsoft/aspire.dev` — because the source PR has no milestone or
+    `release/*` base ref to derive a more specific target."
+  - When `target_resolution` is `main_fallback`: "Falling back to `main`
+    because `microsoft/aspire.dev` currently has no `release/*` branches."
 - Why this PR is needed (the significant change and the docs gap it addresses)
 - A summary of what documentation was added or changed
 - A list of files modified or created
