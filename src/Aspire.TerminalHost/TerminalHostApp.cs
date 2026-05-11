@@ -7,8 +7,15 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.TerminalHost;
 
 /// <summary>
-/// In-process entry point for the Aspire terminal host. Owns the per-replica
-/// relay terminals, the control listener, and the lifecycle/shutdown handshake.
+/// In-process entry point for the Aspire terminal host. Owns the single
+/// per-replica relay terminal, the control listener, and the lifecycle/shutdown
+/// handshake.
+///
+/// Each <c>aspire.terminalhost</c> process serves exactly one replica. Replica
+/// fan-out happens at the AppHost level: a target resource with N replicas
+/// causes N independent terminal host processes to be spawned, each with its
+/// own producer/consumer/control UDS triple. The host has no notion of its
+/// global replica index — that's encoded in the UDS paths and is opaque here.
 ///
 /// Exposed as a class so tests can drive the host without spawning a process.
 /// </summary>
@@ -18,8 +25,8 @@ public sealed class TerminalHostApp : IAsyncDisposable
     private readonly ILogger _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly CancellationTokenSource _shutdownCts = new();
-    private readonly List<TerminalReplica> _replicas = new();
     private readonly object _gate = new();
+    private TerminalReplica? _replica;
     private TerminalHostControlListener? _controlListener;
     private bool _disposed;
 
@@ -33,41 +40,54 @@ public sealed class TerminalHostApp : IAsyncDisposable
         _logger = loggerFactory.CreateLogger<TerminalHostApp>();
     }
 
-    public int ReplicaCount => _args.ReplicaCount;
-
     /// <summary>
-    /// Snapshot of all replica states, suitable for marshalling to the AppHost
-    /// via the control protocol.
+    /// Snapshot of the host's single replica session, suitable for marshalling
+    /// to the AppHost via the control protocol.
     /// </summary>
-    internal TerminalHostReplicaInfo[] SnapshotReplicas()
+    internal TerminalHostSessionInfo SnapshotSession()
     {
+        TerminalReplica? replica;
         lock (_gate)
         {
-            var snap = new TerminalHostReplicaInfo[_replicas.Count];
-            for (var i = 0; i < _replicas.Count; i++)
-            {
-                var r = _replicas[i];
-                snap[i] = new TerminalHostReplicaInfo
-                {
-                    Index = r.Index,
-                    ProducerUdsPath = r.ProducerUdsPath,
-                    ConsumerUdsPath = r.ConsumerUdsPath,
-                    IsAlive = r.IsAlive,
-                    ExitCode = r.ExitCode,
-                    ProducerConnected = r.ProducerConnected,
-                    RestartCount = r.RestartCount,
-                    CurrentColumns = r.CurrentColumns,
-                    CurrentRows = r.CurrentRows,
-                    AttachedPeerCount = r.AttachedPeerCount,
-                    Peers = r.SnapshotPeers(),
-                };
-            }
-            return snap;
+            replica = _replica;
         }
+
+        if (replica is null)
+        {
+            // Pre-start (replica not yet created). Report a placeholder consistent with
+            // "no producer connected" so callers can still read configured paths.
+            return new TerminalHostSessionInfo
+            {
+                ProducerUdsPath = _args.ProducerUdsPath,
+                ConsumerUdsPath = _args.ConsumerUdsPath,
+                IsAlive = false,
+                ExitCode = null,
+                ProducerConnected = false,
+                RestartCount = 0,
+                CurrentColumns = _args.Columns,
+                CurrentRows = _args.Rows,
+                AttachedPeerCount = 0,
+                Peers = Array.Empty<TerminalHostPeerInfo>(),
+            };
+        }
+
+        return new TerminalHostSessionInfo
+        {
+            ProducerUdsPath = replica.ProducerUdsPath,
+            ConsumerUdsPath = replica.ConsumerUdsPath,
+            IsAlive = replica.IsAlive,
+            ExitCode = replica.ExitCode,
+            ProducerConnected = replica.ProducerConnected,
+            RestartCount = replica.RestartCount,
+            CurrentColumns = replica.CurrentColumns,
+            CurrentRows = replica.CurrentRows,
+            AttachedPeerCount = replica.AttachedPeerCount,
+            Peers = replica.SnapshotPeers(),
+        };
     }
 
     /// <summary>
-    /// Starts each replica relay and the control listener, then waits for either
+    /// Starts the replica relay and the control listener, then waits for either
     /// the external cancellation token or a shutdown request to fire. Returns the
     /// process exit code.
     /// </summary>
@@ -76,14 +96,14 @@ public sealed class TerminalHostApp : IAsyncDisposable
         if (_args.Shell is { } shell)
         {
             _logger.LogInformation(
-                "Aspire terminal host starting: {Replicas} replica(s), shell hint='{Shell}', size={Cols}x{Rows}.",
-                _args.ReplicaCount, shell, _args.Columns, _args.Rows);
+                "Aspire terminal host starting: shell hint='{Shell}', size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
+                shell, _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
         }
         else
         {
             _logger.LogInformation(
-                "Aspire terminal host starting: {Replicas} replica(s), size={Cols}x{Rows}.",
-                _args.ReplicaCount, _args.Columns, _args.Rows);
+                "Aspire terminal host starting: size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
+                _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
         }
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -92,23 +112,19 @@ public sealed class TerminalHostApp : IAsyncDisposable
 
         try
         {
-            // Start replicas first, then the control listener; that way as soon as
-            // the AppHost can connect to control, all consumer UDS paths are bound.
-            for (var i = 0; i < _args.ReplicaCount; i++)
+            // Start the replica first, then the control listener; that way as soon as
+            // the AppHost can connect to control, the consumer UDS is bound.
+            var replicaLogger = _loggerFactory.CreateLogger("Aspire.TerminalHost.Replica");
+            var replica = TerminalReplica.Start(
+                _args.ProducerUdsPath,
+                _args.ConsumerUdsPath,
+                _args.Columns,
+                _args.Rows,
+                replicaLogger,
+                token);
+            lock (_gate)
             {
-                var replicaLogger = _loggerFactory.CreateLogger($"Aspire.TerminalHost.Replica[{i}]");
-                var replica = TerminalReplica.Start(
-                    i,
-                    _args.ProducerUdsPaths[i],
-                    _args.ConsumerUdsPaths[i],
-                    _args.Columns,
-                    _args.Rows,
-                    replicaLogger,
-                    token);
-                lock (_gate)
-                {
-                    _replicas.Add(replica);
-                }
+                _replica = replica;
             }
 
             _controlListener = new TerminalHostControlListener(
@@ -140,10 +156,10 @@ public sealed class TerminalHostApp : IAsyncDisposable
     private static async Task WaitForShutdownAsync(CancellationToken cancellationToken)
     {
         // Wait for external cancellation or an explicit shutdown request via the
-        // control protocol. We do not auto-exit when all replicas have exited:
-        // a replica failing/disconnecting is recoverable in normal operation
-        // (DCP may relaunch the upstream PTY), and DCP is responsible for
-        // tearing down the host when the resource is fully stopped.
+        // control protocol. We do not auto-exit when the replica's producer disconnects:
+        // that is recoverable in normal operation (DCP may relaunch the upstream PTY),
+        // and DCP is responsible for tearing down the host when the resource is fully
+        // stopped.
         try
         {
             await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
@@ -174,21 +190,21 @@ public sealed class TerminalHostApp : IAsyncDisposable
             _controlListener = null;
         }
 
-        TerminalReplica[] toDispose;
+        TerminalReplica? toDispose;
         lock (_gate)
         {
-            toDispose = [.. _replicas];
-            _replicas.Clear();
+            toDispose = _replica;
+            _replica = null;
         }
-        foreach (var r in toDispose)
+        if (toDispose is not null)
         {
             try
             {
-                await r.DisposeAsync().ConfigureAwait(false);
+                await toDispose.DisposeAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Error while disposing replica {Index}.", r.Index);
+                _logger.LogDebug(ex, "Error while disposing replica.");
             }
         }
     }

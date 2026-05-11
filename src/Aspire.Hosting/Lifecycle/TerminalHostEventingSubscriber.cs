@@ -11,12 +11,17 @@ namespace Aspire.Hosting.Lifecycle;
 
 /// <summary>
 /// Resolves the path to the <c>aspire.terminalhost</c> binary on each
-/// <see cref="TerminalHostResource"/> before DCP launches it. The resource is created
+/// <see cref="TerminalHostResource"/> before DCP launches it. Each resource is created
 /// during <c>WithTerminal()</c> with a placeholder command because
 /// <see cref="DcpOptions"/> is not yet configured at that point; this subscriber
 /// finalises the executable command before <see cref="BeforeStartEvent"/> completes
-/// and DCP picks the resource up.
+/// and DCP picks the resources up.
 /// </summary>
+/// <remarks>
+/// Each parent replica gets its own <see cref="TerminalHostResource"/>, so this iterates
+/// over all of them and resolves each independently. They all point at the same binary
+/// (just with different per-replica UDS args).
+/// </remarks>
 internal sealed class TerminalHostEventingSubscriber(
     IOptions<DcpOptions> dcpOptions,
     ILogger<TerminalHostEventingSubscriber> logger) : IDistributedApplicationEventingSubscriber
@@ -37,9 +42,15 @@ internal sealed class TerminalHostEventingSubscriber(
         var terminalHostPath = _dcpOptions.Value.TerminalHostPath;
         var invocationArgs = ParseInvocationArgs(_dcpOptions.Value.TerminalHostInvocationArgs);
 
+        // Surface a one-time warning per parent if the AppHost replica count drifted from
+        // what TerminalAnnotation.TerminalHosts.Count was sized for at WithTerminal() time.
+        // De-duplicated by parent name so a 5-replica drift doesn't log the same warning
+        // 5 times.
+        var warnedParents = new HashSet<string>(StringComparers.ResourceName);
+
         foreach (var host in @event.Model.Resources.OfType<TerminalHostResource>())
         {
-            ValidateReplicaCount(host);
+            ValidateReplicaIndex(host, warnedParents);
 
             if (host.Annotations.OfType<ExecutableAnnotation>().LastOrDefault() is not { } annotation)
             {
@@ -54,17 +65,17 @@ internal sealed class TerminalHostEventingSubscriber(
             if (string.IsNullOrEmpty(terminalHostPath))
             {
                 _logger.LogWarning(
-                    "Terminal host binary path is not configured. The terminal for resource '{TargetName}' will not be available. Set ASPIRE_TERMINAL_HOST_PATH or ensure the Aspire SDK provides the 'aspireterminalhostpath' assembly metadata.",
-                    host.Parent.Name);
+                    "Terminal host binary path is not configured. The terminal for resource '{TargetName}' (replica {ReplicaIndex}) will not be available. Set ASPIRE_TERMINAL_HOST_PATH or ensure the Aspire SDK provides the 'aspireterminalhostpath' assembly metadata.",
+                    host.Parent.Name, host.ParentReplicaIndex);
                 continue;
             }
 
             if (!File.Exists(terminalHostPath))
             {
                 _logger.LogWarning(
-                    "Terminal host binary not found at '{TerminalHostPath}'. The terminal for resource '{TargetName}' will not be available.",
+                    "Terminal host binary not found at '{TerminalHostPath}'. The terminal for resource '{TargetName}' (replica {ReplicaIndex}) will not be available.",
                     terminalHostPath,
-                    host.Parent.Name);
+                    host.Parent.Name, host.ParentReplicaIndex);
                 continue;
             }
 
@@ -85,12 +96,12 @@ internal sealed class TerminalHostEventingSubscriber(
             }
 
             _logger.LogDebug(
-                "Resolved terminal host '{HostName}' for target '{TargetName}' to '{TerminalHostPath}' (invocation args: '{InvocationArgs}') with {ReplicaCount} replica(s).",
+                "Resolved terminal host '{HostName}' for target '{TargetName}' replica {ReplicaIndex} to '{TerminalHostPath}' (invocation args: '{InvocationArgs}').",
                 host.Name,
                 host.Parent.Name,
+                host.ParentReplicaIndex,
                 terminalHostPath,
-                _dcpOptions.Value.TerminalHostInvocationArgs ?? string.Empty,
-                host.Layout.ReplicaCount);
+                _dcpOptions.Value.TerminalHostInvocationArgs ?? string.Empty);
         }
 
         return Task.CompletedTask;
@@ -106,18 +117,20 @@ internal sealed class TerminalHostEventingSubscriber(
         return raw.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 
-    private void ValidateReplicaCount(TerminalHostResource host)
+    private void ValidateReplicaIndex(TerminalHostResource host, HashSet<string> warnedParents)
     {
         var declaredReplicas = host.Parent.Annotations.OfType<ReplicaAnnotation>().LastOrDefault()?.Replicas ?? 1;
 
-        if (declaredReplicas != host.Layout.ReplicaCount)
+        // ParentReplicaIndex was assigned at WithTerminal() time. If WithReplicas() was
+        // called afterwards and increased the count, replicas without a matching host get
+        // no terminal. If the count decreased, hosts at the tail will never see a producer.
+        // Either way we want the same warning the previous design surfaced.
+        if (host.ParentReplicaIndex >= declaredReplicas && warnedParents.Add(host.Parent.Name))
         {
             _logger.LogWarning(
-                "Terminal host for '{TargetName}' was sized for {LayoutReplicas} replica(s) at WithTerminal() time but the resource now declares {DeclaredReplicas}. Call WithReplicas(...) before WithTerminal() to avoid this. Only the first {LayoutReplicas} replica(s) will have an attachable terminal.",
+                "Terminal host(s) for '{TargetName}' were sized at WithTerminal() time but the resource now declares {DeclaredReplicas} replica(s). Call WithReplicas(...) before WithTerminal() to avoid this. Replicas without a matching terminal host will run without an attachable terminal.",
                 host.Parent.Name,
-                host.Layout.ReplicaCount,
-                declaredReplicas,
-                host.Layout.ReplicaCount);
+                declaredReplicas);
         }
     }
 }

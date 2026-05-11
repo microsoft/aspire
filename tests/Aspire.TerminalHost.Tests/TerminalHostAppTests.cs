@@ -14,7 +14,13 @@ public sealed class TerminalHostAppTestsCollection;
 [Collection(nameof(TerminalHostAppTestsCollection))]
 public class TerminalHostAppTests
 {
-    private static (TerminalHostArgs args, TestTempDirectory tmp, string controlPath) BuildArgs(int replicaCount)
+    /// <summary>
+    /// Builds a single-replica argument set for the host. Each terminal host process
+    /// serves exactly one replica, so the AppHost (and these tests) just hand it one
+    /// producer/consumer/control UDS path triple. The replica index is opaque to the
+    /// host — callers encode it however they like in the path layout.
+    /// </summary>
+    private static (TerminalHostArgs args, TestTempDirectory tmp, string controlPath) BuildArgs()
     {
         var tmp = new TestTempDirectory();
         var dcpDir = Path.Combine(tmp.Path, "dcp");
@@ -24,36 +30,23 @@ public class TerminalHostAppTests
         Directory.CreateDirectory(hostDir);
         Directory.CreateDirectory(ctrlDir);
 
-        var producers = new string[replicaCount];
-        var consumers = new string[replicaCount];
-        for (var i = 0; i < replicaCount; i++)
-        {
-            producers[i] = Path.Combine(dcpDir, $"r{i}.sock");
-            consumers[i] = Path.Combine(hostDir, $"r{i}.sock");
-        }
+        var producer = Path.Combine(dcpDir, "r.sock");
+        var consumer = Path.Combine(hostDir, "r.sock");
         var control = Path.Combine(ctrlDir, "ctrl.sock");
 
-        var argList = new List<string> { "--replica-count", replicaCount.ToString() };
-        foreach (var p in producers)
-        {
-            argList.Add("--producer-uds");
-            argList.Add(p);
-        }
-        foreach (var c in consumers)
-        {
-            argList.Add("--consumer-uds");
-            argList.Add(c);
-        }
-        argList.Add("--control-uds");
-        argList.Add(control);
+        var args = TerminalHostArgs.Parse([
+            "--producer-uds", producer,
+            "--consumer-uds", consumer,
+            "--control-uds", control,
+        ]);
 
-        return (TerminalHostArgs.Parse([.. argList]), tmp, control);
+        return (args, tmp, control);
     }
 
     [Fact]
     public async Task RunAsyncBindsControlListenerWhenStarted()
     {
-        var (args, tmp, control) = BuildArgs(1);
+        var (args, tmp, control) = BuildArgs();
         using var disp = tmp;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
@@ -74,9 +67,9 @@ public class TerminalHostAppTests
     }
 
     [Fact]
-    public async Task ControlEndpointReturnsReplicaInfo()
+    public async Task ControlEndpointReturnsSessionInfo()
     {
-        var (args, tmp, control) = BuildArgs(2);
+        var (args, tmp, control) = BuildArgs();
         using var disp = tmp;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
@@ -90,16 +83,12 @@ public class TerminalHostAppTests
             using var rpc = await OpenControlRpcAsync(control);
             var info = await rpc.InvokeAsync<TerminalHostInfoResponse>(
                 TerminalHostControlProtocol.GetInfoMethod);
-            var replicas = await rpc.InvokeAsync<TerminalHostReplicasResponse>(
-                TerminalHostControlProtocol.GetReplicasMethod);
+            var session = await rpc.InvokeAsync<TerminalHostSessionInfo>(
+                TerminalHostControlProtocol.GetSessionMethod);
 
             Assert.Equal(TerminalHostControlProtocol.ProtocolVersion, info.ProtocolVersion);
-            Assert.Equal(2, info.ReplicaCount);
-            Assert.Equal(2, replicas.Replicas.Length);
-            Assert.Equal(0, replicas.Replicas[0].Index);
-            Assert.Equal(1, replicas.Replicas[1].Index);
-            Assert.Equal(args.ProducerUdsPaths[0], replicas.Replicas[0].ProducerUdsPath);
-            Assert.Equal(args.ConsumerUdsPaths[1], replicas.Replicas[1].ConsumerUdsPath);
+            Assert.Equal(args.ProducerUdsPath, session.ProducerUdsPath);
+            Assert.Equal(args.ConsumerUdsPath, session.ConsumerUdsPath);
         }
         finally
         {
@@ -112,7 +101,7 @@ public class TerminalHostAppTests
     [Fact]
     public async Task ShutdownRequestCausesRunAsyncToReturn()
     {
-        var (args, tmp, control) = BuildArgs(1);
+        var (args, tmp, control) = BuildArgs();
         using var disp = tmp;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
@@ -132,9 +121,9 @@ public class TerminalHostAppTests
     }
 
     [Fact]
-    public async Task SnapshotReplicasReturnsConfiguredReplicas()
+    public async Task SnapshotSessionReportsConfiguredPaths()
     {
-        var (args, tmp, control) = BuildArgs(3);
+        var (args, tmp, control) = BuildArgs();
         using var disp = tmp;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
@@ -145,14 +134,9 @@ public class TerminalHostAppTests
         {
             await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
 
-            var snap = app.SnapshotReplicas();
-            Assert.Equal(3, snap.Length);
-            for (var i = 0; i < 3; i++)
-            {
-                Assert.Equal(i, snap[i].Index);
-                Assert.Equal(args.ProducerUdsPaths[i], snap[i].ProducerUdsPath);
-                Assert.Equal(args.ConsumerUdsPaths[i], snap[i].ConsumerUdsPath);
-            }
+            var snap = app.SnapshotSession();
+            Assert.Equal(args.ProducerUdsPath, snap.ProducerUdsPath);
+            Assert.Equal(args.ConsumerUdsPath, snap.ConsumerUdsPath);
         }
         finally
         {
@@ -170,14 +154,14 @@ public class TerminalHostAppTests
     }
 
     [Fact]
-    public async Task ReplicaRecyclesAfterProducerDisconnect()
+    public async Task SessionRecyclesAfterProducerDisconnect()
     {
         // End-to-end check of the recycle loop: the host should stay running
         // across a producer disconnect and accept a fresh producer on the
         // same UDS path, with ProducerConnected and RestartCount tracking
         // each cycle. This exercises the path DCP exercises in production
         // when the underlying process exits and gets relaunched.
-        var (args, tmp, control) = BuildArgs(1);
+        var (args, tmp, control) = BuildArgs();
         using var disp = tmp;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
@@ -189,19 +173,18 @@ public class TerminalHostAppTests
             await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
 
             // Initial state: host is up but no producer has dialed in yet.
-            var initial = app.SnapshotReplicas();
-            Assert.Single(initial);
-            Assert.False(initial[0].ProducerConnected, "Replica should report no producer before any connect.");
-            Assert.False(initial[0].IsAlive, "Legacy IsAlive should mirror ProducerConnected.");
-            Assert.Equal(0, initial[0].RestartCount);
+            var initial = app.SnapshotSession();
+            Assert.False(initial.ProducerConnected, "Session should report no producer before any connect.");
+            Assert.False(initial.IsAlive, "Legacy IsAlive should mirror ProducerConnected.");
+            Assert.Equal(0, initial.RestartCount);
 
             // Cycle 1: connect, get accepted, disconnect.
-            await using (var producer = await ConnectProducerAsync(args.ProducerUdsPaths[0], TimeSpan.FromSeconds(5)))
+            await using (var producer = await ConnectProducerAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(5)))
             {
                 await producer.SendHelloAsync(80, 24, default);
                 await producer.SendOutputAsync("first cycle"u8.ToArray(), default);
                 await WaitForAsync(
-                    () => app.SnapshotReplicas()[0].ProducerConnected,
+                    () => app.SnapshotSession().ProducerConnected,
                     TimeSpan.FromSeconds(5),
                     "ProducerConnected should flip to true after producer dials in.");
             }
@@ -209,23 +192,23 @@ public class TerminalHostAppTests
             await WaitForAsync(
                 () =>
                 {
-                    var s = app.SnapshotReplicas()[0];
+                    var s = app.SnapshotSession();
                     return !s.ProducerConnected && s.RestartCount >= 1;
                 },
                 TimeSpan.FromSeconds(10),
                 "After producer disconnect, ProducerConnected should clear and RestartCount should advance.");
 
-            var afterCycle1 = app.SnapshotReplicas()[0];
+            var afterCycle1 = app.SnapshotSession();
             Assert.Equal(1, afterCycle1.RestartCount);
 
             // Cycle 2: a fresh producer should be able to dial the same UDS path.
             // This is the critical DCP-restart scenario.
-            await using (var producer = await ConnectProducerAsync(args.ProducerUdsPaths[0], TimeSpan.FromSeconds(10)))
+            await using (var producer = await ConnectProducerAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(10)))
             {
                 await producer.SendHelloAsync(80, 24, default);
                 await producer.SendOutputAsync("second cycle"u8.ToArray(), default);
                 await WaitForAsync(
-                    () => app.SnapshotReplicas()[0].ProducerConnected,
+                    () => app.SnapshotSession().ProducerConnected,
                     TimeSpan.FromSeconds(5),
                     "ProducerConnected should flip true again after the second producer dials in.");
             }
@@ -233,19 +216,17 @@ public class TerminalHostAppTests
             await WaitForAsync(
                 () =>
                 {
-                    var s = app.SnapshotReplicas()[0];
+                    var s = app.SnapshotSession();
                     return !s.ProducerConnected && s.RestartCount >= 2;
                 },
                 TimeSpan.FromSeconds(10),
                 "After the second producer disconnects, ProducerConnected should clear and RestartCount should reach 2.");
 
-            // Slot itself is still there — IsAlive/ProducerConnected being false
-            // is transient, the replica array length is unchanged and the same
-            // UDS paths remain in the snapshot.
-            var afterCycle2 = app.SnapshotReplicas();
-            Assert.Single(afterCycle2);
-            Assert.Equal(args.ProducerUdsPaths[0], afterCycle2[0].ProducerUdsPath);
-            Assert.Equal(args.ConsumerUdsPaths[0], afterCycle2[0].ConsumerUdsPath);
+            // Session itself is still there — IsAlive/ProducerConnected being false
+            // is transient, the snapshot continues to report the same UDS paths.
+            var afterCycle2 = app.SnapshotSession();
+            Assert.Equal(args.ProducerUdsPath, afterCycle2.ProducerUdsPath);
+            Assert.Equal(args.ConsumerUdsPath, afterCycle2.ConsumerUdsPath);
         }
         finally
         {
@@ -256,12 +237,12 @@ public class TerminalHostAppTests
     }
 
     [Fact]
-    public async Task ReplicaSnapshotIncludesNewFields()
+    public async Task SessionSnapshotIncludesNewFields()
     {
         // Even before any producer has connected, the snapshot must populate
         // the new fields so older AppHost wire deserialisation never sees a
         // missing-required-property error.
-        var (args, tmp, control) = BuildArgs(2);
+        var (args, tmp, control) = BuildArgs();
         using var disp = tmp;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
@@ -272,15 +253,11 @@ public class TerminalHostAppTests
         {
             await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
 
-            var snap = app.SnapshotReplicas();
-            Assert.Equal(2, snap.Length);
-            foreach (var r in snap)
-            {
-                Assert.False(r.ProducerConnected);
-                Assert.False(r.IsAlive);
-                Assert.Equal(0, r.RestartCount);
-                Assert.Null(r.ExitCode);
-            }
+            var snap = app.SnapshotSession();
+            Assert.False(snap.ProducerConnected);
+            Assert.False(snap.IsAlive);
+            Assert.Equal(0, snap.RestartCount);
+            Assert.Null(snap.ExitCode);
         }
         finally
         {
@@ -302,7 +279,7 @@ public class TerminalHostAppTests
         // minimal HMP1 server never sends Hello.PrimaryPeerId or RoleChange.
         // Without this bridge, the underlying PTY stayed at its DCP-initial
         // dims forever.
-        var (args, tmp, control) = BuildArgs(1);
+        var (args, tmp, control) = BuildArgs();
         using var disp = tmp;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
@@ -317,17 +294,17 @@ public class TerminalHostAppTests
             // upstream-side adapter handshakes successfully and ProducerConnected
             // flips before we attempt the consumer-side connect — otherwise the
             // resize broadcast would race the upstream stream's existence.
-            await using var producer = await ConnectProducerAsync(args.ProducerUdsPaths[0], TimeSpan.FromSeconds(5));
+            await using var producer = await ConnectProducerAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(5));
             await producer.SendHelloAsync(80, 24, default);
 
             await WaitForAsync(
-                () => app.SnapshotReplicas()[0].ProducerConnected,
+                () => app.SnapshotSession().ProducerConnected,
                 TimeSpan.FromSeconds(5),
                 "ProducerConnected should flip to true after producer dials in.");
 
             // Wait for the consumer-side UDS server to bind so the dial below
             // doesn't race a not-yet-listening socket.
-            await WaitForFileAsync(args.ConsumerUdsPaths[0], TimeSpan.FromSeconds(5));
+            await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
 
             // Now connect a minimal raw-frame HMP1 client to the consumer UDS:
             // ClientHello + RequestPrimary, then keep the stream open. We don't
@@ -338,7 +315,7 @@ public class TerminalHostAppTests
             const int requestedHeight = 45;
 
             await using var consumer = await TestHmp1Consumer.ConnectAsync(
-                args.ConsumerUdsPaths[0], TimeSpan.FromSeconds(5));
+                args.ConsumerUdsPath, TimeSpan.FromSeconds(5));
             await consumer.SendClientHelloAsync("test-consumer", "primary", default);
             await consumer.SendRequestPrimaryAsync(requestedWidth, requestedHeight, default);
 
@@ -413,27 +390,6 @@ public class TerminalHostAppTests
 
         public Task SendOutputAsync(byte[] payload, CancellationToken ct) =>
             SendFrameAsync(FrameOutput, payload, ct);
-
-        /// <summary>
-        /// Reads HMP1 frames inbound from the terminal host (i.e. from the
-        /// upstream side of <see cref="DcpUpstreamAdapter"/>) until one matching
-        /// <paramref name="expectedType"/> is observed, then returns its payload.
-        /// Other frame types are skipped (logged as debug). Throws on EOF or
-        /// malformed length.
-        /// </summary>
-        public async Task<byte[]> WaitForFrameAsync(byte expectedType, TimeSpan timeout)
-        {
-            using var cts = new CancellationTokenSource(timeout);
-            while (true)
-            {
-                var (type, payload) = await ReadFrameAsync(cts.Token).ConfigureAwait(false);
-                if (type == expectedType)
-                {
-                    return payload;
-                }
-                // Otherwise ignore and read the next frame.
-            }
-        }
 
         /// <summary>
         /// Drains HMP1 frames until a frame of the requested type whose

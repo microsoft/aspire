@@ -53,11 +53,11 @@ internal sealed class DashboardServiceData : IDisposable
                 var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
                 if (terminalAnnotation is not null)
                 {
-                    var consumerUdsPaths = terminalAnnotation.TerminalHost.Layout.ConsumerUdsPaths;
-                    var replicaCount = consumerUdsPaths.Count;
+                    var terminalHosts = terminalAnnotation.TerminalHosts;
+                    var replicaCount = terminalHosts.Count;
                     var replicaIndex = ResolveReplicaIndex(resource, resourceId);
-                    var consumerUdsPath = (uint)replicaIndex < (uint)consumerUdsPaths.Count
-                        ? consumerUdsPaths[replicaIndex]
+                    var consumerUdsPath = (uint)replicaIndex < (uint)replicaCount
+                        ? terminalHosts[replicaIndex].Layout.ConsumerUdsPath
                         : null;
 
                     var properties = snapshot.Properties

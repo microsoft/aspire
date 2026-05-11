@@ -21,7 +21,11 @@ public class WithTerminalTests
         Assert.Equal(120, annotation.Options.Columns);
         Assert.Equal(30, annotation.Options.Rows);
         Assert.Null(annotation.Options.Shell);
-        Assert.NotNull(annotation.TerminalHost);
+        // The annotation now carries the per-replica list of host resources rather
+        // than a single TerminalHostResource. Default replica count is 1 (no
+        // ReplicaAnnotation present), so exactly one host is created.
+        Assert.NotNull(annotation.TerminalHosts);
+        Assert.Single(annotation.TerminalHosts);
     }
 
     [Fact]
@@ -45,7 +49,7 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalCreatesHiddenTerminalHostResource()
+    public void WithTerminalCreatesPerReplicaHiddenTerminalHostResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
@@ -55,14 +59,17 @@ public class WithTerminalTests
         var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var terminalHost = model.Resources.OfType<TerminalHostResource>().SingleOrDefault();
-        Assert.NotNull(terminalHost);
-        Assert.Equal("myapp-terminalhost", terminalHost.Name);
-        Assert.Same(resource.Resource, terminalHost.Parent);
+        var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
+        var single = Assert.Single(hosts);
+        // Default name pattern is "{parent}-terminalhost-{i}" where i is the parent
+        // replica index. With the default replica count of 1, the only host is index 0.
+        Assert.Equal("myapp-terminalhost-0", single.Name);
+        Assert.Same(resource.Resource, single.Parent);
+        Assert.Equal(0, single.ParentReplicaIndex);
     }
 
     [Fact]
-    public void WithTerminalLinksAnnotationToHostResource()
+    public void WithTerminalLinksAnnotationToHostResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
@@ -74,21 +81,22 @@ public class WithTerminalTests
 
         var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single();
         var hostFromModel = model.Resources.OfType<TerminalHostResource>().Single();
-        Assert.Same(hostFromModel, annotation.TerminalHost);
+        Assert.Same(hostFromModel, Assert.Single(annotation.TerminalHosts));
     }
 
     [Fact]
-    public void WithTerminalAddsWaitAnnotationForWaitSupportedResources()
+    public void WithTerminalAddsWaitAnnotationForEachTerminalHost()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
 
-        var waitAnnotations = resource.Resource.Annotations.OfType<WaitAnnotation>().ToList();
-        var terminalWait = waitAnnotations.FirstOrDefault(w => w.Resource is TerminalHostResource);
-        Assert.NotNull(terminalWait);
-        Assert.Equal(WaitType.WaitUntilStarted, terminalWait.WaitType);
+        var waitAnnotations = resource.Resource.Annotations.OfType<WaitAnnotation>()
+            .Where(w => w.Resource is TerminalHostResource)
+            .ToList();
+        var single = Assert.Single(waitAnnotations);
+        Assert.Equal(WaitType.WaitUntilStarted, single.WaitType);
     }
 
     [Fact]
@@ -116,13 +124,13 @@ public class WithTerminalTests
         var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var terminalHost = model.Resources.OfType<TerminalHostResource>().SingleOrDefault();
-        Assert.NotNull(terminalHost);
-        Assert.Equal("mycontainer-terminalhost", terminalHost.Name);
+        var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
+        var single = Assert.Single(hosts);
+        Assert.Equal("mycontainer-terminalhost-0", single.Name);
     }
 
     [Fact]
-    public void TerminalHostResourceIsExcludedFromManifest()
+    public void TerminalHostResourcesAreExcludedFromManifest()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
@@ -132,11 +140,11 @@ public class WithTerminalTests
         var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var terminalHost = model.Resources.OfType<TerminalHostResource>().SingleOrDefault();
-        Assert.NotNull(terminalHost);
-
-        var manifestAnnotation = terminalHost.Annotations.OfType<ManifestPublishingCallbackAnnotation>().SingleOrDefault();
-        Assert.NotNull(manifestAnnotation);
+        foreach (var host in model.Resources.OfType<TerminalHostResource>())
+        {
+            var manifestAnnotation = host.Annotations.OfType<ManifestPublishingCallbackAnnotation>().SingleOrDefault();
+            Assert.NotNull(manifestAnnotation);
+        }
     }
 
     [Fact]
@@ -159,22 +167,23 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalDefaultsToOneReplicaWorthOfPaths()
+    public void WithTerminalDefaultsToOneTerminalHost()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
 
-        var host = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost;
-        Assert.Equal(1, host.Layout.ReplicaCount);
-        Assert.Single(host.Layout.ProducerUdsPaths);
-        Assert.Single(host.Layout.ConsumerUdsPaths);
-        Assert.NotEmpty(host.Layout.ControlUdsPath);
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        var single = Assert.Single(hosts);
+        Assert.Equal(0, single.ParentReplicaIndex);
+        Assert.NotEmpty(single.Layout.ProducerUdsPath);
+        Assert.NotEmpty(single.Layout.ConsumerUdsPath);
+        Assert.NotEmpty(single.Layout.ControlUdsPath);
     }
 
     [Fact]
-    public void WithTerminalAfterWithReplicasCreatesPathPerReplica()
+    public void WithTerminalAfterWithReplicasCreatesOneTerminalHostPerReplica()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
@@ -182,15 +191,18 @@ public class WithTerminalTests
 
         resource.WithTerminal();
 
-        var host = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost;
-        Assert.Equal(3, host.Layout.ReplicaCount);
-        Assert.Equal(3, host.Layout.ProducerUdsPaths.Count);
-        Assert.Equal(3, host.Layout.ConsumerUdsPaths.Count);
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(3, hosts.Count);
 
         for (var i = 0; i < 3; i++)
         {
-            Assert.EndsWith($"r{i}.sock", host.Layout.ProducerUdsPaths[i]);
-            Assert.EndsWith($"r{i}.sock", host.Layout.ConsumerUdsPaths[i]);
+            Assert.Equal(i, hosts[i].ParentReplicaIndex);
+            // The parent replica index is encoded into the per-replica directory of
+            // the layout — DCP and viewers don't need to know that, but path uniqueness
+            // is what keeps the per-replica hosts from colliding on the same UDS.
+            Assert.Contains($"{Path.DirectorySeparatorChar}{i}{Path.DirectorySeparatorChar}", hosts[i].Layout.ProducerUdsPath);
+            Assert.Contains($"{Path.DirectorySeparatorChar}{i}{Path.DirectorySeparatorChar}", hosts[i].Layout.ConsumerUdsPath);
+            Assert.Equal($"myapp-terminalhost-{i}", hosts[i].Name);
         }
     }
 
@@ -203,19 +215,18 @@ public class WithTerminalTests
 
         resource.WithTerminal();
 
-        var layout = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost.Layout;
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        var sharedBase = hosts[0].Layout.BaseDirectory;
 
-        foreach (var path in layout.ProducerUdsPaths)
+        foreach (var host in hosts)
         {
-            Assert.StartsWith(layout.BaseDirectory, path);
+            // All per-replica hosts share the same per-target base directory so a
+            // single recursive delete cleans up every replica's sockets.
+            Assert.Equal(sharedBase, host.Layout.BaseDirectory);
+            Assert.StartsWith(sharedBase, host.Layout.ProducerUdsPath);
+            Assert.StartsWith(sharedBase, host.Layout.ConsumerUdsPath);
+            Assert.StartsWith(sharedBase, host.Layout.ControlUdsPath);
         }
-
-        foreach (var path in layout.ConsumerUdsPaths)
-        {
-            Assert.StartsWith(layout.BaseDirectory, path);
-        }
-
-        Assert.StartsWith(layout.BaseDirectory, layout.ControlUdsPath);
     }
 
     [Fact]
@@ -232,46 +243,44 @@ public class WithTerminalTests
             options.Shell = "/bin/bash";
         });
 
-        var host = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost;
-        var args = await GetResolvedCommandLineArgsAsync(host);
-
-        Assert.Contains("--replica-count", args);
-        Assert.Contains("2", args);
-
-        Assert.Equal(2, args.Count(a => a == "--producer-uds"));
-        Assert.Equal(2, args.Count(a => a == "--consumer-uds"));
-        Assert.Single(args, a => a == "--control-uds");
-
-        foreach (var path in host.Layout.ProducerUdsPaths)
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        // Each per-replica host serves exactly one replica, so its argv carries
+        // exactly one --producer-uds / --consumer-uds / --control-uds value.
+        // --replica-count is intentionally absent in the new single-replica shape.
+        foreach (var host in hosts)
         {
-            Assert.Contains(path, args);
+            var args = await GetResolvedCommandLineArgsAsync(host);
+
+            Assert.DoesNotContain("--replica-count", args);
+            Assert.Single(args, a => a == "--producer-uds");
+            Assert.Single(args, a => a == "--consumer-uds");
+            Assert.Single(args, a => a == "--control-uds");
+
+            Assert.Contains(host.Layout.ProducerUdsPath, args);
+            Assert.Contains(host.Layout.ConsumerUdsPath, args);
+            Assert.Contains(host.Layout.ControlUdsPath, args);
+
+            Assert.Contains("--columns", args);
+            Assert.Contains("200", args);
+            Assert.Contains("--rows", args);
+            Assert.Contains("50", args);
+            Assert.Contains("--shell", args);
+            Assert.Contains("/bin/bash", args);
         }
-
-        foreach (var path in host.Layout.ConsumerUdsPaths)
-        {
-            Assert.Contains(path, args);
-        }
-
-        Assert.Contains(host.Layout.ControlUdsPath, args);
-
-        Assert.Contains("--columns", args);
-        Assert.Contains("200", args);
-        Assert.Contains("--rows", args);
-        Assert.Contains("50", args);
-        Assert.Contains("--shell", args);
-        Assert.Contains("/bin/bash", args);
     }
 
     [Fact]
-    public void TerminalHostResourceHasUnresolvedCommandUntilBeforeStart()
+    public void TerminalHostResourcesHaveUnresolvedCommandUntilBeforeStart()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
 
-        var host = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost;
-        Assert.Equal(TerminalHostResource.UnresolvedCommand, host.Command);
+        foreach (var host in resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts)
+        {
+            Assert.Equal(TerminalHostResource.UnresolvedCommand, host.Command);
+        }
     }
 
     private static async Task<List<string>> GetResolvedCommandLineArgsAsync(TerminalHostResource host)

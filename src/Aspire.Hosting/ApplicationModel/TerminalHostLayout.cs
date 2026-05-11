@@ -2,102 +2,115 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Describes the Unix domain socket layout used by a <see cref="TerminalHostResource"/> to
-/// bridge per-replica PTY traffic between DCP and clients (Dashboard, CLI).
+/// Describes the Unix domain socket layout used by a single <see cref="TerminalHostResource"/>
+/// to bridge one parent-resource replica's PTY traffic between DCP and viewers (Dashboard,
+/// CLI).
 /// </summary>
 /// <remarks>
 /// <para>
-/// For a target resource with <c>N</c> replicas, the layout owns <c>2N + 1</c> stable
-/// socket paths under a per-run temporary directory:
+/// Each <see cref="TerminalHostResource"/> serves exactly one parent replica and owns three
+/// stable socket paths under a per-replica directory beneath a per-target temporary base:
 /// </para>
 /// <list type="bullet">
 ///   <item>
 ///     <description>
-///       <c>{base}/dcp/r{i}.sock</c> — the producer socket for replica <c>i</c>. DCP listens
-///       on this path and the terminal host connects as an HMP v1 client to consume PTY output
-///       and forward input.
+///       <c>{base}/{i}/dcp.sock</c> (<see cref="ProducerUdsPath"/>) — the producer socket.
+///       The terminal host LISTENS on this path; DCP DIALS it to stream PTY traffic into the
+///       host. <c>{i}</c> is the parent replica index, encoded into the path so each
+///       per-replica host has its own unique paths even though the host process itself
+///       is opaque to the replica index.
 ///     </description>
 ///   </item>
 ///   <item>
 ///     <description>
-///       <c>{base}/host/r{i}.sock</c> — the consumer socket for replica <c>i</c>. The terminal
-///       host listens on this path as an HMP v1 server and viewers (Dashboard, CLI) connect to
-///       attach.
+///       <c>{base}/{i}/host.sock</c> (<see cref="ConsumerUdsPath"/>) — the consumer socket.
+///       The terminal host LISTENS on this path; viewers (Dashboard, CLI) DIAL it to attach.
 ///     </description>
 ///   </item>
 ///   <item>
 ///     <description>
-///       <c>{base}/control.sock</c> — a single control socket that the terminal host listens on
-///       for the AppHost backchannel to query the live replica list and request shutdown.
+///       <c>{base}/{i}/control.sock</c> (<see cref="ControlUdsPath"/>) — the control socket.
+///       The terminal host LISTENS on this path; the AppHost DIALS it for status/shutdown
+///       RPC. (See <see cref="Aspire.Shared.TerminalHost.TerminalHostControlProtocol"/>.)
 ///     </description>
 ///   </item>
 /// </list>
+/// <para>
+/// Connection direction (consistent across all three sockets): the terminal host is the
+/// LISTENER everywhere; DCP, viewers, and the AppHost are the DIALERS. This is also true
+/// of <c>TerminalSpec.UdsPath</c> in the DCP API.
+/// </para>
+/// <para>
+/// All per-replica hosts for a given parent share the same <see cref="BaseDirectory"/> so
+/// that when the AppHost shuts down a single recursive deletion of <see cref="BaseDirectory"/>
+/// cleans up every replica's sockets.
+/// </para>
 /// </remarks>
-[DebuggerDisplay("Type = {GetType().Name,nq}, ReplicaCount = {ReplicaCount}, BaseDirectory = {BaseDirectory}")]
+[DebuggerDisplay("Type = {GetType().Name,nq}, ParentReplicaIndex = {ParentReplicaIndex}, BaseDirectory = {BaseDirectory}")]
 public sealed class TerminalHostLayout
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="TerminalHostLayout"/> class.
+    /// Initializes a new instance of the <see cref="TerminalHostLayout"/> class for a
+    /// single parent-resource replica.
     /// </summary>
-    /// <param name="baseDirectory">The base directory that owns all socket paths in this layout.</param>
-    /// <param name="producerUdsPaths">The producer (DCP-listens-on) UDS path for each replica.</param>
-    /// <param name="consumerUdsPaths">The consumer (host-listens-on) UDS path for each replica.</param>
-    /// <param name="controlUdsPath">The control UDS path for AppHost ↔ terminal host RPC.</param>
-    public TerminalHostLayout(string baseDirectory, IReadOnlyList<string> producerUdsPaths, IReadOnlyList<string> consumerUdsPaths, string controlUdsPath)
+    /// <param name="baseDirectory">The base directory that contains the per-replica sub-directory holding all three socket paths.</param>
+    /// <param name="parentReplicaIndex">The zero-based index of the parent replica this layout serves.</param>
+    /// <param name="producerUdsPath">The producer (host-listens-on, DCP-dials) UDS path.</param>
+    /// <param name="consumerUdsPath">The consumer (host-listens-on, viewers-dial) UDS path.</param>
+    /// <param name="controlUdsPath">The control (host-listens-on, AppHost-dials) UDS path.</param>
+    public TerminalHostLayout(string baseDirectory, int parentReplicaIndex, string producerUdsPath, string consumerUdsPath, string controlUdsPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(baseDirectory);
-        ArgumentNullException.ThrowIfNull(producerUdsPaths);
-        ArgumentNullException.ThrowIfNull(consumerUdsPaths);
+        ArgumentOutOfRangeException.ThrowIfNegative(parentReplicaIndex);
+        ArgumentException.ThrowIfNullOrEmpty(producerUdsPath);
+        ArgumentException.ThrowIfNullOrEmpty(consumerUdsPath);
         ArgumentException.ThrowIfNullOrEmpty(controlUdsPath);
 
-        if (producerUdsPaths.Count == 0)
-        {
-            throw new ArgumentException("At least one producer UDS path is required.", nameof(producerUdsPaths));
-        }
-
-        if (producerUdsPaths.Count != consumerUdsPaths.Count)
-        {
-            throw new ArgumentException(
-                $"Producer ({producerUdsPaths.Count}) and consumer ({consumerUdsPaths.Count}) UDS path counts must match.",
-                nameof(consumerUdsPaths));
-        }
-
         BaseDirectory = baseDirectory;
-        ProducerUdsPaths = producerUdsPaths;
-        ConsumerUdsPaths = consumerUdsPaths;
+        ParentReplicaIndex = parentReplicaIndex;
+        ProducerUdsPath = producerUdsPath;
+        ConsumerUdsPath = consumerUdsPath;
         ControlUdsPath = controlUdsPath;
     }
 
     /// <summary>
-    /// Gets the number of replicas this layout was sized for. Equal to the length of
-    /// <see cref="ProducerUdsPaths"/> and <see cref="ConsumerUdsPaths"/>.
-    /// </summary>
-    public int ReplicaCount => ProducerUdsPaths.Count;
-
-    /// <summary>
-    /// Gets the base directory that owns the socket paths in this layout.
+    /// Gets the base directory that contains the per-replica sub-directory holding the
+    /// socket paths in this layout. Shared across all per-replica hosts of the same parent
+    /// so cleanup is a single recursive delete.
     /// </summary>
     public string BaseDirectory { get; }
 
     /// <summary>
-    /// Gets the producer UDS path for each replica. DCP listens on these paths and the
-    /// terminal host connects to them as an HMP v1 client.
+    /// Gets the zero-based index of the parent replica this host serves. Encoded into
+    /// each socket path so per-replica hosts of the same parent get unique paths.
     /// </summary>
-    public IReadOnlyList<string> ProducerUdsPaths { get; }
+    public int ParentReplicaIndex { get; }
 
     /// <summary>
-    /// Gets the consumer UDS path for each replica. The terminal host listens on these paths
-    /// as an HMP v1 server and viewers connect to them.
+    /// Gets the producer UDS path. The terminal host LISTENS on this path; DCP DIALS it.
     /// </summary>
-    public IReadOnlyList<string> ConsumerUdsPaths { get; }
+    public string ProducerUdsPath { get; }
 
     /// <summary>
-    /// Gets the control UDS path. The terminal host listens on this path for AppHost RPC
-    /// (replica enumeration, shutdown).
+    /// Gets the consumer UDS path. The terminal host LISTENS on this path; viewers
+    /// (Dashboard, CLI) DIAL it.
+    /// </summary>
+    public string ConsumerUdsPath { get; }
+
+    /// <summary>
+    /// Gets the control UDS path. The terminal host LISTENS on this path; the AppHost
+    /// DIALS it for status/shutdown RPC.
     /// </summary>
     public string ControlUdsPath { get; }
+
+    /// <summary>
+    /// Gets the parent replica index as an invariant-culture string. Convenience for
+    /// callers that need to log or include the index in identifiers.
+    /// </summary>
+    public string ParentReplicaIndexString => ParentReplicaIndex.ToString(CultureInfo.InvariantCulture);
 }

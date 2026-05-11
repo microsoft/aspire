@@ -21,16 +21,16 @@ public static class TerminalResourceBuilderExtensions
     /// <remarks>
     /// <para>
     /// When a resource is configured with <c>.WithTerminal()</c>, DCP allocates a pseudo-terminal
-    /// (PTY) per replica and a hidden <see cref="TerminalHostResource"/> bridges the PTY traffic
-    /// over Hex1b's HMP v1 protocol. The terminal session can be accessed from the Aspire
-    /// Dashboard's terminal page or via the <c>aspire terminal</c> CLI command.
+    /// (PTY) per replica and one hidden <see cref="TerminalHostResource"/> per replica bridges
+    /// the PTY traffic over Hex1b's HMP v1 protocol. The terminal session can be accessed from
+    /// the Aspire Dashboard's terminal page or via the <c>aspire terminal</c> CLI command.
     /// </para>
     /// <para>
-    /// The set of socket paths used to wire DCP, the host, and viewers together is sized from
-    /// the target resource's <see cref="ReplicaAnnotation"/>. <strong>Call
-    /// <c>WithReplicas(...)</c> before <c>WithTerminal()</c></strong>; if the replica count
-    /// changes after this call, only the first <c>N</c> replicas (where <c>N</c> was the count
-    /// at <c>WithTerminal()</c> time) will have an attachable terminal.
+    /// One terminal host process is spawned per parent replica (e.g. <c>WithReplicas(3).WithTerminal()</c>
+    /// → 3 terminal host processes named <c>{parent}-terminalhost-0</c> .. <c>{parent}-terminalhost-2</c>).
+    /// <strong>Call <c>WithReplicas(...)</c> before <c>WithTerminal()</c></strong>; if the
+    /// replica count changes after this call, only the first <c>N</c> replicas (where <c>N</c>
+    /// was the count at <c>WithTerminal()</c> time) will have an attachable terminal.
     /// </para>
     /// </remarks>
     /// <example>
@@ -68,94 +68,103 @@ public static class TerminalResourceBuilderExtensions
         configure?.Invoke(options);
 
         var replicaCount = builder.Resource.Annotations.OfType<ReplicaAnnotation>().LastOrDefault()?.Replicas ?? 1;
-        var layout = CreateTerminalHostLayout(replicaCount);
+        if (replicaCount < 1)
+        {
+            replicaCount = 1;
+        }
 
-        var terminalHostName = $"{builder.Resource.Name}-terminalhost";
-        var terminalHost = new TerminalHostResource(terminalHostName, builder.Resource, layout);
+        // One temp base dir per parent: per-replica hosts get sub-directories beneath it
+        // (`{base}/{i}/...`) so the AppHost can clean up every host's sockets with a single
+        // recursive delete when the run ends.
+        var baseDir = Directory.CreateTempSubdirectory("aspire-term-").FullName;
 
-        builder.WithAnnotation(new TerminalAnnotation(terminalHost, options));
+        var terminalHosts = new TerminalHostResource[replicaCount];
+        for (var i = 0; i < replicaCount; i++)
+        {
+            var layout = CreateTerminalHostLayout(baseDir, i);
+            var terminalHostName = $"{builder.Resource.Name}-terminalhost-{i.ToString(CultureInfo.InvariantCulture)}";
+            var terminalHost = new TerminalHostResource(terminalHostName, builder.Resource, layout);
+            terminalHosts[i] = terminalHost;
+        }
 
-        var terminalHostBuilder = builder.ApplicationBuilder.AddResource(terminalHost);
+        builder.WithAnnotation(new TerminalAnnotation(terminalHosts, options));
 
-        terminalHostBuilder
-            .WithInitialState(new CustomResourceSnapshot
-            {
-                ResourceType = "TerminalHost",
-                State = KnownResourceStates.NotStarted,
-                Properties = [],
-                IsHidden = true,
-            })
-            .ExcludeFromManifest()
-            .WithArgs(context =>
-            {
-                context.Args.Add("--replica-count");
-                context.Args.Add(layout.ReplicaCount.ToString(CultureInfo.InvariantCulture));
+        // Register and configure each per-replica host. Capture-by-value semantics matter
+        // here: each iteration creates its own `host` and `replicaIndex` locals so the
+        // WithArgs callback closes over the right host even though it runs lazily later.
+        foreach (var terminalHost in terminalHosts)
+        {
+            var host = terminalHost;
+            var terminalHostBuilder = builder.ApplicationBuilder.AddResource(host);
 
-                foreach (var path in layout.ProducerUdsPaths)
+            terminalHostBuilder
+                .WithInitialState(new CustomResourceSnapshot
+                {
+                    ResourceType = "TerminalHost",
+                    State = KnownResourceStates.NotStarted,
+                    Properties = [],
+                    IsHidden = true,
+                })
+                .ExcludeFromManifest()
+                .WithArgs(context =>
                 {
                     context.Args.Add("--producer-uds");
-                    context.Args.Add(path);
-                }
+                    context.Args.Add(host.Layout.ProducerUdsPath);
 
-                foreach (var path in layout.ConsumerUdsPaths)
-                {
                     context.Args.Add("--consumer-uds");
-                    context.Args.Add(path);
-                }
+                    context.Args.Add(host.Layout.ConsumerUdsPath);
 
-                context.Args.Add("--control-uds");
-                context.Args.Add(layout.ControlUdsPath);
+                    context.Args.Add("--control-uds");
+                    context.Args.Add(host.Layout.ControlUdsPath);
 
-                context.Args.Add("--columns");
-                context.Args.Add(options.Columns.ToString(CultureInfo.InvariantCulture));
+                    context.Args.Add("--columns");
+                    context.Args.Add(options.Columns.ToString(CultureInfo.InvariantCulture));
 
-                context.Args.Add("--rows");
-                context.Args.Add(options.Rows.ToString(CultureInfo.InvariantCulture));
+                    context.Args.Add("--rows");
+                    context.Args.Add(options.Rows.ToString(CultureInfo.InvariantCulture));
 
-                if (!string.IsNullOrEmpty(options.Shell))
-                {
-                    context.Args.Add("--shell");
-                    context.Args.Add(options.Shell);
-                }
+                    if (!string.IsNullOrEmpty(options.Shell))
+                    {
+                        context.Args.Add("--shell");
+                        context.Args.Add(options.Shell);
+                    }
 
-                return Task.CompletedTask;
-            });
+                    return Task.CompletedTask;
+                });
+        }
 
-        // The target waits until the host has started so its viewer-facing UDS listeners are
-        // bound before any consumer (Dashboard or CLI) tries to connect. Phase 2 will switch
-        // this to WaitUntilHealthy once the host implements a real health probe.
+        // The target waits until each host has started so its viewer-facing UDS listener
+        // is bound before any consumer (Dashboard or CLI) tries to connect. Phase 2 will
+        // switch this to WaitUntilHealthy once each host implements a real health probe.
         if (builder.Resource is IResourceWithWaitSupport)
         {
-            builder.WithAnnotation(new WaitAnnotation(terminalHost, WaitType.WaitUntilStarted));
+            foreach (var terminalHost in terminalHosts)
+            {
+                builder.WithAnnotation(new WaitAnnotation(terminalHost, WaitType.WaitUntilStarted));
+            }
         }
 
         return builder;
     }
 
-    private static TerminalHostLayout CreateTerminalHostLayout(int replicaCount)
+    /// <summary>
+    /// Builds the per-replica UDS triple for a single terminal host. Sockets live under a
+    /// per-replica sub-directory (<c>{baseDir}/{replicaIndex}/</c>) so per-replica hosts of
+    /// the same parent get unique paths while still sharing the parent's <paramref name="baseDir"/>
+    /// (which makes cleanup a single recursive delete).
+    /// </summary>
+    private static TerminalHostLayout CreateTerminalHostLayout(string baseDir, int replicaIndex)
     {
-        if (replicaCount <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(replicaCount), replicaCount, "Replica count must be at least 1.");
-        }
+        ArgumentException.ThrowIfNullOrEmpty(baseDir);
+        ArgumentOutOfRangeException.ThrowIfNegative(replicaIndex);
 
-        // Use Directory.CreateTempSubdirectory so we get a securely-created, unique directory
-        // for each AppHost run. The guid in the directory name protects against collisions.
-        var baseDir = Directory.CreateTempSubdirectory("aspire-term-").FullName;
-        Directory.CreateDirectory(Path.Combine(baseDir, "dcp"));
-        Directory.CreateDirectory(Path.Combine(baseDir, "host"));
+        var replicaDir = Path.Combine(baseDir, replicaIndex.ToString(CultureInfo.InvariantCulture));
+        Directory.CreateDirectory(replicaDir);
 
-        var producerPaths = new string[replicaCount];
-        var consumerPaths = new string[replicaCount];
+        var producerPath = Path.Combine(replicaDir, "dcp.sock");
+        var consumerPath = Path.Combine(replicaDir, "host.sock");
+        var controlPath = Path.Combine(replicaDir, "control.sock");
 
-        for (var i = 0; i < replicaCount; i++)
-        {
-            producerPaths[i] = Path.Combine(baseDir, "dcp", $"r{i.ToString(CultureInfo.InvariantCulture)}.sock");
-            consumerPaths[i] = Path.Combine(baseDir, "host", $"r{i.ToString(CultureInfo.InvariantCulture)}.sock");
-        }
-
-        var controlPath = Path.Combine(baseDir, "control.sock");
-
-        return new TerminalHostLayout(baseDir, producerPaths, consumerPaths, controlPath);
+        return new TerminalHostLayout(baseDir, replicaIndex, producerPath, consumerPath, controlPath);
     }
 }

@@ -8,13 +8,20 @@ using StreamJsonRpc;
 namespace Aspire.Hosting.Backchannel;
 
 /// <summary>
-/// AppHost-side client for the terminal host's control UDS. Opens a fresh JsonRpc
-/// connection per call, invokes the requested method, and disposes the connection.
+/// AppHost-side client for a single terminal host process's control UDS. Opens a fresh
+/// JsonRpc connection per call, invokes the requested method, and disposes the connection.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Each <c>aspire.terminalhost</c> process serves one parent replica and exposes a single-session
+/// control surface. To enumerate the full set of replicas for a target resource, the AppHost
+/// fans out across each per-replica host's control UDS using this client.
+/// </para>
+/// <para>
 /// Connection retries are bounded by the per-call <c>totalTimeout</c> with a short per-attempt
 /// delay so that a control RPC issued shortly after the AppHost has asked DCP to launch the
 /// host doesn't see a transient connection-refused error.
+/// </para>
 /// </remarks>
 internal static class TerminalHostControlClient
 {
@@ -22,11 +29,11 @@ internal static class TerminalHostControlClient
 
     /// <summary>
     /// Opens the control UDS at <paramref name="socketPath"/> and invokes
-    /// <see cref="TerminalHostControlProtocol.GetReplicasMethod"/>, returning the host's
-    /// snapshot of replica session state. Throws on transport failures and times out per
+    /// <see cref="TerminalHostControlProtocol.GetSessionMethod"/>, returning the host's
+    /// snapshot of its single session. Throws on transport failures and times out per
     /// <paramref name="totalTimeout"/>.
     /// </summary>
-    public static async Task<TerminalHostReplicasResponse> GetReplicasAsync(
+    public static async Task<TerminalHostSessionInfo> GetSessionAsync(
         string socketPath,
         TimeSpan totalTimeout,
         CancellationToken cancellationToken = default)
@@ -38,8 +45,8 @@ internal static class TerminalHostControlClient
 
         using var rpc = await ConnectWithRetryAsync(socketPath, timeoutCts.Token).ConfigureAwait(false);
 
-        return await rpc.InvokeWithCancellationAsync<TerminalHostReplicasResponse>(
-            TerminalHostControlProtocol.GetReplicasMethod,
+        return await rpc.InvokeWithCancellationAsync<TerminalHostSessionInfo>(
+            TerminalHostControlProtocol.GetSessionMethod,
             arguments: null,
             timeoutCts.Token).ConfigureAwait(false);
     }

@@ -8,15 +8,20 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.TerminalHost;
 
 /// <summary>
-/// A single replica relay session inside the terminal host. The replica owns
-/// a recycle loop that builds successive <see cref="Hex1bTerminal"/> instances
-/// over the lifetime of the host process.
+/// The single replica relay session inside a terminal host process. Each
+/// <c>aspire.terminalhost</c> process owns exactly one <see cref="TerminalReplica"/>
+/// — replica fan-out happens at the process level, not inside the host. The
+/// replica's identity (which parent-resource replica it serves) is encoded in
+/// the UDS paths and is opaque to the host.
+///
+/// The replica owns a recycle loop that builds successive <see cref="Hex1bTerminal"/>
+/// instances over the lifetime of the host process.
 ///
 /// Each iteration of the loop:
 /// <list type="number">
-///   <item>Builds a fresh Hex1bTerminal that listens on the producer UDS and
+///   <item>Builds a fresh Hex1bTerminal that LISTENS on the producer UDS and
 ///         serves on the consumer UDS.</item>
-///   <item>Waits for DCP (the upstream PTY owner) to dial the producer UDS.
+///   <item>Waits for DCP (the upstream PTY owner) to DIAL the producer UDS.
 ///         When that connection is accepted, <see cref="ProducerConnected"/>
 ///         flips to <c>true</c>.</item>
 ///   <item>Forwards bytes between producer and any number of viewers (Dashboard,
@@ -30,15 +35,12 @@ namespace Aspire.TerminalHost;
 ///         the underlying process and dial back in.</item>
 /// </list>
 ///
-/// Connection direction note: the producer side has the terminal host listening
-/// and DCP dialing, not the other way around. This guarantees the host is
+/// Connection direction note: the producer side has the terminal host LISTENING
+/// and DCP DIALING, not the other way around. This guarantees the host is
 /// receiving from the very first byte the PTY emits, and also lets the host
 /// recycle without DCP having to re-coordinate; DCP just dials the same path
 /// again and Hex1b's existing connect-retry semantics on the producer side
 /// take care of the brief unbound window during a recycle.
-///
-/// One <see cref="TerminalReplica"/> is owned by the host per replica. They
-/// are independent — a recycle on one replica does not affect the others.
 /// </summary>
 internal sealed class TerminalReplica : IAsyncDisposable
 {
@@ -55,7 +57,6 @@ internal sealed class TerminalReplica : IAsyncDisposable
     private int _currentRows;
     private bool _disposed;
 
-    public int Index { get; }
     public string ProducerUdsPath { get; }
     public string ConsumerUdsPath { get; }
     public int Columns { get; }
@@ -65,8 +66,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
     /// True while the current Hex1bTerminal has an attached producer (DCP has
     /// dialed in and the upstream PTY is delivering bytes). False between
     /// recycles, before the first producer ever connects, or after the
-    /// replica has been torn down. Distinct from "the replica slot is alive
-    /// in the host" — the slot is always alive while the host is running.
+    /// replica has been torn down.
     /// </summary>
     public bool ProducerConnected
     {
@@ -125,7 +125,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
     }
 
     /// <summary>
-    /// Number of HMP1 viewer peers currently attached to this replica's consumer UDS.
+    /// Number of HMP1 viewer peers currently attached to the consumer UDS.
     /// Maintained from <c>OnClientConnected</c> / <c>OnClientDisconnected</c> callbacks.
     /// Zero between cycles or before the first peer connects.
     /// </summary>
@@ -162,7 +162,6 @@ internal sealed class TerminalReplica : IAsyncDisposable
     public Task RunTask => _runTask;
 
     private TerminalReplica(
-        int index,
         string producerUdsPath,
         string consumerUdsPath,
         int columns,
@@ -170,7 +169,6 @@ internal sealed class TerminalReplica : IAsyncDisposable
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        Index = index;
         ProducerUdsPath = producerUdsPath;
         ConsumerUdsPath = consumerUdsPath;
         Columns = columns;
@@ -187,7 +185,6 @@ internal sealed class TerminalReplica : IAsyncDisposable
     /// in the background and only exits on cancellation or dispose.
     /// </summary>
     public static TerminalReplica Start(
-        int index,
         string producerUdsPath,
         string consumerUdsPath,
         int columns,
@@ -200,11 +197,11 @@ internal sealed class TerminalReplica : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(logger);
 
         logger.LogInformation(
-            "Starting replica {Index}: producer='{Producer}', consumer='{Consumer}'",
-            index, producerUdsPath, consumerUdsPath);
+            "Starting replica: producer='{Producer}', consumer='{Consumer}'",
+            producerUdsPath, consumerUdsPath);
 
         return new TerminalReplica(
-            index, producerUdsPath, consumerUdsPath, columns, rows, logger, cancellationToken);
+            producerUdsPath, consumerUdsPath, columns, rows, logger, cancellationToken);
     }
 
     /// <summary>
@@ -234,7 +231,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
                     // disposal of the previous instance, etc.). Treat as a
                     // failed cycle and let the backoff handle it instead of
                     // letting the exception kill the recycle loop.
-                    _logger.LogError(ex, "Replica {Index} BuildTerminal threw.", Index);
+                    _logger.LogError(ex, "Replica BuildTerminal threw.");
                     exitCode = -1;
                     failed = true;
                     goto AfterRun;
@@ -257,7 +254,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Replica {Index} cycle threw.", Index);
+                    _logger.LogError(ex, "Replica cycle threw.");
                     exitCode = -1;
                     failed = true;
                 }
@@ -274,7 +271,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogDebug(ex, "Replica {Index}: terminal dispose threw (ignored).", Index);
+                        _logger.LogDebug(ex, "Replica terminal dispose threw (ignored).");
                     }
                 }
 
@@ -302,15 +299,15 @@ internal sealed class TerminalReplica : IAsyncDisposable
             {
                 consecutiveFailures++;
                 _logger.LogInformation(
-                    "Replica {Index} cycle ended with failure (consecutive={Count}); will rebind.",
-                    Index, consecutiveFailures);
+                    "Replica cycle ended with failure (consecutive={Count}); will rebind.",
+                    consecutiveFailures);
             }
             else
             {
                 consecutiveFailures = 0;
                 _logger.LogInformation(
-                    "Replica {Index} producer disconnected (exit code {ExitCode}); rebinding for next producer.",
-                    Index, exitCode);
+                    "Replica producer disconnected (exit code {ExitCode}); rebinding for next producer.",
+                    exitCode);
             }
 
             if (ct.IsCancellationRequested)
@@ -433,8 +430,8 @@ internal sealed class TerminalReplica : IAsyncDisposable
                         {
                             await upstream.ResizeAsync(e.Width, e.Height, ct).ConfigureAwait(false);
                             _logger.LogDebug(
-                                "Replica {Index}: forwarded downstream resize ({Width}x{Height}) to upstream PTY.",
-                                Index, e.Width, e.Height);
+                                "Replica: forwarded downstream resize ({Width}x{Height}) to upstream PTY.",
+                                e.Width, e.Height);
                         }
                         catch (OperationCanceledException) when (ct.IsCancellationRequested)
                         {
@@ -443,8 +440,8 @@ internal sealed class TerminalReplica : IAsyncDisposable
                         catch (Exception ex)
                         {
                             _logger.LogDebug(ex,
-                                "Replica {Index}: forwarding downstream resize ({Width}x{Height}) upstream failed.",
-                                Index, e.Width, e.Height);
+                                "Replica: forwarding downstream resize ({Width}x{Height}) upstream failed.",
+                                e.Width, e.Height);
                         }
                     };
                 })
@@ -473,7 +470,7 @@ internal sealed class TerminalReplica : IAsyncDisposable
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Replica {Index}: recycle loop terminated with an unexpected error.", Index);
+            _logger.LogDebug(ex, "Replica recycle loop terminated with an unexpected error.");
         }
 
         _stopCts.Dispose();

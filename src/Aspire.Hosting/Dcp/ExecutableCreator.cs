@@ -129,12 +129,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 }
                 else if (TryGetReplicaIndex(exe, out var replicaIndex)
                     && replicaIndex >= 0
-                    && replicaIndex < terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths.Count)
+                    && replicaIndex < terminalAnnotation.TerminalHosts.Count)
                 {
                     spec.Terminal = new TerminalSpec
                     {
                         Enabled = true,
-                        UdsPath = terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths[replicaIndex],
+                        UdsPath = terminalAnnotation.TerminalHosts[replicaIndex].Layout.ProducerUdsPath,
                         Cols = terminalAnnotation.Options.Columns,
                         Rows = terminalAnnotation.Options.Rows
                     };

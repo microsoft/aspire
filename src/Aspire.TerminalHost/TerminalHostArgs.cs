@@ -8,11 +8,26 @@ namespace Aspire.TerminalHost;
 /// <summary>
 /// Parsed command-line arguments for the Aspire terminal host.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Each <c>aspire.terminalhost</c> process serves exactly <strong>one</strong> replica's
+/// terminal session. The "which replica is this?" question is intentionally opaque to the
+/// host: the AppHost encodes the replica identity in the UDS paths it passes in (typically
+/// as a per-replica directory like <c>{base}/{i}/dcp.sock</c>) and the host just listens
+/// on whatever paths it's told. If a target resource has <c>N</c> replicas, the AppHost
+/// spawns <c>N</c> independent terminal host processes, each with its own
+/// producer/consumer/control UDS triple.
+/// </para>
+/// <para>
+/// Connection direction note: on the producer side the terminal host <strong>listens</strong>
+/// and DCP <strong>dials</strong>. On the consumer side the terminal host <strong>listens</strong>
+/// and viewers (Dashboard, CLI) <strong>dial</strong>. Same shape on both ends.
+/// </para>
+/// </remarks>
 internal sealed class TerminalHostArgs
 {
-    public required int ReplicaCount { get; init; }
-    public required string[] ProducerUdsPaths { get; init; }
-    public required string[] ConsumerUdsPaths { get; init; }
+    public required string ProducerUdsPath { get; init; }
+    public required string ConsumerUdsPath { get; init; }
     public required string ControlUdsPath { get; init; }
     public int Columns { get; init; } = 120;
     public int Rows { get; init; } = 30;
@@ -26,10 +41,9 @@ internal sealed class TerminalHostArgs
     /// <summary>
     /// Parses command-line arguments. The argument shape is:
     /// <list type="bullet">
-    ///   <item><c>--replica-count N</c> (required, &gt;= 1)</item>
-    ///   <item><c>--producer-uds PATH</c> (repeated N times)</item>
-    ///   <item><c>--consumer-uds PATH</c> (repeated N times)</item>
-    ///   <item><c>--control-uds PATH</c> (required)</item>
+    ///   <item><c>--producer-uds PATH</c> (required) — path the host LISTENS on; DCP dials.</item>
+    ///   <item><c>--consumer-uds PATH</c> (required) — path the host LISTENS on; viewers dial.</item>
+    ///   <item><c>--control-uds PATH</c> (required) — path the host LISTENS on; AppHost dials for status/shutdown RPC.</item>
     ///   <item><c>--columns N</c> (optional, default 120)</item>
     ///   <item><c>--rows N</c> (optional, default 30)</item>
     ///   <item><c>--shell NAME</c> (optional, informational)</item>
@@ -41,9 +55,8 @@ internal sealed class TerminalHostArgs
     {
         ArgumentNullException.ThrowIfNull(args);
 
-        int? replicaCount = null;
-        var producers = new List<string>();
-        var consumers = new List<string>();
+        string? producer = null;
+        string? consumer = null;
         string? control = null;
         int columns = 120;
         int rows = 30;
@@ -54,14 +67,21 @@ internal sealed class TerminalHostArgs
             var arg = args[i];
             switch (arg)
             {
-                case "--replica-count":
-                    replicaCount = ParseInt(args, ref i, "--replica-count");
-                    break;
                 case "--producer-uds":
-                    producers.Add(ParseString(args, ref i, "--producer-uds"));
+                    if (producer is not null)
+                    {
+                        throw new TerminalHostArgsException(
+                            "--producer-uds may only be specified once. Each terminal host serves exactly one replica.");
+                    }
+                    producer = ParseString(args, ref i, "--producer-uds");
                     break;
                 case "--consumer-uds":
-                    consumers.Add(ParseString(args, ref i, "--consumer-uds"));
+                    if (consumer is not null)
+                    {
+                        throw new TerminalHostArgsException(
+                            "--consumer-uds may only be specified once. Each terminal host serves exactly one replica.");
+                    }
+                    consumer = ParseString(args, ref i, "--consumer-uds");
                     break;
                 case "--control-uds":
                     control = ParseString(args, ref i, "--control-uds");
@@ -80,27 +100,14 @@ internal sealed class TerminalHostArgs
             }
         }
 
-        if (replicaCount is null)
+        if (string.IsNullOrEmpty(producer))
         {
-            throw new TerminalHostArgsException("Missing required argument: --replica-count.");
+            throw new TerminalHostArgsException("Missing required argument: --producer-uds.");
         }
 
-        if (replicaCount.Value < 1)
+        if (string.IsNullOrEmpty(consumer))
         {
-            throw new TerminalHostArgsException(
-                $"--replica-count must be >= 1 (got {replicaCount.Value}).");
-        }
-
-        if (producers.Count != replicaCount.Value)
-        {
-            throw new TerminalHostArgsException(
-                $"Expected {replicaCount.Value} --producer-uds argument(s), got {producers.Count}.");
-        }
-
-        if (consumers.Count != replicaCount.Value)
-        {
-            throw new TerminalHostArgsException(
-                $"Expected {replicaCount.Value} --consumer-uds argument(s), got {consumers.Count}.");
+            throw new TerminalHostArgsException("Missing required argument: --consumer-uds.");
         }
 
         if (string.IsNullOrEmpty(control))
@@ -116,9 +123,8 @@ internal sealed class TerminalHostArgs
 
         return new TerminalHostArgs
         {
-            ReplicaCount = replicaCount.Value,
-            ProducerUdsPaths = [.. producers],
-            ConsumerUdsPaths = [.. consumers],
+            ProducerUdsPath = producer,
+            ConsumerUdsPath = consumer,
             ControlUdsPath = control,
             Columns = columns,
             Rows = rows,

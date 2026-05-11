@@ -7,10 +7,14 @@ namespace Aspire.Hosting.Dcp.Model;
 
 /// <summary>
 /// Terminal configuration for a DCP resource. When set, DCP allocates a pseudo-terminal
-/// for the process and serves the per-replica HMP v1 producer endpoint at <see cref="UdsPath"/>.
-/// The Aspire terminal host connects to that endpoint as an HMP v1 client.
+/// for the process and DIALS the per-replica HMP v1 producer endpoint at <see cref="UdsPath"/>.
+/// The Aspire terminal host LISTENS on that endpoint as an HMP v1 server.
 /// </summary>
 /// <remarks>
+/// Connection direction note: DCP is the dialer; the terminal host is the listener. The
+/// previous wording on this type and on the Go-side <c>terminal_types.go</c> said "DCP
+/// listens" — that was inverted. The actual implementation in DCP's
+/// <c>internal/termpty/session.go</c> calls <c>net.Dialer.DialContext(..., "unix", udsPath)</c>.
 /// Mirrors <c>api/v1/terminal_types.go</c> in microsoft/dcp; field names and JSON tags must
 /// stay in lockstep with the Go side.
 /// </remarks>
@@ -18,15 +22,16 @@ internal sealed class TerminalSpec
 {
     /// <summary>
     /// Whether terminal (PTY) mode is enabled for this resource. When true, DCP allocates
-    /// a pseudo-terminal instead of pipes for the process I/O and exposes an HMP v1
-    /// producer endpoint at <see cref="UdsPath"/>.
+    /// a pseudo-terminal instead of pipes for the process I/O and DIALS the HMP v1
+    /// producer endpoint at <see cref="UdsPath"/> (which the Aspire terminal host has
+    /// already bound and is listening on).
     /// </summary>
     [JsonPropertyName("enabled")]
     public bool Enabled { get; set; }
 
     /// <summary>
-    /// Path to the Unix domain socket that DCP listens on for the terminal host's HMP v1
-    /// client connection. Required when <see cref="Enabled"/> is true.
+    /// Path to the Unix domain socket the Aspire terminal host LISTENS on for the HMP v1
+    /// producer connection. DCP DIALS this path. Required when <see cref="Enabled"/> is true.
     /// </summary>
     [JsonPropertyName("udsPath")]
     public string? UdsPath { get; set; }

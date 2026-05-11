@@ -9,17 +9,13 @@ public class TerminalHostArgsTests
     public void ParseAllRequiredArgsSucceeds()
     {
         var args = TerminalHostArgs.Parse([
-            "--replica-count", "2",
-            "--producer-uds", "/tmp/p0.sock",
-            "--producer-uds", "/tmp/p1.sock",
-            "--consumer-uds", "/tmp/c0.sock",
-            "--consumer-uds", "/tmp/c1.sock",
+            "--producer-uds", "/tmp/p.sock",
+            "--consumer-uds", "/tmp/c.sock",
             "--control-uds", "/tmp/ctrl.sock",
         ]);
 
-        Assert.Equal(2, args.ReplicaCount);
-        Assert.Equal(["/tmp/p0.sock", "/tmp/p1.sock"], args.ProducerUdsPaths);
-        Assert.Equal(["/tmp/c0.sock", "/tmp/c1.sock"], args.ConsumerUdsPaths);
+        Assert.Equal("/tmp/p.sock", args.ProducerUdsPath);
+        Assert.Equal("/tmp/c.sock", args.ConsumerUdsPath);
         Assert.Equal("/tmp/ctrl.sock", args.ControlUdsPath);
         Assert.Equal(120, args.Columns);
         Assert.Equal(30, args.Rows);
@@ -30,7 +26,6 @@ public class TerminalHostArgsTests
     public void ParseAcceptsOptionalDimensionsAndShell()
     {
         var args = TerminalHostArgs.Parse([
-            "--replica-count", "1",
             "--producer-uds", "/tmp/p.sock",
             "--consumer-uds", "/tmp/c.sock",
             "--control-uds", "/tmp/ctrl.sock",
@@ -45,22 +40,31 @@ public class TerminalHostArgsTests
     }
 
     [Fact]
-    public void ParseMissingReplicaCountThrows()
+    public void ParseMissingProducerUdsThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--producer-uds", "/tmp/p.sock",
             "--consumer-uds", "/tmp/c.sock",
             "--control-uds", "/tmp/ctrl.sock",
         ]));
 
-        Assert.Contains("--replica-count", ex.Message);
+        Assert.Contains("--producer-uds", ex.Message);
+    }
+
+    [Fact]
+    public void ParseMissingConsumerUdsThrows()
+    {
+        var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
+            "--producer-uds", "/tmp/p.sock",
+            "--control-uds", "/tmp/ctrl.sock",
+        ]));
+
+        Assert.Contains("--consumer-uds", ex.Message);
     }
 
     [Fact]
     public void ParseMissingControlUdsThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count", "1",
             "--producer-uds", "/tmp/p.sock",
             "--consumer-uds", "/tmp/c.sock",
         ]));
@@ -69,13 +73,14 @@ public class TerminalHostArgsTests
     }
 
     [Fact]
-    public void ParseProducerCountMismatchThrows()
+    public void ParseDuplicateProducerUdsThrows()
     {
+        // Each terminal host serves exactly one replica, so passing two producer-uds
+        // entries is interpreted as a misuse of the new single-replica argument shape.
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count", "2",
             "--producer-uds", "/tmp/p0.sock",
-            "--consumer-uds", "/tmp/c0.sock",
-            "--consumer-uds", "/tmp/c1.sock",
+            "--producer-uds", "/tmp/p1.sock",
+            "--consumer-uds", "/tmp/c.sock",
             "--control-uds", "/tmp/ctrl.sock",
         ]));
 
@@ -83,13 +88,12 @@ public class TerminalHostArgsTests
     }
 
     [Fact]
-    public void ParseConsumerCountMismatchThrows()
+    public void ParseDuplicateConsumerUdsThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count", "2",
-            "--producer-uds", "/tmp/p0.sock",
-            "--producer-uds", "/tmp/p1.sock",
+            "--producer-uds", "/tmp/p.sock",
             "--consumer-uds", "/tmp/c0.sock",
+            "--consumer-uds", "/tmp/c1.sock",
             "--control-uds", "/tmp/ctrl.sock",
         ]));
 
@@ -97,21 +101,9 @@ public class TerminalHostArgsTests
     }
 
     [Fact]
-    public void ParseZeroReplicaCountThrows()
-    {
-        var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count", "0",
-            "--control-uds", "/tmp/ctrl.sock",
-        ]));
-
-        Assert.Contains("--replica-count", ex.Message);
-    }
-
-    [Fact]
     public void ParseNegativeColumnsThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count", "1",
             "--producer-uds", "/tmp/p.sock",
             "--consumer-uds", "/tmp/c.sock",
             "--control-uds", "/tmp/ctrl.sock",
@@ -125,7 +117,6 @@ public class TerminalHostArgsTests
     public void ParseUnknownArgumentThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count", "1",
             "--producer-uds", "/tmp/p.sock",
             "--consumer-uds", "/tmp/c.sock",
             "--control-uds", "/tmp/ctrl.sock",
@@ -139,21 +130,23 @@ public class TerminalHostArgsTests
     public void ParseMissingValueForArgumentThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count",
+            "--producer-uds",
         ]));
 
-        Assert.Contains("--replica-count", ex.Message);
+        Assert.Contains("--producer-uds", ex.Message);
     }
 
     [Fact]
-    public void ParseNonIntegerForReplicaCountThrows()
+    public void ParseNonIntegerForColumnsThrows()
     {
         var ex = Assert.Throws<TerminalHostArgsException>(() => TerminalHostArgs.Parse([
-            "--replica-count", "abc",
+            "--producer-uds", "/tmp/p.sock",
+            "--consumer-uds", "/tmp/c.sock",
             "--control-uds", "/tmp/ctrl.sock",
+            "--columns", "abc",
         ]));
 
-        Assert.Contains("--replica-count", ex.Message);
+        Assert.Contains("--columns", ex.Message);
     }
 
     [Fact]

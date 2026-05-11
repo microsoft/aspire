@@ -424,6 +424,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// host not running, control RPC timeout, etc.) so the caller can fall back to a
     /// "terminal unavailable" UI without an exception.
     /// </summary>
+    /// <summary>
+    /// Returns the discovery info needed to attach to a resource's terminal session(s). For a
+    /// resource configured with <c>WithTerminal()</c>, this enumerates the per-replica
+    /// consumer-side UDS endpoints by asking each per-replica terminal host process over its
+    /// control UDS in parallel. Returns <see cref="GetTerminalInfoResponse.IsAvailable"/> = false
+    /// when the resource has no <see cref="TerminalAnnotation"/>; per-host control RPC failures
+    /// (e.g. host not yet started) degrade to <see cref="TerminalReplicaInfo.IsAlive"/> = false
+    /// for that replica without failing the whole call.
+    /// </summary>
     public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(GetTerminalInfoRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -444,11 +453,70 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             return new GetTerminalInfoResponse { IsAvailable = false };
         }
 
-        var layout = terminalAnnotation.TerminalHost.Layout;
-        Aspire.Shared.TerminalHost.TerminalHostReplicasResponse hostReplicas;
+        var (replicas, _) = await CollectReplicaInfosAsync(
+            request.ResourceName,
+            terminalAnnotation,
+            cancellationToken).ConfigureAwait(false);
+
+        return new GetTerminalInfoResponse
+        {
+            IsAvailable = true,
+            Replicas = replicas,
+            Columns = terminalAnnotation.Options.Columns,
+            Rows = terminalAnnotation.Options.Rows,
+        };
+    }
+
+    /// <summary>
+    /// Fans out across each per-replica terminal host's control UDS in parallel and returns
+    /// the assembled per-replica info array plus an aggregate flag indicating whether at
+    /// least one host responded. Per-host failures (host not yet started, control RPC timeout)
+    /// materialize as a <see cref="TerminalReplicaInfo"/> with the AppHost-known consumer UDS
+    /// path and <see cref="TerminalReplicaInfo.IsAlive"/> = false, so callers can always render
+    /// a row per replica even when a host hasn't started.
+    /// </summary>
+    private async Task<(TerminalReplicaInfo[] Replicas, bool AnyHostReachable)> CollectReplicaInfosAsync(
+        string resourceName,
+        TerminalAnnotation terminalAnnotation,
+        CancellationToken cancellationToken)
+    {
+        var hosts = terminalAnnotation.TerminalHosts;
+        var tasks = new Task<(TerminalReplicaInfo Info, bool HostResponded)>[hosts.Count];
+        for (var i = 0; i < hosts.Count; i++)
+        {
+            tasks[i] = QueryReplicaAsync(resourceName, hosts[i], cancellationToken);
+        }
+
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var replicas = new TerminalReplicaInfo[results.Length];
+        var anyResponded = false;
+        for (var i = 0; i < results.Length; i++)
+        {
+            replicas[i] = results[i].Info;
+            anyResponded |= results[i].HostResponded;
+        }
+        return (replicas, anyResponded);
+    }
+
+    /// <summary>
+    /// Queries a single per-replica host's control UDS and translates the response (or the
+    /// failure) into a <see cref="TerminalReplicaInfo"/>. The AppHost is the source of truth
+    /// for the consumer UDS path and replica index — those come from <see cref="TerminalHostResource.Layout"/>
+    /// rather than from the host's echoed reply. The returned <c>HostResponded</c> flag is true
+    /// only when the control RPC actually succeeded.
+    /// </summary>
+    private async Task<(TerminalReplicaInfo Info, bool HostResponded)> QueryReplicaAsync(
+        string resourceName,
+        TerminalHostResource host,
+        CancellationToken cancellationToken)
+    {
+        var layout = host.Layout;
+        var replicaIndex = layout.ParentReplicaIndex;
+
+        Aspire.Shared.TerminalHost.TerminalHostSessionInfo? session = null;
         try
         {
-            hostReplicas = await TerminalHostControlClient.GetReplicasAsync(
+            session = await TerminalHostControlClient.GetSessionAsync(
                 layout.ControlUdsPath,
                 totalTimeout: TimeSpan.FromSeconds(3),
                 cancellationToken).ConfigureAwait(false);
@@ -456,56 +524,32 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogDebug(
-                "GetTerminalInfo: timed out waiting for terminal host control RPC for resource '{ResourceName}' (control path '{ControlPath}').",
-                request.ResourceName, layout.ControlUdsPath);
-            return new GetTerminalInfoResponse { IsAvailable = false };
+                "Terminal host control RPC timed out for resource '{ResourceName}' replica {ReplicaIndex} (control path '{ControlPath}').",
+                resourceName, replicaIndex, layout.ControlUdsPath);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogDebug(
                 ex,
-                "GetTerminalInfo: terminal host control RPC failed for resource '{ResourceName}' (control path '{ControlPath}').",
-                request.ResourceName, layout.ControlUdsPath);
-            return new GetTerminalInfoResponse { IsAvailable = false };
+                "Terminal host control RPC failed for resource '{ResourceName}' replica {ReplicaIndex} (control path '{ControlPath}').",
+                resourceName, replicaIndex, layout.ControlUdsPath);
         }
 
-        var replicas = new List<TerminalReplicaInfo>(hostReplicas.Replicas.Length);
-        foreach (var hostReplica in hostReplicas.Replicas)
+        var info = new TerminalReplicaInfo
         {
-            // The AppHost is the source of truth for the consumer UDS layout. The host echoes
-            // it back, but if the host's index is out of range we drop the entry rather than
-            // throw, so a bug in the host can never crash a backchannel call.
-            if (hostReplica.Index < 0 || hostReplica.Index >= layout.ConsumerUdsPaths.Count)
-            {
-                logger.LogWarning(
-                    "GetTerminalInfo: terminal host for resource '{ResourceName}' returned out-of-range replica index {Index} (replica count {Count}); skipping.",
-                    request.ResourceName, hostReplica.Index, layout.ConsumerUdsPaths.Count);
-                continue;
-            }
-
-            replicas.Add(new TerminalReplicaInfo
-            {
-                ReplicaIndex = hostReplica.Index,
-                Label = $"replica {hostReplica.Index}",
-                ConsumerUdsPath = layout.ConsumerUdsPaths[hostReplica.Index],
-                IsAlive = hostReplica.IsAlive,
-                ExitCode = hostReplica.ExitCode,
-                ProducerConnected = hostReplica.ProducerConnected,
-                RestartCount = hostReplica.RestartCount,
-                CurrentColumns = hostReplica.CurrentColumns,
-                CurrentRows = hostReplica.CurrentRows,
-                AttachedPeerCount = hostReplica.AttachedPeerCount,
-                Peers = ConvertPeers(hostReplica.Peers),
-            });
-        }
-
-        return new GetTerminalInfoResponse
-        {
-            IsAvailable = true,
-            Replicas = [.. replicas],
-            Columns = terminalAnnotation.Options.Columns,
-            Rows = terminalAnnotation.Options.Rows,
+            ReplicaIndex = replicaIndex,
+            Label = $"replica {replicaIndex}",
+            ConsumerUdsPath = layout.ConsumerUdsPath,
+            IsAlive = session?.IsAlive ?? false,
+            ExitCode = session?.ExitCode,
+            ProducerConnected = session?.ProducerConnected ?? false,
+            RestartCount = session?.RestartCount ?? 0,
+            CurrentColumns = session?.CurrentColumns,
+            CurrentRows = session?.CurrentRows,
+            AttachedPeerCount = session?.AttachedPeerCount,
+            Peers = ConvertPeers(session?.Peers),
         };
+        return (info, session is not null);
     }
 
     /// <summary>
@@ -558,61 +602,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 continue;
             }
 
-            var layout = terminalAnnotation.TerminalHost.Layout;
-
-            Aspire.Shared.TerminalHost.TerminalHostReplicasResponse? hostReplicas = null;
-            try
-            {
-                hostReplicas = await TerminalHostControlClient.GetReplicasAsync(
-                    layout.ControlUdsPath,
-                    totalTimeout: TimeSpan.FromSeconds(3),
-                    cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                logger.LogDebug(
-                    "ListTerminals: timed out waiting for terminal host control RPC for resource '{ResourceName}' (control path '{ControlPath}').",
-                    resource.Name, layout.ControlUdsPath);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogDebug(
-                    ex,
-                    "ListTerminals: terminal host control RPC failed for resource '{ResourceName}' (control path '{ControlPath}').",
-                    resource.Name, layout.ControlUdsPath);
-            }
-
-            TerminalReplicaInfo[]? replicas = null;
-            if (hostReplicas is not null)
-            {
-                var list = new List<TerminalReplicaInfo>(hostReplicas.Replicas.Length);
-                foreach (var hostReplica in hostReplicas.Replicas)
-                {
-                    if (hostReplica.Index < 0 || hostReplica.Index >= layout.ConsumerUdsPaths.Count)
-                    {
-                        logger.LogWarning(
-                            "ListTerminals: terminal host for resource '{ResourceName}' returned out-of-range replica index {Index} (replica count {Count}); skipping.",
-                            resource.Name, hostReplica.Index, layout.ConsumerUdsPaths.Count);
-                        continue;
-                    }
-
-                    list.Add(new TerminalReplicaInfo
-                    {
-                        ReplicaIndex = hostReplica.Index,
-                        Label = $"replica {hostReplica.Index}",
-                        ConsumerUdsPath = layout.ConsumerUdsPaths[hostReplica.Index],
-                        IsAlive = hostReplica.IsAlive,
-                        ExitCode = hostReplica.ExitCode,
-                        ProducerConnected = hostReplica.ProducerConnected,
-                        RestartCount = hostReplica.RestartCount,
-                        CurrentColumns = hostReplica.CurrentColumns,
-                        CurrentRows = hostReplica.CurrentRows,
-                        AttachedPeerCount = hostReplica.AttachedPeerCount,
-                        Peers = ConvertPeers(hostReplica.Peers),
-                    });
-                }
-                replicas = [.. list];
-            }
+            var (replicas, anyHostReachable) = await CollectReplicaInfosAsync(
+                resource.Name,
+                terminalAnnotation,
+                cancellationToken).ConfigureAwait(false);
 
             terminals.Add(new TerminalSummary
             {
@@ -620,8 +613,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 DisplayName = resource.Name,
                 ConfiguredColumns = terminalAnnotation.Options.Columns,
                 ConfiguredRows = terminalAnnotation.Options.Rows,
-                IsHostReachable = hostReplicas is not null,
-                Replicas = replicas,
+                IsHostReachable = anyHostReachable,
+                Replicas = anyHostReachable ? replicas : null,
             });
         }
 

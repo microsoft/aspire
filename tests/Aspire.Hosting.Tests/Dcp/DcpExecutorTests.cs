@@ -4842,15 +4842,18 @@ public class DcpExecutorTests
             .ToList();
         Assert.Equal(2, exes.Count);
 
-        var layout = resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost.Layout;
-        Assert.Equal(2, layout.ProducerUdsPaths.Count);
+        // Each parent replica gets its own per-replica TerminalHostResource — the
+        // annotation now carries the list, and the Executable for replica i must
+        // dial the producer UDS owned by TerminalHosts[i].
+        var hosts = resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(2, hosts.Count);
 
         for (var i = 0; i < exes.Count; i++)
         {
             var spec = exes[i].Spec.Terminal;
             Assert.NotNull(spec);
             Assert.True(spec!.Enabled);
-            Assert.Equal(layout.ProducerUdsPaths[i], spec.UdsPath);
+            Assert.Equal(hosts[i].Layout.ProducerUdsPath, spec.UdsPath);
             Assert.Equal(100, spec.Cols);
             Assert.Equal(30, spec.Rows);
         }
@@ -4900,11 +4903,13 @@ public class DcpExecutorTests
         await appExecutor.RunApplicationAsync();
 
         var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "shell");
-        var layout = resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHost.Layout;
+        // Plain executables are always single-replica — there's exactly one host
+        // at index 0, owning the only producer UDS.
+        var host = Assert.Single(resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts);
 
         Assert.NotNull(exe.Spec.Terminal);
         Assert.True(exe.Spec.Terminal!.Enabled);
-        Assert.Equal(layout.ProducerUdsPaths[0], exe.Spec.Terminal.UdsPath);
+        Assert.Equal(host.Layout.ProducerUdsPath, exe.Spec.Terminal.UdsPath);
         Assert.Equal(100, exe.Spec.Terminal.Cols);
         Assert.Equal(30, exe.Spec.Terminal.Rows);
 

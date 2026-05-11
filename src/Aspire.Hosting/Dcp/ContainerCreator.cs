@@ -358,9 +358,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.PemCertificates = pemCertificates;
 
         // Configure the terminal spec if the resource has a TerminalAnnotation.
-        // Containers are always single-replica, so the layout's index 0 paths
-        // are used directly. DCP currently implements PTY support on Windows
-        // only; on other platforms we leave Terminal unset and log a warning.
+        // Containers are always single-replica, so we use the host at index 0
+        // (TerminalAnnotation always has at least one entry). DCP currently
+        // implements PTY support on Windows only; on other platforms we leave
+        // Terminal unset and log a warning.
         if (modelContainer.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
         {
             var terminalAnnotation = terminalAnnotations.FirstOrDefault();
@@ -372,12 +373,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                         "WithTerminal() is currently only supported on Windows. Container resource '{ResourceName}' will run without an attachable terminal in this Aspire version.",
                         modelContainer.Name);
                 }
-                else if (terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths.Count > 0)
+                else if (terminalAnnotation.TerminalHosts.Count > 0)
                 {
                     spec.Terminal = new TerminalSpec
                     {
                         Enabled = true,
-                        UdsPath = terminalAnnotation.TerminalHost.Layout.ProducerUdsPaths[0],
+                        UdsPath = terminalAnnotation.TerminalHosts[0].Layout.ProducerUdsPath,
                         Cols = terminalAnnotation.Options.Columns,
                         Rows = terminalAnnotation.Options.Rows
                     };

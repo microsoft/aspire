@@ -20,7 +20,7 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
     [Fact]
     public async Task ReturnsUnavailable_WhenResourceDoesNotExist()
     {
-        var (model, _) = BuildModel(replicaCount: 1, controlListener: null);
+        var (model, _) = BuildModel(replicaCount: 1, controlListeners: null);
 
         var target = CreateTarget(model);
 
@@ -49,47 +49,60 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsUnavailable_WhenControlSocketIsUnreachable()
+    public async Task ReturnsAvailableWithDegradedReplicas_WhenAllControlSocketsAreUnreachable()
     {
-        // Build a layout pointing at a control socket nobody is listening on. The retry loop
-        // should burn its 3-second budget and report unavailable rather than throw.
-        var (model, _) = BuildModel(replicaCount: 2, controlListener: null);
+        // Build a layout pointing at control sockets nobody is listening on. The new
+        // fan-out model treats each per-replica host independently — every host's
+        // control RPC will time out, but the call still returns IsAvailable=true with
+        // one degraded TerminalReplicaInfo per replica (IsAlive=false, AppHost-known
+        // ConsumerUdsPath populated). This mirrors the user-visible behavior in
+        // `aspire terminal ps` where the row still appears for each replica even
+        // when its host hasn't started yet.
+        var (model, hosts) = BuildModel(replicaCount: 2, controlListeners: null);
 
         var target = CreateTarget(model);
 
         var result = await target.GetTerminalInfoAsync(
-            new GetTerminalInfoRequest { ResourceName = "myapp" }).DefaultTimeout(TimeSpan.FromSeconds(10));
+            new GetTerminalInfoRequest { ResourceName = "myapp" }).DefaultTimeout(TimeSpan.FromSeconds(15));
 
-        Assert.False(result.IsAvailable);
-        Assert.Null(result.Replicas);
+        Assert.True(result.IsAvailable);
+        Assert.NotNull(result.Replicas);
+        Assert.Equal(2, result.Replicas!.Length);
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.Equal(i, result.Replicas[i].ReplicaIndex);
+            Assert.False(result.Replicas[i].IsAlive);
+            Assert.Equal(hosts[i].Layout.ConsumerUdsPath, result.Replicas[i].ConsumerUdsPath);
+        }
     }
 
     [Fact]
-    public async Task ReturnsPerReplicaInfo_WhenHostIsReachable()
+    public async Task ReturnsPerReplicaInfo_WhenAllHostsReachable()
     {
-        var hostReplicas = new[]
+        // Each per-replica terminal host serves a single session. The AppHost's
+        // GetTerminalInfo fans out across them in parallel and assembles the
+        // per-replica response array. ReplicaIndex on the wire comes from the
+        // AppHost's layout (TerminalHostLayout.ParentReplicaIndex), not from the
+        // host's reply, so a misbehaving host can never confuse the AppHost's view.
+        var fakeHost0 = await StartFakeControlHostAsync(new TerminalHostSessionInfo
         {
-            new TerminalHostReplicaInfo
-            {
-                Index = 0,
-                ProducerUdsPath = "ignored-by-apphost",
-                ConsumerUdsPath = "host-claim-r0",
-                IsAlive = true,
-            },
-            new TerminalHostReplicaInfo
-            {
-                Index = 1,
-                ProducerUdsPath = "ignored-by-apphost",
-                ConsumerUdsPath = "host-claim-r1",
-                IsAlive = false,
-                ExitCode = 7,
-            },
-        };
-        var fakeHost = await StartFakeControlHostAsync(hostReplicas).DefaultTimeout();
+            ProducerUdsPath = "host-claim-p0",
+            ConsumerUdsPath = "host-claim-r0",
+            IsAlive = true,
+            ProducerConnected = true,
+        }).DefaultTimeout();
 
-        var (model, layout) = BuildModel(
+        var fakeHost1 = await StartFakeControlHostAsync(new TerminalHostSessionInfo
+        {
+            ProducerUdsPath = "host-claim-p1",
+            ConsumerUdsPath = "host-claim-r1",
+            IsAlive = false,
+            ExitCode = 7,
+        }).DefaultTimeout();
+
+        var (model, hosts) = BuildModel(
             replicaCount: 2,
-            controlListener: fakeHost);
+            controlListeners: [fakeHost0, fakeHost1]);
 
         var target = CreateTarget(model);
 
@@ -108,40 +121,47 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         Assert.Equal("replica 0", result.Replicas[0].Label);
         // AppHost is the source of truth for the consumer UDS path even though the host
         // echoed back its own claim — verify we trust the layout.
-        Assert.Equal(layout.ConsumerUdsPaths[0], result.Replicas[0].ConsumerUdsPath);
+        Assert.Equal(hosts[0].Layout.ConsumerUdsPath, result.Replicas[0].ConsumerUdsPath);
         Assert.True(result.Replicas[0].IsAlive);
         Assert.Null(result.Replicas[0].ExitCode);
 
         Assert.Equal(1, result.Replicas[1].ReplicaIndex);
         Assert.Equal("replica 1", result.Replicas[1].Label);
-        Assert.Equal(layout.ConsumerUdsPaths[1], result.Replicas[1].ConsumerUdsPath);
+        Assert.Equal(hosts[1].Layout.ConsumerUdsPath, result.Replicas[1].ConsumerUdsPath);
         Assert.False(result.Replicas[1].IsAlive);
         Assert.Equal(7, result.Replicas[1].ExitCode);
     }
 
     [Fact]
-    public async Task SkipsOutOfRangeIndices_FromMisbehavingHost()
+    public async Task DegradedReplicaReportedWhenSomeHostsUnreachable()
     {
-        var hostReplicas = new[]
+        // Mixed scenario: replica 0's host is reachable, replica 1's is not.
+        // Both show up in the result; replica 1 has IsAlive=false but the
+        // AppHost-known consumer path is still reported so the row stays visible.
+        var fakeHost0 = await StartFakeControlHostAsync(new TerminalHostSessionInfo
         {
-            new TerminalHostReplicaInfo { Index = 0, ProducerUdsPath = "p0", ConsumerUdsPath = "c0", IsAlive = true },
-            new TerminalHostReplicaInfo { Index = 99, ProducerUdsPath = "px", ConsumerUdsPath = "cx", IsAlive = true },
-            new TerminalHostReplicaInfo { Index = -1, ProducerUdsPath = "py", ConsumerUdsPath = "cy", IsAlive = true },
-        };
-        var fakeHost = await StartFakeControlHostAsync(hostReplicas).DefaultTimeout();
+            ProducerUdsPath = "host-claim-p0",
+            ConsumerUdsPath = "host-claim-r0",
+            IsAlive = true,
+            ProducerConnected = true,
+        }).DefaultTimeout();
 
-        var (model, layout) = BuildModel(replicaCount: 1, controlListener: fakeHost);
+        var (model, hosts) = BuildModel(
+            replicaCount: 2,
+            controlListeners: [fakeHost0, null]);
 
         var target = CreateTarget(model);
 
         var result = await target.GetTerminalInfoAsync(
-            new GetTerminalInfoRequest { ResourceName = "myapp" }).DefaultTimeout(TimeSpan.FromSeconds(10));
+            new GetTerminalInfoRequest { ResourceName = "myapp" }).DefaultTimeout(TimeSpan.FromSeconds(15));
 
         Assert.True(result.IsAvailable);
         Assert.NotNull(result.Replicas);
-        var single = Assert.Single(result.Replicas!);
-        Assert.Equal(0, single.ReplicaIndex);
-        Assert.Equal(layout.ConsumerUdsPaths[0], single.ConsumerUdsPath);
+        Assert.Equal(2, result.Replicas!.Length);
+        Assert.True(result.Replicas[0].IsAlive);
+        Assert.False(result.Replicas[1].IsAlive);
+        Assert.Equal(hosts[0].Layout.ConsumerUdsPath, result.Replicas[0].ConsumerUdsPath);
+        Assert.Equal(hosts[1].Layout.ConsumerUdsPath, result.Replicas[1].ConsumerUdsPath);
     }
 
     [Fact]
@@ -157,40 +177,55 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         Assert.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1, result.Capabilities);
     }
 
-    private (DistributedApplicationModel Model, TerminalHostLayout Layout) BuildModel(
+    /// <summary>
+    /// Builds a target resource with a <see cref="TerminalAnnotation"/> wired to one
+    /// per-replica <see cref="TerminalHostResource"/> per replica. <paramref name="controlListeners"/>
+    /// is matched by index against the hosts: a non-null entry points the corresponding layout
+    /// at that fake host's listening UDS, a null entry leaves the layout pointing at a path
+    /// nobody is listening on (so the per-host RPC degrades gracefully).
+    /// </summary>
+    private (DistributedApplicationModel Model, IReadOnlyList<TerminalHostResource> Hosts) BuildModel(
         int replicaCount,
-        FakeControlHost? controlListener)
+        IReadOnlyList<FakeControlHost?>? controlListeners)
     {
         var baseDir = CreateShortTempDir();
-        Directory.CreateDirectory(Path.Combine(baseDir, "dcp"));
-        Directory.CreateDirectory(Path.Combine(baseDir, "host"));
-
-        var producer = new string[replicaCount];
-        var consumer = new string[replicaCount];
-        for (var i = 0; i < replicaCount; i++)
-        {
-            producer[i] = Path.Combine(baseDir, "dcp", $"r{i}.sock");
-            consumer[i] = Path.Combine(baseDir, "host", $"r{i}.sock");
-        }
-
-        // If a fake host is supplied, point the layout at its real socket path. Otherwise use
-        // a path that does not exist — the retry loop will exhaust its budget and IsAvailable
-        // will be false, exercising the unreachable path.
-        var controlPath = controlListener?.SocketPath ?? Path.Combine(baseDir, "control.sock");
-        var layout = new TerminalHostLayout(baseDir, producer, consumer, controlPath);
 
         var target = new CustomResource("myapp");
-        var host = new TerminalHostResource("myapp-terminalhost", target, layout);
-        var annotation = new TerminalAnnotation(host, new TerminalOptions { Columns = 132, Rows = 40 });
+        var hosts = new TerminalHostResource[replicaCount];
+        for (var i = 0; i < replicaCount; i++)
+        {
+            var perReplicaDir = Path.Combine(baseDir, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Directory.CreateDirectory(perReplicaDir);
+
+            var producer = Path.Combine(perReplicaDir, "dcp.sock");
+            var consumer = Path.Combine(perReplicaDir, "host.sock");
+            // If a fake host is supplied at this index, use its real listening path so
+            // the AppHost-side fan-out actually reaches it. Otherwise leave it pointing
+            // at a path that does not exist.
+            var control = controlListeners is not null && i < controlListeners.Count && controlListeners[i] is { } listener
+                ? listener.SocketPath
+                : Path.Combine(perReplicaDir, "control.sock");
+
+            var layout = new TerminalHostLayout(
+                baseDirectory: baseDir,
+                parentReplicaIndex: i,
+                producerUdsPath: producer,
+                consumerUdsPath: consumer,
+                controlUdsPath: control);
+
+            hosts[i] = new TerminalHostResource($"myapp-terminalhost-{i}", target, layout);
+        }
+
+        var annotation = new TerminalAnnotation(hosts, new TerminalOptions { Columns = 132, Rows = 40 });
         target.Annotations.Add(annotation);
 
-        var model = new DistributedApplicationModel(new ResourceCollection
+        var resources = new ResourceCollection { target };
+        foreach (var h in hosts)
         {
-            target,
-            host,
-        });
+            resources.Add(h);
+        }
 
-        return (model, layout);
+        return (new DistributedApplicationModel(resources), hosts);
     }
 
     private static AuxiliaryBackchannelRpcTarget CreateTarget(DistributedApplicationModel model)
@@ -201,11 +236,11 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         return new AuxiliaryBackchannelRpcTarget(NullLogger<AuxiliaryBackchannelRpcTarget>.Instance, sp);
     }
 
-    private async Task<FakeControlHost> StartFakeControlHostAsync(TerminalHostReplicaInfo[] replicas)
+    private async Task<FakeControlHost> StartFakeControlHostAsync(TerminalHostSessionInfo session)
     {
         var dir = CreateShortTempDir();
         var socketPath = Path.Combine(dir, "ctrl.sock");
-        var host = new FakeControlHost(socketPath, replicas);
+        var host = new FakeControlHost(socketPath, session);
         await host.StartAsync().ConfigureAwait(false);
         _toDispose.Add(host);
         return host;
@@ -234,7 +269,12 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         }
     }
 
-    private sealed class FakeControlHost(string socketPath, TerminalHostReplicaInfo[] replicas) : IAsyncDisposable
+    /// <summary>
+    /// Stand-in for an <c>aspire.terminalhost</c> process: binds the control UDS and
+    /// exposes a single <see cref="TerminalHostControlProtocol.GetSessionMethod"/> that
+    /// returns the canned <see cref="TerminalHostSessionInfo"/>.
+    /// </summary>
+    private sealed class FakeControlHost(string socketPath, TerminalHostSessionInfo session) : IAsyncDisposable
     {
         private Socket? _listenSocket;
         private CancellationTokenSource? _cts;
@@ -283,8 +323,8 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
                     var rpc = new JsonRpc(handler);
 
                     rpc.AddLocalRpcMethod(
-                        TerminalHostControlProtocol.GetReplicasMethod,
-                        new Func<TerminalHostReplicasResponse>(() => new TerminalHostReplicasResponse { Replicas = replicas }));
+                        TerminalHostControlProtocol.GetSessionMethod,
+                        new Func<TerminalHostSessionInfo>(() => session));
 
                     lock (_rpcs)
                     {

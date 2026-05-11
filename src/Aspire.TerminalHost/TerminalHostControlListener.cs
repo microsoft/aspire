@@ -113,8 +113,8 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
 
         var rpc = new JsonRpc(handler);
         rpc.AddLocalRpcMethod(
-            TerminalHostControlProtocol.GetReplicasMethod,
-            _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetReplicasAsync))!,
+            TerminalHostControlProtocol.GetSessionMethod,
+            _target.GetType().GetMethod(nameof(TerminalHostControlRpcTarget.GetSessionAsync))!,
             _target);
         rpc.AddLocalRpcMethod(
             TerminalHostControlProtocol.GetInfoMethod,
