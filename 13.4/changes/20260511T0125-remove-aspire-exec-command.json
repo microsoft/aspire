@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": true,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "The experimental aspire exec command has been removed from the CLI along with its associated AppHost backchannel, feature flag, and localized resources.",
-  "docsPrs": [],
+  "docsPrs": [
+    901
+  ],
   "docsRequired": false,
-  "emoji": "🗑️",
+  "emoji": "\ud83d\uddd1\ufe0f",
   "firstMergedAt": "2026-05-11T01:25:38Z",
   "lastMergedAt": "2026-05-11T01:25:38Z",
   "name": "Remove aspire exec command",

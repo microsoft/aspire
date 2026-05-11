@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#16913 (remove aspire exec command)",
+  "mergedAt": "2026-05-11T04:04:07Z",
+  "number": 901,
+  "runDate": "2026-05-11T10:41:46Z",
+  "status": "included",
+  "title": "[docs] Remove execCommandEnabled from CLI config settings reference"
+}

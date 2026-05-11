@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The aspire update command now requires --yes when running in non-interactive mode, matching the behavior of aspire destroy. The validation logic is shared between both commands via a common base helper.",
-  "docsPrs": [],
+  "docsPrs": [
+    902
+  ],
   "docsRequired": false,
-  "emoji": "✅",
+  "emoji": "\u2705",
   "firstMergedAt": "2026-05-11T02:04:27Z",
   "lastMergedAt": "2026-05-11T02:04:27Z",
   "name": "Require --yes for update command in non-interactive mode",

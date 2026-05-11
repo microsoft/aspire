@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#16869 (AI Agents dialog in dashboard header)",
+  "mergedAt": "2026-05-11T10:15:26Z",
+  "number": 888,
+  "runDate": "2026-05-11T10:41:46Z",
+  "status": "included",
+  "title": "[docs] Dashboard AI Agents dialog and DisableAgentHelp configuration option"
+}

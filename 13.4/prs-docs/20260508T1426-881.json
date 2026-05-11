@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal tooling fix in docs repo, not milestone feature documentation",
+  "mergedAt": "2026-05-08T14:26:53Z",
+  "number": 881,
+  "runDate": "2026-05-11T10:41:46Z",
+  "status": "excluded",
+  "title": "Use pnpm instead of npm in check-data-files.mjs"
+}

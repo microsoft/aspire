@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#16906 (resource command displayImmediately)",
+  "mergedAt": "2026-05-11T04:34:31Z",
+  "number": 897,
+  "runDate": "2026-05-11T10:41:46Z",
+  "status": "included",
+  "title": "[docs] Update custom-resource-commands to use new CommandResults.Success displayImmediately overload"
+}

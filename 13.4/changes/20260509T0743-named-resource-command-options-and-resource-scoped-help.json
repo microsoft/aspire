@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Resource command inputs are now parsed as named CLI options (e.g., --name value) instead of positional arguments, making optional inputs easier to use. Running aspire resource <resource> --help now shows the commands available for that specific resource.",
-  "docsPrs": [],
+  "docsPrs": [
+    904
+  ],
   "docsRequired": false,
-  "emoji": "🎯",
+  "emoji": "\ud83c\udfaf",
   "firstMergedAt": "2026-05-09T07:43:50Z",
   "lastMergedAt": "2026-05-11T02:31:52Z",
   "name": "Named resource command options and resource-scoped help",

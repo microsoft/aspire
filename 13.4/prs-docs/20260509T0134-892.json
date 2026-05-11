@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#16710 (resource command arguments and visibility)",
+  "mergedAt": "2026-05-09T01:34:09Z",
+  "number": 892,
+  "runDate": "2026-05-11T10:41:46Z",
+  "status": "included",
+  "title": "[docs] Add command arguments, validation, and visibility to custom-resource-commands"
+}
