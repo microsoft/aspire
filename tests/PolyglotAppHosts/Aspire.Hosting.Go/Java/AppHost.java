@@ -27,7 +27,7 @@ void main() throws Exception {
 
         // Go app with headless Delve server for remote debugging (GoLand / VS Code attach)
         var debugService = builder.addGoApp("debug-service", "../go-debug-service")
-            .withDelveServer(2345.0);
+            .withDelveServer();
 
         builder.build().run();
     }

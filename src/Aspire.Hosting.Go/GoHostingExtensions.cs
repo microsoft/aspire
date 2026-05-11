@@ -464,27 +464,7 @@ public static class GoHostingExtensions
     private static string BuildDockerGoCommand(IResource resource)
     {
         var parts = new List<string> { "go", "build" };
-
-        if (resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
-        {
-            parts.Add("-race");
-        }
-
-        if (resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
-        {
-            parts.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
-        }
-
-        if (resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
-        {
-            parts.Add($"-ldflags={ShellQuote(ldFlagsAnnotation.Flags)}");
-        }
-
-        if (resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
-        {
-            parts.Add($"-gcflags={ShellQuote(gcFlagsAnnotation.Flags)}");
-        }
-
+        parts.AddRange(BuildFlagParts(resource));
         parts.AddRange(["-o", "/app/server", "."]);
         return string.Join(" ", parts);
     }
@@ -494,7 +474,15 @@ public static class GoHostingExtensions
     /// Returns an empty string when no flags are set.
     /// For <c>go run</c> the flags are individual args; for <c>dlv --build-flags</c> they are combined.
     /// </summary>
-    private static string BuildFlagsString(IResource resource)
+    private static string BuildFlagsString(IResource resource) =>
+        string.Join(" ", BuildFlagParts(resource));
+
+    /// <summary>
+    /// Returns the ordered flag tokens derived from build annotations on the resource.
+    /// Shared by <see cref="BuildDockerGoCommand"/> and <see cref="BuildFlagsString"/> so
+    /// that flag ordering and quoting rules are defined in exactly one place.
+    /// </summary>
+    private static List<string> BuildFlagParts(IResource resource)
     {
         var parts = new List<string>();
 
@@ -518,7 +506,7 @@ public static class GoHostingExtensions
             parts.Add($"-gcflags={ShellQuote(gcFlagsAnnotation.Flags)}");
         }
 
-        return string.Join(" ", parts);
+        return parts;
     }
 
     /// <summary>
