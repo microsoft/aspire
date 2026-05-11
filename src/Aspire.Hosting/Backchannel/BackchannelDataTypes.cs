@@ -51,6 +51,17 @@ internal static class AuxiliaryBackchannelCapabilities
     /// gate UI/CLI affordances on the presence of this capability.
     /// </summary>
     public const string Terminals_V1 = "terminals.v1";
+
+    /// <summary>
+    /// Terminal listing capability (13.4+): the AppHost exposes <c>ListTerminalsAsync</c>, returning
+    /// every <c>WithTerminal</c>-enabled resource with current grid size and attached-peer counts.
+    /// Backs <c>aspire terminal ps</c>. Distinct from <see cref="Terminals_V1"/> because the per-replica
+    /// metadata (<see cref="TerminalReplicaInfo.CurrentColumns"/>, <see cref="TerminalReplicaInfo.AttachedPeerCount"/>,
+    /// <see cref="TerminalReplicaInfo.Peers"/>) and the new RPC are additive over the v1 surface and
+    /// can be advertised independently. Older AppHosts that only speak <see cref="Terminals_V1"/>
+    /// continue to work for <c>terminal attach</c>; <c>terminal ps</c> requires both.
+    /// </summary>
+    public const string Terminals_PsV1 = "terminals.ps.v1";
 }
 
 /// <summary>
@@ -1318,6 +1329,52 @@ internal sealed class TerminalReplicaInfo
     /// unexpectedly high count indicates the upstream process is crashing repeatedly.
     /// </summary>
     public int RestartCount { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal grid width in columns, as last negotiated by the active HMP1
+    /// primary peer. Falls back to <see cref="GetTerminalInfoResponse.Columns"/> when no peer has
+    /// driven a resize yet. Null when the AppHost predates the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_PsV1"/> capability.
+    /// </summary>
+    public int? CurrentColumns { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal grid height in rows. See <see cref="CurrentColumns"/>.
+    /// </summary>
+    public int? CurrentRows { get; init; }
+
+    /// <summary>
+    /// Gets the count of HMP1 viewer peers currently attached to this replica's consumer UDS
+    /// (Dashboard tabs, CLI <c>aspire terminal attach</c> sessions, etc.). Zero when no viewer
+    /// is attached. Null when the AppHost predates the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_PsV1"/> capability.
+    /// </summary>
+    public int? AttachedPeerCount { get; init; }
+
+    /// <summary>
+    /// Gets per-peer details for currently-attached HMP1 viewers, in connect order. Useful for
+    /// "who's attached?" diagnostics in <c>aspire terminal ps -v</c>. Null when the AppHost
+    /// predates the <see cref="AuxiliaryBackchannelCapabilities.Terminals_PsV1"/> capability.
+    /// </summary>
+    public TerminalPeerInfo[]? Peers { get; init; }
+}
+
+/// <summary>
+/// Per-peer identification for an HMP1 client currently attached to a replica's consumer UDS.
+/// Mirrors the host-side peer info reported by the terminal host control protocol.
+/// </summary>
+internal sealed class TerminalPeerInfo
+{
+    /// <summary>
+    /// Gets the HMP1-assigned stable peer identifier for the lifetime of the connection.
+    /// </summary>
+    public required string PeerId { get; init; }
+
+    /// <summary>
+    /// Gets the free-form display label the peer reported in its ClientHello, or null if the
+    /// peer didn't supply one (e.g. <c>aspire-cli:1234</c>, <c>dashboard:abc12345</c>).
+    /// </summary>
+    public string? DisplayName { get; init; }
 }
 
 /// <summary>
@@ -1355,6 +1412,71 @@ internal sealed class GetTerminalInfoResponse
     /// negotiate a different size after attaching.
     /// </summary>
     public int Rows { get; init; }
+}
+
+/// <summary>
+/// Request for listing every <c>WithTerminal</c>-enabled resource. Empty payload — the AppHost
+/// already knows which resources have a <c>TerminalAnnotation</c>. Gated on the
+/// <see cref="AuxiliaryBackchannelCapabilities.Terminals_PsV1"/> capability.
+/// </summary>
+internal sealed class ListTerminalsRequest
+{
+}
+
+/// <summary>
+/// One entry per <c>WithTerminal</c>-enabled resource. Returned inside
+/// <see cref="ListTerminalsResponse.Terminals"/>. Replica details (current size, attached peers)
+/// are only populated when the host process is reachable; otherwise <see cref="IsHostReachable"/>
+/// is false and <see cref="Replicas"/> is null.
+/// </summary>
+internal sealed class TerminalSummary
+{
+    /// <summary>
+    /// Gets the resource name (matches <c>IResource.Name</c>).
+    /// </summary>
+    public required string ResourceName { get; init; }
+
+    /// <summary>
+    /// Gets a short human-readable display name. Today identical to <see cref="ResourceName"/>;
+    /// kept separate so the AppHost can substitute a friendlier name later (e.g. when a resource
+    /// has a display name annotation).
+    /// </summary>
+    public required string DisplayName { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal width. Falls back when no replica has reported
+    /// a resize.
+    /// </summary>
+    public required int ConfiguredColumns { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal height.
+    /// </summary>
+    public required int ConfiguredRows { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the terminal host process for this resource was
+    /// reachable when the snapshot was taken. False when the host hasn't started yet, the control
+    /// UDS isn't bound, or the control RPC timed out.
+    /// </summary>
+    public required bool IsHostReachable { get; init; }
+
+    /// <summary>
+    /// Gets the per-replica details, or null when <see cref="IsHostReachable"/> is false.
+    /// </summary>
+    public TerminalReplicaInfo[]? Replicas { get; init; }
+}
+
+/// <summary>
+/// Response from <c>ListTerminalsAsync</c>. Lists every <c>WithTerminal</c>-enabled resource in the
+/// AppHost. Empty array when no resource is configured for terminals.
+/// </summary>
+internal sealed class ListTerminalsResponse
+{
+    /// <summary>
+    /// Gets the per-resource summaries. Empty (not null) when there are no terminal-enabled resources.
+    /// </summary>
+    public required TerminalSummary[] Terminals { get; init; }
 }
 
 #endregion

@@ -86,6 +86,55 @@ internal sealed class TerminalHostReplicaInfo
     /// high count indicates the upstream process is crashing repeatedly.
     /// </summary>
     public int RestartCount { get; init; }
+
+    /// <summary>
+    /// Current terminal grid width in columns, as last negotiated by the active
+    /// HMP1 primary peer. Falls back to the AppHost-configured initial width
+    /// (<see cref="TerminalHostInfoResponse"/>) when no peer has driven a resize.
+    /// Optional: nullable so older hosts predating the terminal-ps metadata
+    /// surface deserialize cleanly without throwing.
+    /// </summary>
+    public int? CurrentColumns { get; init; }
+
+    /// <summary>
+    /// Current terminal grid height in rows. See <see cref="CurrentColumns"/>.
+    /// </summary>
+    public int? CurrentRows { get; init; }
+
+    /// <summary>
+    /// Number of HMP1 peers (CLI <c>aspire terminal attach</c> sessions, browser
+    /// dashboard tabs) currently connected to this replica's consumer UDS. Zero
+    /// when no viewer is attached. Updated on each peer connect/disconnect.
+    /// Optional for back-compat with older hosts.
+    /// </summary>
+    public int? AttachedPeerCount { get; init; }
+
+    /// <summary>
+    /// Per-peer identification for currently-connected HMP1 viewers, in connect order.
+    /// Useful for diagnostics ("who currently holds the terminal?") in
+    /// <c>aspire terminal ps</c>. Optional for back-compat with older hosts.
+    /// </summary>
+    public TerminalHostPeerInfo[]? Peers { get; init; }
+}
+
+/// <summary>
+/// Per-peer identification for an HMP1 client currently connected to a replica's
+/// consumer UDS. The HMP1 server assigns the <see cref="PeerId"/> at handshake;
+/// the <see cref="DisplayName"/> is whatever the client passed in its ClientHello
+/// (e.g. <c>aspire-cli:1234</c> or <c>dashboard:abc12345</c>).
+/// </summary>
+internal sealed class TerminalHostPeerInfo
+{
+    /// <summary>
+    /// HMP1-assigned stable peer identifier for the lifetime of the connection.
+    /// </summary>
+    public required string PeerId { get; init; }
+
+    /// <summary>
+    /// Free-form label the peer reported in its ClientHello, or null if the
+    /// peer didn't supply one.
+    /// </summary>
+    public string? DisplayName { get; init; }
 }
 
 /// <summary>

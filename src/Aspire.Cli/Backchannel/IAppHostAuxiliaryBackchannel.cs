@@ -56,6 +56,15 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsTerminalsV1 { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the AppHost advertises the
+    /// <c>terminals.ps.v1</c> capability — the per-resource list returned by
+    /// <see cref="ListTerminalsAsync"/>, plus the additional per-replica metadata
+    /// (current grid size, attached peer count, peer details) carried on
+    /// <see cref="TerminalReplicaInfo"/>.
+    /// </summary>
+    bool SupportsTerminalsPsV1 { get; }
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -156,4 +165,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     Task<GetTerminalInfoResponse> GetTerminalInfoAsync(
         string resourceName,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Returns an empty list when
+    /// no resource is configured. Each entry includes per-replica current grid size and attached
+    /// peer details (when <see cref="TerminalSummary.IsHostReachable"/> is true). Backs
+    /// <c>aspire terminal ps</c>. Gated on <see cref="SupportsTerminalsPsV1"/>; older AppHosts
+    /// without this capability return an empty response.
+    /// </summary>
+    Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default);
 }

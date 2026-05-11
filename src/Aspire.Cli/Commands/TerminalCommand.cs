@@ -20,6 +20,7 @@ internal sealed class TerminalCommand : BaseCommand
 
     public TerminalCommand(
         TerminalAttachCommand attachCommand,
+        TerminalPsCommand psCommand,
         IInteractionService interactionService,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
@@ -28,8 +29,10 @@ internal sealed class TerminalCommand : BaseCommand
         : base("terminal", "Manage interactive terminal sessions for resources.", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         ArgumentNullException.ThrowIfNull(attachCommand);
+        ArgumentNullException.ThrowIfNull(psCommand);
 
         Subcommands.Add(attachCommand);
+        Subcommands.Add(psCommand);
     }
 
     protected override bool UpdateNotificationsEnabled => false;

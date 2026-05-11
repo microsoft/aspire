@@ -56,6 +56,10 @@ public sealed class TerminalHostApp : IAsyncDisposable
                     ExitCode = r.ExitCode,
                     ProducerConnected = r.ProducerConnected,
                     RestartCount = r.RestartCount,
+                    CurrentColumns = r.CurrentColumns,
+                    CurrentRows = r.CurrentRows,
+                    AttachedPeerCount = r.AttachedPeerCount,
+                    Peers = r.SnapshotPeers(),
                 };
             }
             return snap;

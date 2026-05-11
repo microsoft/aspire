@@ -289,6 +289,136 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task TerminalPsCommand_WhenNoAppHostRunning_ReturnsSuccess()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("terminal ps");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        // Mirrors TerminalAttachCommand: no running AppHost is informational, not an error.
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_WhenAppHostLacksTerminalsPsV1Capability_ReturnsAppHostIncompatible()
+    {
+        // Older AppHosts that pre-date the 'terminals.ps.v1' capability return
+        // SupportsTerminalsPsV1=false; the command must surface that explicitly rather
+        // than misleadingly listing nothing.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.SupportsTerminalsPsV1 = false;
+            });
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(ExitCodeConstants.AppHostIncompatible, exitCode);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_WhenNoTerminalsRegistered_ReturnsSuccess()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    Terminals = Array.Empty<TerminalSummary>()
+                };
+            });
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(ExitCodeConstants.Success, exitCode);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_WhenTerminalsPresent_RendersTableSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    Terminals =
+                    [
+                        new TerminalSummary
+                        {
+                            ResourceName = "myresource",
+                            DisplayName = "myresource",
+                            ConfiguredColumns = 120,
+                            ConfiguredRows = 30,
+                            IsHostReachable = true,
+                            Replicas =
+                            [
+                                new TerminalReplicaInfo
+                                {
+                                    ReplicaIndex = 0,
+                                    Label = "myresource-0",
+                                    ConsumerUdsPath = "/tmp/r0.sock",
+                                    IsAlive = true,
+                                    CurrentColumns = 130,
+                                    CurrentRows = 32,
+                                    AttachedPeerCount = 2
+                                }
+                            ]
+                        }
+                    ]
+                };
+            });
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(ExitCodeConstants.Success, exitCode);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_JsonFormat_WhenEmpty_EmitsEmptyArray()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    Terminals = Array.Empty<TerminalSummary>()
+                };
+            });
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps --format json");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(ExitCodeConstants.Success, exitCode);
+        }
+    }
+
     private (ServiceProvider Provider, TestAppHostAuxiliaryBackchannel Backchannel) CreateProviderWithBackchannel(
         TemporaryWorkspace workspace,
         Action<TestAppHostAuxiliaryBackchannel> configure)
@@ -349,11 +479,17 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         public DateTimeOffset ConnectedAt => _inner.ConnectedAt;
         public bool SupportsV2 => _inner.SupportsV2;
         public bool SupportsTerminalsV1 => _inner.SupportsTerminalsV1;
+        public bool SupportsTerminalsPsV1 => _inner.SupportsTerminalsPsV1;
 
         public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
         {
             _onGetTerminalInfo(resourceName);
             return _inner.GetTerminalInfoAsync(resourceName, cancellationToken);
+        }
+
+        public Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
+        {
+            return _inner.ListTerminalsAsync(cancellationToken);
         }
 
         public Task<global::Aspire.Cli.Backchannel.DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)

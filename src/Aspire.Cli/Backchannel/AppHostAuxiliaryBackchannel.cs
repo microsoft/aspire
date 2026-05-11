@@ -90,6 +90,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     // a single new method never requires every consumer to upgrade an opaque version field.
     public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
 
+    /// <inheritdoc />
+    public bool SupportsTerminalsPsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_PsV1);
+
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.
     /// </summary>
@@ -806,6 +809,35 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, replicas={ReplicaCount}",
             resourceName, response.IsAvailable, response.Replicas?.Length ?? 0);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Older AppHosts without
+    /// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_PsV1"/> capability are
+    /// short-circuited to an empty response so the CLI can render a clean "nothing to show"
+    /// message rather than a mysterious RPC error.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsTerminalsPsV1)
+        {
+            return new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Listing all terminal-enabled resources.");
+
+        var request = new ListTerminalsRequest();
+
+        var response = await rpc.InvokeWithCancellationAsync<ListTerminalsResponse>(
+            "ListTerminalsAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.Terminals.Length);
 
         return response;
     }

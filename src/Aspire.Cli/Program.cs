@@ -489,6 +489,7 @@ public class Program
         builder.Services.AddTransient<IntegrationSearchCommand>();
         builder.Services.AddTransient<TerminalCommand>();
         builder.Services.AddTransient<TerminalAttachCommand>();
+        builder.Services.AddTransient<TerminalPsCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();

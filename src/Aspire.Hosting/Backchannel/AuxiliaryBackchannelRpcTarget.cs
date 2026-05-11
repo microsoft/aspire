@@ -50,7 +50,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             [
                 AuxiliaryBackchannelCapabilities.V1,
                 AuxiliaryBackchannelCapabilities.V2,
-                AuxiliaryBackchannelCapabilities.Terminals_V1
+                AuxiliaryBackchannelCapabilities.Terminals_V1,
+                AuxiliaryBackchannelCapabilities.Terminals_PsV1,
             ]
         });
     }
@@ -465,6 +466,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 ExitCode = hostReplica.ExitCode,
                 ProducerConnected = hostReplica.ProducerConnected,
                 RestartCount = hostReplica.RestartCount,
+                CurrentColumns = hostReplica.CurrentColumns,
+                CurrentRows = hostReplica.CurrentRows,
+                AttachedPeerCount = hostReplica.AttachedPeerCount,
+                Peers = ConvertPeers(hostReplica.Peers),
             });
         }
 
@@ -474,6 +479,129 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Replicas = [.. replicas],
             Columns = terminalAnnotation.Options.Columns,
             Rows = terminalAnnotation.Options.Rows,
+        };
+    }
+
+    /// <summary>
+    /// Translates a host-side <see cref="Aspire.Shared.TerminalHost.TerminalHostPeerInfo"/> array
+    /// to the wire-facing <see cref="TerminalPeerInfo"/> array that ships over JsonRpc. Returns
+    /// null when the host didn't supply any peer info (older host) so newer clients can detect
+    /// "no info available" vs. "info available, currently empty".
+    /// </summary>
+    private static TerminalPeerInfo[]? ConvertPeers(Aspire.Shared.TerminalHost.TerminalHostPeerInfo[]? hostPeers)
+    {
+        if (hostPeers is null)
+        {
+            return null;
+        }
+        if (hostPeers.Length == 0)
+        {
+            return Array.Empty<TerminalPeerInfo>();
+        }
+        var result = new TerminalPeerInfo[hostPeers.Length];
+        for (var i = 0; i < hostPeers.Length; i++)
+        {
+            result[i] = new TerminalPeerInfo
+            {
+                PeerId = hostPeers[i].PeerId,
+                DisplayName = hostPeers[i].DisplayName,
+            };
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost, with current grid size and
+    /// attached-peer details. Used by <c>aspire terminal ps</c>. Each per-resource snapshot is
+    /// independent: a resource whose terminal host hasn't started yet (or whose control RPC times
+    /// out) is reported with <see cref="TerminalSummary.IsHostReachable"/> = false rather than
+    /// failing the whole listing.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(ListTerminalsRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        _ = request;
+
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+
+        var terminals = new List<TerminalSummary>();
+        foreach (var resource in appModel.Resources)
+        {
+            var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+            if (terminalAnnotation is null)
+            {
+                continue;
+            }
+
+            var layout = terminalAnnotation.TerminalHost.Layout;
+
+            Aspire.Shared.TerminalHost.TerminalHostReplicasResponse? hostReplicas = null;
+            try
+            {
+                hostReplicas = await TerminalHostControlClient.GetReplicasAsync(
+                    layout.ControlUdsPath,
+                    totalTimeout: TimeSpan.FromSeconds(3),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                logger.LogDebug(
+                    "ListTerminals: timed out waiting for terminal host control RPC for resource '{ResourceName}' (control path '{ControlPath}').",
+                    resource.Name, layout.ControlUdsPath);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogDebug(
+                    ex,
+                    "ListTerminals: terminal host control RPC failed for resource '{ResourceName}' (control path '{ControlPath}').",
+                    resource.Name, layout.ControlUdsPath);
+            }
+
+            TerminalReplicaInfo[]? replicas = null;
+            if (hostReplicas is not null)
+            {
+                var list = new List<TerminalReplicaInfo>(hostReplicas.Replicas.Length);
+                foreach (var hostReplica in hostReplicas.Replicas)
+                {
+                    if (hostReplica.Index < 0 || hostReplica.Index >= layout.ConsumerUdsPaths.Count)
+                    {
+                        logger.LogWarning(
+                            "ListTerminals: terminal host for resource '{ResourceName}' returned out-of-range replica index {Index} (replica count {Count}); skipping.",
+                            resource.Name, hostReplica.Index, layout.ConsumerUdsPaths.Count);
+                        continue;
+                    }
+
+                    list.Add(new TerminalReplicaInfo
+                    {
+                        ReplicaIndex = hostReplica.Index,
+                        Label = $"replica {hostReplica.Index}",
+                        ConsumerUdsPath = layout.ConsumerUdsPaths[hostReplica.Index],
+                        IsAlive = hostReplica.IsAlive,
+                        ExitCode = hostReplica.ExitCode,
+                        ProducerConnected = hostReplica.ProducerConnected,
+                        RestartCount = hostReplica.RestartCount,
+                        CurrentColumns = hostReplica.CurrentColumns,
+                        CurrentRows = hostReplica.CurrentRows,
+                        AttachedPeerCount = hostReplica.AttachedPeerCount,
+                        Peers = ConvertPeers(hostReplica.Peers),
+                    });
+                }
+                replicas = [.. list];
+            }
+
+            terminals.Add(new TerminalSummary
+            {
+                ResourceName = resource.Name,
+                DisplayName = resource.Name,
+                ConfiguredColumns = terminalAnnotation.Options.Columns,
+                ConfiguredRows = terminalAnnotation.Options.Rows,
+                IsHostReachable = hostReplicas is not null,
+                Replicas = replicas,
+            });
+        }
+
+        return new ListTerminalsResponse
+        {
+            Terminals = [.. terminals],
         };
     }
 

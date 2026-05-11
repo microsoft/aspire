@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared.TerminalHost;
 using Hex1b;
 using Microsoft.Extensions.Logging;
 
@@ -45,10 +46,13 @@ internal sealed class TerminalReplica : IAsyncDisposable
     private readonly Task _runTask;
     private readonly CancellationTokenSource _stopCts;
     private readonly object _gate = new();
+    private readonly Dictionary<string, TerminalHostPeerInfo> _peers = new(StringComparer.Ordinal);
     private Hex1bTerminal? _currentTerminal;
     private bool _producerConnected;
     private int? _lastExitCode;
     private int _restartCount;
+    private int _currentColumns;
+    private int _currentRows;
     private bool _disposed;
 
     public int Index { get; }
@@ -103,6 +107,55 @@ internal sealed class TerminalReplica : IAsyncDisposable
     public int? ExitCode => LastExitCode;
 
     /// <summary>
+    /// Current terminal grid width in columns, as last negotiated by the active HMP1
+    /// primary peer (via <c>OnResized</c>). Initialized from the AppHost-configured
+    /// width and updated on every downstream resize.
+    /// </summary>
+    public int CurrentColumns
+    {
+        get { lock (_gate) { return _currentColumns; } }
+    }
+
+    /// <summary>
+    /// Current terminal grid height in rows. See <see cref="CurrentColumns"/>.
+    /// </summary>
+    public int CurrentRows
+    {
+        get { lock (_gate) { return _currentRows; } }
+    }
+
+    /// <summary>
+    /// Number of HMP1 viewer peers currently attached to this replica's consumer UDS.
+    /// Maintained from <c>OnClientConnected</c> / <c>OnClientDisconnected</c> callbacks.
+    /// Zero between cycles or before the first peer connects.
+    /// </summary>
+    public int AttachedPeerCount
+    {
+        get { lock (_gate) { return _peers.Count; } }
+    }
+
+    /// <summary>
+    /// Snapshot of currently-attached HMP1 viewer peers, in dictionary order.
+    /// </summary>
+    public TerminalHostPeerInfo[] SnapshotPeers()
+    {
+        lock (_gate)
+        {
+            if (_peers.Count == 0)
+            {
+                return Array.Empty<TerminalHostPeerInfo>();
+            }
+            var snap = new TerminalHostPeerInfo[_peers.Count];
+            var i = 0;
+            foreach (var peer in _peers.Values)
+            {
+                snap[i++] = peer;
+            }
+            return snap;
+        }
+    }
+
+    /// <summary>
     /// Task that completes when the replica's recycle loop exits (i.e. when
     /// the host is shutting down or the replica is being disposed).
     /// </summary>
@@ -122,6 +175,8 @@ internal sealed class TerminalReplica : IAsyncDisposable
         ConsumerUdsPath = consumerUdsPath;
         Columns = columns;
         Rows = rows;
+        _currentColumns = columns;
+        _currentRows = rows;
         _logger = logger;
         _stopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _runTask = Task.Run(() => RecycleLoopAsync(_stopCts.Token), _stopCts.Token);
@@ -227,6 +282,11 @@ internal sealed class TerminalReplica : IAsyncDisposable
                 {
                     _currentTerminal = null;
                     _producerConnected = false;
+                    // Hex1b's HMP1 server fires OnClientDisconnected for every peer when the
+                    // terminal is disposed, so _peers should already be empty here. Clear
+                    // defensively to avoid carrying stale entries into the next cycle if any
+                    // disconnect callback raced past dispose.
+                    _peers.Clear();
                 }
             }
 
@@ -325,6 +385,31 @@ internal sealed class TerminalReplica : IAsyncDisposable
                 ConsumerUdsPath,
                 srvOpts =>
                 {
+                    // Track every HMP1 peer that connects/disconnects so the host can answer
+                    // "who's currently attached to this replica?" via the control RPC. PeerId is
+                    // assigned by Hex1b at handshake time and is unique per connection; DisplayName
+                    // is the optional ClientHello label (e.g. "aspire-cli:1234", "dashboard:abc12345").
+                    srvOpts.OnClientConnected = (e, _) =>
+                    {
+                        lock (_gate)
+                        {
+                            _peers[e.PeerId] = new TerminalHostPeerInfo
+                            {
+                                PeerId = e.PeerId,
+                                DisplayName = e.DisplayName,
+                            };
+                        }
+                        return Task.CompletedTask;
+                    };
+                    srvOpts.OnClientDisconnected = (e, _) =>
+                    {
+                        lock (_gate)
+                        {
+                            _peers.Remove(e.PeerId);
+                        }
+                        return Task.CompletedTask;
+                    };
+
                     // Bridge downstream → upstream resize. The consumer-side multi-head
                     // server fires OnResized whenever the current primary peer's dims
                     // change (RequestPrimary or explicit Resize from primary). Forward
@@ -332,8 +417,18 @@ internal sealed class TerminalReplica : IAsyncDisposable
                     // and the underlying workload sees the new TIOCSWINSZ value. Without
                     // this hook the consumer-side presentation reflects the new dims but
                     // the actual PTY stays at whatever DCP started it at.
+                    //
+                    // Also persist the latest dimensions so `aspire terminal ps` and the
+                    // dashboard can report the current grid size without round-tripping to
+                    // every attached viewer.
                     srvOpts.OnResized = async (e, ct) =>
                     {
+                        lock (_gate)
+                        {
+                            _currentColumns = e.Width;
+                            _currentRows = e.Height;
+                        }
+
                         try
                         {
                             await upstream.ResizeAsync(e.Width, e.Height, ct).ConfigureAwait(false);
