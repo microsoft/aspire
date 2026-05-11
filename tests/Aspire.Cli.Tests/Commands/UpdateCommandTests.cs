@@ -1924,43 +1924,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(deleteKeys, e => e.Key.Equals("channel", StringComparison.Ordinal) && e.IsGlobal);
     }
 
-    [Fact]
-    public async Task UpdateCommand_SelfUpdate_StableChannel_DoesNotDeleteGlobalChannel()
-    {
-        // Pre-S9, selecting `stable` triggered DeleteConfigurationAsync("channel", isGlobal: true)
-        // to roll back any prior write. Verify the delete is gone — it shouldn't fire even
-        // for the stable channel (no writer => no rollback).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var deleteCalls = new List<(string Key, bool IsGlobal)>();
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.ConfigurationServiceFactory = _ => new Aspire.Cli.Tests.TestServices.TestConfigurationService
-            {
-                OnDeleteConfiguration = (key, isGlobal) => deleteCalls.Add((key, isGlobal)),
-            };
-
-            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
-            {
-                DownloadLatestCliAsyncCallback = (channel, ct) =>
-                {
-                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
-                    File.WriteAllText(archivePath, "fake archive");
-                    return Task.FromResult(archivePath);
-                }
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --self --channel stable");
-
-        await result.InvokeAsync().DefaultTimeout();
-
-        Assert.DoesNotContain(deleteCalls, e => e.Key.Equals("channel", StringComparison.Ordinal) && e.IsGlobal);
-    }
+    // Pre-S9 the `stable` channel also triggered DeleteConfigurationAsync("channel", isGlobal: true)
+    // to roll back any prior write. That rollback path is covered by the stable row of
+    // UpdateCommand_SelfUpdate_DoesNotWriteChannelToGlobalConfiguration above (asserts both
+    // DoesNotContain set + DoesNotContain delete) — no standalone test required here.
 }
 
 // Helper class to track DisplayCancellationMessage calls

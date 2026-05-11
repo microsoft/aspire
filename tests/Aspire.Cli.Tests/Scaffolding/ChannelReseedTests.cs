@@ -5,6 +5,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Scaffolding;
@@ -12,8 +13,8 @@ namespace Aspire.Cli.Tests.Scaffolding;
 /// <summary>
 /// Behavioral regression tests for channel reseed in <see cref="ScaffoldingService.ScaffoldAsync"/>.
 /// Verifies that the channel written to <c>aspire.config.json</c> is sourced from
-/// <see cref="CliExecutionContext.Channel"/> — not a literal — for both the implicit (context) and
-/// explicit (caller-supplied) cases.
+/// <see cref="CliExecutionContext.Channel"/> when no explicit channel is given, and from the
+/// caller-supplied value when one is.
 /// <para>
 /// <b>Coverage gap:</b> The heavyweight DI reseed sites —
 /// <c>CliTemplateFactory.PythonStarterTemplate</c>, <c>CliTemplateFactory.GoStarterTemplate</c>,
@@ -22,71 +23,37 @@ namespace Aspire.Cli.Tests.Scaffolding;
 /// Reseed regressions at those sites must be caught by integration tests or dogfood.
 /// </para>
 /// </summary>
-public class ChannelReseedTests
+public class ChannelReseedTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData("stable")]
-    [InlineData("staging")]
-    [InlineData("daily")]
-    [InlineData("pr-12345")] // option-(a) resolved label — what reseed sites must persist
-    public async Task ScaffoldAsync_NoExplicitChannel_PersistsCliExecutionContextChannel(string contextChannel)
+    [InlineData("stable", null, "stable")]
+    [InlineData("staging", null, "staging")]
+    [InlineData("daily", null, "daily")]
+    [InlineData("pr-12345", null, "pr-12345")]                  // option-(a) resolved label — what reseed sites must persist
+    [InlineData("daily", "explicit-staging", "explicit-staging")] // explicit Channel overrides context.Channel
+    public async Task ScaffoldAsync_PersistsExpectedChannel(string contextChannel, string? explicitChannel, string expectedPersistedChannel)
     {
-        var dir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var executionContext = CreateExecutionContext(contextChannel);
-            var scaffoldingService = CreateScaffoldingService(executionContext);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-            var ctx = new ScaffoldContext(
-                Language: s_testLanguage,
-                TargetDirectory: dir,
-                ProjectName: "test",
-                SdkVersion: null,
-                Channel: null);
+        var executionContext = BuildContext(contextChannel);
+        var scaffoldingService = CreateScaffoldingService(executionContext);
 
-            // ScaffoldGuestLanguageAsync writes the early channel save to disk
-            // BEFORE the AppHostServerProject is created — so we capture the
-            // reseed even though IAppHostServerProjectFactory.CreateAsync throws.
-            await Assert.ThrowsAnyAsync<Exception>(
-                async () => await scaffoldingService.ScaffoldAsync(ctx, CancellationToken.None));
+        var ctx = new ScaffoldContext(
+            Language: s_testLanguage,
+            TargetDirectory: workspace.WorkspaceRoot,
+            ProjectName: "test",
+            SdkVersion: null,
+            Channel: explicitChannel);
 
-            var reloaded = AspireConfigFile.Load(dir.FullName);
-            Assert.NotNull(reloaded);
-            Assert.Equal(contextChannel, reloaded.Channel);
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
-    }
+        // ScaffoldGuestLanguageAsync writes the early channel save to disk
+        // BEFORE the AppHostServerProject is created — so we capture the
+        // reseed even though IAppHostServerProjectFactory.CreateAsync throws.
+        await Assert.ThrowsAnyAsync<Exception>(
+            async () => await scaffoldingService.ScaffoldAsync(ctx, CancellationToken.None));
 
-    [Fact]
-    public async Task ScaffoldAsync_ExplicitChannel_OverridesCliExecutionContextChannel()
-    {
-        var dir = Directory.CreateTempSubdirectory();
-        try
-        {
-            var executionContext = CreateExecutionContext(channel: "daily");
-            var scaffoldingService = CreateScaffoldingService(executionContext);
-
-            var ctx = new ScaffoldContext(
-                Language: s_testLanguage,
-                TargetDirectory: dir,
-                ProjectName: "test",
-                SdkVersion: null,
-                Channel: "explicit-staging");
-
-            await Assert.ThrowsAnyAsync<Exception>(
-                async () => await scaffoldingService.ScaffoldAsync(ctx, CancellationToken.None));
-
-            var reloaded = AspireConfigFile.Load(dir.FullName);
-            Assert.NotNull(reloaded);
-            Assert.Equal("explicit-staging", reloaded.Channel);
-        }
-        finally
-        {
-            dir.Delete(recursive: true);
-        }
+        var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(expectedPersistedChannel, reloaded.Channel);
     }
 
     private static readonly LanguageInfo s_testLanguage = new(
@@ -96,11 +63,6 @@ public class ChannelReseedTests
         DetectionPatterns: ["apphost.ts"],
         CodeGenerator: "TypeScript",
         AppHostFileName: "apphost.ts");
-
-    private static CliExecutionContext CreateExecutionContext(string channel)
-    {
-        return BuildContext(channel);
-    }
 
     private static CliExecutionContext BuildContext(string channel)
     {
@@ -125,3 +87,4 @@ public class ChannelReseedTests
             logger: NullLogger<ScaffoldingService>.Instance);
     }
 }
+

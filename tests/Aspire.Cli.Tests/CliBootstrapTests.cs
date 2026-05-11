@@ -30,13 +30,16 @@ public class CliBootstrapTests
         return await Program.BuildApplicationAsync([], startupContext);
     }
 
-    [Fact]
-    public void IdentityChannelReader_NullAssembly_ThrowsArgumentNullException()
+    private static string GetBakedEntryAssemblyChannel()
     {
-        // Explicit null produces an immediate, descriptive ArgumentNullException so misuse
-        // is caught at construction time rather than surfacing later as the cryptic
-        // "metadata missing on '?'" exception.
-        Assert.Throws<ArgumentNullException>(() => new IdentityChannelReader(null!));
+        var entryAssembly = Assembly.GetEntryAssembly();
+        Assert.NotNull(entryAssembly);
+        var bakedChannel = entryAssembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => string.Equals(a.Key, "AspireCliChannel", StringComparison.Ordinal))
+            .Value;
+        Assert.False(string.IsNullOrEmpty(bakedChannel));
+        return bakedChannel!;
     }
 
     [Fact]
@@ -84,46 +87,16 @@ public class CliBootstrapTests
     }
 
     [Fact]
-    public async Task BuildApplication_LocallyBuiltCli_ChannelMatchesTestHostAssemblyMetadata()
-    {
-        // The Aspire.Cli.csproj defaults AspireCliChannel to "local" when not overridden by
-        // CI; the test csproj forwards $(AspireCliChannel) the same way (see csproj comment).
-        // The test host and production assembly therefore stay in lockstep regardless of
-        // whether the build runs under /p:AspireCliChannel=stable or unspecified — both pick
-        // up the same value. We assert the bootstrapped context's channel matches the
-        // *test host's* baked metadata, NOT a hard-coded literal, so the test stops being
-        // an accidental regression for any non-default build (including pr-<N>).
-        using var host = await BuildHostAsync();
-
-        var entryAssembly = Assembly.GetEntryAssembly();
-        Assert.NotNull(entryAssembly);
-        var bakedChannel = entryAssembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(a => string.Equals(a.Key, "AspireCliChannel", StringComparison.Ordinal))
-            .Value;
-        Assert.False(string.IsNullOrEmpty(bakedChannel));
-
-        var context = host.Services.GetRequiredService<CliExecutionContext>();
-
-        Assert.Equal(bakedChannel, context.Channel);
-    }
-
-    [Fact]
     public async Task BuildApplication_CliExecutionContextChannel_MatchesAssemblyMetadataAttribute()
     {
         // End-to-end coherence: the channel flowing through the DI container must equal the
         // value baked into the entry assembly by [AssemblyMetadata("AspireCliChannel", "...")].
-        // IdentityChannelReader reads from typeof(Aspire.Cli.Program).Assembly. This test
+        // IdentityChannelReader reads from typeof(Aspire.Cli.Program).Assembly; this test
         // reads Assembly.GetEntryAssembly() directly and the comparison works because
         // Aspire.Cli.csproj and the test csproj forward the same $(AspireCliChannel) MSBuild
-        // property — keeping both assemblies in lockstep regardless of the build configuration.
-        var entryAssembly = Assembly.GetEntryAssembly();
-        Assert.NotNull(entryAssembly);
-        var bakedChannel = entryAssembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(a => string.Equals(a.Key, "AspireCliChannel", StringComparison.Ordinal))
-            .Value;
-        Assert.False(string.IsNullOrEmpty(bakedChannel));
+        // property — keeping both assemblies in lockstep regardless of the build configuration
+        // (so this test is also correct on /p:AspireCliChannel=stable or pr-<N> CI builds).
+        var bakedChannel = GetBakedEntryAssemblyChannel();
 
         using var host = await BuildHostAsync();
 
@@ -132,3 +105,4 @@ public class CliBootstrapTests
         Assert.Equal(bakedChannel, context.Channel);
     }
 }
+

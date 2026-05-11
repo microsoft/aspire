@@ -404,12 +404,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
-        var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelName", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        var channel = (string?)method.Invoke(server, []);
+        var channel = server.ResolveChannelName();
 
         Assert.Equal("pr-new", channel);
     }
-
 }

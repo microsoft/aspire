@@ -7,14 +7,16 @@ namespace Aspire.Cli.Tests;
 
 public class CliExecutionContextTests(ITestOutputHelper outputHelper)
 {
-    private static CliExecutionContext CreateContext(string channel = "daily")
+    private static CliExecutionContext CreateContext(string? channel = "daily")
     {
         var workingDir = new DirectoryInfo(AppContext.BaseDirectory);
         var hivesDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "hives"));
         var cacheDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "cache"));
         var sdksDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "sdks"));
         var logsDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "logs"));
-        return new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", channel: channel);
+        return channel is null
+            ? new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log")
+            : new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", channel: channel);
     }
 
     private static CliExecutionContext CreateContextWithHives(DirectoryInfo hivesDir)
@@ -29,13 +31,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Channel_DefaultsToLocal_WhenNotSpecified()
     {
-        var workingDir = new DirectoryInfo(AppContext.BaseDirectory);
-        var hivesDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "cache"));
-        var sdksDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "sdks"));
-        var logsDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "logs"));
-
-        var ctx = new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log");
+        var ctx = CreateContext(channel: null);
 
         Assert.Equal("local", ctx.Channel);
     }

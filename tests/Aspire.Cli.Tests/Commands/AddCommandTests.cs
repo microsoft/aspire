@@ -1899,146 +1899,51 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommand_WithPrHive_PrefersCurrentCliVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
-        hivesDir.Create();
-        hivesDir.CreateSubdirectory("pr-12345");
-
+        // PR-hive packages are discovered through the package-search code path: the
+        // explicit channel maps to a separate NuGet source that, when queried, returns
+        // a package pinned to the current CLI version.
         var cliVersion = VersionHelper.GetDefaultSdkVersion();
-        var selectedPackageVersion = string.Empty;
-        var promptedForVersion = false;
 
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.AddCommandPrompterFactory = (sp) =>
+        var (exitCode, selectedVersion, prompted) = await RunAddRedisWithHiveScenarioAsync(
+            configureHives: workspace =>
             {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
-                prompter.PromptForIntegrationVersionCallback = (packages) =>
-                {
-                    promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in a PR hive.");
-                };
-
-                return prompter;
-            };
-
-            options.ProjectLocatorFactory = _ => new TestProjectLocator();
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
-                {
-                    var implicitPackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "implicit",
-                        Version = "13.2.2"
-                    };
-
-                    var prHivePackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "pr-hive",
-                        Version = cliVersion
-                    };
-
-                    return nugetSource is null
-                        ? (0, new[] { implicitPackage })
-                        : (0, new[] { prHivePackage });
-                };
-
-                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
-                {
-                    selectedPackageVersion = packageVersion;
-                    return 0;
-                };
-
-                return runner;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add redis");
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+                var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+                hivesDir.Create();
+                hivesDir.CreateSubdirectory("pr-12345");
+            },
+            searchCallback: nugetSource => nugetSource is null
+                ? new[] { new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "implicit", Version = "13.2.2" } }
+                : new[] { new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "pr-hive", Version = cliVersion } },
+            promptFailureMessage: "Should not prompt when the current CLI version is available in a PR hive.");
 
         Assert.Equal(0, exitCode);
-        Assert.False(promptedForVersion);
-        Assert.Equal(cliVersion, selectedPackageVersion);
+        Assert.False(prompted);
+        Assert.Equal(cliVersion, selectedVersion);
     }
+
     [Fact]
     public async Task AddCommand_WithLocalHive_PrefersCurrentCliVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var localPackagesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", PackageChannelNames.Local, "packages"));
-        localPackagesDir.Create();
-
+        // The local channel enumerates .nupkg files directly from disk and does not call
+        // package search — only the implicit channel goes through SearchPackagesAsync,
+        // which here returns a stale version that must lose to the on-disk CLI-version match.
         var cliVersion = VersionHelper.GetDefaultSdkVersion();
-        // Aspire.Hosting drives GetLocalHivePinnedVersion; Aspire.Hosting.Redis is the integration we add.
-        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
-        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
 
-        var selectedPackageVersion = string.Empty;
-        var promptedForVersion = false;
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.AddCommandPrompterFactory = (sp) =>
+        var (exitCode, selectedVersion, prompted) = await RunAddRedisWithHiveScenarioAsync(
+            configureHives: workspace =>
             {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestAddCommandPrompter(interactionService);
-                prompter.PromptForIntegrationVersionCallback = (packages) =>
-                {
-                    promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in the local hive.");
-                };
-
-                return prompter;
-            };
-
-            options.ProjectLocatorFactory = _ => new TestProjectLocator();
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                // The local channel enumerates .nupkg files directly and does not call package search.
-                // Implicit channel still goes through search; return a stable that should be ignored.
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
-                {
-                    var implicitPackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "implicit",
-                        Version = "13.2.2"
-                    };
-
-                    return (0, new[] { implicitPackage });
-                };
-
-                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
-                {
-                    selectedPackageVersion = packageVersion;
-                    return 0;
-                };
-
-                return runner;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add redis");
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+                var localPackagesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", PackageChannelNames.Local, "packages"));
+                localPackagesDir.Create();
+                // Aspire.Hosting drives GetLocalHivePinnedVersion; Aspire.Hosting.Redis is the integration we add.
+                File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
+                File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
+            },
+            searchCallback: _ => new[] { new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "implicit", Version = "13.2.2" } },
+            promptFailureMessage: "Should not prompt when the current CLI version is available in the local hive.");
 
         Assert.Equal(0, exitCode);
-        Assert.False(promptedForVersion);
-        Assert.Equal(cliVersion, selectedPackageVersion);
+        Assert.False(prompted);
+        Assert.Equal(cliVersion, selectedVersion);
     }
 
     [Fact]
@@ -2056,25 +1961,49 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // HivesDirectory.GetDirectories() (filesystem-dependent, typically alphabetical),
         // combined with Parallel.ForEachAsync ordering in IntegrationPackageSearchService.
         // No deterministic precedence is currently defined for that case. Flagged for policy.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var hivesRoot = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
-        var localPackagesDir = new DirectoryInfo(Path.Combine(hivesRoot.FullName, PackageChannelNames.Local, "packages"));
-        var prPackagesDir = new DirectoryInfo(Path.Combine(hivesRoot.FullName, "pr-12345", "packages"));
-        localPackagesDir.Create();
-        prPackagesDir.Create();
-
         var cliVersion = VersionHelper.GetDefaultSdkVersion();
         const string staleVersion = "13.0.0-pr.99999.gstale01";
 
-        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
-        File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
+        var (exitCode, selectedVersion, prompted) = await RunAddRedisWithHiveScenarioAsync(
+            configureHives: workspace =>
+            {
+                var hivesRoot = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+                var localPackagesDir = new DirectoryInfo(Path.Combine(hivesRoot.FullName, PackageChannelNames.Local, "packages"));
+                var prPackagesDir = new DirectoryInfo(Path.Combine(hivesRoot.FullName, "pr-12345", "packages"));
+                localPackagesDir.Create();
+                prPackagesDir.Create();
 
-        File.WriteAllText(Path.Combine(prPackagesDir.FullName, $"Aspire.Hosting.{staleVersion}.nupkg"), string.Empty);
-        File.WriteAllText(Path.Combine(prPackagesDir.FullName, $"Aspire.Hosting.Redis.{staleVersion}.nupkg"), string.Empty);
+                File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
+                File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
+
+                File.WriteAllText(Path.Combine(prPackagesDir.FullName, $"Aspire.Hosting.{staleVersion}.nupkg"), string.Empty);
+                File.WriteAllText(Path.Combine(prPackagesDir.FullName, $"Aspire.Hosting.Redis.{staleVersion}.nupkg"), string.Empty);
+            },
+            searchCallback: _ => new[] { new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "implicit", Version = "13.2.2" } },
+            promptFailureMessage: "Should not prompt; CLI-version match in local hive should win.");
+
+        Assert.Equal(0, exitCode);
+        Assert.False(prompted);
+        Assert.Equal(cliVersion, selectedVersion);
+        Assert.NotEqual(staleVersion, selectedVersion);
+    }
+
+    /// <summary>
+    /// Shared scaffolding for "aspire add redis" + hive precedence tests. The three tests
+    /// (PR-hive / local-hive / both-hives) differ only in (a) how the hive directory is
+    /// laid out on disk and (b) what the package-search mock returns. Everything else
+    /// — workspace, prompter that fails on prompt, project locator, AddPackage capture —
+    /// is identical.
+    /// </summary>
+    private async Task<(int ExitCode, string SelectedVersion, bool PromptInvoked)> RunAddRedisWithHiveScenarioAsync(
+        Action<TemporaryWorkspace> configureHives,
+        Func<FileInfo?, NuGetPackage[]> searchCallback,
+        string promptFailureMessage)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        configureHives(workspace);
 
         var selectedPackageVersion = string.Empty;
-        var selectedPackageSource = string.Empty;
         var promptedForVersion = false;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -2086,9 +2015,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 prompter.PromptForIntegrationVersionCallback = (packages) =>
                 {
                     promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt; CLI-version match in local hive should win.");
+                    throw new InvalidOperationException(promptFailureMessage);
                 };
-
                 return prompter;
             };
 
@@ -2099,20 +2027,12 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 var runner = new TestDotNetCliRunner();
                 runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
                 {
-                    var implicitPackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "implicit",
-                        Version = "13.2.2"
-                    };
-
-                    return (0, new[] { implicitPackage });
+                    return (0, searchCallback(nugetSource));
                 };
 
                 runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
                 {
                     selectedPackageVersion = packageVersion;
-                    selectedPackageSource = nugetSource ?? string.Empty;
                     return 0;
                 };
 
@@ -2126,10 +2046,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("add redis");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(0, exitCode);
-        Assert.False(promptedForVersion);
-        Assert.Equal(cliVersion, selectedPackageVersion);
-        Assert.NotEqual(staleVersion, selectedPackageVersion);
+        return (exitCode, selectedPackageVersion, promptedForVersion);
     }
 
     private static NuGetPackage CreatePackage(string id, string version)

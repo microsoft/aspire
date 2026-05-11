@@ -337,7 +337,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// <summary>
     /// Resolves the configured channel name from the local project config.
     /// </summary>
-    private string? ResolveChannelName()
+    internal string? ResolveChannelName()
     {
         // Check aspire.config.json first, then fall back to legacy .aspire/settings.json.
         var channelName = AspireConfigFile.Load(_appDirectoryPath)?.Channel

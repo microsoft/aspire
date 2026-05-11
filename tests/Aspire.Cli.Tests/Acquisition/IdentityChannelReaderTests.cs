@@ -11,21 +11,27 @@ public class IdentityChannelReaderTests
 {
     private const string ChannelMetadataKey = "AspireCliChannel";
 
-    [Theory]
-    [InlineData("stable")]
-    [InlineData("staging")]
-    [InlineData("daily")]
-    [InlineData("local")]
-    [InlineData("pr-1")]
-    [InlineData("pr-12345")]
-    [InlineData("pr-2147483647")]
-    public void ReadChannel_AssemblyHasMetadataForValidChannel_ReturnsValue(string channel)
+    [Fact]
+    public void Ctor_NullAssembly_ThrowsArgumentNullException()
     {
-        var assembly = BuildFakeAssemblyWithChannelMetadata($"FakeCli_{channel.Replace('-', '_')}", channel);
+        // Explicit null produces an immediate, descriptive ArgumentNullException so misuse
+        // is caught at construction time rather than surfacing later as the cryptic
+        // "metadata missing on '?'" exception.
+        Assert.Throws<ArgumentNullException>(() => new IdentityChannelReader(null!));
+    }
+
+    [Fact]
+    public void ReadChannel_AssemblyHasValidChannelMetadata_ReturnsValue()
+    {
+        // Integration smoke for the reader → IsValidChannel wiring. The full shape truth
+        // table is asserted by IsValidChannel_MatchesExpectedTruthTable below; this test
+        // proves a valid value round-trips through a fake assembly's
+        // [AssemblyMetadata("AspireCliChannel", ...)].
+        var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Valid", "pr-12345");
 
         var reader = new IdentityChannelReader(assembly);
 
-        Assert.Equal(channel, reader.ReadChannel());
+        Assert.Equal("pr-12345", reader.ReadChannel());
     }
 
     [Fact]
@@ -42,33 +48,12 @@ public class IdentityChannelReaderTests
     }
 
     [Fact]
-    public void ReadChannel_AssemblyHasEmptyChannelMetadata_Throws()
+    public void ReadChannel_AssemblyHasInvalidChannelMetadata_Throws()
     {
-        var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_EmptyChannel", channelValue: string.Empty);
-
-        var reader = new IdentityChannelReader(assembly);
-
-        var ex = Assert.Throws<InvalidOperationException>(reader.ReadChannel);
-        Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("foobar")]                       // free-form garbage
-    [InlineData("pr")]                           // legacy literal "pr" without "-<N>" suffix
-    [InlineData("pr-")]                          // prefix with no digits
-    [InlineData("pr-abc")]                       // non-digits after prefix
-    [InlineData("pr-12a")]                       // mixed digits + non-digits
-    [InlineData("pr-12.34")]                     // dot inside the number
-    [InlineData("PR-12345")]                     // wrong case for the prefix
-    [InlineData("   ")]                          // whitespace-only
-    [InlineData(" pr-12345")]                    // leading whitespace
-    [InlineData("pr-12345 ")]                    // trailing whitespace
-    public void ReadChannel_InvalidChannelValue_Throws(string channelValue)
-    {
-        // The reader is the single gate on the channel shape. The runtime
-        // must fail loudly here rather than letting an unrecognised value
-        // become a hive label and silently misroute packages.
-        var assembly = BuildFakeAssemblyWithChannelMetadata($"FakeCli_Invalid_{Math.Abs(channelValue.GetHashCode())}", channelValue);
+        // Integration smoke that an invalid baked value surfaces as InvalidOperationException
+        // through the reader. The exhaustive invalid-value matrix is in
+        // IsValidChannel_MatchesExpectedTruthTable below.
+        var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Invalid", "pr");
 
         var reader = new IdentityChannelReader(assembly);
 
@@ -106,8 +91,8 @@ public class IdentityChannelReaderTests
 
     // IsValidChannel is the gate for the baked value. We assert its exact
     // truth table here so the reader's contract is testable without round-
-    // tripping through a fake assembly. The Throws-based tests above cover
-    // the integration through ResolveChannel.
+    // tripping through a fake assembly. The smoke tests above cover the
+    // valid-roundtrip and invalid-throws integration through ReadChannel.
     [Theory]
     [InlineData("stable", true)]
     [InlineData("staging", true)]
@@ -181,3 +166,4 @@ public class IdentityChannelReaderTests
         return builder;
     }
 }
+

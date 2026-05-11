@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Reflection;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
@@ -28,13 +27,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        var resolveChannelName = typeof(PrebuiltAppHostServer)
-            .GetMethod("ResolveChannelName", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("ResolveChannelName not found on PrebuiltAppHostServer.");
-
-        var resolved = resolveChannelName.Invoke(server, parameters: null);
-
-        Assert.Null(resolved);
+        Assert.Null(server.ResolveChannelName());
     }
 
     [Fact]
@@ -49,12 +42,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        var resolveChannelName = typeof(PrebuiltAppHostServer)
-            .GetMethod("ResolveChannelName", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-        var resolved = (string?)resolveChannelName.Invoke(server, parameters: null);
-
-        Assert.Equal("staging", resolved);
+        Assert.Equal("staging", server.ResolveChannelName());
     }
 
     [Fact]
@@ -77,12 +65,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        var resolveChannelName = typeof(PrebuiltAppHostServer)
-            .GetMethod("ResolveChannelName", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-        var resolved = (string?)resolveChannelName.Invoke(server, parameters: null);
-
-        Assert.Equal("daily", resolved);
+        Assert.Equal("daily", server.ResolveChannelName());
     }
 
     [Fact]
@@ -103,12 +86,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        var resolveChannelName = typeof(PrebuiltAppHostServer)
-            .GetMethod("ResolveChannelName", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-        var resolved = (string?)resolveChannelName.Invoke(server, parameters: null);
-
-        Assert.Equal("staging", resolved);
+        Assert.Equal("staging", server.ResolveChannelName());
     }
 
     private static PrebuiltAppHostServer CreateServer(string appPath)
@@ -132,3 +110,4 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
             NullLogger.Instance);
     }
 }
+
