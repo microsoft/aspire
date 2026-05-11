@@ -7,8 +7,6 @@
     <AssemblyName>Aspire.Cli.Benchmarks</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-    <IsShippingPackage>false</IsShippingPackage>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <!-- Harness only; no need for library-grade ConfigureAwait discipline. -->
     <NoWarn>$(NoWarn);CA2007</NoWarn>
