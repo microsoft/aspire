@@ -7,6 +7,7 @@ import {
     CertificateTrustScope,
     EndpointProperty,
     IconVariant,
+    OtlpProtocol,
     ProbeType,
     refExpr,
 } from './.modules/aspire.js';
@@ -20,6 +21,7 @@ const builder = await createBuilder();
 
 // addContainer (pre-existing)
 const container = await builder.addContainer("mycontainer", "nginx");
+await container.withOtlpExporter({ protocol: OtlpProtocol.HttpJson });
 const taggedContainer = await builder.addContainer("mytaggedcontainer", {
     image: "nginx",
     tag: "stable-alpine",
