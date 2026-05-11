@@ -81,6 +81,13 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
     /// <inheritdoc />
+    // Per-feature capability strings (e.g. Terminals_V1) are deliberately preferred over a
+    // monolithic "rev the whole aux backchannel version" approach. See
+    // docs/specs/cli-backchannel.md §3 ("Capability Negotiation Over Version Numbers"). When
+    // the CLI starts using a new RPC, add a new capability constant in
+    // src/Aspire.Hosting/Backchannel/BackchannelDataTypes.cs (advertised by the AppHost RPC
+    // target) and surface a SupportsXxx property here for the call site to gate on. This way
+    // a single new method never requires every consumer to upgrade an opaque version field.
     public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
 
     /// <summary>

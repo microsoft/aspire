@@ -14,12 +14,20 @@ namespace Aspire.Dashboard.Terminal;
 /// connects to the matching local socket.
 /// </summary>
 /// <remarks>
-/// The path itself is included in the gRPC stream from the AppHost. In Aspire's
+/// <para>The path itself is included in the gRPC stream from the AppHost. In Aspire's
 /// single-user, single-machine local-dev scenario the path is not a privileged
 /// secret (the user already controls the AppHost process and can read or write
 /// anything in its temp directory), but the path never reaches the browser via
 /// the terminal WebSocket because the proxy takes only
-/// <c>resource</c>/<c>replica</c> identifiers.
+/// <c>resource</c>/<c>replica</c> identifiers.</para>
+/// <para>The resolver intentionally does <i>not</i> use Hex1b's
+/// <c>WithHmp1UdsClient</c> builder. That builder is for in-process Hex1b
+/// applications that want to <i>embed</i> the HMP1 stream into a Hex1b
+/// terminal (the CLI's <c>aspire terminal attach</c> path does exactly that).
+/// The dashboard never instantiates a Hex1b terminal — it is a byte-level
+/// proxy between the browser's HMP1 client and the remote terminal host —
+/// so the resolver only needs the raw stream and reaches for the lower-level
+/// <see cref="Hmp1Transports.ConnectUnixSocket"/> helper instead.</para>
 /// </remarks>
 internal sealed class DefaultTerminalConnectionResolver : ITerminalConnectionResolver
 {

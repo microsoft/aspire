@@ -14,15 +14,27 @@ namespace Aspire.Dashboard.Terminal;
 /// dumb byte pump that shuttles raw HMP1 frames in both directions.
 /// </summary>
 /// <remarks>
-/// <para>This is the same architecture used by WebMuxerDemo's
-/// <c>WebSocketProxy.BridgeAsync</c>. From the upstream's perspective the
-/// browser tab is just another HMP v1 peer in its multi-head roster, so
-/// take-control / role-change / state-replay all work end-to-end without
-/// any per-connection emulator state in the dashboard process.</para>
+/// <para>From the upstream's perspective the browser tab is just another
+/// HMP v1 peer in its multi-head roster, so take-control / role-change /
+/// state-replay all work end-to-end without any per-connection emulator
+/// state in the dashboard process.</para>
 /// <para>The browser identifies the target replica via
 /// <c>?resource=&lt;name&gt;&amp;replica=&lt;index&gt;</c>; the actual UDS
 /// path is resolved server-side by <see cref="ITerminalConnectionResolver"/>
 /// so the dashboard never trusts a browser-supplied filesystem path.</para>
+/// <para>
+/// <b>Why a custom proxy and not Hex1b's <c>Hmp1PresentationAdapter</c>?</b>
+/// <c>Hmp1PresentationAdapter</c> is the <i>server</i> side of HMP1: it lives
+/// in the process that owns the underlying terminal (Aspire.TerminalHost) and
+/// multicasts a single Hex1b terminal to many HMP1 peers. The dashboard never
+/// owns a terminal — it sits between two HMP1 endpoints (the browser and the
+/// remote terminal host) and relays frames at the byte level. Likewise
+/// <c>WebSocketPresentationAdapter</c> is for in-process Hex1b apps that
+/// render <i>themselves</i> to a browser via WebSocket; it is not a
+/// WebSocket↔stream bridge. Until Hex1b ships a generic HMP1 WebSocket
+/// proxy primitive there is no built-in adapter that fits the dashboard's
+/// role, so this thin pump is the minimum viable implementation.
+/// </para>
 /// </remarks>
 internal static class TerminalWebSocketProxy
 {
