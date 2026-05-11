@@ -19,7 +19,7 @@ public static class GoHostingExtensions
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to add the resource to.</param>
     /// <param name="name">The name of the resource.</param>
-    /// <param name="appDirectory">The path to the directory containing the Go application (must contain <c>go.mod</c>).</param>
+    /// <param name="appDirectory">The path to the directory containing the Go application source, which typically includes a <c>go.mod</c> file for standard <c>go run .</c> execution.</param>
     /// <param name="buildTags">Optional build tags passed to the compiler via <c>-tags</c> (e.g. <c>"netgo"</c>, <c>"integration"</c>).</param>
     /// <param name="ldFlags">Optional linker flags passed via <c>-ldflags</c> (e.g. <c>"-X main.version=1.0.0"</c>).</param>
     /// <param name="gcFlags">Optional compiler flags passed via <c>-gcflags</c> (e.g. <c>"all=-N -l"</c> to disable optimisations for Delve).</param>
