@@ -61,8 +61,57 @@ internal sealed class LlmsSection
 /// Parser for llms.txt format documentation with parallel document processing.
 /// </summary>
 /// <remarks>
-/// Supports both standard markdown with headings on separate lines and minified
-/// content with inline headings. Code blocks are properly excluded from heading detection.
+/// <para>
+/// The llms.txt convention is defined at <see href="https://llmstxt.org"/>. A
+/// concatenated llms.txt corpus is a stream of markdown documents separated by
+/// H1 (<c>#</c>) headings. Each document optionally begins with a blockquote
+/// "summary" line, followed by H2+ sections.
+/// </para>
+/// <para>
+/// Two physical formats appear in the wild:
+/// </para>
+/// <list type="number">
+///   <item>
+///     <description>
+///       <b>Standard markdown</b> — headings on their own line, blank lines
+///       between sections. Example:
+///       <code>
+///       # Document Title
+///
+///       > One-line summary in a blockquote.
+///
+///       ## Section One
+///
+///       Section body.
+///
+///       ## Section Two
+///
+///       More body.
+///       </code>
+///     </description>
+///   </item>
+///   <item>
+///     <description>
+///       <b>Minified ("inline") form</b> — newlines collapsed to single spaces
+///       by site-generation plugins (notably Starlight's
+///       <see href="https://github.com/delucis/starlight-llms-txt">starlight-llms-txt</see>),
+///       so the heading marker appears inline with a space prefix
+///       (<c>" ## "</c>) and Starlight emits
+///       <c>[Section titled "Section One"]</c> as an anchor stub directly
+///       after each heading. Example raw line:
+///       <code>
+///       # Document Title [Section titled Document Title] Body text ## Section One [Section titled Section One] Body of section one. ## Section Two ...
+///       </code>
+///       Both formats can appear within the same corpus (and even the same
+///       document).
+///     </description>
+///   </item>
+/// </list>
+/// <para>
+/// Fenced code blocks are detected up front and treated as no-fly zones for all
+/// heading detection so bash <c>#</c> comments and shell prompts don't get
+/// parsed as document or section boundaries.
+/// </para>
 /// </remarks>
 internal static partial class LlmsTxtParser
 {
@@ -169,6 +218,10 @@ internal static partial class LlmsTxtParser
         return sliced ?? s_emptyRegions;
     }
 
+    // Sentinel returned by SliceCodeBlocks for fence-free documents. Most docs in
+    // the live corpus contain zero fenced blocks, so returning a singleton avoids
+    // hundreds of empty List<T> allocations per parse and lets callers iterate
+    // freely without null checks.
     private static readonly List<(int Start, int End)> s_emptyRegions = [];
 
     /// <summary>
@@ -226,8 +279,19 @@ internal static partial class LlmsTxtParser
             return false;
         }
 
-        // Some landing pages emit a second H1 inline with the rest of the body content.
-        // Those should stay inside the current document rather than starting a new one.
+        // Reject H1-looking lines that are actually pieces of minified inline
+        // content rather than real document headings. Examples observed in the
+        // live corpus:
+        //
+        //   "# Document Title ## Section One"
+        //     -> minified form where the H1 and its first H2 share a line; the
+        //        same physical document, not a new one.
+        //   "# Document Title [Section titled Document Title] Body..."
+        //     -> Starlight anchor stub emitted right after the heading; this is
+        //        body content, not a new document.
+        //   "# Whats new in [Aspire 13.3](/whats-new/aspire-13-3)"
+        //     -> markdown link inside what looks like a title; in practice this
+        //        only appears in body prose, not real top-level H1s.
         return title.IndexOf("## ", StringComparison.Ordinal) < 0
             && title.IndexOf("[Section titled", StringComparison.Ordinal) < 0
             && title.IndexOf("](", StringComparison.Ordinal) < 0;
@@ -249,6 +313,9 @@ internal static partial class LlmsTxtParser
 
         return trimmed[0] is '#'
             && trimmed[1] is not '#'
+            // Either "# " (a normal heading) or a bare "#" at end-of-input — the
+            // latter only happens in test fixtures, but accepting it keeps
+            // IsH1Start total over short spans.
             && (trimmed[1] is ' ' || trimmed.Length is 1);
     }
 
@@ -457,7 +524,11 @@ internal static partial class LlmsTxtParser
             var closeIndex = content[searchStart..].IndexOf("```");
             if (closeIndex < 0)
             {
-                // Unclosed code block - treat rest as code
+                // Unclosed fence — extend the region to end-of-content. If the
+                // corpus is ever truncated mid-fence (download interrupted,
+                // upstream regression), this keeps any stray `# `/`## ` lines
+                // inside the unterminated block from being mistaken for real
+                // document or section boundaries.
                 regions.Add((absoluteOpen, content.Length));
                 break;
             }
@@ -635,7 +706,16 @@ internal static partial class LlmsTxtParser
         // Calculate absolute end position
         var absoluteEnd = position + whitespaceSkipped + textStart + headingEnd;
 
-        // Skip past [Section titled...] marker if present
+        // Skip past the Starlight "[Section titled <title>]" anchor stub that
+        // appears immediately after the heading text in minified output. For
+        // example, the raw bytes around an H2 look like:
+        //
+        //   "## Connection string[Section titled Connection string] ..."
+        //
+        // We've already taken "Connection string" as the heading; here we just
+        // advance absoluteEnd past the closing ']' so the next heading scan
+        // doesn't start inside the anchor stub.
+        // See https://github.com/delucis/starlight-llms-txt for the emitter.
         var afterHeading = content[absoluteEnd..];
         if (afterHeading.StartsWith("[Section titled"))
         {
@@ -680,8 +760,21 @@ internal static partial class LlmsTxtParser
     }
 
     /// <summary>
-    /// Finds the next inline heading marker (space followed by ##).
+    /// Finds the next inline heading marker — a space followed by two or more
+    /// <c>#</c> characters — used by the minified llms.txt format where headings
+    /// share a line with body content.
     /// </summary>
+    /// <remarks>
+    /// Matches the boundary between body text and an inline heading. Example raw
+    /// span (one physical line):
+    /// <code>
+    /// "Body text for the previous section. ## Next Section [Section titled Next Section]"
+    /// </code>
+    /// The match position is the space before <c>##</c>, so callers can advance
+    /// past it to land on the <c>##</c>. A leading space is required to avoid
+    /// matching inside identifiers, URLs, or code-like prose (for example
+    /// <c>"file##fragment"</c>).
+    /// </remarks>
     private static int FindNextInlineHeadingMarker(ReadOnlySpan<char> span)
     {
         var position = 0;
@@ -797,7 +890,11 @@ internal static partial class LlmsTxtParser
     /// </summary>
     private static string GenerateSlug(string title)
     {
-        // Fast path for simple titles
+        // Fast path: if the title is already slug-shaped (lowercase letters,
+        // digits, and hyphens — no spaces, no uppercase, no punctuation) just
+        // return the original string. This avoids renting/copying into a pooled
+        // buffer for titles that already look like slugs (e.g. caller-supplied
+        // identifiers in tests).
         var span = title.AsSpan();
         var needsProcessing = false;
 
