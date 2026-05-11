@@ -164,27 +164,7 @@ jobs:
           echo "Already processed: $PROCESSED_COUNT"
           echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
 
-          # Extract backport entries from previous milestone, filtered to the
-          # batch window. Reads directly from the memory branch clone (still
-          # alive in $MEMORY_TMP) so both backport==true and date filtering
-          # happen in a single jq pass.
-          PREVIOUS_MILESTONE="${{ env.PREVIOUS_MILESTONE }}"
-          if [ "$BATCH_COUNT" -gt 0 ] && [ -n "$PREVIOUS_MILESTONE" ]; then
-            PREV_CHANGES="$MEMORY_TMP/repo/$PREVIOUS_MILESTONE/changes"
-            if [ -d "$PREV_CHANGES" ] && ls "$PREV_CHANGES"/*.json >/dev/null 2>&1; then
-              OLDEST_MERGED=$(jq -r '.[0].mergedAt' "$DATA_DIR/batch-prs.json")
-              cat "$PREV_CHANGES"/*.json \
-                | jq -s --arg cutoff "$OLDEST_MERGED" \
-                  '[.[] | select(.backport == true and .firstMergedAt >= $cutoff)]' \
-                > "$DATA_DIR/backport-prs.json" 2>/dev/null \
-                || echo '[]' > "$DATA_DIR/backport-prs.json"
-              echo "Backport entries from $PREVIOUS_MILESTONE (filtered to batch window): $(jq length "$DATA_DIR/backport-prs.json")"
-            fi
-          fi
           rm -rf "$MEMORY_TMP"
-          if [ ! -f "$DATA_DIR/backport-prs.json" ]; then
-            echo '[]' > "$DATA_DIR/backport-prs.json"
-          fi
 
           # 2a. Enrich batch PRs with comments, files, and authorAssociation.
           #     The per-PR author_association from the REST API is unreliable
@@ -507,8 +487,7 @@ use one of these patterns:
 | Docs milestone start | `${MILESTONE_START}` (fetch docs PRs merged on or after this date) |
 | Docs batch file | `/tmp/gh-aw/pr-data/batch-docs-prs.json` (unprocessed docs PRs) |
 | Docs PR tracker directory | `prs-docs/` (under memory directories; one JSON file per docs PR) |
-| Previous milestone | `${PREVIOUS_MILESTONE}` (optional; used to filter PRs already shipped via backport) |
-| Backport entries file | `/tmp/gh-aw/pr-data/backport-prs.json` (change entries with `backport: true` from previous milestone) |
+| Previous milestone | `${PREVIOUS_MILESTONE}` (optional; used to identify the release branch for backport detection) |
 
 ## Step 1: Load existing changelog and feedback
 
@@ -560,7 +539,6 @@ with `jq` to see their exact shape.
 | `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs, enriched with `authorAssociation`, `files`, and `comments` (not available from `gh pr list`) |
 | `all-docs-prs.json` | All merged PRs in `${DOCS_REPO}` since `${MILESTONE_START}`, sorted by `mergedAt` ascending |
 | `batch-docs-prs.json` | Oldest ${BATCH_SIZE} unprocessed docs PRs (same base fields as product PRs plus `files`, but **without** `authorAssociation` or `comments`) |
-| `backport-prs.json` | Change entries with `backport: true` from the `${PREVIOUS_MILESTONE}` milestone (same schema as Step 6a), filtered to entries whose `firstMergedAt` is on or after the oldest batch PR's `mergedAt`. Empty array if none. Used in Step 3 item 2 to exclude PRs already shipped via backport. |
 
 ## Step 3: Process the batch PRs
 
@@ -578,16 +556,20 @@ full schema of each entry.
      targeting a release branch.
    Record each excluded bot PR as an individual tracker file in `prs/` with
    `status: "excluded"` in Step 6b so they are not re-processed on future runs.
-2. **Exclude PRs already shipped via backport** — if
-   `/tmp/gh-aw/pr-data/backport-prs.json` is non-empty, check each batch PR
-   against the backport entries from the previous milestone. A batch PR should
-   be excluded if it is the **original source** of a backport entry — i.e., its
-   title or body closely matches a backport entry's `name` or `description`,
-   or a backport entry's `description`/`name` explicitly references the PR
-   number. When excluding, set `status: "excluded"` in the PR tracker with a
-   comment like `"Already shipped via backport in milestone <previous>"`. Do
-   **not** exclude PRs that merely touch the same area — the match must be
-   specific to the same logical change.
+2. **Exclude PRs already shipped via backport** — for each batch PR whose
+   `mergedAt` is **before** `${MILESTONE_START}` (i.e., the PR was merged in
+   the previous milestone window and carried over), check the PR's `body` and
+   `comments` (both available in the batch data) for evidence that a backport
+   to the previous milestone's release branch was triggered. Look for:
+   - A `/backport to release/${PREVIOUS_MILESTONE}` command in comments.
+   - A bot comment (e.g., from `github-actions[bot]` or `mergifyio`) confirming
+     a backport PR was created targeting `release/${PREVIOUS_MILESTONE}`.
+   - Body text stating the PR was backported to `release/${PREVIOUS_MILESTONE}`.
+   If a backport was triggered, exclude the PR — its changes already shipped
+   in the previous milestone. Set `status: "excluded"` in the PR tracker with
+   a comment like `"Backported to release/${PREVIOUS_MILESTONE}"`.
+   PRs merged **on or after** `${MILESTONE_START}` should **not** be checked
+   for backports — they are new to this milestone by definition.
 3. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
    processing it, the backlog will be fully caught up.
 
