@@ -16,6 +16,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
@@ -4833,6 +4834,13 @@ public class DcpExecutorTests
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
+        // The per-replica TerminalHostResources are now materialized inside BeforeStartEvent
+        // (see TerminalResourceBuilderExtensions.WithTerminal). DcpExecutor.RunApplicationAsync
+        // does not raise that event itself, so the test publishes it manually before running
+        // the executor — otherwise TerminalAnnotation.TerminalHosts would still be empty when
+        // ExecutableCreator looks up the per-replica producer UDS path.
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, distributedAppModel));
+
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
         await appExecutor.RunApplicationAsync();
 
@@ -4898,6 +4906,10 @@ public class DcpExecutorTests
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // BeforeStartEvent is where the per-replica TerminalHostResources are now
+        // materialized. See the matching note in Project_WithTerminal_PopulatesPerReplicaTerminalSpecOnWindows.
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, distributedAppModel));
 
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
         await appExecutor.RunApplicationAsync();

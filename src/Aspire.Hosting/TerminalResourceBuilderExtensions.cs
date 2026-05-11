@@ -28,9 +28,9 @@ public static class TerminalResourceBuilderExtensions
     /// <para>
     /// One terminal host process is spawned per parent replica (e.g. <c>WithReplicas(3).WithTerminal()</c>
     /// → 3 terminal host processes named <c>{parent}-terminalhost-0</c> .. <c>{parent}-terminalhost-2</c>).
-    /// <strong>Call <c>WithReplicas(...)</c> before <c>WithTerminal()</c></strong>; if the
-    /// replica count changes after this call, only the first <c>N</c> replicas (where <c>N</c>
-    /// was the count at <c>WithTerminal()</c> time) will have an attachable terminal.
+    /// The order of <c>WithReplicas(...)</c> and <c>WithTerminal()</c> does not matter: the per-replica
+    /// hosts are materialized during <see cref="BeforeStartEvent"/> after the model is fully built,
+    /// so the final replica count is always honoured.
     /// </para>
     /// </remarks>
     /// <example>
@@ -41,7 +41,8 @@ public static class TerminalResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <example>
-    /// Add terminal support with custom dimensions to a multi-replica resource:
+    /// Add terminal support with custom dimensions to a multi-replica resource. The order of
+    /// <c>WithReplicas</c> and <c>WithTerminal</c> does not matter:
     /// <code>
     /// var agent = builder.AddExecutable("agent", "my-agent", ".")
     ///     .WithReplicas(3)
@@ -67,7 +68,54 @@ public static class TerminalResourceBuilderExtensions
         var options = new TerminalOptions();
         configure?.Invoke(options);
 
-        var replicaCount = builder.Resource.Annotations.OfType<ReplicaAnnotation>().LastOrDefault()?.Replicas ?? 1;
+        // Annotation is added eagerly so consumers (DCP creators, dashboard data, backchannel)
+        // can detect "this resource has a terminal" the moment WithTerminal() returns. The
+        // per-replica hosts inside it are populated later, during BeforeStartEvent — the model
+        // (including any subsequent WithReplicas calls) is fully built by then, so the final
+        // replica count is always honoured even if WithTerminal() ran before WithReplicas().
+        var annotation = new TerminalAnnotation(options);
+        builder.WithAnnotation(annotation);
+
+        var parent = builder.Resource;
+        var appBuilder = builder.ApplicationBuilder;
+
+        // Subscribe directly on the IDistributedApplicationEventing rather than registering an
+        // IDistributedApplicationEventingSubscriber: subscriptions registered during the builder
+        // phase fire in registration order ahead of DI-registered subscribers (which only attach
+        // their callbacks during DistributedApplication.RunApplicationAsync). That ordering is
+        // important — TerminalHostEventingSubscriber resolves each host's binary path by
+        // iterating model.Resources.OfType<TerminalHostResource>(), so the hosts MUST already
+        // be in the model by the time it runs.
+        appBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
+        {
+            MaterializeTerminalHosts(@event, parent, annotation, options);
+            return Task.CompletedTask;
+        });
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Reads the parent's final <see cref="ReplicaAnnotation"/> and creates one
+    /// <see cref="TerminalHostResource"/> per replica. Idempotent — re-firing
+    /// <see cref="BeforeStartEvent"/> (e.g. from a test) is a no-op once the
+    /// <paramref name="annotation"/> is initialized.
+    /// </summary>
+    private static void MaterializeTerminalHosts(
+        BeforeStartEvent @event,
+        IResource parent,
+        TerminalAnnotation annotation,
+        TerminalOptions options)
+    {
+        if (annotation.IsInitialized)
+        {
+            return;
+        }
+
+        // ReplicaAnnotation may have been added before OR after WithTerminal — that's
+        // exactly why this code runs at BeforeStartEvent time. The model is locked down
+        // by now, so LastOrDefault() reflects the final WithReplicas(N) call.
+        var replicaCount = parent.Annotations.OfType<ReplicaAnnotation>().LastOrDefault()?.Replicas ?? 1;
         if (replicaCount < 1)
         {
             replicaCount = 1;
@@ -82,69 +130,71 @@ public static class TerminalResourceBuilderExtensions
         for (var i = 0; i < replicaCount; i++)
         {
             var layout = CreateTerminalHostLayout(baseDir, i);
-            var terminalHostName = $"{builder.Resource.Name}-terminalhost-{i.ToString(CultureInfo.InvariantCulture)}";
-            var terminalHost = new TerminalHostResource(terminalHostName, builder.Resource, layout);
+            var terminalHostName = $"{parent.Name}-terminalhost-{i.ToString(CultureInfo.InvariantCulture)}";
+            var terminalHost = new TerminalHostResource(terminalHostName, parent, layout);
+
+            ConfigureTerminalHostAnnotations(terminalHost, options);
+            @event.Model.Resources.Add(terminalHost);
+
             terminalHosts[i] = terminalHost;
-        }
-
-        builder.WithAnnotation(new TerminalAnnotation(terminalHosts, options));
-
-        // Register and configure each per-replica host. Capture-by-value semantics matter
-        // here: each iteration creates its own `host` and `replicaIndex` locals so the
-        // WithArgs callback closes over the right host even though it runs lazily later.
-        foreach (var terminalHost in terminalHosts)
-        {
-            var host = terminalHost;
-            var terminalHostBuilder = builder.ApplicationBuilder.AddResource(host);
-
-            terminalHostBuilder
-                .WithInitialState(new CustomResourceSnapshot
-                {
-                    ResourceType = "TerminalHost",
-                    State = KnownResourceStates.NotStarted,
-                    Properties = [],
-                    IsHidden = true,
-                })
-                .ExcludeFromManifest()
-                .WithArgs(context =>
-                {
-                    context.Args.Add("--producer-uds");
-                    context.Args.Add(host.Layout.ProducerUdsPath);
-
-                    context.Args.Add("--consumer-uds");
-                    context.Args.Add(host.Layout.ConsumerUdsPath);
-
-                    context.Args.Add("--control-uds");
-                    context.Args.Add(host.Layout.ControlUdsPath);
-
-                    context.Args.Add("--columns");
-                    context.Args.Add(options.Columns.ToString(CultureInfo.InvariantCulture));
-
-                    context.Args.Add("--rows");
-                    context.Args.Add(options.Rows.ToString(CultureInfo.InvariantCulture));
-
-                    if (!string.IsNullOrEmpty(options.Shell))
-                    {
-                        context.Args.Add("--shell");
-                        context.Args.Add(options.Shell);
-                    }
-
-                    return Task.CompletedTask;
-                });
         }
 
         // The target waits until each host has started so its viewer-facing UDS listener
         // is bound before any consumer (Dashboard or CLI) tries to connect. Phase 2 will
         // switch this to WaitUntilHealthy once each host implements a real health probe.
-        if (builder.Resource is IResourceWithWaitSupport)
+        if (parent is IResourceWithWaitSupport)
         {
-            foreach (var terminalHost in terminalHosts)
+            for (var i = 0; i < terminalHosts.Length; i++)
             {
-                builder.WithAnnotation(new WaitAnnotation(terminalHost, WaitType.WaitUntilStarted));
+                parent.Annotations.Add(new WaitAnnotation(terminalHosts[i], WaitType.WaitUntilStarted));
             }
         }
 
-        return builder;
+        annotation.Initialize(baseDir, terminalHosts);
+    }
+
+    private static void ConfigureTerminalHostAnnotations(TerminalHostResource host, TerminalOptions options)
+    {
+        // Equivalent to the previous WithInitialState(...).ExcludeFromManifest().WithArgs(...) chain
+        // but we can't go through IResourceBuilder<T> here — we're running mid-event without an
+        // IDistributedApplicationBuilder reference, and creating one against the already-built
+        // application is not supported. Adding the annotations directly produces an identical
+        // resource state (each helper above is just sugar over Annotations.Add).
+        host.Annotations.Add(new ResourceSnapshotAnnotation(new CustomResourceSnapshot
+        {
+            ResourceType = "TerminalHost",
+            State = KnownResourceStates.NotStarted,
+            Properties = [],
+            IsHidden = true,
+        }));
+
+        host.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
+
+        host.Annotations.Add(new CommandLineArgsCallbackAnnotation(context =>
+        {
+            context.Args.Add("--producer-uds");
+            context.Args.Add(host.Layout.ProducerUdsPath);
+
+            context.Args.Add("--consumer-uds");
+            context.Args.Add(host.Layout.ConsumerUdsPath);
+
+            context.Args.Add("--control-uds");
+            context.Args.Add(host.Layout.ControlUdsPath);
+
+            context.Args.Add("--columns");
+            context.Args.Add(options.Columns.ToString(CultureInfo.InvariantCulture));
+
+            context.Args.Add("--rows");
+            context.Args.Add(options.Rows.ToString(CultureInfo.InvariantCulture));
+
+            if (!string.IsNullOrEmpty(options.Shell))
+            {
+                context.Args.Add("--shell");
+                context.Args.Add(options.Shell);
+            }
+
+            return Task.CompletedTask;
+        }));
     }
 
     /// <summary>
@@ -168,4 +218,3 @@ public static class TerminalResourceBuilderExtensions
         return new TerminalHostLayout(baseDir, replicaIndex, producerPath, consumerPath, controlPath);
     }
 }
-

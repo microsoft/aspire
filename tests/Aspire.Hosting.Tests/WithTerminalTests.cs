@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,7 +11,7 @@ namespace Aspire.Hosting.Tests;
 public class WithTerminalTests
 {
     [Fact]
-    public void WithTerminalAddsTerminalAnnotation()
+    public async Task WithTerminalAddsTerminalAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
@@ -21,10 +23,16 @@ public class WithTerminalTests
         Assert.Equal(120, annotation.Options.Columns);
         Assert.Equal(30, annotation.Options.Rows);
         Assert.Null(annotation.Options.Shell);
-        // The annotation now carries the per-replica list of host resources rather
-        // than a single TerminalHostResource. Default replica count is 1 (no
-        // ReplicaAnnotation present), so exactly one host is created.
-        Assert.NotNull(annotation.TerminalHosts);
+
+        // Until BeforeStartEvent fires the per-replica hosts are not yet materialized:
+        // TerminalHosts is empty and IsInitialized is false. This deferral is what
+        // allows WithReplicas(N) to be honoured even when called AFTER WithTerminal().
+        Assert.False(annotation.IsInitialized);
+        Assert.Empty(annotation.TerminalHosts);
+
+        await PublishBeforeStartAsync(builder);
+
+        Assert.True(annotation.IsInitialized);
         Assert.Single(annotation.TerminalHosts);
     }
 
@@ -49,15 +57,14 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalCreatesPerReplicaHiddenTerminalHostResources()
+    public async Task WithTerminalCreatesPerReplicaHiddenTerminalHostResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
 
-        var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
 
         var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
         var single = Assert.Single(hosts);
@@ -69,15 +76,14 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalLinksAnnotationToHostResources()
+    public async Task WithTerminalLinksAnnotationToHostResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
 
-        var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
 
         var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single();
         var hostFromModel = model.Resources.OfType<TerminalHostResource>().Single();
@@ -85,12 +91,14 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalAddsWaitAnnotationForEachTerminalHost()
+    public async Task WithTerminalAddsWaitAnnotationForEachTerminalHost()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
+
+        await PublishBeforeStartAsync(builder);
 
         var waitAnnotations = resource.Resource.Annotations.OfType<WaitAnnotation>()
             .Where(w => w.Resource is TerminalHostResource)
@@ -111,7 +119,7 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalWorksOnContainerResources()
+    public async Task WithTerminalWorksOnContainerResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var container = builder.AddContainer("mycontainer", "myimage");
@@ -121,8 +129,7 @@ public class WithTerminalTests
         var annotation = container.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
 
-        var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
 
         var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
         var single = Assert.Single(hosts);
@@ -130,15 +137,14 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void TerminalHostResourcesAreExcludedFromManifest()
+    public async Task TerminalHostResourcesAreExcludedFromManifest()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
 
-        var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
 
         foreach (var host in model.Resources.OfType<TerminalHostResource>())
         {
@@ -167,12 +173,14 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalDefaultsToOneTerminalHost()
+    public async Task WithTerminalDefaultsToOneTerminalHost()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
+
+        await PublishBeforeStartAsync(builder);
 
         var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
         var single = Assert.Single(hosts);
@@ -183,13 +191,15 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalAfterWithReplicasCreatesOneTerminalHostPerReplica()
+    public async Task WithTerminalAfterWithReplicasCreatesOneTerminalHostPerReplica()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(3));
 
         resource.WithTerminal();
+
+        await PublishBeforeStartAsync(builder);
 
         var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
         Assert.Equal(3, hosts.Count);
@@ -207,13 +217,40 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void TerminalHostLayoutPathsAreUnderTheSameTempBaseDirectory()
+    public async Task WithReplicasAfterWithTerminalCreatesOneTerminalHostPerReplica()
+    {
+        // Regression test for the original ordering bug: previously WithTerminal() read
+        // the parent's ReplicaAnnotation eagerly, so calling WithReplicas(N) AFTER
+        // WithTerminal() resulted in only one terminal host being created. With deferred
+        // host materialization in BeforeStartEvent, the order is now irrelevant.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+
+        resource.WithTerminal();
+        resource.WithAnnotation(new ReplicaAnnotation(3));
+
+        await PublishBeforeStartAsync(builder);
+
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(3, hosts.Count);
+
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Equal(i, hosts[i].ParentReplicaIndex);
+            Assert.Equal($"myapp-terminalhost-{i}", hosts[i].Name);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalHostLayoutPathsAreUnderTheSameTempBaseDirectory()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(2));
 
         resource.WithTerminal();
+
+        await PublishBeforeStartAsync(builder);
 
         var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
         var sharedBase = hosts[0].Layout.BaseDirectory;
@@ -243,6 +280,8 @@ public class WithTerminalTests
             options.Shell = "/bin/bash";
         });
 
+        await PublishBeforeStartAsync(builder);
+
         var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
         // Each per-replica host serves exactly one replica, so its argv carries
         // exactly one --producer-uds / --consumer-uds / --control-uds value.
@@ -270,12 +309,17 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void TerminalHostResourcesHaveUnresolvedCommandUntilBeforeStart()
+    public async Task TerminalHostResourcesHaveUnresolvedCommandUntilTerminalHostPathIsConfigured()
     {
+        // The host process binary path is filled in by TerminalHostEventingSubscriber
+        // from DcpOptions during BeforeStartEvent. The test environment doesn't ship a
+        // real terminalhost binary, so the placeholder remains after the event fires.
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
         resource.WithTerminal();
+
+        await PublishBeforeStartAsync(builder);
 
         foreach (var host in resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts)
         {
@@ -291,5 +335,23 @@ public class WithTerminalTests
             await callbackAnnotation.Callback(new CommandLineArgsCallbackContext(argsList, CancellationToken.None));
         }
         return argsList.Select(a => a?.ToString() ?? string.Empty).ToList();
+    }
+
+    private static async Task PublishBeforeStartAsync(IDistributedApplicationTestingBuilder builder)
+    {
+        // BeforeStartEvent is the seam where WithTerminal() now materializes its per-replica
+        // hosts. Tests that observe TerminalHosts/host annotations have to publish it manually
+        // because the test harness doesn't go through DistributedApplication.RunApplicationAsync.
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+    }
+
+    private static async Task<(DistributedApplication App, DistributedApplicationModel Model)> BuildAndPublishBeforeStartAsync(IDistributedApplicationTestingBuilder builder)
+    {
+        var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+        return (app, model);
     }
 }

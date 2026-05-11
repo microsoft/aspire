@@ -216,7 +216,8 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
             hosts[i] = new TerminalHostResource($"myapp-terminalhost-{i}", target, layout);
         }
 
-        var annotation = new TerminalAnnotation(hosts, new TerminalOptions { Columns = 132, Rows = 40 });
+        var annotation = new TerminalAnnotation(new TerminalOptions { Columns = 132, Rows = 40 });
+        annotation.Initialize(baseDir, hosts);
         target.Annotations.Add(annotation);
 
         var resources = new ResourceCollection { target };
