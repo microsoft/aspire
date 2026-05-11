@@ -86,7 +86,8 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        if (TryGetLocalAspirePackageSource(out var localPackageSource))
+        var localPackageSource = GetLocalAspirePackageSource();
+        if (localPackageSource is not null)
         {
             return GetIntegrationPackagesFromLocalPackageSource(localPackageSource, cancellationToken);
         }
@@ -131,7 +132,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return filteredPackages;
     }
 
-    private bool TryGetLocalAspirePackageSource(out DirectoryInfo packageSource)
+    private DirectoryInfo? GetLocalAspirePackageSource()
     {
         if (Type is PackageChannelType.Explicit && Mappings is not null)
         {
@@ -139,21 +140,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             {
                 if (IsScopedAspireMapping(mapping) && Directory.Exists(mapping.Source))
                 {
-                    packageSource = new DirectoryInfo(mapping.Source);
-                    return true;
+                    return new DirectoryInfo(mapping.Source);
                 }
             }
         }
 
-        packageSource = null!;
-        return false;
+        return null;
     }
 
     private IEnumerable<NuGetPackage> GetIntegrationPackagesFromLocalPackageSource(DirectoryInfo packageSource, CancellationToken cancellationToken)
     {
-        // Local hive channels are flat folders of nupkg files plus nuget.org for non-Aspire packages.
-        // Searching them through NuGet blends the local folder with nuget.org and can produce phantom
-        // Aspire.Hosting.* rows that cannot restore after package source mapping routes Aspire* locally.
+        // Enumerate local package files directly to avoid phantom remote entries when package source
+        // mappings route Aspire packages locally.
         var packageMetadata = packageSource
             .EnumerateFiles("*.nupkg", SearchOption.TopDirectoryOnly)
             .Select(file =>
