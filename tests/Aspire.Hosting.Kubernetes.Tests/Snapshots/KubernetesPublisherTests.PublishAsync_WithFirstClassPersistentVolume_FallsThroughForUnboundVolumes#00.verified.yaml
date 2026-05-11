@@ -22,7 +22,7 @@ spec:
             - name: "data"
               mountPath: "/var/lib/data"
             - name: "scratch"
-              mountPath: "/tmp/scratch"
+              mountPath: "/srv/scratch"
           imagePullPolicy: "IfNotPresent"
       volumes:
         - name: "data"

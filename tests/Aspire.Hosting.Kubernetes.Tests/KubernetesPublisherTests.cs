@@ -969,7 +969,7 @@ public class KubernetesPublisherTests()
 
         builder.AddContainer("service", "nginx")
             .WithVolume("data", "/var/lib/data")
-            .WithVolume("scratch", "/tmp/scratch")
+            .WithVolume("scratch", "/srv/scratch")
             .WithPersistentVolume(data);
 
         var app = builder.Build();
