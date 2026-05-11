@@ -9,7 +9,7 @@ internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
-        var (mode, passthrough, options) = ParseArgs(args);
+        var (passthrough, options) = ParseArgs(args);
 
         try
         {
@@ -21,25 +21,12 @@ internal static class Program
             return 1;
         }
 
-        switch (mode)
-        {
-            case Mode.Inspect:
-                await Inspector.RunAsync(options).ConfigureAwait(false);
-                return 0;
-
-            case Mode.Benchmark:
-                BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(passthrough);
-                return 0;
-
-            default:
-                Console.Error.WriteLine($"Unknown mode: {mode}");
-                return 1;
-        }
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(passthrough);
+        return 0;
     }
 
-    private static (Mode Mode, string[] Passthrough, RunOptions Options) ParseArgs(string[] args)
+    private static (string[] Passthrough, RunOptions Options) ParseArgs(string[] args)
     {
-        var mode = Mode.Benchmark;
         var refresh = false;
         string? input = null;
         var remaining = new List<string>();
@@ -48,10 +35,6 @@ internal static class Program
         {
             switch (args[i])
             {
-                case "--inspect":
-                    mode = Mode.Inspect;
-                    break;
-
                 case "--refresh":
                     refresh = true;
                     break;
@@ -71,13 +54,7 @@ internal static class Program
             }
         }
 
-        return (mode, remaining.ToArray(), new RunOptions(input, refresh));
-    }
-
-    private enum Mode
-    {
-        Benchmark,
-        Inspect,
+        return (remaining.ToArray(), new RunOptions(input, refresh));
     }
 }
 

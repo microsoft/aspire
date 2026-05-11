@@ -25,12 +25,6 @@ after `--`:
 dotnet run -c Release --project benchmarks/Aspire.Cli.Benchmarks -- --filter '*ParseAsync*'
 ```
 
-### Inspect structural metrics (no BDN, fast)
-
-```bash
-dotnet run -c Release --project benchmarks/Aspire.Cli.Benchmarks -- --inspect
-```
-
 ### Refresh corpus
 
 ```bash
