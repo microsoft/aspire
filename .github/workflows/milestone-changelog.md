@@ -142,7 +142,7 @@ jobs:
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
+            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-milestone-prs.json"
 
@@ -540,7 +540,7 @@ with `jq` to see their exact shape.
 | File | Contents |
 |------|----------|
 | `all-milestone-prs.json` | All merged PRs in the `${MILESTONE}` milestone, sorted by `mergedAt` ascending |
-| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs, enriched with `authorAssociation`, `files`, and `comments` (not available from `gh pr list`) |
+| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs, enriched with `authorAssociation`, `mergedBy`, `files`, and `comments` (not available from `gh pr list`) |
 | `all-docs-prs.json` | All merged PRs in `${DOCS_REPO}` since `${MILESTONE_START}`, sorted by `mergedAt` ascending |
 | `batch-docs-prs.json` | Oldest ${BATCH_SIZE} unprocessed docs PRs (same base fields as product PRs plus `files`, but **without** `authorAssociation` or `comments`) |
 
@@ -579,9 +579,9 @@ full schema of each entry.
    processing it, the backlog will be fully caught up.
 
 For each remaining (non-bot) PR, collect all data from the batch: number, title,
-author, `authorAssociation`, body, labels, changed file paths (`files` array), and
-total changed lines (additions + deletions). No additional API calls are needed —
-the batch data contains everything required.
+author, `mergedBy`, `authorAssociation`, body, labels, changed file paths (`files`
+array), and total changed lines (additions + deletions). No additional API calls
+are needed — the batch data contains everything required.
 
 ### 3a. Processing backport PRs
 
@@ -720,6 +720,23 @@ Then determine whether either of these optional flags applies:
 | **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
 | **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
+### Owner
+
+Every changelog entry has an **owner** — the team member accountable for the
+change. Determine the owner as follows:
+
+1. **Default:** The PR author (`author.login` from the batch data).
+2. **Community contribution:** If the PR author is a community contributor
+   (i.e., `authorAssociation` is not `MEMBER` or `OWNER`), the owner is the
+   person who merged the PR (`mergedBy.login` from the batch data).
+3. **Backport PRs:** Use the original PR's author (per Step 3a item 5). If
+   that author is a community contributor, use the backport PR's `mergedBy`.
+4. **Grouped entries (Step 5d):** When multiple PRs are grouped into one
+   entry, the owner is determined by the **first** (oldest) PR in the group.
+
+Set the `owner` field in the change file (Step 6a) to the owner's GitHub
+username (without `@` prefix).
+
 The `authorAssociation` field is pre-populated in the batch data by the fetch-data
 job. Use it directly — no additional API calls are needed. For **backport PRs**,
 the original PR's author is not in the batch; query:
@@ -738,6 +755,7 @@ indented line below the Changes line:
 
 ```
   Changes: [#1234](https://github.com/${REPO}/pull/1234)  
+  Owner: [@jamesnk](https://github.com/jamesnk)  
   ⚠️ **Breaking change**  
   📝 **Documentation required**  
   🌍 **Community contribution** by [@username](https://github.com/username)  
@@ -755,9 +773,9 @@ non-empty after Step 5f), add a `Docs:` line linking to the docs PRs:
 ```
   Docs: [${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)  
 ```
-When multiple docs PRs are linked, separate them with commas. The `Docs:` line
-appears immediately after the `Changes:` line. Keep the
-`📝 **Documentation required**` flag line as well.
+When multiple docs PRs are linked, separate them with commas. The line order
+within each entry is: `Changes:`, `Owner:`, `Docs:` (if any), then flag lines.
+Keep the `📝 **Documentation required**` flag line as well.
 
 ### 5c. Write name and description
 
@@ -888,6 +906,7 @@ Schema:
   "firstMergedAt": "2026-04-20T14:15:00Z",
   "lastMergedAt": "2026-04-22T18:30:00Z",
   "name": "New CLI command",
+  "owner": "jamesnk",
   "prs": [1240]
 }
 ```
@@ -907,6 +926,7 @@ Field definitions:
 - **firstMergedAt**: ISO 8601 UTC timestamp of the earliest PR's merge date
 - **lastMergedAt**: ISO 8601 UTC timestamp of the most recent PR's merge date
 - **name**: Short, user-friendly name for the change
+- **owner**: GitHub username (without `@`) of the team member accountable for this change (see Step 5b Owner section)
 - **prs**: Array of PR numbers associated with this entry
 
 After writing each file, **normalize formatting** by running:
@@ -1080,12 +1100,12 @@ Under each area heading, add a one-line **summary** counting the entries per cha
 type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
 for counts of 1 (`1 new feature`, `1 bug fix`, `1 improvement`).
 
-**Every line** within a changelog entry (name, description, Changes, Docs, and each flag
-line) must end with **two trailing spaces** (`  `) to produce a markdown line break.
-This includes the last line of each entry, even when there are no flags.
+**Every line** within a changelog entry (name, description, Changes, Owner, Docs, and
+each flag line) must end with **two trailing spaces** (`  `) to produce a markdown
+line break. This includes the last line of each entry, even when there are no flags.
 
-When a changelog entry has a non-empty `docsPrs` array, add a **Docs:** line immediately
-after the `Changes:` line. Each docs PR is linked using the format
+When a changelog entry has a non-empty `docsPrs` array, add a **Docs:** line after
+the `Owner:` line. Each docs PR is linked using the format
 `[${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)`. Separate multiple
 docs PRs with commas. The `📝 **Documentation required**` flag line is kept
 regardless of whether docs PRs are linked.
@@ -1116,12 +1136,14 @@ Use this exact format:
 1. **🧭 Feature name**  
   Brief user-facing description  
   Changes: [#1234](https://github.com/${REPO}/pull/1234), [#1235](https://github.com/${REPO}/pull/1235)  
+  Owner: [@jamesnk](https://github.com/jamesnk)  
   ⚠️ **Breaking change**  
   📝 **Documentation required**  
 
 1. **🚀 Another feature**  
   What this means for users  
   Changes: [#1236](https://github.com/${REPO}/pull/1236)  
+  Owner: [@davidfowl](https://github.com/davidfowl)  
   Docs: [${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)  
   📝 **Documentation required**  
 
@@ -1130,6 +1152,7 @@ Use this exact format:
 1. **⚡ Performance boost**  
   Faster startup for container resources  
   Changes: [#1238](https://github.com/${REPO}/pull/1238)  
+  Owner: [@eerhardt](https://github.com/eerhardt)  
 
 ## 💻 CLI
 
@@ -1140,12 +1163,14 @@ Use this exact format:
 1. **🆕 New CLI command**  
   Added a new command for scaffolding resources  
   Changes: [#1240](https://github.com/${REPO}/pull/1240)  
+  Owner: [@jamesnk](https://github.com/jamesnk)  
 
 #### Bug fixes
 
 1. **🐛 Fix crash on init**  
   Resolved a crash when running init in an empty directory  
   Changes: [#1239](https://github.com/${REPO}/pull/1239)  
+  Owner: [@maddymontaquila](https://github.com/maddymontaquila)  
   ⚠️ **Breaking change**  
   🌍 **Community contribution** by [@contributor](https://github.com/contributor)  
 
@@ -1158,6 +1183,7 @@ Use this exact format:
 1. **🎨 Dashboard improvement**  
   Description of the change  
   Changes: [#1237](https://github.com/${REPO}/pull/1237)  
+  Owner: [@AdrianJSClique](https://github.com/AdrianJSClique)  
 
 ---
 
