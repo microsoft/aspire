@@ -503,11 +503,11 @@ to determine what work is available.
 
 - If `batch-prs.json` is **non-empty**, proceed through all steps (1–8).
 - If `batch-prs.json` is **empty** but `batch-docs-prs.json` is non-empty,
-  **skip Steps 3 and 5a–5e** (no product PRs to process) but continue through
-  Steps 1, 2, 4, 5f, 6, 7, and 8 to process docs PRs, apply editorial
+  **skip Steps 3 and 5a–5f** (no product PRs to process) but continue through
+  Steps 1, 2, 4, 5g, 6, 7, and 8 to process docs PRs, apply editorial
   feedback, and update the wiki.
 - If **both** batches are empty, the `fetch-data` job detected updated feedback.
-  **Skip Steps 3, 5a–5e, and 5f** but continue through Steps 1, 2, 4, 6, 7,
+  **Skip Steps 3, 5a–5f, and 5g** but continue through Steps 1, 2, 4, 6, 7,
   and 8 to apply editorial feedback, refresh the “What’s New” section, and
   update the footer counts.
 
@@ -650,7 +650,7 @@ body, labels, and file paths only.
 
 Use the diff to write a more accurate changelog name and description. If the diff
 reveals the change is not notable (e.g., pure refactoring despite a misleading title),
-apply the filtering rules from Step 5e.
+apply the filtering rules from Step 5f.
 
 ## Step 4: Process editorial feedback from comments
 
@@ -722,7 +722,7 @@ Then determine whether either of these optional flags applies:
 | **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
 | **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
-### Owner
+### 5c. Determine owner
 
 Every changelog entry has an **owner** — the team member accountable for the
 change. Determine the owner as follows:
@@ -733,7 +733,7 @@ change. Determine the owner as follows:
    person who merged the PR (`mergedBy.login` from the batch data).
 3. **Backport PRs:** Use the original PR's author (per Step 3a item 5). If
    that author is a community contributor, use the backport PR's `mergedBy`.
-4. **Grouped entries (Step 5d):** When multiple PRs are grouped into one
+4. **Grouped entries (Step 5e):** When multiple PRs are grouped into one
    entry, the owner is determined by the **first** (oldest) PR in the group.
 
 Set the `owner` field in the change file (Step 6a) to the owner's GitHub
@@ -771,7 +771,7 @@ This gives visibility and recognition to external contributors.
 Omit flag lines entirely when a flag does not apply.
 
 When documentation PRs have been matched to an entry (the `docsPrs` array is
-non-empty after Step 5f), add a `Docs:` line linking to the docs PRs:
+non-empty after Step 5g), add a `Docs:` line linking to the docs PRs:
 ```
   Docs: [${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)  
 ```
@@ -779,7 +779,7 @@ When multiple docs PRs are linked, separate them with commas. The line order
 within each entry is: `Owner:`, `Changes:`, `Docs:` (if any), then flag lines.
 Keep the `📝 **Documentation required**` flag line as well.
 
-### 5c. Write name and description
+### 5d. Write name and description
 
 - **Emoji**: Choose a single emoji that represents the change. Pick something specific
   and evocative — avoid reusing the area emoji. Examples: 🧭 for navigation, 🚀 for
@@ -789,7 +789,7 @@ Keep the `📝 **Documentation required**` flag line as well.
 - **Description**: One to two sentences describing the change from an end-user
   perspective. Focus on *what* changed and *why* it matters.
 
-### 5d. Group related PRs
+### 5e. Group related PRs
 
 If multiple PRs **within the current batch** represent the same logical change
 (e.g., a feature spread across several PRs), combine them into **one** changelog
@@ -804,7 +804,7 @@ rather than creating a new one:
   (e.g., new capabilities, platform support, configuration options).
 - Keep the description concise — add detail, don't repeat what's already there.
 
-### 5e. Filtering rules
+### 5f. Filtering rules
 
 - **Include**: new features, notable bug fixes, breaking changes, performance
   improvements, new integrations, new resource types, and notable engineering or
@@ -816,7 +816,7 @@ rather than creating a new one:
 - When in doubt about whether a change is notable, include it — it can always be
   removed via a comment later.
 
-### 5f. Match documentation PRs
+### 5g. Match documentation PRs
 
 Read `/tmp/gh-aw/pr-data/batch-docs-prs.json`. This is a JSON array of up to
 ${BATCH_SIZE} unprocessed docs PRs from `${DOCS_REPO}`, sorted by `mergedAt`
@@ -889,7 +889,7 @@ Where:
 Create the `changes/` directory (via `mkdir -p`) if it does not exist.
 
 If a changelog entry was updated (e.g., a new PR was grouped with an existing entry
-per Step 5d), overwrite the existing change file with the updated content.
+per Step 5e), overwrite the existing change file with the updated content.
 
 Schema:
 
@@ -1252,7 +1252,7 @@ if it exists) and check that:
    body must still be present in the new body (unless editorial feedback explicitly
    requested removal).
 2. **No existing entries were modified** unless the modification adds a PR number from
-   the current batch to that entry's Changes line (per Step 5d grouping rules), or
+   the current batch to that entry's Changes line (per Step 5e grouping rules), or
    editorial feedback from Step 4 explicitly requested the change (e.g., rename,
    merge, area override).
 3. **All new entries reference only PR numbers from the current batch** — any PR number
