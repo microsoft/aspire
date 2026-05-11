@@ -39,8 +39,9 @@ env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-03-01"
-  MILESTONE: "13.3"
+  MILESTONE_START: "2026-05-08"
+  MILESTONE: "13.4"
+  PREVIOUS_MILESTONE: "13.3"
   BATCH_SIZE: "20"
 
 on:
@@ -136,7 +137,7 @@ jobs:
               echo "::warning::Memory branch clone failed: $(cat "$CLONE_ERR")"
             fi
           fi
-          rm -rf "$MEMORY_TMP" "$CLONE_ERR"
+          rm -f "$CLONE_ERR"
 
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
@@ -162,6 +163,28 @@ jobs:
           PROCESSED_COUNT=$(echo "$PROCESSED_NUMBERS" | jq length)
           echo "Already processed: $PROCESSED_COUNT"
           echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
+
+          # Extract backport entries from previous milestone, filtered to the
+          # batch window. Reads directly from the memory branch clone (still
+          # alive in $MEMORY_TMP) so both backport==true and date filtering
+          # happen in a single jq pass.
+          PREVIOUS_MILESTONE="${{ env.PREVIOUS_MILESTONE }}"
+          if [ "$BATCH_COUNT" -gt 0 ] && [ -n "$PREVIOUS_MILESTONE" ]; then
+            PREV_CHANGES="$MEMORY_TMP/repo/$PREVIOUS_MILESTONE/changes"
+            if [ -d "$PREV_CHANGES" ] && ls "$PREV_CHANGES"/*.json >/dev/null 2>&1; then
+              OLDEST_MERGED=$(jq -r '.[0].mergedAt' "$DATA_DIR/batch-prs.json")
+              cat "$PREV_CHANGES"/*.json \
+                | jq -s --arg cutoff "$OLDEST_MERGED" \
+                  '[.[] | select(.backport == true and .firstMergedAt >= $cutoff)]' \
+                > "$DATA_DIR/backport-prs.json" 2>/dev/null \
+                || echo '[]' > "$DATA_DIR/backport-prs.json"
+              echo "Backport entries from $PREVIOUS_MILESTONE (filtered to batch window): $(jq length "$DATA_DIR/backport-prs.json")"
+            fi
+          fi
+          rm -rf "$MEMORY_TMP"
+          if [ ! -f "$DATA_DIR/backport-prs.json" ]; then
+            echo '[]' > "$DATA_DIR/backport-prs.json"
+          fi
 
           # 2a. Enrich batch PRs with author_association, comments, and files.
           #     Two API calls per PR:
@@ -196,7 +219,7 @@ jobs:
           MILESTONE_START="${{ env.MILESTONE_START }}"
           gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
             --search "merged:>=${MILESTONE_START}" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles \
+            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-docs-prs.json"
 
@@ -433,8 +456,8 @@ Generate and maintain a changelog for the **${PRODUCT} ${MILESTONE} milestone** 
 Each run appends newly merged changes to the existing content while preserving
 previous entries. A companion feedback issue collects editorial comments.
 
-> **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-03-01`**, **`13.3`**, and **`20`**). All file names,
+> **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, and `${BATCH_SIZE}` refer to values set in the workflow's
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-05-08`**, **`13.4`**, **`13.3`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools
@@ -473,6 +496,8 @@ use one of these patterns:
 | Docs milestone start | `${MILESTONE_START}` (fetch docs PRs merged on or after this date) |
 | Docs batch file | `/tmp/gh-aw/pr-data/batch-docs-prs.json` (unprocessed docs PRs) |
 | Docs PR tracker directory | `prs-docs/` (under memory directories; one JSON file per docs PR) |
+| Previous milestone | `${PREVIOUS_MILESTONE}` (optional; used to filter PRs already shipped via backport) |
+| Backport entries file | `/tmp/gh-aw/pr-data/backport-prs.json` (change entries with `backport: true` from previous milestone) |
 
 ## Step 1: Load existing changelog and feedback
 
@@ -513,45 +538,24 @@ to determine what work is available.
    on this issue will be read in Step 4 when processing editorial feedback. If the file does not exist, there is no
    feedback to process.
 
-## Step 2: Review the pre-computed batch
+## Step 2: Review the pre-computed data
 
-The pre-computation step (in the frontmatter) has already:
-- Fetched **all** merged PRs in the ${MILESTONE} milestone, sorted by merge date
-  ascending (oldest first) → `/tmp/gh-aw/pr-data/all-milestone-prs.json`
-- Compared each PR against the individual PR tracker files in `prs/` on the
-  memory branch to identify which PRs have not yet been processed (no tracker
-  file present)
-- Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
+All paths are under `/tmp/gh-aw/pr-data/`. Inspect the JSON files directly
+with `jq` to see their exact shape.
 
-Each entry in `batch-prs.json` contains: `number`, `title`, `body`, `author` (object
-with `login` and `is_bot`), `authorAssociation` (string, e.g. `"MEMBER"`, `"OWNER"`,
-`"CONTRIBUTOR"`, `"NONE"`), `mergedAt`, `labels` (array of objects with `name`),
-`additions`, `deletions`, `changedFiles`, `files` (array of objects with
-`path`, `additions`, `deletions`, `changeType`) listing the changed file paths,
-and `comments` (array of objects with `author`, `body`, `createdAt`) containing
-the PR's issue comments. The `files` and `comments` fields are enriched from
-the REST API during the pre-computation step (not from `gh pr list`).
-
-The pre-computation step has also fetched merged PRs from `${DOCS_REPO}` that
-were merged on or after `${MILESTONE_START}`:
-- All matching docs PRs → `/tmp/gh-aw/pr-data/all-docs-prs.json`
-- Oldest ${BATCH_SIZE} unprocessed docs PRs → `/tmp/gh-aw/pr-data/batch-docs-prs.json`
-
-Each entry in `batch-docs-prs.json` has the same schema as `batch-prs.json`,
-except without the `authorAssociation`, `comments`, or `files` fields (which
-are only enriched for product PRs).
+| File | Contents |
+|------|----------|
+| `all-milestone-prs.json` | All merged PRs in the `${MILESTONE}` milestone, sorted by `mergedAt` ascending |
+| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs, enriched with `authorAssociation`, `files`, and `comments` (not available from `gh pr list`) |
+| `all-docs-prs.json` | All merged PRs in `${DOCS_REPO}` since `${MILESTONE_START}`, sorted by `mergedAt` ascending |
+| `batch-docs-prs.json` | Oldest ${BATCH_SIZE} unprocessed docs PRs (same base fields as product PRs plus `files`, but **without** `authorAssociation` or `comments`) |
+| `backport-prs.json` | Change entries with `backport: true` from the `${PREVIOUS_MILESTONE}` milestone (same schema as Step 6a), filtered to entries whose `firstMergedAt` is on or after the oldest batch PR's `mergedAt`. Empty array if none. Used in Step 3 item 2 to exclude PRs already shipped via backport. |
 
 ## Step 3: Process the batch PRs
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
-unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
-`number`, `title`, `body`, `author` (object with `login` and `is_bot`), `mergedAt`,
-`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`,
-`files` (array of objects with `path`, `additions`, `deletions`, `changeType`),
-and `comments` (array of objects with `author`, `body`, `createdAt`).
-The batch is also enriched with `authorAssociation` (fetched via REST API in the
-pre-computation step). The `files`, `comments`, and `authorAssociation` fields
-are all fetched per-PR during enrichment, not from `gh pr list`.
+unprocessed PRs, sorted by `mergedAt` ascending (oldest first). See Step 2 for the
+full schema of each entry.
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
@@ -563,7 +567,17 @@ are all fetched per-PR during enrichment, not from `gh pr list`.
      targeting a release branch.
    Record each excluded bot PR as an individual tracker file in `prs/` with
    `status: "excluded"` in Step 6b so they are not re-processed on future runs.
-2. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
+2. **Exclude PRs already shipped via backport** — if
+   `/tmp/gh-aw/pr-data/backport-prs.json` is non-empty, check each batch PR
+   against the backport entries from the previous milestone. A batch PR should
+   be excluded if it is the **original source** of a backport entry — i.e., its
+   title or body closely matches a backport entry's `name` or `description`,
+   or a backport entry's `description`/`name` explicitly references the PR
+   number. When excluding, set `status: "excluded"` in the PR tracker with a
+   comment like `"Already shipped via backport in milestone <previous>"`. Do
+   **not** exclude PRs that merely touch the same area — the match must be
+   specific to the same logical change.
+3. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
    processing it, the backlog will be fully caught up.
 
 For each remaining (non-bot) PR, collect all data from the batch: number, title,
@@ -784,7 +798,8 @@ rather than creating a new one:
 
 Read `/tmp/gh-aw/pr-data/batch-docs-prs.json`. This is a JSON array of up to
 ${BATCH_SIZE} unprocessed docs PRs from `${DOCS_REPO}`, sorted by `mergedAt`
-ascending. Each entry has the same schema as the product PR batch.
+ascending. Each entry has the same fields as product PRs except
+`authorAssociation` and `comments` (which are only enriched for product PRs).
 
 Unlike product PRs (Step 3), **do not exclude bot-authored docs PRs** —
 automated docs PRs from bots often contain meaningful documentation updates.
@@ -795,8 +810,8 @@ filter but documents an unrelated product or version), record it as
 `"excluded"` in the docs PR tracker (Step 6d) with a comment explaining why.
 
 For each remaining docs PR, determine whether it documents a changelog entry.
-The batch data already contains each docs PR's `title`, `body`, and `files`
-(changed file paths) — no additional API calls are needed. Match by:
+The batch data already contains each docs PR's `title`, `body`, `files`
+(changed file paths), and `labels` — no additional API calls are needed. Match by:
 
 1. **Explicit product PR reference** — the docs PR body or title mentions a
    product PR number (e.g., "Documents #1234", links to
