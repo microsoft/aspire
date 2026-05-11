@@ -116,13 +116,15 @@ await hostedAgent.publishAsHostedAgent({
         await configuration.description.set('Validation hosted agent');
         await configuration.cpu.set(1);
         await configuration.memory.set(2);
-        await configuration.metadata.set('scenario', 'validation');
-        await configuration.environmentVariables.set('VALIDATION_MODE', 'true');
+        const metadata = await configuration.metadata();
+        await metadata.set('scenario', 'validation');
+        const environmentVariables = await configuration.environmentVariables();
+        await environmentVariables.set('VALIDATION_MODE', 'true');
     }
 });
 
 const api = await builder.addContainer('api', 'nginx');
-await foundry.withRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
+await foundry.withContainerRegistryRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
 
 const _deploymentName = await chat.deploymentName.get();
 const _modelName = await chat.modelName.get();

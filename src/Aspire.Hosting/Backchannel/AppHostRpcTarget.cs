@@ -3,7 +3,6 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Exec;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -161,16 +160,6 @@ internal class AppHostRpcTarget(
         }
 
         return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        var execResourceManager = serviceProvider.GetRequiredService<ExecResourceManager>();
-        var logsStream = execResourceManager.StreamExecResourceLogs(cancellationToken);
-        await foreach (var commandOutput in logsStream.ConfigureAwait(false))
-        {
-            yield return commandOutput;
-        }
     }
 
 #pragma warning disable CA1822

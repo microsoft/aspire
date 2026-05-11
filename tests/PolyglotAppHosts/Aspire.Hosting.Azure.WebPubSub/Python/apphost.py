@@ -13,10 +13,10 @@ with create_builder() as builder:
     # addEventHandler — adds an event handler to a hub
     hub.add_event_handler("resource")
     hub.add_event_handler("resource")
-    # withRoleAssignments — assigns roles on a container resource
+    # with_web_pub_sub_role_assignments — assigns roles on a container resource
     container = builder.add_container("resource", "image")
     container.with_web_pub_sub_role_assignments()
-    # withRoleAssignments — also available directly on AzureWebPubSubResource builder
+    # with_web_pub_sub_role_assignments — also available directly on AzureWebPubSubResource builder
     webpubsub.with_web_pub_sub_role_assignments()
     # withReference — generic, works via IResourceWithConnectionString
     container.with_reference()

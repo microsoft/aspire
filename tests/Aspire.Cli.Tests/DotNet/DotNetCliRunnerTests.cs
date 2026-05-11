@@ -1287,6 +1287,91 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetAppHostInformationAsync_UsesAspireHostingAppHostPackageVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, invocationOptions) =>
+            {
+                Assert.Contains("-getItem:PackageReference,AspireProjectOrPackageReference,PackageVersion", args);
+                invocationOptions.StandardOutputCallback?.Invoke("""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true"
+                      },
+                      "Items": {
+                        "PackageReference": [
+                          {
+                            "Identity": "Aspire.Hosting.AppHost",
+                            "Version": "13.0.0"
+                          }
+                        ]
+                      }
+                    }
+                    """);
+            },
+            0);
+
+        var result = await runner.GetAppHostInformationAsync(projectFile, new ProcessInvocationOptions(), CancellationToken.None);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(result.IsAspireHost);
+        Assert.Equal("13.0.0", result.AspireHostingVersion);
+    }
+
+    [Fact]
+    public async Task GetAppHostInformationAsync_UsesAspireHostingAppHostCentralPackageVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (_, _, _, invocationOptions) =>
+            {
+                invocationOptions.StandardOutputCallback?.Invoke("""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true"
+                      },
+                      "Items": {
+                        "PackageVersion": [
+                          {
+                            "Identity": "Aspire.Hosting.AppHost",
+                            "Version": "13.0.1"
+                          }
+                        ]
+                      }
+                    }
+                    """);
+            },
+            0);
+
+        var result = await runner.GetAppHostInformationAsync(projectFile, new ProcessInvocationOptions(), CancellationToken.None);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(result.IsAspireHost);
+        Assert.Equal("13.0.1", result.AspireHostingVersion);
+    }
+
+    [Fact]
     public async Task GetProjectItemsAndPropertiesAsync_UsesMsBuild_ForCsProjFile()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1302,11 +1387,14 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
             executionContext,
-            (args, _, _, invocationOptions) =>
+            (args, env, _, invocationOptions) =>
             {
                 // Verify that "msbuild" command is used for .csproj files
                 Assert.Contains("msbuild", args);
                 Assert.DoesNotContain("build", args);
+                Assert.NotNull(env);
+                Assert.Equal("1", env["DOTNET_CLI_TELEMETRY_OPTOUT"]);
+                Assert.Equal("1", env["DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE"]);
 
                 // Provide valid JSON output
                 invocationOptions.StandardOutputCallback?.Invoke("{\"Properties\":{\"MSBuildVersion\":\"17.0.0\",\"AspireHostingSDKVersion\":\"9.0.0\"},\"Items\":{\"PackageReference\":[]}}");

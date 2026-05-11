@@ -18,8 +18,8 @@ namespace Aspire.Hosting.Kubernetes;
 [AspireExport(ExposeMethods = true)]
 public sealed partial class HelmChartOptions
 {
-    private const int KubernetesNamespaceMaxLength = 63;
-    private const int HelmReleaseNameMaxLength = 53;
+    internal const int KubernetesNamespaceMaxLength = 63;
+    internal const int HelmReleaseNameMaxLength = 53;
     private const int HelmChartNameMaxLength = 250;
     private const int HelmChartDescriptionMaxLength = 1024;
 
@@ -39,7 +39,7 @@ public sealed partial class HelmChartOptions
     public HelmChartOptions WithNamespace(string @namespace)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
-        ValidateDnsLabel(@namespace, "Kubernetes namespace", KubernetesNamespaceMaxLength, nameof(@namespace));
+        ValidateNamespace(@namespace, nameof(@namespace));
 
         var expression = ReferenceExpression.Create($"{@namespace}");
         EnvironmentBuilder.WithAnnotation(new KubernetesNamespaceAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
@@ -83,7 +83,7 @@ public sealed partial class HelmChartOptions
     public HelmChartOptions WithReleaseName(string releaseName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseName);
-        ValidateDnsLabel(releaseName, "Helm release name", HelmReleaseNameMaxLength, nameof(releaseName));
+        ValidateReleaseName(releaseName, nameof(releaseName));
 
         var expression = ReferenceExpression.Create($"{releaseName}");
         EnvironmentBuilder.WithAnnotation(new HelmReleaseNameAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
@@ -255,7 +255,7 @@ public sealed partial class HelmChartOptions
         };
     }
 
-    private static void ValidateDnsLabel(string value, string target, int maxLength, string paramName)
+    internal static void ValidateDnsLabel(string value, string target, int maxLength, string paramName)
     {
         if (value.Length > maxLength)
         {
@@ -267,6 +267,12 @@ public sealed partial class HelmChartOptions
             throw new ArgumentException($"{target} '{value}' is invalid. Use lowercase letters, numbers, and hyphens, and start and end with an alphanumeric character.", paramName);
         }
     }
+
+    internal static void ValidateNamespace(string @namespace, string paramName)
+        => ValidateDnsLabel(@namespace, "Kubernetes namespace", KubernetesNamespaceMaxLength, paramName);
+
+    internal static void ValidateReleaseName(string releaseName, string paramName)
+        => ValidateDnsLabel(releaseName, "Helm release name", HelmReleaseNameMaxLength, paramName);
 
     // Matches Helm's own chart-version validation, which uses the lenient SemVer parser
     // (Masterminds/semver/v3 NewVersion) — see helm/helm pkg/chart/v2/metadata.go isValidSemver.

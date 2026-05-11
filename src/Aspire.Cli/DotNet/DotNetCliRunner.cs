@@ -437,7 +437,7 @@ internal sealed class DotNetCliRunner(
         // Get both properties and PackageReference items to determine Aspire.Hosting version
         var (exitCode, jsonDocument) = await GetProjectItemsAndPropertiesAsync(
             projectFile,
-            ["PackageReference", "AspireProjectOrPackageReference"],
+            ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
             ["IsAspireHost", "AspireHostingSDKVersion"],
             options,
             cancellationToken);
@@ -466,31 +466,22 @@ internal sealed class DotNetCliRunner(
                     // Check PackageReference items first
                     if (items.TryGetProperty("PackageReference", out var packageReferences))
                     {
-                        foreach (var packageRef in packageReferences.EnumerateArray())
-                        {
-                            if (packageRef.TryGetProperty("Identity", out var identity) &&
-                                identity.GetString() == "Aspire.Hosting" &&
-                                packageRef.TryGetProperty("Version", out var version))
-                            {
-                                aspireHostingVersion = version.GetString();
-                                break;
-                            }
-                        }
+                        aspireHostingVersion = GetPackageVersion(packageReferences, "Aspire.Hosting") ??
+                            GetPackageVersion(packageReferences, "Aspire.Hosting.AppHost");
                     }
 
                     // Fallback to AspireProjectOrPackageReference items if not found
                     if (aspireHostingVersion == null && items.TryGetProperty("AspireProjectOrPackageReference", out var aspireProjectOrPackageReferences))
                     {
-                        foreach (var aspireRef in aspireProjectOrPackageReferences.EnumerateArray())
-                        {
-                            if (aspireRef.TryGetProperty("Identity", out var identity) &&
-                                identity.GetString() == "Aspire.Hosting" &&
-                                aspireRef.TryGetProperty("Version", out var version))
-                            {
-                                aspireHostingVersion = version.GetString();
-                                break;
-                            }
-                        }
+                        aspireHostingVersion = GetPackageVersion(aspireProjectOrPackageReferences, "Aspire.Hosting") ??
+                            GetPackageVersion(aspireProjectOrPackageReferences, "Aspire.Hosting.AppHost");
+                    }
+
+                    // Fallback to PackageVersion items for Central Package Management if not found
+                    if (aspireHostingVersion == null && items.TryGetProperty("PackageVersion", out var packageVersions))
+                    {
+                        aspireHostingVersion = GetPackageVersion(packageVersions, "Aspire.Hosting") ??
+                            GetPackageVersion(packageVersions, "Aspire.Hosting.AppHost");
                     }
                 }
 
@@ -511,6 +502,21 @@ internal sealed class DotNetCliRunner(
         {
             return (exitCode, false, null);
         }
+    }
+
+    private static string? GetPackageVersion(JsonElement items, string packageId)
+    {
+        foreach (var item in items.EnumerateArray())
+        {
+            if (item.TryGetProperty("Identity", out var identity) &&
+                identity.GetString() == packageId &&
+                item.TryGetProperty("Version", out var version))
+            {
+                return version.GetString();
+            }
+        }
+
+        return null;
     }
 
     public async Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -541,6 +547,16 @@ internal sealed class DotNetCliRunner(
         cliArgsList.Add(projectFile.FullName);
 
         string[] cliArgs = [.. cliArgsList];
+        // These probes parse dotnet/msbuild stdout as machine-readable JSON. Disable
+        // telemetry and workload-update notifications for every property/item probe so
+        // unrelated first-run or workload messages cannot corrupt the JSON stream. This
+        // is intentionally broader than `aspire ls`: the same probe path is used by
+        // AppHost validation in commands such as `run`.
+        var env = new Dictionary<string, string>
+        {
+            [KnownConfigNames.DotnetCliTelemetryOptOut] = "1",
+            [KnownConfigNames.DotnetCliWorkloadUpdateNotifyDisable] = "1"
+        };
 
         var existingStandardOutputCallback = options.StandardOutputCallback;
         var existingStandardErrorCallback = options.StandardErrorCallback;
@@ -564,7 +580,7 @@ internal sealed class DotNetCliRunner(
 
             var exitCode = await ExecuteAsync(
                 args: cliArgs,
-                env: null,
+                env: env,
                 projectFile: projectFile,
                 workingDirectory: projectFile.Directory!,
                 backchannelCompletionSource: null,

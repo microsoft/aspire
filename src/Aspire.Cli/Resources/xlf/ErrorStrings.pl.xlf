@@ -77,6 +77,11 @@
         <target state="translated">Nie można przeanalizować wersji pakietu Aspire.Hosting.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DotNetSdkUnavailableAppHostDiscoveryWarning">
+        <source>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</source>
+        <target state="new">Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ErrorDeletingConfiguration">
         <source>Error deleting configuration: {0}</source>
         <target state="translated">Błąd podczas usuwania konfiguracji: {0}</target>

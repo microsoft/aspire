@@ -34,6 +34,11 @@ For more information, see https://aka.ms/aspire/container-runtime-unhealthy</sou
         <target state="translated">{0}(이)가 종료 코드 {1}(으)로 예기치 않게 종료되었습니다.</target>
         <note>{0} is a resource type, {1} is a number</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceFailedToStart">
+        <source>{0} failed to start</source>
+        <target state="new">{0} failed to start</target>
+        <note>{0} is a resource type</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
         <source>Resource has not started because it's configured to not automatically start.</source>
         <target state="translated">리소스가 자동으로 시작되지 않도록 구성되어 있어 시작되지 않았습니다.</target>

@@ -23,7 +23,6 @@ internal interface IAppHostCliBackchannel
     Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken);
     Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
-    IAsyncEnumerable<CommandOutput> ExecAsync(CancellationToken cancellationToken);
     Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken);
 }
 
@@ -475,24 +474,6 @@ internal sealed class AppHostCliBackchannel(
             "UpdatePromptResponseAsync",
             [promptId, answers],
             cancellationToken).ConfigureAwait(false);
-    }
-
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        using var activity = telemetry.StartDiagnosticActivity();
-        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        logger.LogDebug("Requesting execution.");
-        var commandOutputs = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<CommandOutput>>(
-            "ExecAsync",
-            Array.Empty<object>(),
-            cancellationToken);
-
-        logger.LogDebug("Requested execution.");
-        await foreach (var commandOutput in commandOutputs.WithCancellation(cancellationToken))
-        {
-            yield return commandOutput;
-        }
     }
 
     public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken)

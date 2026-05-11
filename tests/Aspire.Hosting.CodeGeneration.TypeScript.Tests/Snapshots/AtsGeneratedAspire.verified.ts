@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -28,7 +28,22 @@ import {
     AspireList
 } from './base.js';
 
-import type { Awaitable } from './base.js';
+export {
+    InputType,
+    InteractionInputCollection
+} from './base.js';
+
+export type {
+    InteractionInput,
+    InteractionInputOption
+} from './base.js';
+
+import type {
+    Awaitable,
+    InteractionInput,
+    InteractionInputCollection,
+    InputType
+} from './base.js';
 
 // ============================================================================
 // Handle Type Aliases (Internal - not exported to users)
