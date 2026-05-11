@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Resources;
 
 namespace Aspire.Hosting.Kubernetes.Extensions;
@@ -200,12 +203,37 @@ internal static class ResourceExtensions
             return podTemplateSpec;
         }
 
+        // Look up first-class persistent volume bindings on the workload. When a
+        // ContainerMountAnnotation matches a binding by name, the publisher routes the
+        // pod's volumes[] entry through the binding's generated PVC instead of the
+        // environment's default storage type.
+        Dictionary<string, KubernetesPersistentVolumeBindingAnnotation>? bindingsByVolumeName = null;
+        if (context.TargetResource.TryGetAnnotationsOfType<KubernetesPersistentVolumeBindingAnnotation>(out var volumeBindings))
+        {
+            bindingsByVolumeName = new Dictionary<string, KubernetesPersistentVolumeBindingAnnotation>(StringComparer.Ordinal);
+            foreach (var binding in volumeBindings)
+            {
+                bindingsByVolumeName[binding.Volume.Name] = binding;
+            }
+        }
+
         foreach (var volume in context.Volumes)
         {
             var podVolume = new VolumeV1
             {
                 Name = volume.Name,
             };
+
+            if (bindingsByVolumeName is not null && bindingsByVolumeName.TryGetValue(volume.Name, out var binding))
+            {
+                var claimName = binding.Volume.GeneratedClaim?.Metadata.Name ?? binding.Volume.Name.ToKubernetesResourceName();
+                podVolume.PersistentVolumeClaim = new()
+                {
+                    ClaimName = claimName,
+                };
+                podTemplateSpec.Spec.Volumes.Add(podVolume);
+                continue;
+            }
 
             switch (context.Parent.DefaultStorageType.ToLowerInvariant())
             {

@@ -1,0 +1,38 @@
+﻿---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "service-statefulset"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "service"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
+        app.kubernetes.io/component: "service"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - image: "nginx:latest"
+          name: "service"
+          volumeMounts:
+            - name: "data"
+              mountPath: "/var/lib/data"
+            - name: "scratch"
+              mountPath: "/tmp/scratch"
+          imagePullPolicy: "IfNotPresent"
+      volumes:
+        - name: "data"
+          persistentVolumeClaim:
+            claimName: "data"
+        - name: "scratch"
+          emptyDir: {}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
+      app.kubernetes.io/component: "service"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+  replicas: 1
