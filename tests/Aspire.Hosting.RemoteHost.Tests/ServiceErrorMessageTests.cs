@@ -105,7 +105,7 @@ public class ServiceErrorMessageTests
         // AssemblyLoader probing finds in the test runtime directory.
         var langResolver = new LanguageSupportResolver(
             services,
-            Array.Empty<Assembly>,
+            () => Array.Empty<Assembly>(),
             NullLogger<LanguageSupportResolver>.Instance);
 
         var auth = CreateAuthenticatedState();
@@ -122,7 +122,7 @@ public class ServiceErrorMessageTests
         var services = new ServiceCollection().BuildServiceProvider();
         var codeResolver = new CodeGeneratorResolver(
             services,
-            Array.Empty<Assembly>,
+            () => Array.Empty<Assembly>(),
             NullLogger<CodeGeneratorResolver>.Instance);
 
         var auth = CreateAuthenticatedState();
