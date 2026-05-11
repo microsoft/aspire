@@ -453,7 +453,7 @@ Each run appends newly merged changes to the existing content while preserving
 previous entries. A companion feedback issue collects editorial comments.
 
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-05-08`**, **`13.4`**, **`13.3`**, **`https://aspire.dev/whats-new/upgrade-aspire/`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-05-08`**, **`13.4`**, **`13.3`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools
@@ -542,7 +542,7 @@ with `jq` to see their exact shape.
 | File | Contents |
 |------|----------|
 | `all-milestone-prs.json` | All merged PRs in the `${MILESTONE}` milestone, sorted by `mergedAt` ascending |
-| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs, enriched with `authorAssociation`, `files`, and `comments` (not available from `gh pr list`) |
+| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs, enriched with `authorAssociation`, `mergedBy`, `files`, and `comments` (not available from `gh pr list`) |
 | `all-docs-prs.json` | All merged PRs in `${DOCS_REPO}` since `${MILESTONE_START}`, sorted by `mergedAt` ascending |
 | `batch-docs-prs.json` | Oldest ${BATCH_SIZE} unprocessed docs PRs (same base fields as product PRs plus `files`, but **without** `authorAssociation` or `comments`) |
 
@@ -581,9 +581,9 @@ full schema of each entry.
    processing it, the backlog will be fully caught up.
 
 For each remaining (non-bot) PR, collect all data from the batch: number, title,
-author, `authorAssociation`, body, labels, changed file paths (`files` array), and
-total changed lines (additions + deletions). No additional API calls are needed —
-the batch data contains everything required.
+author, `mergedBy`, `authorAssociation`, body, labels, changed file paths (`files`
+array), and total changed lines (additions + deletions). No additional API calls
+are needed — the batch data contains everything required.
 
 ### 3a. Processing backport PRs
 
