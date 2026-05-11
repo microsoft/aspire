@@ -81,12 +81,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string IncludeHiddenOptionDescription {
-            get {
-                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
-            }
-        }
-
         internal static string CommandSpecificHelpAllowedValues {
             get {
                 return ResourceManager.GetString("CommandSpecificHelpAllowedValues", resourceCulture);

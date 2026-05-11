@@ -62,11 +62,6 @@
         <target state="new">value</target>
         <note />
       </trans-unit>
-      <trans-unit id="IncludeHiddenOptionDescription">
-        <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>connect to</source>
         <target state="translated">conectar-se a</target>

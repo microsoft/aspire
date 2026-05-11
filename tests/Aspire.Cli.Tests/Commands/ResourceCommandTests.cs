@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -92,6 +93,147 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         await Verify(helpWriter.ToString(), extension: "txt");
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpFallsBackToDefaultHelpWhenAvailableCommandsScanFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Scan failed.")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource web --help");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpFallsBackToDefaultHelpWhenAvailableCommandsSnapshotFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = _ => throw new InvalidOperationException("Snapshot failed.")
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource web --help");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpWithAppHostDirectoryDoesNotPromptWhenMultipleAppHostsFound()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Apps");
+        var prompted = false;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) =>
+            {
+                prompted = true;
+                throw new InvalidOperationException("Help should not prompt for an AppHost.");
+            }
+        };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, behavior, _, _) =>
+            {
+                Assert.Equal(MultipleAppHostProjectsFoundBehavior.Throw, behavior);
+                throw new ProjectLocatorException("multiple", ProjectLocatorFailureReason.MultipleProjectFilesFound);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"""resource web --apphost "{appHostDirectory.FullName}" --help""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(prompted);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpWithAppHostDoesNotPromptWhenMultipleRunningAppHostsMatch()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostProjectFile.FullName, "<Project />");
+        var prompted = false;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) =>
+            {
+                prompted = true;
+                throw new InvalidOperationException("Help should not prompt for an AppHost.");
+            }
+        };
+        var appHostInfo = new AppHostInformation
+        {
+            AppHostPath = appHostProjectFile.FullName,
+            ProcessId = 1
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection(
+            "hash1",
+            Path.Combine(workspace.WorkspaceRoot.FullName, "socket1"),
+            new TestAppHostAuxiliaryBackchannel { AppHostInfo = appHostInfo });
+        monitor.AddConnection(
+            "hash2",
+            Path.Combine(workspace.WorkspaceRoot.FullName, "socket2"),
+            new TestAppHostAuxiliaryBackchannel { AppHostInfo = appHostInfo });
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"""resource web --apphost "{appHostProjectFile.FullName}" --help""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(prompted);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
     }
 
     [Fact]

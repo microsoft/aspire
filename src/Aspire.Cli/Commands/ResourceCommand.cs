@@ -26,6 +26,7 @@ internal sealed class ResourceCommand : BaseCommand
 
     private readonly IInteractionService _interactionService;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
+    private readonly IProjectLocator _projectLocator;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<ResourceCommand> _logger;
 
@@ -46,7 +47,7 @@ internal sealed class ResourceCommand : BaseCommand
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
     private static readonly Option<bool> s_includeHiddenOption = new("--include-hidden")
     {
-        Description = ResourceCommandStrings.IncludeHiddenOptionDescription
+        Description = SharedCommandStrings.IncludeHiddenOptionDescription
     };
 
     /// <summary>
@@ -73,6 +74,7 @@ internal sealed class ResourceCommand : BaseCommand
     {
         _interactionService = interactionService;
         _backchannelMonitor = backchannelMonitor;
+        _projectLocator = projectLocator;
         _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
         _logger = logger;
 
@@ -174,7 +176,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         return resources
             .SelectMany(static resource => resource.Commands)
-            .Where(IsAvailableToCli)
+            .Where(ResourceSnapshotMapper.IsCommandAvailableToApi)
             .GroupBy(static command => command.Name, StringComparers.CommandName)
             .OrderBy(static group => group.Key, StringComparers.CommandName)
             .Select(static group =>
@@ -186,17 +188,6 @@ internal sealed class ResourceCommand : BaseCommand
                 return (group.Key, description ?? string.Empty);
             })
             .ToArray();
-    }
-
-    private static bool IsAvailableToCli(ResourceSnapshotCommand command)
-    {
-        return string.Equals(command.State, "Enabled", StringComparison.OrdinalIgnoreCase) &&
-            IsVisibleToCli(command.Visibility);
-    }
-
-    private static bool IsVisibleToCli(string? visibility)
-    {
-        return visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase)) is true;
     }
 
     private static (JsonNode? Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommand? command, string[] capturedArguments)
@@ -496,7 +487,14 @@ internal sealed class ResourceCommand : BaseCommand
                 var exitCode = _defaultHelpAction.Invoke(parseResult);
                 if (TryGetResourceOnlyHelp(parseResult, out var resourceName))
                 {
-                    await WriteAvailableCommandsAsync(parseResult, resourceName, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await WriteAvailableCommandsAsync(parseResult, resourceName, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        command._logger.LogDebug(ex, "Failed to augment resource help with available resource commands.");
+                    }
                 }
 
                 return exitCode;
@@ -553,14 +551,7 @@ internal sealed class ResourceCommand : BaseCommand
             var appHostProjectFile = parseResult.GetValue(s_appHostOption);
             if (appHostProjectFile is not null)
             {
-                var result = await command._connectionResolver.ResolveConnectionAsync(
-                    appHostProjectFile,
-                    SharedCommandStrings.ScanningForRunningAppHosts,
-                    string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, ResourceCommandStrings.SelectAppHostAction),
-                    SharedCommandStrings.AppHostNotRunning,
-                    cancellationToken).ConfigureAwait(false);
-
-                return result.Connection;
+                return await ResolveExplicitConnectionForAvailableCommandsAsync(appHostProjectFile, cancellationToken).ConfigureAwait(false);
             }
 
             var inScopeConnections = await command._interactionService.ShowStatusAsync(
@@ -572,6 +563,50 @@ internal sealed class ResourceCommand : BaseCommand
                 });
 
             return inScopeConnections.Count == 1 ? inScopeConnections[0] : null;
+        }
+
+        private async Task<IAppHostAuxiliaryBackchannel?> ResolveExplicitConnectionForAvailableCommandsAsync(FileInfo appHostProjectFile, CancellationToken cancellationToken)
+        {
+            FileInfo? selectedAppHostProjectFile = appHostProjectFile;
+
+            if (Directory.Exists(appHostProjectFile.FullName))
+            {
+                var searchResult = await command._projectLocator.UseOrFindAppHostProjectFileAsync(
+                    appHostProjectFile,
+                    MultipleAppHostProjectsFoundBehavior.Throw,
+                    createSettingsFile: false,
+                    cancellationToken).ConfigureAwait(false);
+
+                selectedAppHostProjectFile = searchResult.SelectedProjectFile;
+            }
+            else if (!appHostProjectFile.Exists)
+            {
+                return null;
+            }
+
+            if (selectedAppHostProjectFile is null)
+            {
+                return null;
+            }
+
+            var targetPath = Path.GetFullPath(selectedAppHostProjectFile.FullName);
+            var matchingConnections = await command._interactionService.ShowStatusAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                async () =>
+                {
+                    await command._backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+                    return command._backchannelMonitor.Connections
+                        .Where(connection => IsMatchingAppHostPath(connection.AppHostInfo?.AppHostPath, targetPath))
+                        .ToList();
+                });
+
+            return matchingConnections.Count == 1 ? matchingConnections[0] : null;
+        }
+
+        private static bool IsMatchingAppHostPath(string? appHostPath, string targetPath)
+        {
+            return !string.IsNullOrEmpty(appHostPath) &&
+                string.Equals(Path.GetFullPath(appHostPath), targetPath, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryGetResourceOnlyHelp(ParseResult parseResult, [NotNullWhen(true)] out string? resourceName)
