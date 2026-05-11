@@ -510,10 +510,34 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
-    /// Wraps <paramref name="value"/> in single quotes when it contains spaces so that
+    /// Wraps <paramref name="value"/> as a single POSIX shell token when needed so that
     /// shell tokenisation in Dockerfile <c>RUN</c> instructions and Delve's
-    /// <c>--build-flags</c> parser do not split it into separate tokens.
+    /// <c>--build-flags</c> parser do not split it into separate tokens or produce
+    /// invalid syntax for embedded single quotes.
     /// </summary>
-    private static string ShellQuote(string value) =>
-        value.Contains(' ') ? $"'{value}'" : value;
+    private static string ShellQuote(string value)
+    {
+        if (value.Length == 0)
+        {
+            return "''";
+        }
+
+        var requiresQuoting = false;
+
+        foreach (var ch in value)
+        {
+            if (char.IsWhiteSpace(ch) || ch == '\'')
+            {
+                requiresQuoting = true;
+                break;
+            }
+        }
+
+        if (!requiresQuoting)
+        {
+            return value;
+        }
+
+        return $"'{value.Replace("'", "'\"'\"'")}'";
+    }
 }
