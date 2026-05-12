@@ -93,6 +93,7 @@ with create_builder() as builder:
 
     # addContainer (pre-existing)
     container = builder.add_container("resource", "image")
+    container.with_otlp_exporter(protocol="HttpJson")
     # addDockerfile
     docker_container = builder.add_dockerfile("resource", ".")
     docker_builder_container = builder.add_dockerfile_builder("builder-resource", ".", configure_dockerfile_builder, stage="runtime")

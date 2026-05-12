@@ -36,7 +36,9 @@ func main() {
 		WithDisabledFeatures([]string{"scripts"}).
 		WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &protocol})
 
+	genericProtocol := aspire.OtlpProtocolHttpJson
 	builder.AddContainer("consumer", "nginx").
+		WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericProtocol}).
 		WithReference(keycloak).
 		WithReference(keycloak2)
 

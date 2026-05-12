@@ -33,6 +33,10 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
                 "resourceName": {
                   "type": "string",
                   "description": "The resource name. This limits traces returned to the specified resource. If no resource name is specified then distributed traces for all resources are returned."
+                },
+                "search": {
+                  "type": "string",
+                  "description": "Full-text search to filter traces. Searches across span names, attribute values, IDs, and other fields."
                 }
               }
             }
@@ -50,6 +54,13 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             resourceNameElement.ValueKind == JsonValueKind.String)
         {
             resourceName = resourceNameElement.GetString();
+        }
+
+        string? search = null;
+        if (arguments?.TryGetValue("search", out var searchElement) == true &&
+            searchElement.ValueKind == JsonValueKind.String)
+        {
+            search = searchElement.GetString();
         }
 
         try
@@ -70,7 +81,7 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             }
 
             // Fetch all traces from the API. Limiting of returned telemetry to the MCP caller happens later.
-            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
+            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
 
             logger.LogDebug("Fetching traces from {Url}", url);
 

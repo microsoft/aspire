@@ -53,6 +53,9 @@ void main() throws Exception {
             var _composeEnvironmentName = composeEnvironment.name();
             var _serviceContainerName = service.containerName();
             var _serviceRestart = service.restart();
+            var _serviceConfigs = service.configs();
+            var _serviceSecrets = service.secrets();
+            var _serviceUlimitsCount = service.ulimits().size();
         });
         var _resolvedDefaultNetworkName = compose.defaultNetworkName();
         var _resolvedDashboardEnabled = compose.dashboardEnabled();

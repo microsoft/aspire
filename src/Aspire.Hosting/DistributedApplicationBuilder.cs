@@ -18,6 +18,7 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Diagnostics;
@@ -346,6 +347,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceNotificationService>();
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
+        _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());

@@ -48,6 +48,9 @@ with create_builder() as builder:
         compose_service.parent().name()
         service.container_name()
         service.restart()
+        _service_configs_count = len(service.configs)
+        _service_secrets_count = len(service.secrets)
+        _service_ulimits_count = len(service.ulimits)
 
     compose.configure_compose_file(configure_compose_file)
     compose.with_dashboard()

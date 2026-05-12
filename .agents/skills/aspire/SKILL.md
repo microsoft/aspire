@@ -1,6 +1,6 @@
 ---
 name: aspire
-description: "Use this skill when the user is working with an Aspire distributed application and needs to operate the AppHost or its resources through the Aspire CLI: start, restart, stop, or wait on the app; inspect resources, logs, traces, docs, or health; add integrations; manage secrets or config; publish, deploy, or rerun a named pipeline step; initialize Aspire in an existing app; recover missing `.modules` files in a TypeScript AppHost; discover the right frontend URL for Playwright from Aspire state; expose custom dashboard/resource commands; or understand unfamiliar Aspire AppHost APIs in C# or TypeScript. Use it even if they describe the task in terms of an AppHost, resources, dashboard, existing app bootstrap, missing generated modules, Playwright URL discovery, C# API understanding, or local distributed app workflow without explicitly naming Aspire. Do not use it for non-Aspire .NET apps, container-only repos with no AppHost, or ordinary build and test tasks."
+description: "Use this skill when the user is working with an Aspire distributed application and needs to operate the AppHost or its resources through the Aspire CLI: start, restart, stop, or wait on the app; work through code/resource changes with watch, rebuild, hot reload, or resource commands; inspect resources, logs, traces, docs, or health; add integrations; manage secrets or config; publish, deploy, or rerun a named pipeline step; initialize Aspire in an existing app; recover missing `.modules` files in a TypeScript AppHost; discover the right frontend URL for Playwright from Aspire state; expose custom dashboard/resource commands; or understand unfamiliar Aspire AppHost APIs in C# or TypeScript. Use it even if they describe the task in terms of an AppHost, resources, dashboard, existing app bootstrap, missing generated modules, Playwright URL discovery, C# API understanding, or local distributed app workflow without explicitly naming Aspire. Do not use it for non-Aspire .NET apps, container-only repos with no AppHost, or ordinary build and test tasks."
 ---
 
 # Aspire Skill
@@ -12,6 +12,7 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 ## Use this skill for
 
 - Starting, restarting, and stopping AppHosts with `aspire start` and `aspire stop`
+- Working through code changes with the right AppHost, resource, default watch, runtime hot reload, or IDE-managed workflow
 - Initializing Aspire in an existing app with `aspire init` (drops skeleton files; use the `aspireify` skill to complete wiring)
 - Inspecting resources, logs, traces, and docs
 - Discovering integrations with `aspire integration list` or `aspire integration search`, and adding them with `aspire add`
@@ -35,7 +36,7 @@ Resources are typically defined in an AppHost such as, `AppHost.cs`, `apphost.ts
 3. Use `aspire wait <resource>` before interacting with a resource that needs to be healthy.
 4. Inspect state with `aspire describe`, then use `aspire otel logs`, `aspire logs`, `aspire otel traces`, and `aspire export` before making code changes. Display returned data using the formatting rules in [references/monitoring.md](references/monitoring.md).
 5. Before adding an integration, use `aspire integration search <query>` when the package is unknown, then use `aspire docs search <topic>` and `aspire docs get <slug>` for workflow guidance. Before introducing a custom dashboard/resource command or using an unfamiliar AppHost API, use docs search/get and then `aspire docs api search <query> --language csharp|typescript` and `aspire docs api get <id>` when you need the API reference entry itself.
-6. Re-run `aspire start` after AppHost changes. In git worktrees, re-run `aspire start --isolated` instead of switching to `aspire run`.
+6. When code changes, decide whether the AppHost model changed or only one resource changed. Re-run `aspire start` after AppHost changes; in git worktrees, re-run `aspire start --isolated` instead of switching to `aspire run`. Keep the AppHost running for resource-specific changes and use resource commands, runtime hot reload/watch, dashboard actions, or IDE-managed debugging as appropriate.
 
 ## C# AppHosts
 
@@ -59,6 +60,10 @@ When the AppHost is `apphost.ts`, the `.modules/` folder at the project root con
 
 - Prefer `aspire start` over `dotnet run` for AppHosts. `aspire run` blocks the terminal and is a poor fit for agent workflows.
 - Re-running `aspire start` is the restart path. In git worktrees, `aspire start --isolated` is both the start and restart command. Do not combine `aspire stop` and `aspire run`.
+- Do not stop or restart the whole AppHost just because one resource changed. Keep the AppHost running and operate on the resource directly unless the AppHost model or AppHost code changed.
+- Use the command shape `aspire resource <resource-name> <command>` for resource operations, such as `aspire resource api stop`, `aspire resource api start`, or `aspire resource api rebuild` when a C# project resource exposes rebuild.
+- Use `features.defaultWatchEnabled` only for Aspire default watch. It runs supported C# and TypeScript AppHosts in CLI watch mode for the AppHost-managed application; do not treat it as per-resource rebuild, restart, or hot reload for resource source changes.
+- When the resource has its own framework/runtime hot reload, hot module replacement (HMR), or watch workflow, prefer that resource-specific workflow. Some frontend frameworks such as Vite, Next.js, and similar client-side JavaScript frameworks enable HMR by default; do not force an Aspire resource or AppHost restart when that workflow is already handling the change. IDE-managed debugging and hot reload in VS Code, Visual Studio, or Rider is delegated to the IDE and should not be mixed with Aspire CLI restart, rebuild, or watch behavior.
 - Use `--apphost <path>` when the workspace has multiple AppHosts or discovery is ambiguous.
 - Use `--format Json` when another tool or script needs machine-readable output.
 - Use `aspire integration list --format Json` for read-only, scriptable integration listing. Use `aspire integration search <query> --format Json` for read-only, scriptable integration filtering. Use `aspire add <package>` only when you are ready to mutate the AppHost.

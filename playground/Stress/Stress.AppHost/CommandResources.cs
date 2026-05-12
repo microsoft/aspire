@@ -5,9 +5,13 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to exercise resource command arguments.
+#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 
 internal static class CommandResources
 {
+    private static string NodeExecutablePath { get; } = Environment.GetEnvironmentVariable("NODE") ?? "node";
+    private static string DotnetExecutablePath { get; } = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
+
     public static void AddCommandResources(
         this IDistributedApplicationBuilder builder,
         IResourceBuilder<ProjectResource> serviceBuilder,
@@ -425,6 +429,411 @@ internal static class CommandResources
                 ]
             });
 
+        // These commands exercise local process-backed resource commands, including issue-inspired command shapes.
+        var processCommands = builder.AddCommandGroup("process-commands", serviceBuilder.Resource);
+        var processCommandScriptsDirectory = Path.Combine(builder.AppHostDirectory, "process-command-scripts");
+        var processCommandStdinScriptPath = Path.Combine(processCommandScriptsDirectory, "stdin.js");
+        var processCommandEnvironmentScriptPath = Path.Combine(processCommandScriptsDirectory, "environment.js");
+        var processCommandWorkingDirectoryScriptPath = Path.Combine(processCommandScriptsDirectory, "working-directory.js");
+        var processCommandStderrFailureScriptPath = Path.Combine(processCommandScriptsDirectory, "stderr-failure.js");
+        var processCommandOutputLimitScriptPath = Path.Combine(processCommandScriptsDirectory, "output-limit.js");
+        var processCommandBackupRestoreScriptPath = Path.Combine(processCommandScriptsDirectory, "backup-restore.js");
+        var processCommandContainerExecScriptPath = Path.Combine(processCommandScriptsDirectory, "container-exec.js");
+        var processCommandSampleBackupPath = Path.Combine(processCommandScriptsDirectory, "sample-backup.dump");
+        var processCommandFileAppsDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, "..", "process-command-file-apps"));
+        var processCommandCSharpArgumentsAndStdinAppPath = Path.Combine(processCommandFileAppsDirectory, "arguments-and-stdin.cs");
+        var processCommandCSharpWorkingDirectoryFailureAppPath = Path.Combine(processCommandFileAppsDirectory, "working-directory-failure.cs");
+        var processCommandIssueToolAppPath = Path.Combine(processCommandFileAppsDirectory, "issue-tool.cs");
+
+        processCommands.WithProcessCommand(
+            commandName: "dotnet-version",
+            displayName: "Show .NET version",
+            executablePath: "dotnet",
+            arguments: ["--version"],
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs 'dotnet --version' from the AppHost and returns the process output.",
+                IconName = "WindowConsole",
+                MaxOutputLineCount = 10
+            });
+        processCommands.WithProcessCommand(
+            commandName: "dotnet-command",
+            displayName: "Run dotnet command",
+            processSpecFactory: context =>
+            {
+                var command = context.Arguments.GetString("command") switch
+                {
+                    "info" => "--info",
+                    _ => "--version"
+                };
+
+                return new ProcessCommandSpec("dotnet")
+                {
+                    Arguments = [command]
+                };
+            },
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a selected dotnet command from the AppHost to exercise process command arguments.",
+                IconName = "WindowConsole",
+                MaxOutputLineCount = 25,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "command",
+                        Label = "Command",
+                        Description = "Select which dotnet command to run.",
+                        InputType = InputType.Choice,
+                        Value = "version",
+                        Options =
+                        [
+                            KeyValuePair.Create("version", "dotnet --version"),
+                            KeyValuePair.Create("info", "dotnet --info")
+                        ]
+                    }
+                ]
+            });
+        processCommands.WithProcessCommand(
+            commandName: "process-stdin",
+            displayName: "Process stdin",
+            processSpecFactory: context => CreateNodeProcessSpec(
+                processCommandStdinScriptPath,
+                standardInputContent: context.Arguments.GetString("input") ?? "Hello from stdin"),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a process that reads one line from standard input.",
+                IconName = "WindowConsole",
+                MaxOutputLineCount = 10,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "input",
+                        Label = "Input",
+                        Description = "Text written to the process standard input.",
+                        InputType = InputType.Text,
+                        Value = "Hello from stdin",
+                        MaxLength = 100
+                    }
+                ]
+            });
+        processCommands.WithProcessCommand(
+            commandName: "process-environment",
+            displayName: "Process environment",
+            processSpecFactory: _ => CreateNodeProcessSpec(
+                processCommandEnvironmentScriptPath,
+                environmentVariables: new Dictionary<string, string>
+                {
+                    ["PROCESS_COMMAND_SAMPLE"] = "from-process-command"
+                },
+                inheritEnvironmentVariables: false),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a process with a custom environment and environment inheritance disabled.",
+                IconName = "WindowConsole",
+                MaxOutputLineCount = 10
+            });
+        processCommands.WithProcessCommand(
+            commandName: "process-working-directory",
+            displayName: "Process working directory",
+            processSpecFactory: _ => CreateNodeProcessSpec(
+                processCommandWorkingDirectoryScriptPath,
+                workingDirectory: builder.AppHostDirectory),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a process from the AppHost working directory and lists project files.",
+                IconName = "Folder",
+                MaxOutputLineCount = 10
+            });
+        processCommands.WithProcessCommand(
+            commandName: "process-stderr-failure",
+            displayName: "Process stderr failure",
+            processSpecFactory: _ => CreateNodeProcessSpec(processCommandStderrFailureScriptPath),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a process that writes stdout/stderr and returns a non-zero exit code.",
+                IconName = "Warning",
+                MaxOutputLineCount = 10
+            });
+        processCommands.WithProcessCommand(
+            commandName: "process-output-limit",
+            displayName: "Process output limit",
+            processSpecFactory: _ => CreateNodeProcessSpec(processCommandOutputLimitScriptPath),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a process that emits more lines than the command returns.",
+                IconName = "TableLightning",
+                MaxOutputLineCount = 5,
+                DisplayImmediately = false
+            });
+        processCommands.WithProcessCommand(
+            commandName: "process-csharp-file-app",
+            displayName: "Process C# file app",
+            processSpecFactory: context => CreateDotnetFileAppProcessSpec(
+                processCommandCSharpArgumentsAndStdinAppPath,
+                arguments: [context.Arguments.GetString("name") ?? "Aspire"],
+                standardInputContent: context.Arguments.GetString("input") ?? "Hello from C#"),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a C# file-based app that reads command arguments and standard input.",
+                IconName = "WindowConsole",
+                MaxOutputLineCount = 10,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "name",
+                        Label = "Name",
+                        Description = "Text passed as a C# file app command-line argument.",
+                        InputType = InputType.Text,
+                        Value = "Aspire",
+                        MaxLength = 100
+                    },
+                    new InteractionInput
+                    {
+                        Name = "input",
+                        Label = "Input",
+                        Description = "Text written to the C# file app standard input.",
+                        InputType = InputType.Text,
+                        Value = "Hello from C#",
+                        MaxLength = 100
+                    }
+                ]
+            });
+        processCommands.WithProcessCommand(
+            commandName: "process-csharp-file-app-failure",
+            displayName: "Process C# file app failure",
+            processSpecFactory: _ => CreateDotnetFileAppProcessSpec(
+                processCommandCSharpWorkingDirectoryFailureAppPath,
+                workingDirectory: builder.AppHostDirectory),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Runs a C# file-based app from the AppHost working directory that writes stdout/stderr and returns a non-zero exit code.",
+                IconName = "Warning",
+                MaxOutputLineCount = 10
+            });
+        processCommands.WithProcessCommand(
+            commandName: "issue-seed-data",
+            displayName: "Issue: Seed data",
+            processSpecFactory: context => CreateDotnetFileAppProcessSpec(
+                processCommandIssueToolAppPath,
+                arguments:
+                [
+                    "seed",
+                    context.Arguments.GetString("dataset") ?? "small",
+                    context.Arguments.GetString("customers") ?? "25"
+                ],
+                environmentVariables: new Dictionary<string, string>
+                {
+                    ["ConnectionStrings__mainDb"] = "Host=localhost;Port=15432;Database=mainDb;Username=postgres",
+                    ["ASPIRE_COMMAND_SCENARIO"] = "#8502 seed-data"
+                }),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Exercises a data seeding command with dashboard/CLI arguments.",
+                IconName = "DatabasePlugConnected",
+                MaxOutputLineCount = 20,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "dataset",
+                        Label = "Dataset",
+                        Description = "Seed data size.",
+                        InputType = InputType.Choice,
+                        Value = "small",
+                        Options =
+                        [
+                            KeyValuePair.Create("small", "Small"),
+                            KeyValuePair.Create("medium", "Medium"),
+                            KeyValuePair.Create("large", "Large")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "customers",
+                        Label = "Customers",
+                        Description = "Number of customers to create.",
+                        InputType = InputType.Number,
+                        Value = "25"
+                    }
+                ]
+            });
+        processCommands.WithProcessCommand(
+            commandName: "issue-e2e-tests",
+            displayName: "Issue: E2E test filter",
+            processSpecFactory: context => CreateDotnetFileAppProcessSpec(
+                processCommandIssueToolAppPath,
+                arguments:
+                [
+                    "test",
+                    context.Arguments.GetString("filter") ?? "smoke"
+                ],
+                environmentVariables: new Dictionary<string, string>
+                {
+                    ["ASPIRE_TEST_CONFIGURATION"] = "Debug",
+                    ["ASPIRE_COMMAND_SCENARIO"] = "#8502 e2e-tests"
+                }),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Exercises running different test filters from a resource command.",
+                IconName = "Beaker",
+                MaxOutputLineCount = 20,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "filter",
+                        Label = "Filter",
+                        Description = "The test filter to run.",
+                        InputType = InputType.Choice,
+                        Value = "smoke",
+                        Options =
+                        [
+                            KeyValuePair.Create("smoke", "Smoke tests"),
+                            KeyValuePair.Create("db", "Database tests"),
+                            KeyValuePair.Create("ui", "UI tests")
+                        ]
+                    }
+                ]
+            });
+        processCommands.WithProcessCommand(
+            commandName: "issue-start-job",
+            displayName: "Issue: Start job-like process",
+            processSpecFactory: context => CreateDotnetFileAppProcessSpec(
+                processCommandIssueToolAppPath,
+                arguments:
+                [
+                    "job",
+                    context.Arguments.GetString("job") ?? "daily-import"
+                ],
+                standardInputContent: context.Arguments.GetString("payload") ?? "local-trigger"),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Exercises the on-demand job trigger shape by starting a local process with a payload.",
+                IconName = "Play",
+                MaxOutputLineCount = 20,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "job",
+                        Label = "Job",
+                        Description = "Job name to run.",
+                        InputType = InputType.Text,
+                        Value = "daily-import",
+                        MaxLength = 100
+                    },
+                    new InteractionInput
+                    {
+                        Name = "payload",
+                        Label = "Payload",
+                        Description = "Payload written to the job process standard input.",
+                        InputType = InputType.Text,
+                        Value = "local-trigger",
+                        MaxLength = 200
+                    }
+                ]
+            });
+        processCommands.WithProcessCommand(
+            commandName: "issue-restore-backup",
+            displayName: "Issue: Restore backup",
+            processSpecFactory: context => CreateNodeProcessSpec(
+                processCommandBackupRestoreScriptPath,
+                arguments:
+                [
+                    context.Arguments.GetString("backupPath") ?? processCommandSampleBackupPath,
+                    context.Arguments.GetString("container") ?? "db-server",
+                    context.Arguments.GetString("database") ?? "mainDb"
+                ]),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Exercises backup restore command composition similar to docker cp and docker exec pg_restore.",
+                IconName = "DatabaseArrowRight",
+                MaxOutputLineCount = 20,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "backupPath",
+                        Label = "Backup path",
+                        Description = "Backup file path on the AppHost machine.",
+                        InputType = InputType.Text,
+                        Value = processCommandSampleBackupPath,
+                        MaxLength = 500
+                    },
+                    new InteractionInput
+                    {
+                        Name = "container",
+                        Label = "Container",
+                        Description = "Container name or ID.",
+                        InputType = InputType.Text,
+                        Value = "db-server",
+                        MaxLength = 100
+                    },
+                    new InteractionInput
+                    {
+                        Name = "database",
+                        Label = "Database",
+                        Description = "Database name to restore.",
+                        InputType = InputType.Text,
+                        Value = "mainDb",
+                        MaxLength = 100
+                    }
+                ]
+            });
+        processCommands.WithProcessCommand(
+            commandName: "issue-container-exec-shape",
+            displayName: "Issue: Container exec shape",
+            processSpecFactory: context => CreateNodeProcessSpec(
+                processCommandContainerExecScriptPath,
+                arguments:
+                [
+                    GetRequiredCommandArgument(context.Arguments, "container"),
+                    GetRequiredCommandArgument(context.Arguments, "execCommand"),
+                    GetRequiredCommandArgument(context.Arguments, "workingDirectory")
+                ]),
+            commandOptions: new ProcessCommandOptions
+            {
+                Description = "Exercises the local process shape for a docker exec-style command.",
+                IconName = "WindowConsole",
+                MaxOutputLineCount = 20,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "container",
+                        Label = "Container",
+                        Description = "Container name or ID.",
+                        InputType = InputType.Text,
+                        Required = true,
+                        Placeholder = "db-server",
+                        MaxLength = 100
+                    },
+                    new InteractionInput
+                    {
+                        Name = "execCommand",
+                        Label = "Command",
+                        Description = "Command to execute in the container.",
+                        InputType = InputType.Text,
+                        Required = true,
+                        Placeholder = "pg_isready -U postgres",
+                        MaxLength = 200
+                    },
+                    new InteractionInput
+                    {
+                        Name = "workingDirectory",
+                        Label = "Working directory",
+                        Description = "Working directory inside the container.",
+                        InputType = InputType.Text,
+                        Required = true,
+                        Placeholder = "/",
+                        MaxLength = 200
+                    }
+                ]
+            });
+
         serviceBuilder.WithHttpCommand("/write-console", "Write to console", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/write-console-large", "Write to console large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/increment-counter", "Increment counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
@@ -604,6 +1013,11 @@ internal static class CommandResources
         };
     }
 
+    private static string GetRequiredCommandArgument(InteractionInputCollection arguments, string name)
+    {
+        return arguments.GetString(name) ?? throw new InvalidOperationException($"The '{name}' argument is required.");
+    }
+
     private static ValidateCommandArguments ReadValidateCommandArguments(InteractionInputCollection arguments)
     {
         return new ValidateCommandArguments
@@ -666,6 +1080,55 @@ internal static class CommandResources
         return inputs;
     }
 
+    private static ProcessCommandSpec CreateNodeProcessSpec(
+        string scriptPath,
+        IReadOnlyList<string>? arguments = null,
+        string? workingDirectory = null,
+        IDictionary<string, string>? environmentVariables = null,
+        bool inheritEnvironmentVariables = true,
+        string? standardInputContent = null)
+    {
+        var processArguments = new List<string> { scriptPath };
+        if (arguments is not null)
+        {
+            processArguments.AddRange(arguments);
+        }
+
+        return new ProcessCommandSpec(NodeExecutablePath)
+        {
+            Arguments = processArguments,
+            WorkingDirectory = workingDirectory,
+            EnvironmentVariables = environmentVariables ?? new Dictionary<string, string>(),
+            InheritEnvironmentVariables = inheritEnvironmentVariables,
+            StandardInputContent = standardInputContent
+        };
+    }
+
+    private static ProcessCommandSpec CreateDotnetFileAppProcessSpec(
+        string appPath,
+        IReadOnlyList<string>? arguments = null,
+        string? workingDirectory = null,
+        IDictionary<string, string>? environmentVariables = null,
+        bool inheritEnvironmentVariables = true,
+        string? standardInputContent = null)
+    {
+        var processArguments = new List<string> { "run", "--file", appPath };
+        if (arguments is { Count: > 0 })
+        {
+            processArguments.Add("--");
+            processArguments.AddRange(arguments);
+        }
+
+        return new ProcessCommandSpec(DotnetExecutablePath)
+        {
+            Arguments = processArguments,
+            WorkingDirectory = workingDirectory,
+            EnvironmentVariables = environmentVariables ?? new Dictionary<string, string>(),
+            InheritEnvironmentVariables = inheritEnvironmentVariables,
+            StandardInputContent = standardInputContent
+        };
+    }
+
     private static async Task ExecuteCommandForAllResourcesAsync(IServiceProvider serviceProvider, string commandName, CancellationToken cancellationToken)
     {
         var commandService = serviceProvider.GetRequiredService<ResourceCommandService>();
@@ -708,3 +1171,6 @@ internal static class CommandResources
         public bool RequireHealthy { get; set; } = true;
     }
 }
+
+#pragma warning restore ASPIREPROCESSCOMMAND001
+#pragma warning restore ASPIREINTERACTION001

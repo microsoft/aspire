@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -574,6 +574,40 @@ export interface HttpsCertificateInfo {
     subject?: string;
     issuer?: string;
     thumbprint?: string;
+}
+
+/** DTO interface for ProcessCommandExportOptions */
+export interface ProcessCommandExportOptions {
+    executablePath?: string;
+    arguments?: string[];
+    workingDirectory?: string;
+    environmentVariables?: Record<string, string>;
+    inheritEnvironmentVariables?: boolean;
+    standardInputContent?: string;
+    killEntireProcessTree?: boolean;
+    commandOptions?: CommandOptions;
+    maxOutputLineCount?: number;
+    displayImmediately?: boolean;
+    successExitCodes?: number[];
+}
+
+/** DTO interface for ProcessCommandResultExportOptions */
+export interface ProcessCommandResultExportOptions {
+    commandOptions?: CommandOptions;
+    maxOutputLineCount?: number;
+    displayImmediately?: boolean;
+    successExitCodes?: number[];
+}
+
+/** DTO interface for ProcessCommandSpecExportData */
+export interface ProcessCommandSpecExportData {
+    executablePath?: string;
+    arguments?: string[];
+    workingDirectory?: string;
+    environmentVariables?: Record<string, string>;
+    inheritEnvironmentVariables?: boolean;
+    standardInputContent?: string;
+    killEntireProcessTree?: boolean;
 }
 
 /** DTO interface for ReferenceEnvironmentInjectionOptions */
@@ -7833,6 +7867,10 @@ export interface ContainerRegistryResource {
     withHealthCheck(key: string): ContainerRegistryResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ContainerRegistryResourcePromise;
     /** Sets the parent relationship */
@@ -7926,6 +7964,10 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     withHealthCheck(key: string): ContainerRegistryResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ContainerRegistryResourcePromise;
     /** Sets the parent relationship */
@@ -8170,6 +8212,40 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ContainerRegistryResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ContainerRegistryResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -8783,6 +8859,14 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -9031,6 +9115,10 @@ export interface ContainerResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ContainerResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise;
     /** Configures developer certificate trust */
@@ -9230,6 +9318,10 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ContainerResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise;
     /** Configures developer certificate trust */
@@ -10177,6 +10269,40 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ContainerResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ContainerResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -11169,6 +11295,14 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -11439,6 +11573,10 @@ export interface CSharpAppResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): CSharpAppResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise;
     /** Configures developer certificate trust */
@@ -11606,6 +11744,10 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): CSharpAppResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise;
     /** Configures developer certificate trust */
@@ -12326,6 +12468,40 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise {
         const commandOptions = options?.commandOptions;
         return new CSharpAppResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<CSharpAppResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -13240,6 +13416,14 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -13516,6 +13700,10 @@ export interface DotnetToolResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): DotnetToolResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise;
     /** Configures developer certificate trust */
@@ -13693,6 +13881,10 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): DotnetToolResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise;
     /** Configures developer certificate trust */
@@ -14480,6 +14672,40 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise {
         const commandOptions = options?.commandOptions;
         return new DotnetToolResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<DotnetToolResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -15414,6 +15640,14 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -15678,6 +15912,10 @@ export interface ExecutableResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExecutableResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise;
     /** Configures developer certificate trust */
@@ -15843,6 +16081,10 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExecutableResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise;
     /** Configures developer certificate trust */
@@ -16546,6 +16788,40 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ExecutableResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ExecutableResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -17456,6 +17732,14 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -17674,6 +17958,10 @@ export interface ExternalServiceResource {
     withHealthCheck(key: string): ExternalServiceResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExternalServiceResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ExternalServiceResourcePromise;
     /** Sets the parent relationship */
@@ -17769,6 +18057,10 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     withHealthCheck(key: string): ExternalServiceResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExternalServiceResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ExternalServiceResourcePromise;
     /** Sets the parent relationship */
@@ -18033,6 +18325,40 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExternalServiceResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ExternalServiceResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ExternalServiceResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -18650,6 +18976,14 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -18820,6 +19154,10 @@ export interface ParameterResource {
     withHealthCheck(key: string): ParameterResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ParameterResourcePromise;
     /** Sets the parent relationship */
@@ -18915,6 +19253,10 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     withHealthCheck(key: string): ParameterResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ParameterResourcePromise;
     /** Sets the parent relationship */
@@ -19175,6 +19517,40 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ParameterResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ParameterResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -19792,6 +20168,14 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withRelationship(resourceBuilder, type)), this._client);
     }
@@ -20010,6 +20394,10 @@ export interface ProjectResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ProjectResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise;
     /** Configures developer certificate trust */
@@ -20177,6 +20565,10 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ProjectResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise;
     /** Configures developer certificate trust */
@@ -20897,6 +21289,40 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ProjectResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ProjectResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -21811,6 +22237,14 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -22107,6 +22541,10 @@ export interface TestDatabaseResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestDatabaseResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise;
     /** Configures developer certificate trust */
@@ -22306,6 +22744,10 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestDatabaseResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise;
     /** Configures developer certificate trust */
@@ -23253,6 +23695,40 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise {
         const commandOptions = options?.commandOptions;
         return new TestDatabaseResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<TestDatabaseResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -24245,6 +24721,14 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -24549,6 +25033,10 @@ export interface TestRedisResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestRedisResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise;
     /** Configures developer certificate trust */
@@ -24778,6 +25266,10 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestRedisResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise;
     /** Configures developer certificate trust */
@@ -25773,6 +26265,40 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise {
         const commandOptions = options?.commandOptions;
         return new TestRedisResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<TestRedisResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -26949,6 +27475,14 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -27301,6 +27835,10 @@ export interface TestVaultResource {
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestVaultResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise;
     /** Configures developer certificate trust */
@@ -27502,6 +28040,10 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): TestVaultResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
     /** Adds an HTTP resource command */
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise;
     /** Configures developer certificate trust */
@@ -28451,6 +28993,40 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise {
         const commandOptions = options?.commandOptions;
         return new TestVaultResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<TestVaultResource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -29457,6 +30033,14 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
     }
 
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
+    }
+
     withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
@@ -29857,6 +30441,10 @@ export interface Resource {
     withHealthCheck(key: string): ResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ResourcePromise;
     /** Sets the parent relationship */
@@ -29950,6 +30538,10 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     withHealthCheck(key: string): ResourcePromise;
     /** Adds a resource command */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise;
+    /** Adds a process resource command */
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
+    /** Adds a process resource command via callback */
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ResourcePromise;
     /** Sets the parent relationship */
@@ -30194,6 +30786,40 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise {
         const commandOptions = options?.commandOptions;
         return new ResourcePromiseImpl(this._withCommandInternal(name, displayName, executeCommand, commandOptions), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandInternal(commandName: string, displayName: string, options: ProcessCommandExportOptions): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, options };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withProcessCommand',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise {
+        return new ResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
+    }
+
+    /** @internal */
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<Resource> {
+        const createProcessSpecId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
+            const arg = new ExecuteCommandContextImpl(argHandle, this._client);
+            return await createProcessSpec(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, commandName, displayName, createProcessSpec: createProcessSpecId };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withProcessCommandFactory',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
+        return new ResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
@@ -30805,6 +31431,14 @@ class ResourcePromiseImpl implements ResourcePromise {
 
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withCommand(name, displayName, executeCommand, options)), this._client);
+    }
+
+    withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
+    }
+
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ResourcePromise {

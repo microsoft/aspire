@@ -21,6 +21,8 @@ func main() {
 	if err = container.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+	genericOtlpProtocol := aspire.OtlpProtocolHttpJson
+	container.WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericOtlpProtocol})
 	taggedContainer := builder.AddContainer("mytaggedcontainer", &aspire.AddContainerOptions{
 		Image: "nginx",
 		Tag:   "stable-alpine",

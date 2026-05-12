@@ -62,6 +62,11 @@ public static class AzureContainerAppExtensions
                 name: ContainerAppsPipelineStepMarker.StepName,
                 action: ctx =>
                 {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
                     if (!ctx.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().Any())
                     {
                         foreach (var r in ctx.Model.GetComputeResources())

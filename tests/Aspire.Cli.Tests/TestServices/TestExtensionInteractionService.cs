@@ -76,7 +76,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return 0;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         DisplayErrorCallback?.Invoke(errorMessage);
     }

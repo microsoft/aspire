@@ -38,6 +38,11 @@ public static class KubernetesEnvironmentExtensions
                 name: KubernetesPipelineStepMarker.StepName,
                 action: ctx =>
                 {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
                     var hasKubernetesEnvironment = ctx.Model.Resources.OfType<KubernetesEnvironmentResource>().Any() ||
                         ctx.Model.Resources.OfType<IComputeEnvironmentResource>()
                             .Any(r => r.HasAnnotationOfType<KubernetesEnvironmentAnnotation>());

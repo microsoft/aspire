@@ -2,15 +2,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
+using Azure;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
-using Azure.Identity;
+using Azure.Core;
+using Azure.ResourceManager.Authorization.Models;
 using Microsoft.Extensions.Logging;
+using RoleManagementPrincipalType = Azure.ResourceManager.Authorization.Models.RoleManagementPrincipalType;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -19,6 +25,8 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
+    private const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.
     /// </summary>
@@ -134,19 +142,92 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(project);
 
+        var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault() ??
+            throw new InvalidOperationException("AzureEnvironmentResource must be present in the application model.");
+
+        var provisioningContext = await azureEnvironment.ProvisioningContextTask.Task.ConfigureAwait(false);
+        var credential = provisioningContext.Credential;
+
         var projectEndpoint = await project.Endpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(projectEndpoint))
         {
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
-        var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
+        var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
-            def.ToProjectsAgentVersionCreationOptions(),
+            def.ToProjectsAgentVersionCreationOptions(Target.Name),
             cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
+
+        // Foundry should do this automatically in the future.
+        await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
+
         return result.Value;
+    }
+
+    private async Task AssignFoundryRoleToAgentIdentityAsync(
+        PipelineStepContext context,
+        AzureCognitiveServicesProjectResource project,
+        ProjectsAgentVersion version,
+        ProvisioningContext provisioningContext)
+    {
+        var principalId = version.InstanceIdentity?.PrincipalId;
+        if (string.IsNullOrEmpty(principalId))
+        {
+            context.Logger.LogWarning("Hosted agent '{Name}' version '{Version}' did not return an instance identity. The agent may not be able to access Foundry project storage.", Name, version.Version);
+            return;
+        }
+
+        var foundryResourceId = await project.Parent.Id.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(foundryResourceId))
+        {
+            context.Logger.LogWarning("Could not resolve the Microsoft Foundry resource ID for hosted agent '{Name}'. The agent identity '{PrincipalId}' may need the Cognitive Services User role assigned manually.", Name, principalId);
+            return;
+        }
+
+        var subscriptionResourceId = provisioningContext.Subscription.Id.ToString();
+        var roleDefinitionId = new ResourceIdentifier(
+            $"{subscriptionResourceId}/providers/Microsoft.Authorization/roleDefinitions/{AzureAIUserRoleDefinitionId}");
+
+        var assignmentName = StableGuid(principalId, roleDefinitionId.ToString(), foundryResourceId);
+
+        var content = new RoleAssignmentCreateOrUpdateContent(roleDefinitionId, Guid.Parse(principalId))
+        {
+            PrincipalType = RoleManagementPrincipalType.ServicePrincipal
+        };
+
+        var resourceScope = new ResourceIdentifier(foundryResourceId);
+        var assignments = provisioningContext.ArmClient.GetRoleAssignments(resourceScope);
+
+        try
+        {
+            await assignments.CreateOrUpdateAsync(
+                WaitUntil.Completed,
+                assignmentName,
+                content,
+                context.CancellationToken).ConfigureAwait(false);
+
+            context.Logger.LogInformation("Assigned Cognitive Services User role to hosted agent '{Name}' identity '{PrincipalId}'.", Name, principalId);
+        }
+        catch (RequestFailedException ex)
+        {
+            context.Logger.LogWarning(
+                ex,
+                "Could not create Cognitive Services User role assignment for hosted agent '{Name}' identity '{PrincipalId}' on Foundry resource '{FoundryResourceId}'. Create the role assignment manually.",
+                Name,
+                principalId,
+                foundryResourceId);
+        }
+
+        static string StableGuid(params string[] values)
+        {
+            byte[] hash = XxHash128.Hash(
+                Encoding.UTF8.GetBytes(string.Join("|", values)));
+
+            return new Guid(hash).ToString();
+        }
     }
 
     internal static async Task<Dictionary<string, string>> GetResolvedEnvironmentVariablesAsync(
@@ -168,11 +249,6 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             {
                 await callback.Callback(envContext).ConfigureAwait(false);
             }
-        }
-        if (resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var identityAnnotation))
-        {
-            collectedEnvVars["AZURE_CLIENT_ID"] = identityAnnotation.IdentityResource.ClientId;
-            collectedEnvVars["AZURE_TOKEN_CREDENTIALS"] = "ManagedIdentityCredential";
         }
         var resolvedEnvVars = new Dictionary<string, string>();
         foreach (var (key, value) in collectedEnvVars)

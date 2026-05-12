@@ -178,7 +178,7 @@ internal sealed class TestInteractionService : IInteractionService
         return 0;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         lock (_displayLock)
         {

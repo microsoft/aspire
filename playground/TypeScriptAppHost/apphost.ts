@@ -3,6 +3,7 @@
 // Run with: aspire run
 // Publish with: aspire publish
 
+import { join } from 'node:path';
 import {
     createBuilder,
     refExpr,
@@ -29,6 +30,7 @@ await builder.addDockerComposeEnvironment("compose");
 
 const dir = await builder.appHostDirectory();
 console.log(`AppHost directory: ${dir}`);
+const processCommandScriptPath = join(dir, "process-command-scripts", "node-process-check.js");
 
 // Add PostgreSQL server and database
 const postgres = await builder.addPostgres("postgres");
@@ -96,6 +98,59 @@ await cache.withCommand(
                 }
             }
         }
+    });
+await cache.withProcessCommand(
+    "node-process-check",
+    "Node process check",
+    {
+        executablePath: "node",
+        arguments: [
+            processCommandScriptPath,
+            "from-typescript-apphost"
+        ],
+        environmentVariables: {
+            TS_PROCESS_COMMAND_SAMPLE: "from-process-command"
+        },
+        standardInputContent: "hello from TypeScript AppHost",
+        maxOutputLineCount: 10,
+        commandOptions: {
+            description: "Runs a Node process command from the TypeScript AppHost.",
+            iconName: "WindowConsole"
+        }
+    });
+await cache.withProcessCommandFactory(
+    "node-process-check-factory",
+    "Node process check with arguments",
+    async (context: ExecuteCommandContext) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            executablePath: "node",
+            arguments: [
+                processCommandScriptPath,
+                message
+            ],
+            environmentVariables: {
+                TS_PROCESS_COMMAND_SAMPLE: "from-process-command-factory"
+            },
+            standardInputContent: "hello from TypeScript AppHost factory"
+        };
+    },
+    {
+        commandOptions: {
+            description: "Runs a Node process command with arguments from the TypeScript AppHost.",
+            iconName: "WindowConsole",
+            arguments: [
+                {
+                    name: "message",
+                    label: "Message",
+                    inputType: InputType.Text,
+                    required: true
+                }
+            ]
+        },
+        maxOutputLineCount: 10
     });
 
 console.log("Added Redis cache");
