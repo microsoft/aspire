@@ -74,10 +74,10 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 4: Verify generated SDK files exist.
-        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "modules");
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($"modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
         }
 
         var expectedFiles = new[] { "aspire.mts", "base.mts", "transport.mts" };
@@ -152,10 +152,10 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "modules");
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($"modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
         }
 
         var aspireModulePath = Path.Combine(modulesDir, "aspire.mts");

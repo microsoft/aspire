@@ -571,8 +571,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var files = new Dictionary<string, string>();
 
         // Add embedded resource files (transport.mts, base.mts)
-        files["transport.mts"] = GetEmbeddedResource("transport.ts");
-        files["base.mts"] = GetEmbeddedResource("base.ts");
+        files["transport.mts"] = GetEmbeddedResource("transport.mts");
+        files["base.mts"] = GetEmbeddedResource("base.mts");
 
         // Generate the capability-based aspire.mts SDK
         files["aspire.mts"] = GenerateAspireSdk(context);
