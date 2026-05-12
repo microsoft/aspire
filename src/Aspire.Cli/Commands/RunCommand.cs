@@ -290,7 +290,11 @@ internal sealed class RunCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeBuilt, ExecutionContext.LogFilePath));
+                InteractionService.DisplayError(InteractionServiceStrings.ProjectCouldNotBeBuilt);
+                InteractionService.DisplayMessage(
+                    KnownEmojis.PageFacingUp,
+                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
+                    allowMarkup: true);
                 return await pendingRun;
             }
 
@@ -464,7 +468,10 @@ internal sealed class RunCommand : BaseCommand
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
             // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            InteractionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
+                allowMarkup: true);
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
         catch (ConnectionLostException) when (isExtensionHost)
@@ -480,7 +487,10 @@ internal sealed class RunCommand : BaseCommand
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
             // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            InteractionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
+                allowMarkup: true);
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
         finally
@@ -597,7 +607,7 @@ internal sealed class RunCommand : BaseCommand
         }
 
         // Logs row
-        grid.AddRow(LabelMarkup(logsLabel), new Text(logFilePath));
+        grid.AddRow(LabelMarkup(logsLabel), new Markup(MarkupHelpers.SafeFileLink(console, logFilePath)));
 
         // PID row (if provided)
         if (pid.HasValue)

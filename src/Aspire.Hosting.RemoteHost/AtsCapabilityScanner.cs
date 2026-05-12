@@ -903,10 +903,10 @@ public static class AtsCapabilityScanner
     }
 
     /// <summary>
-    /// Detects method name collisions after capability expansion and removes colliding methods,
-    /// keeping only the first one (sorted by CapabilityId). A warning is emitted for each
-    /// removed capability. Since ATS doesn't support method overloading, each (TargetTypeId, MethodName)
-    /// pair must be unique. Use [AspireExport(MethodName = "uniqueName")] to resolve collisions.
+    /// Detects method name collisions after capability expansion. Since ATS doesn't support method
+    /// overloading, each (TargetTypeId, MethodName) pair must be unique. When a concrete target has
+    /// a target-specific export, it shadows matching generic exports only for that target. Ambiguous
+    /// collisions still remove later capabilities and emit warnings.
     /// </summary>
     private static void FilterMethodNameCollisions(List<AtsCapabilityInfo> capabilities, List<AtsDiagnostic> diagnostics)
     {
@@ -926,12 +926,44 @@ public static class AtsCapabilityScanner
         }
 
         var capabilitiesToRemove = new HashSet<string>();
+        var expandedTargetsToRemove = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         foreach (var collisionGroup in collisionGroups)
         {
             var methodName = collisionGroup.Key.MethodName;
             var targetTypeId = collisionGroup.Key.Target;
-            var capIds = collisionGroup.Select(x => x.Capability.CapabilityId).Distinct().ToList();
+            var collidingCapabilities = collisionGroup
+                .Select(x => x.Capability)
+                .GroupBy(c => c.CapabilityId, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .ToList();
+            var exactTargetCapabilities = collidingCapabilities
+                .Where(c => string.Equals(c.TargetTypeId, targetTypeId, StringComparison.Ordinal))
+                .ToList();
+
+            if (exactTargetCapabilities.Count == 1)
+            {
+                var exactTargetCapability = exactTargetCapabilities[0];
+                foreach (var collidingCapability in collidingCapabilities)
+                {
+                    if (string.Equals(collidingCapability.CapabilityId, exactTargetCapability.CapabilityId, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (!expandedTargetsToRemove.TryGetValue(collidingCapability.CapabilityId, out var targetIds))
+                    {
+                        targetIds = new(StringComparer.Ordinal);
+                        expandedTargetsToRemove[collidingCapability.CapabilityId] = targetIds;
+                    }
+
+                    targetIds.Add(targetTypeId);
+                }
+
+                continue;
+            }
+
+            var capIds = collidingCapabilities.Select(c => c.CapabilityId).ToList();
             capIds.Sort(StringComparer.Ordinal);
 
             var conflictingIdsStr = string.Join(", ", capIds);
@@ -947,7 +979,19 @@ public static class AtsCapabilityScanner
             }
         }
 
-        capabilities.RemoveAll(c => capabilitiesToRemove.Contains(c.CapabilityId));
+        foreach (var capability in capabilities)
+        {
+            if (expandedTargetsToRemove.TryGetValue(capability.CapabilityId, out var targetIds))
+            {
+                capability.ExpandedTargetTypes = capability.ExpandedTargetTypes
+                    .Where(t => !targetIds.Contains(t.TypeId))
+                    .ToList();
+            }
+        }
+
+        capabilities.RemoveAll(c =>
+            capabilitiesToRemove.Contains(c.CapabilityId) ||
+            (c.TargetTypeId is not null && c.ExpandedTargetTypes.Count == 0));
     }
 
     /// <summary>

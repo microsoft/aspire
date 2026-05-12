@@ -406,4 +406,52 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expected, formattedJson, ignoreLineEndingDifferences: true);
     }
+
+    [Fact]
+    public async Task TelemetrySpansCommand_WithSearchOption_PassesSearchToUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        string? capturedUrl = null;
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            if (url.Contains("/api/telemetry/spans"))
+            {
+                capturedUrl = url;
+                var json = BuildSpansJson(("frontend", null, "span001", "GET /index", s_testTime, s_testTime.AddMilliseconds(50), false));
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel spans --dashboard-url http://localhost:18888 --search \"GET /index\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(capturedUrl);
+        Assert.Contains("search=", capturedUrl);
+    }
 }

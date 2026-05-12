@@ -132,7 +132,11 @@ internal sealed class InitCommand : BaseCommand
 
         if (dropResult != ExitCodeConstants.Success)
         {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
+            InteractionService.DisplayError(InteractionServiceStrings.ProjectCouldNotBeCreated);
+            InteractionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
+                allowMarkup: true);
             return dropResult;
         }
 

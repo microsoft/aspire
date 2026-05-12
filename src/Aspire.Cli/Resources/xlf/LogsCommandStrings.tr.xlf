@@ -42,6 +42,11 @@
         <target state="translated">--follow kullanılmadığında kaynak adı gereklidir. Tüm kaynaklardan günlük akışı yapmak için --follow kullanın.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">akış günlüklerinin kaynağı</target>

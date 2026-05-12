@@ -375,10 +375,14 @@ internal sealed class AppHostLauncher(
             }
         }
 
-        interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedLeft, string.Format(
+        var checkLogsMessage = string.Format(
             CultureInfo.CurrentCulture,
             RunCommandStrings.CheckLogsForDetails,
-            childLogFile));
+            MarkupHelpers.SafeFileLink(interactionService, childLogFile));
+        interactionService.DisplayMessage(
+            KnownEmojis.MagnifyingGlassTiltedLeft,
+            checkLogsMessage,
+            allowMarkup: true);
 
         return ExitCodeConstants.FailedToDotnetRunAppHost;
     }

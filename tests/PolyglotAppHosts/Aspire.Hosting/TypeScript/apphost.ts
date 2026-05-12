@@ -7,6 +7,7 @@ import {
     CertificateTrustScope,
     EndpointProperty,
     IconVariant,
+    OtlpProtocol,
     ProbeType,
     refExpr,
 } from './.modules/aspire.js';
@@ -22,6 +23,7 @@ const processCommandStdinScriptPath = fileURLToPath(new URL("./process-command-s
 
 // addContainer (pre-existing)
 const container = await builder.addContainer("mycontainer", "nginx");
+await container.withOtlpExporter({ protocol: OtlpProtocol.HttpJson });
 const taggedContainer = await builder.addContainer("mytaggedcontainer", {
     image: "nginx",
     tag: "stable-alpine",

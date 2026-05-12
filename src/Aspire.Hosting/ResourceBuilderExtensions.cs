@@ -2872,6 +2872,34 @@ public static class ResourceBuilderExtensions
             CreateProcessCommandOptions(options));
     }
 
+    /// <summary>
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
+    /// </summary>
+    [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withProcessCommandFactory", Description = "Adds a process resource command via callback")]
+    internal static IResourceBuilder<TResource> WithProcessCommandFactoryExport<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string commandName,
+        string displayName,
+        Func<ExecuteCommandContext, Task<ProcessCommandSpecExportData>> createProcessSpec,
+        ProcessCommandResultExportOptions? options = null)
+        where TResource : IResource
+    {
+        ArgumentNullException.ThrowIfNull(createProcessSpec);
+
+        return builder.WithProcessCommand(
+            commandName,
+            displayName,
+            async context =>
+            {
+                var processCommandSpec = await createProcessSpec(context).ConfigureAwait(false)
+                    ?? throw new InvalidOperationException("The process command specification factory returned null.");
+
+                return CreateProcessCommandSpec(processCommandSpec);
+            },
+            CreateProcessCommandOptions(options));
+    }
+
     internal static async Task<ExecuteCommandResult> ExecuteProcessCommandAsync(ExecuteCommandContext context, ProcessCommandSpec processCommandSpec, ProcessCommandOptions commandOptions)
     {
         var processSpec = CreateProcessSpec(context, processCommandSpec, commandOptions);
@@ -2894,7 +2922,22 @@ public static class ResourceBuilderExtensions
 
     private static ProcessCommandOptions CreateProcessCommandOptions(ProcessCommandExportOptions exportOptions)
     {
+        return CreateProcessCommandOptions(new ProcessCommandResultExportOptions
+        {
+            CommandOptions = exportOptions.CommandOptions,
+            MaxOutputLineCount = exportOptions.MaxOutputLineCount,
+            DisplayImmediately = exportOptions.DisplayImmediately,
+            SuccessExitCodes = exportOptions.SuccessExitCodes
+        });
+    }
+
+    private static ProcessCommandOptions CreateProcessCommandOptions(ProcessCommandResultExportOptions? exportOptions)
+    {
         var commandOptions = new ProcessCommandOptions();
+        if (exportOptions is null)
+        {
+            return commandOptions;
+        }
 
         if (exportOptions.CommandOptions is { } commonOptions)
         {
@@ -2941,13 +2984,27 @@ public static class ResourceBuilderExtensions
 
     private static ProcessCommandSpec CreateProcessCommandSpec(ProcessCommandExportOptions exportOptions)
     {
-        var executablePath = exportOptions.ExecutablePath;
+        return CreateProcessCommandSpec(new ProcessCommandSpecExportData
+        {
+            ExecutablePath = exportOptions.ExecutablePath,
+            Arguments = exportOptions.Arguments,
+            WorkingDirectory = exportOptions.WorkingDirectory,
+            EnvironmentVariables = exportOptions.EnvironmentVariables,
+            InheritEnvironmentVariables = exportOptions.InheritEnvironmentVariables,
+            StandardInputContent = exportOptions.StandardInputContent,
+            KillEntireProcessTree = exportOptions.KillEntireProcessTree
+        });
+    }
+
+    private static ProcessCommandSpec CreateProcessCommandSpec(ProcessCommandSpecExportData exportData)
+    {
+        var executablePath = exportData.ExecutablePath;
         if (string.IsNullOrWhiteSpace(executablePath))
         {
             throw new DistributedApplicationException("Process command requires a non-empty executable path.");
         }
 
-        var arguments = exportOptions.Arguments ?? [];
+        var arguments = exportData.Arguments ?? [];
         foreach (var argument in arguments)
         {
             if (argument is null)
@@ -2958,12 +3015,12 @@ public static class ResourceBuilderExtensions
 
         return new ProcessCommandSpec(executablePath)
         {
-            WorkingDirectory = exportOptions.WorkingDirectory,
+            WorkingDirectory = exportData.WorkingDirectory,
             Arguments = arguments.ToArray(),
-            EnvironmentVariables = CreateEnvironmentVariables(exportOptions.EnvironmentVariables),
-            InheritEnvironmentVariables = exportOptions.InheritEnvironmentVariables ?? true,
-            StandardInputContent = exportOptions.StandardInputContent,
-            KillEntireProcessTree = exportOptions.KillEntireProcessTree ?? true
+            EnvironmentVariables = CreateEnvironmentVariables(exportData.EnvironmentVariables),
+            InheritEnvironmentVariables = exportData.InheritEnvironmentVariables ?? true,
+            StandardInputContent = exportData.StandardInputContent,
+            KillEntireProcessTree = exportData.KillEntireProcessTree ?? true
         };
     }
 

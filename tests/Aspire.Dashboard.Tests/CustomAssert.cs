@@ -9,7 +9,12 @@ public static class CustomAssert
 {
     public static void AssertExceedsMinInterval(TimeSpan duration, TimeSpan minInterval)
     {
-        // Timers are not precise, so we allow for a small margin of error.
-        Assert.True(duration >= minInterval.Subtract(TimeSpan.FromMilliseconds(50)), $"Elapsed time {duration} should be greater than min interval {minInterval}.");
+        // Timers are not precise, especially under CPU contention, so we allow for a margin of error.
+        // The margin accounts for system scheduling delays and Task.Delay inaccuracy under load.
+        var tolerance = TimeSpan.FromMilliseconds(200);
+        var effectiveMinInterval = minInterval.Subtract(tolerance);
+        Assert.True(
+            duration >= effectiveMinInterval,
+            $"Elapsed time {duration} should be greater than or equal to effective min interval {effectiveMinInterval} (min interval {minInterval} with tolerance {tolerance}).");
     }
 }

@@ -167,6 +167,11 @@
         <target state="needs-review-translation">리소스 이름으로 필터링</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</source>
+        <target state="new">Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>view telemetry for</source>
         <target state="translated">원격 분석 데이터 보기</target>
