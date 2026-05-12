@@ -55,6 +55,8 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
             var newContent = $$"""
                 {{sdkLine}}
 
+                #pragma warning disable ASPIREINTERACTION001
+
                 var builder = DistributedApplication.CreateBuilder(args);
 
                 var cache = builder.AddContainer("cache", "redis");
