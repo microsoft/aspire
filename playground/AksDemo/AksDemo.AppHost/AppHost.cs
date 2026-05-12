@@ -50,7 +50,7 @@ aks.AddGateway("storefront-gw")
    .WithLoadBalancer(publicLb)
    .WithRoute("/api", api.GetEndpoint("http"))
    .WithTls()
-   .WithGatewayAnnotation("cert-manager.io/cluster-issuer", "letsencrypt-staging");
+   .WithGatewayAnnotation("cert-manager.io/cluster-issuer", "letsencrypt-prod");
 
 // Admin gateway: serves the same backend but on a separate AGC ALB so a different set of
 // network policies, frontends, or DNS names can hang off it.
