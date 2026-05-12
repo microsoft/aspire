@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering improvement: makes pr-docs-check workflow target-branch resolution deterministic",
+  "mergedAt": "2026-05-12T01:35:52Z",
+  "number": 16950,
+  "runDate": "2026-05-12T03:06:21Z",
+  "status": "included",
+  "title": "Make pr-docs-check target-branch resolution deterministic and prefer latest aspire.dev release branch"
+}

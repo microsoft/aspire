@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Dependency update: bumps Aspire AppHost SDK from 13.2.4 to 13.3.0, not a documentation PR",
+  "mergedAt": "2026-05-12T01:10:51Z",
+  "number": 917,
+  "runDate": "2026-05-12T03:06:21Z",
+  "status": "excluded",
+  "title": "Update Aspire AppHost SDK and packages to 13.3.0"
+}

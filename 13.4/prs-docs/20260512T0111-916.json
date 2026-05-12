@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump: mermaid from 11.14.0 to 11.15.0, not a documentation PR",
+  "mergedAt": "2026-05-12T01:11:08Z",
+  "number": 916,
+  "runDate": "2026-05-12T03:06:21Z",
+  "status": "excluded",
+  "title": "build(deps): bump mermaid from 11.14.0 to 11.15.0 in /src/frontend"
+}

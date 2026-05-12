@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CLI improvement: adds clickable terminal hyperlinks to log file paths in CLI output",
+  "mergedAt": "2026-05-12T01:41:15Z",
+  "number": 16603,
+  "runDate": "2026-05-12T03:06:21Z",
+  "status": "included",
+  "title": "Make CLI log paths clickable"
+}

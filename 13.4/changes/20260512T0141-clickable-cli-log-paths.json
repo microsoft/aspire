@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire CLI now displays log file references as clickable terminal hyperlinks, making it easy to open log files directly from CLI output.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-05-12T01:41:15Z",
+  "lastMergedAt": "2026-05-12T01:41:15Z",
+  "name": "Clickable log file paths in CLI output",
+  "owner": "IEvangelist",
+  "prs": [
+    16603
+  ]
+}
