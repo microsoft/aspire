@@ -5,8 +5,7 @@
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting go golang framework runtime</PackageTags>
     <Description>Go support for Aspire.</Description>
-    <!-- No baseline exists since this is a new package -->
-    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
