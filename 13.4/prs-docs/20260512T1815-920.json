@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs refactoring to apply consistent pattern across integration articles; not documentation of a specific new feature",
+  "mergedAt": "2026-05-12T18:15:39Z",
+  "number": 920,
+  "runDate": "2026-05-12T18:37:38Z",
+  "status": "excluded",
+  "title": "refactor(integrations): apply PostgreSQL pattern to every integration article"
+}

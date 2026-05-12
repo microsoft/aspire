@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added KubernetesManifestResource with a polyglot-friendly server-side API for adding arbitrary Kubernetes manifests to deployment pipelines. Resources can be configured with namespaces, labels, annotations, and arbitrary YAML field paths via the new AddManifest(...) helper on KubernetesResource.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "☸️",
+  "firstMergedAt": "2026-05-12T17:57:05Z",
+  "lastMergedAt": "2026-05-12T17:57:05Z",
+  "name": "Kubernetes manifest resource API",
+  "owner": "sebastienros",
+  "prs": [
+    16883
+  ]
+}

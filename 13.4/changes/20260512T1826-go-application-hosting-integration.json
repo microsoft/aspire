@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@edmondshtogu"
+  ],
+  "description": "Added Aspire.Hosting.Go — a first-class hosting integration for Go applications, bringing Go to parity with Aspire.Hosting.Python and Aspire.Hosting.JavaScript. Supports build flags (tags, ldflags, gcflags), race detector, Delve remote debugging with VS Code integration, go mod lifecycle commands (tidy, vendor, download), and a production-ready go-starter template with Redis, OTLP telemetry, and health checks.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🦫",
+  "firstMergedAt": "2026-05-12T18:26:17Z",
+  "lastMergedAt": "2026-05-12T18:26:17Z",
+  "name": "Go application hosting integration",
+  "owner": "davidfowl",
+  "prs": [
+    16879
+  ]
+}

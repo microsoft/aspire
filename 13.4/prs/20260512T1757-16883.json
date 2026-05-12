@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New KubernetesManifestResource API for polyglot-friendly Kubernetes manifest configuration",
+  "mergedAt": "2026-05-12T17:57:05Z",
+  "number": 16883,
+  "runDate": "2026-05-12T18:37:38Z",
+  "status": "included",
+  "title": "Add Kubernetes manifest ATS API"
+}

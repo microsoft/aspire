@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs infrastructure change (twoslash annotations) unrelated to a milestone changelog entry",
+  "mergedAt": "2026-05-12T17:34:38Z",
+  "number": 919,
+  "runDate": "2026-05-12T18:37:38Z",
+  "status": "excluded",
+  "title": "Strip twoslash annotations from llms*.txt outputs"
+}
