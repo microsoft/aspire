@@ -221,7 +221,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }, ct);
 
             // Configuring containers that use the tunnel require these host network-side endpoints for Executables to be ready.
-            var cctx = new ContainerCreationContext(createContainerNetworks, createExecutableEndpoints);
+            var cctx = new ContainerCreationContext(createContainerNetworks, createExecutableEndpoints, ct);
             _containerContextSource.SetResult(cctx);
 
             var createContainers = Task.Run(async () =>
