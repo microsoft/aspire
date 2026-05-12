@@ -19,7 +19,7 @@ jobs:
   build:
     name: Build CLI E2E Docker image
     runs-on: ${{ github.repository_owner == 'microsoft' && '8-core-ubuntu-latest' || 'ubuntu-latest' }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       INCLUDE_POLYGLOT: ${{ inputs.includePolyglotImages }}
       UPLOAD_ARTIFACTS: ${{ inputs.uploadImageArtifacts }}
