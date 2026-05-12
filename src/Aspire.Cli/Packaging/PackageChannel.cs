@@ -102,7 +102,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                     .Select(TryGetPackageIdentityFromPackageFileName)
                     .Where(p => p.HasValue)
                     .Select(p => p!.Value)
-                    .Where(p => p.PackageId.Contains("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
+                    .Where(p => p.PackageId.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
                     .Select(p => new NuGetPackage { Id = p.PackageId, Version = PinnedVersion, Source = aspireMapping.Source })
                     .ToList();
             }
