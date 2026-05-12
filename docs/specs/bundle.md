@@ -643,6 +643,31 @@ For advanced scenarios (testing, debugging), a single environment variable can f
 
 This is not documented for end users - it's for internal testing and edge cases only.
 
+### Channel Identity
+
+Every CLI binary is built for a specific acquisition channel. The pipeline is:
+
+1. **MSBuild property** — `AspireCliChannel` is set by CI (for example, `/p:AspireCliChannel=stable`) or defaults to `local` for local developer builds.
+2. **Assembly metadata** — `Aspire.Cli.csproj` emits `<AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />`, which becomes a `[AssemblyMetadata]` attribute on the compiled assembly.
+3. **`IdentityChannelReader`** — registered as an `IIdentityChannelReader` singleton in DI, reading and validating the attribute on first access. The read is lazy, cached via `Lazy<string>`, and thread-safe. The reader is AOT-safe: it only enumerates a sealed, build-time-known attribute type.
+4. **`CliExecutionContext.IdentityChannel`** — the resolved string, available to all CLI components for hive selection and project reseeding.
+
+#### Supported channel names
+
+The following values are the only accepted `AspireCliChannel` values. Any other value causes `IdentityChannelReader` to throw `InvalidOperationException` at startup.
+
+| Channel | Built by | Package source |
+|---------|----------|----------------|
+| `stable` | Release pipeline | Official NuGet feeds |
+| `staging` | RC/preview pipeline | RC/preview NuGet feeds |
+| `daily` | Daily CI | Daily build NuGet feeds |
+| `local` | Developer build (default when no `/p:AspireCliChannel=` override) | `~/.aspire/hives/local/packages/` |
+| `pr-<N>` | PR CI build (N = PR number, for example `pr-16820`) | `~/.aspire/hives/pr-<N>/packages/` |
+
+Bare `pr` (without a numeric suffix) is explicitly rejected; CI bakes `pr-<N>` directly so no runtime join is needed. The `default` sentinel in `PackageChannelNames` is a project-level value for `aspire.config.json#channel` and is **not** a valid assembly-baked identity channel.
+
+`CliExecutionContext.IdentityChannel` is the CLI's own identity. It is distinct from the channel a project requests via `aspire.config.json#channel`: packaging decisions (such as PSM emission for an apphost) key on the project's channel, not the CLI's identity.
+
 ---
 
 ## Installation
@@ -749,6 +774,18 @@ For testing PR builds before they are merged:
 ```
 
 The PR script also downloads NuGet package artifacts (`built-nugets` and `built-nugets-for-{rid}`) and installs them as a NuGet hive at `~/.aspire/hives/pr-{N}/packages/`. This enables `aspire new` and `aspire add` to resolve PR-built package versions when the channel is set to `pr-{N}`.
+
+### Hive Types
+
+The CLI maintains per-channel NuGet package directories ("hives") under `~/.aspire/hives/`. On startup the CLI selects the hive whose directory name matches `CliExecutionContext.IdentityChannel`.
+
+| Hive directory | Channel | Package resolution |
+|----------------|---------|-------------------|
+| `hives/local/packages/` | `local` | Flat directory of `.nupkg` files. The CLI pins to the version found in `Aspire.Hosting.*.nupkg`. |
+| `hives/pr-<N>/packages/` | `pr-<N>` | Flat directory of `.nupkg` files populated by `get-aspire-cli-pr.sh` / `.ps1`. |
+| _(none)_ | `stable`, `staging`, `daily` | No on-disk hive. Packages are resolved from the appropriate public NuGet feeds. |
+
+Hive directories are preserved across CLI installations and re-extractions — only the binary and managed payload are overwritten.
 
 ---
 
