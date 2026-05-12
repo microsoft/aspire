@@ -665,8 +665,12 @@ extract_version_suffix_from_packages() {
     local download_dir="$1"
     
     if [[ "$DRY_RUN" == true ]]; then
-        # Return a mock version for dry run
-        printf "pr.1234.a1b2c3d4"
+        # Return a non-PR-shaped sentinel so the --local-dir auto-detect regex at the
+        # call site (^pr\.([0-9]+)\.[0-9a-g]+$) does NOT match and the caller falls
+        # through to hive_label="local". A "pr.<N>.gSHA"-shaped mock would always
+        # match and force hive_label="pr-1234" in every dry-run, regardless of what
+        # is actually in --local-dir.
+        printf "local"
         return 0
     fi
     

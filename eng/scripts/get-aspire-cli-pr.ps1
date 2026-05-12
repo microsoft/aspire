@@ -917,8 +917,12 @@ function Get-VersionSuffixFromPackages {
     )
     
     if ($PSCmdlet.ShouldProcess("packages", "Extract version suffix from packages") -and $WhatIfPreference) {
-        # Return a mock version for WhatIf
-        return "pr.1234.a1b2c3d4"
+        # Return a non-PR-shaped sentinel so the -LocalDir auto-detect regex at the
+        # call site (^pr\.(\d+)\.[0-9a-g]+$) does NOT match and the caller falls
+        # through to hive_label="local". A "pr.<N>.gSHA"-shaped mock would always
+        # match and force hive_label="pr-1234" in every -WhatIf run, regardless of
+        # what is actually in -LocalDir.
+        return "local"
     }
     
     # Look for any .nupkg file and extract version from its name
