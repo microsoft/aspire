@@ -959,10 +959,16 @@ pre-agent-steps:
                r"(?:\bnew\s+Option<[^>]+>\s*\("
                r"|Option<[^>]+>\s+\w+(?:\s*=|\s*\([^)]*\)\s*=>)\s*new\s*\()"
            )),
-          # Any added non-blank line in dashboard API surface files.
+          # Any non-blank added or removed line in dashboard API
+          # surface files. This ensures endpoint removals or route
+          # moves that appear only as deletions still gate docs.
           ("dashboard_api_endpoint_changed",
            r"^src/Aspire\.Dashboard/(Api/.+\.cs|DashboardEndpointsBuilder\.cs)$",
            "added",
+           re.compile(r"\S")),
+          ("dashboard_api_endpoint_changed",
+           r"^src/Aspire\.Dashboard/(Api/.+\.cs|DashboardEndpointsBuilder\.cs)$",
+           "removed",
            re.compile(r"\S")),
           # [Obsolete(...)] addition anywhere in src/. Tolerates either
           # the shorthand attribute name or the *Attribute form.
@@ -997,9 +1003,13 @@ pre-agent-steps:
            r"^src/[^/]+/api/.+\.cs$", "removed",
            re.compile(r"^\s*(?:public|protected)\s+")),
           # Tag / Image / Registry / Digest updates inside
-          # *ContainerImageTags.cs files.
+          # *ContainerImageTags.cs files. Scan both added and
+          # removed lines so pure deletions still count as changes.
           ("container_image_version_changed",
            r"^src/.+ContainerImageTags\.cs$", "added",
+           re.compile(r"\b(?:Tag|Image|Registry|Digest)\s*=\s*\"")),
+          ("container_image_version_changed",
+           r"^src/.+ContainerImageTags\.cs$", "removed",
            re.compile(r"\b(?:Tag|Image|Registry|Digest)\s*=\s*\"")),
           # [DefaultValue(...)] anywhere in src/. Captures defaults
           # declared via attribute even when the file isn't named
@@ -1009,9 +1019,14 @@ pre-agent-steps:
            re.compile(r"\[DefaultValue(?:Attribute)?\s*\(")),
           # TargetFramework / TargetFrameworks change in a src/
           # csproj. Moving an integration's TFM affects which
-          # consumers can install it.
+          # consumers can install it. Check both added and removed
+          # lines so pure removals (including removing one TFM from
+          # a multi-target list) are not missed.
           ("target_framework_changed",
            r"^src/.+\.csproj$", "added",
+           re.compile(r"<TargetFrameworks?>")),
+          ("target_framework_changed",
+           r"^src/.+\.csproj$", "removed",
            re.compile(r"<TargetFrameworks?>")),
       ]
 
@@ -1118,12 +1133,20 @@ pre-agent-steps:
               if not path_re.match(filename):
                   continue
               patch = f.get("patch") or ""
-              # The patch field is omitted for very large files. Skip
-              # those rather than crashing; they're rare and the
-              # Group A path triggers already catch most large-surface
-              # changes by filename alone.
+              # The patch field is omitted by GitHub for some large
+              # diffs. Because this block exists specifically to detect
+              # diff-content signals, silently skipping a matched file
+              # would create a false negative. Favor recall instead:
+              # treat "matched file but patch unavailable" as
+              # conservative evidence for this signal.
               if not patch:
-                  continue
+                  signals[signal_name] = True
+                  record(
+                      signal_name,
+                      filename,
+                      "diff matched but GitHub omitted patch; conservatively gated",
+                  )
+                  break  # one match per file is enough for evidence
               for line in patch.splitlines():
                   # Always skip the diff file headers "+++ b/path" and
                   # "--- a/path" — they would otherwise match many
