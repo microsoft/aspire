@@ -3,6 +3,7 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -17,14 +18,14 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// actually materialized via the host Docker socket.
 /// </summary>
 /// <remarks>
-/// The legacy <c>polyglot-validation.yml</c> Rust SDK Validation job ran with
-/// <c>continue-on-error: true</c> as a paranoid safety net. Inspecting the recent main
-/// run history shows the job has been green consistently, so this test runs as a
-/// normal PR-blocking test rather than being quarantined.
+/// Quarantined to match the legacy <c>polyglot-validation.yml</c> Rust SDK Validation
+/// job, which ran with <c>continue-on-error: true</c> as a paranoid safety net.
+/// Tracking issue <see href="https://github.com/microsoft/aspire/issues/16974"/>.
 /// </remarks>
 public sealed class RustPolyglotTests(ITestOutputHelper output)
 {
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16974")]
     [CaptureWorkspaceOnFailure]
     public async Task CreateRustAppHostWithRedisIntegration()
     {

@@ -127,7 +127,13 @@ jobs:
           # Polyglot base image. Tag with both the FROM-referenced base name
           # (used by the extended dockerfiles below) and the artifact-friendly
           # polyglot tag (used by downstream loaders in load-cli-e2e-images.sh).
-          build_image "polyglot base image" tests/Shared/Docker/Dockerfile.e2e-polyglot-base cli-e2e-polyglot-base false \
+          # SKIP_SOURCE_BUILD=true: CI installs the CLI from prebuilt artifacts
+          # (downloaded per-test in run-tests.yml), not from a source build inside
+          # the container. The container source-build path is only used for local
+          # `docker build` dev iteration and is intentionally skipped here so
+          # arcade does not need RepositoryUrl/Source Link metadata that is
+          # missing once `.dockerignore` strips `.git/` from the build context.
+          build_image "polyglot base image" tests/Shared/Docker/Dockerfile.e2e-polyglot-base cli-e2e-polyglot-base true \
             aspire-e2e-polyglot-base:latest \
             aspire-cli-e2e-polyglot:prebuilt
           save_image aspire-cli-e2e-polyglot:prebuilt aspire-cli-e2e-polyglot.tar.gz
@@ -151,10 +157,14 @@ jobs:
             --build-context "aspire-e2e-polyglot-base=docker-image://aspire-e2e-polyglot-base:latest"
           )
           for lang in java python go rust; do
+            # Extended polyglot images FROM aspire-e2e-polyglot-base; they have
+            # no source-build stage of their own, so SKIP_SOURCE_BUILD is a
+            # no-op here. Passed as 'true' for symmetry with the base image
+            # and to make the intent explicit.
             build_image "${lang^} polyglot image" \
               "tests/Shared/Docker/Dockerfile.e2e-polyglot-${lang}" \
               "cli-e2e-polyglot-${lang}" \
-              false \
+              true \
               "aspire-cli-e2e-polyglot-${lang}:prebuilt"
             save_image "aspire-cli-e2e-polyglot-${lang}:prebuilt" \
               "aspire-cli-e2e-polyglot-${lang}.tar.gz"
