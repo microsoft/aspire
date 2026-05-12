@@ -3,7 +3,6 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -18,12 +17,11 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// actually materialized via the host Docker socket.
 /// </summary>
 /// <remarks>
-/// Quarantined to preserve the existing <c>continue-on-error: true</c> semantics from
-/// the legacy <c>polyglot-validation.yml</c> Rust SDK Validation job: Rust polyglot
-/// support is experimental and was non-blocking on PRs. The test runs in the scheduled
-/// quarantine workflow so regressions are still tracked.
+/// The legacy <c>polyglot-validation.yml</c> Rust SDK Validation job ran with
+/// <c>continue-on-error: true</c> as a paranoid safety net. Inspecting the recent main
+/// run history shows the job has been green consistently, so this test runs as a
+/// normal PR-blocking test rather than being quarantined.
 /// </remarks>
-[QuarantinedTest("https://github.com/microsoft/aspire/issues/16701")]
 public sealed class RustPolyglotTests(ITestOutputHelper output)
 {
     [Fact]

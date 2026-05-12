@@ -47,6 +47,11 @@ internal static class PolyglotRedisAssertions
         //  - kills the background AppHost on the way out so the container can exit cleanly.
         // The script bypasses Hex1b escaping by being written to the bind-mounted workspace
         // from the host.
+        // Wait for `aspire run` to finish gracefully when possible so DCP can tear down
+        // the spawned Redis container instead of orphaning it on the host docker socket.
+        // The legacy bash scripts SIGKILLed immediately, which leaked containers; on a
+        // shared runner those leaks could even be picked up by a subsequent `[Fact]` in
+        // the same class via the host-docker poll below.
         var scriptContents =
             "#!/bin/bash\n" +
             "set -u\n" +
@@ -56,13 +61,27 @@ internal static class PolyglotRedisAssertions
             "SUCCESS=0\n" +
             $"for i in $(seq 1 {totalIterations}); do\n" +
             $"  echo \"poll $i/{totalIterations} for redis container...\"\n" +
-            "  if docker ps --format '{{.Image}} {{.Names}}' 2>/dev/null | grep -i redis; then\n" +
+            // Match only containers whose image was pulled from the Aspire CI mirror
+            // (we set `.with_image_registry(\"netaspireci.azurecr.io\")` on the AppHost
+            // Redis resource). This rules out false positives from developer-host
+            // containers pulled from docker.io, and from any earlier `[Fact]` whose
+            // graceful-shutdown path failed to clean up.
+            "  if docker ps --format '{{.Image}} {{.Names}}' 2>/dev/null | grep -i 'netaspireci.azurecr.io.*redis'; then\n" +
             "    SUCCESS=1\n" +
             "    break\n" +
             "  fi\n" +
             "  sleep 10\n" +
             "done\n" +
-            "kill -9 \"$ASPIRE_PID\" 2>/dev/null || true\n" +
+            "# Graceful shutdown: SIGINT first so the AppHost can call DCP cleanup\n" +
+            "# (which removes the spawned Redis container) before we fall back to SIGKILL.\n" +
+            "if kill -0 \"$ASPIRE_PID\" 2>/dev/null; then\n" +
+            "  kill -INT \"$ASPIRE_PID\" 2>/dev/null || true\n" +
+            "  for i in $(seq 1 30); do\n" +
+            "    if ! kill -0 \"$ASPIRE_PID\" 2>/dev/null; then break; fi\n" +
+            "    sleep 1\n" +
+            "  done\n" +
+            "  kill -9 \"$ASPIRE_PID\" 2>/dev/null || true\n" +
+            "fi\n" +
             "wait \"$ASPIRE_PID\" 2>/dev/null || true\n" +
             "if [ \"$SUCCESS\" = \"1\" ]; then\n" +
             "  echo '[REDIS-CONTAINER-FOUND]'\n" +
