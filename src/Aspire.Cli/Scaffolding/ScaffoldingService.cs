@@ -203,9 +203,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         config.Profiles = profiles;
-        // Persist the resolved channel: prepare-resolved value wins; otherwise fall back to
-        // the channel baked into the running CLI (CliExecutionContext.Channel).
-        config.Channel = prepareResult.ChannelName ?? _cliExecutionContext.Channel;
         config.AppHost ??= new AspireConfigAppHost();
         config.AppHost.Path ??= language.AppHostFileName;
         config.AppHost.Language = language.LanguageId;

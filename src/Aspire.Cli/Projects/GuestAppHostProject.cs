@@ -349,11 +349,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     return (Success: true, Output: prepareOutput, Error: (string?)null, ChannelName: channelName, NeedsCodeGen: needsCodeGen);
                 }, emoji: KnownEmojis.Gear);
 
-            // Persist the channel: prepare-resolved value wins; otherwise fall back to the
-            // channel baked into the running CLI (CliExecutionContext.Channel).
-            config.Channel = buildResult.ChannelName ?? _executionContext.Channel;
-            SaveConfiguration(config, directory);
-
             if (!buildResult.Success)
             {
                 // Set OutputCollector so RunCommand can display errors

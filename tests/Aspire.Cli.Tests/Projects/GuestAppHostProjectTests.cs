@@ -617,6 +617,77 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Null(reloaded.Channel);
     }
 
+    /// <summary>
+    /// Regression test for the v3 channel refactor: <c>aspire run</c> must be a pure read
+    /// for <c>aspire.config.json#channel</c>. A no-op rewrite (same value) or a silent
+    /// identity-channel pin (when unset) on every invocation is not useful work and
+    /// hides intent — the seed write at <c>aspire init</c> / scaffolding time and the
+    /// explicit channel resolution in <c>aspire update</c> are the only legitimate
+    /// channel-write paths.
+    /// </summary>
+    /// <remarks>
+    /// The test seeds <c>aspire.config.json</c> with a known channel value, drives
+    /// <see cref="GuestAppHostProject.RunAsync"/> past the channel-write site (via a
+    /// fake <see cref="IAppHostServerProject"/> that returns a failed prepare result so
+    /// <c>RunAsync</c> takes the early <c>FailedToBuildArtifacts</c> return), and then
+    /// reloads <c>aspire.config.json</c> from disk to assert the on-disk channel is
+    /// unchanged. The identity channel is set to a distinctive value
+    /// (<c>pr-99999</c>) so any accidental identity pin would be detectable.
+    /// </remarks>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData(null)]
+    public async Task RunAsync_DoesNotMutateConfigChannel(string? seededChannel)
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var seededJson = seededChannel is null
+            ? """
+              {
+                "sdk": { "version": "1.0.0" },
+                "packages": { "Aspire.Hosting": "1.0.0" }
+              }
+              """
+            : $$"""
+              {
+                "sdk": { "version": "1.0.0" },
+                "channel": "{{seededChannel}}",
+                "packages": { "Aspire.Hosting": "1.0.0" }
+              }
+              """;
+        await File.WriteAllTextAsync(configPath, seededJson);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        // Drive RunAsync past the (now-removed) channel-write site by returning a fake
+        // apphost server whose PrepareAsync reports failure. RunAsync takes the early
+        // FailedToBuildArtifacts return without touching the network or starting a server.
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+        };
+
+        var project = CreateGuestAppHostProject(
+            identityChannel: "pr-99999",
+            appHostServerProjectFactory: factory);
+
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            WorkingDirectory = _workspace.WorkspaceRoot,
+        };
+
+        var exitCode = await project.RunAsync(context, CancellationToken.None);
+        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        // Pre-fix, RunAsync would have written `seededChannel ?? "pr-99999"` here on every
+        // invocation. Post-fix, RunAsync is a pure read for the channel.
+        Assert.Equal(seededChannel, reloaded.Channel);
+    }
+
     private GuestAppHostProject CreateGuestAppHostProject()
         => CreateGuestAppHostProject(interactionService: null, identityChannel: "local");
 
@@ -659,5 +730,25 @@ public class GuestAppHostProjectTests : IDisposable
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry);
+    }
+
+    private sealed class FakeFailingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject
+    {
+        public string AppDirectoryPath { get; } = appDirectoryPath;
+
+        public string GetInstanceIdentifier() => AppDirectoryPath;
+
+        public Task<AppHostServerPrepareResult> PrepareAsync(
+            string sdkVersion,
+            IEnumerable<IntegrationReference> integrations,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
+
+        public (string SocketPath, System.Diagnostics.Process Process, OutputCollector OutputCollector) Run(
+            int hostPid,
+            IReadOnlyDictionary<string, string>? environmentVariables = null,
+            string[]? additionalArgs = null,
+            bool debug = false) =>
+            throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
     }
 }
