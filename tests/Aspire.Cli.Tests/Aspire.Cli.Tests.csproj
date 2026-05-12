@@ -19,7 +19,7 @@
        host sees a coherent channel value.
 
        CliBootstrapTests reads Assembly.GetEntryAssembly() directly and compares it against
-       context.Channel. That comparison is meaningful because both this csproj and Aspire.Cli.csproj
+       context.IdentityChannel. That comparison is meaningful because both this csproj and Aspire.Cli.csproj
        forward the same $(AspireCliChannel) MSBuild property — keeping both assemblies in lockstep.
        Under /p:AspireCliChannel=stable both pick up "stable"; under no override both default to
        "local" via the production csproj's fallback. -->

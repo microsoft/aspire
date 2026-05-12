@@ -333,10 +333,10 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 // semantics coherent end-to-end (build → execution context → hive → restore).
                 PackageChannel? localBuildChannel = null;
                 if (string.IsNullOrWhiteSpace(configuredChannelName) &&
-                    VersionHelper.IsLocalBuildChannel(ExecutionContext.Channel))
+                    VersionHelper.IsLocalBuildChannel(ExecutionContext.IdentityChannel))
                 {
                     localBuildChannel = channels.FirstOrDefault(c =>
-                        string.Equals(c.Name, ExecutionContext.Channel, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase));
                 }
 
                 var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)

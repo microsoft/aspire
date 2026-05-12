@@ -13,7 +13,7 @@ namespace Aspire.Cli.Tests.Scaffolding;
 /// <summary>
 /// Behavioral regression tests for channel reseed in <see cref="ScaffoldingService.ScaffoldAsync"/>.
 /// Verifies that the channel written to <c>aspire.config.json</c> is sourced from
-/// <see cref="CliExecutionContext.Channel"/> when no explicit channel is given, and from the
+/// <see cref="CliExecutionContext.IdentityChannel"/> when no explicit channel is given, and from the
 /// caller-supplied value when one is.
 /// <para>
 /// <b>Coverage gap:</b> The heavyweight DI reseed sites —
@@ -30,7 +30,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
     [InlineData("staging", null, "staging")]
     [InlineData("daily", null, "daily")]
     [InlineData("pr-12345", null, "pr-12345")]                  // option-(a) resolved label — what reseed sites must persist
-    [InlineData("daily", "explicit-staging", "explicit-staging")] // explicit Channel overrides context.Channel
+    [InlineData("daily", "explicit-staging", "explicit-staging")] // explicit Channel overrides context.IdentityChannel
     public async Task ScaffoldAsync_PersistsExpectedChannel(string contextChannel, string? explicitChannel, string expectedPersistedChannel)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -74,7 +74,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             sdksDirectory: dir,
             logsDirectory: dir,
             logFilePath: "test.log",
-            channel: channel);
+            identityChannel: channel);
     }
 
     private static ScaffoldingService CreateScaffoldingService(CliExecutionContext executionContext)

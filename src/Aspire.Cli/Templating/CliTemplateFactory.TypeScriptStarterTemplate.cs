@@ -62,11 +62,11 @@ internal sealed partial class CliTemplateFactory
                     // Persist the template SDK version before restore so integration and codegen package
                     // resolution stays aligned with the project we just created. Seed the channel:
                     // explicit input wins; otherwise default to the channel baked into the running
-                    // CLI (CliExecutionContext.Channel).
+                    // CLI (CliExecutionContext.IdentityChannel).
                     var config = AspireConfigFile.LoadOrCreate(outputPath, aspireVersion);
                     config.Channel = !string.IsNullOrEmpty(inputs.Channel)
                         ? inputs.Channel
-                        : _executionContext.Channel;
+                        : _executionContext.IdentityChannel;
                     config.Save(outputPath);
 
                     var appHostProject = _projectFactory.TryGetProject(new FileInfo(Path.Combine(outputPath, "apphost.ts")));

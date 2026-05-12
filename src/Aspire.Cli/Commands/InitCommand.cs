@@ -263,7 +263,7 @@ internal sealed class InitCommand : BaseCommand
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
 
         // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
-        // identity-channel package sources (CliExecutionContext.Channel — stable,
+        // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
         // staging, daily, pr-<N>, or local). This is required so MSBuild can resolve
         // `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK directive — both
         // for `aspire add` (`dotnet package add --file apphost.cs`) and for
@@ -274,7 +274,7 @@ internal sealed class InitCommand : BaseCommand
         // creates a new file or merges missing sources into an existing one, so adding
         // hives later is handled the same way as for templates.
         var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
-            channelName: _executionContext.Channel,
+            channelName: _executionContext.IdentityChannel,
             outputPath: workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
         if (createdNuGetConfig)
@@ -325,7 +325,7 @@ internal sealed class InitCommand : BaseCommand
         }
 
         // Resolve the channel-aware template package version + feed mapping. The running
-        // CLI binary's identity channel (CliExecutionContext.Channel — stable, staging,
+        // CLI binary's identity channel (CliExecutionContext.IdentityChannel — stable, staging,
         // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
         // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
         // intentionally excluded — init should produce the same template on every machine

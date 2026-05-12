@@ -574,7 +574,7 @@ public class Program
         var cacheDirectory = GetCacheDirectory();
         var sdksDirectory = GetSdksDirectory();
         var packagesDirectory = GetPackagesDirectory();
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, channel: channel);
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel);
     }
 
     private static DirectoryInfo GetCacheDirectory()

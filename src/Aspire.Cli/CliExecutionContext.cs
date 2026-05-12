@@ -5,7 +5,7 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string channel = "local")
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local")
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -13,22 +13,30 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
 
     /// <summary>
-    /// Gets the resolved hive label for the running CLI: one of <c>local</c>,
-    /// <c>stable</c>, <c>staging</c>, <c>daily</c>, or the per-PR label
-    /// <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>). This is the value
-    /// baked into the binary via <c>[AssemblyMetadata("AspireCliChannel", "...")]</c>
-    /// and consumed verbatim by the packaging service to select the matching
-    /// hive directory.
+    /// Gets the hive label baked into the <strong>running CLI binary</strong>:
+    /// one of <c>local</c>, <c>stable</c>, <c>staging</c>, <c>daily</c>, or the
+    /// per-PR label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>). The value
+    /// is sourced from <c>[AssemblyMetadata("AspireCliChannel", "...")]</c> and
+    /// is consumed verbatim by the packaging service to select the matching
+    /// hive directory for this CLI process.
     /// </summary>
     /// <remarks>
-    /// This is the value reseed call sites (template factories, scaffolding,
-    /// guest apphost project) write into a project's
-    /// <c>aspire.config.json#channel</c>: it is the consumer-facing label that
-    /// subsequent CLI runs use to select the right hive. CI bakes
-    /// <c>pr-&lt;PR_NUMBER&gt;</c> directly for PR builds, so no runtime
-    /// "<c>pr</c> + parsed PrNumber" join is required.
+    /// <para>
+    /// This is the <em>CLI's identity</em>, not the channel a project is asking
+    /// restore to use. Restore/packaging decisions that depend on what the
+    /// project requested (for example PSM emission for an apphost) must key on
+    /// the project's <c>aspire.config.json#channel</c>, not this property.
+    /// </para>
+    /// <para>
+    /// Reseed call sites (template factories, scaffolding, guest apphost
+    /// project) write this value into a project's
+    /// <c>aspire.config.json#channel</c> as the default — that is the
+    /// consumer-facing label subsequent CLI runs use to select the right hive.
+    /// CI bakes <c>pr-&lt;PR_NUMBER&gt;</c> directly for PR builds, so no
+    /// runtime "<c>pr</c> + parsed PrNumber" join is required.
+    /// </para>
     /// </remarks>
-    public string Channel { get; } = channel;
+    public string IdentityChannel { get; } = identityChannel;
 
     /// <summary>
     /// Gets the directory where restored NuGet packages are cached for apphost server sessions.

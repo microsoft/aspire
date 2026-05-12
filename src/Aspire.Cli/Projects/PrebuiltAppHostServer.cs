@@ -109,8 +109,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         try
         {
-            // Resolve the configured channel from the local project config
-            var channelName = ResolveChannelName();
+            // Resolve the channel the project requests for restore (aspire.config.json#channel,
+            // with a legacy .aspire/settings.json#channel fallback). This is independent of the
+            // running CLI's identity hive (CliExecutionContext.IdentityChannel).
+            var requestedChannel = ResolveRequestedChannel();
 
             if (projectRefs.Count > 0)
             {
@@ -125,13 +127,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
                 // Build a synthetic project with all package and project references
                 _integrationLibsPath = await BuildIntegrationProjectAsync(
-                    packageRefs, projectRefs, channelName, cancellationToken);
+                    packageRefs, projectRefs, requestedChannel, cancellationToken);
             }
             else if (packageRefs.Count > 0)
             {
                 // NuGet-only — use the bundled NuGet service (no SDK required)
                 _integrationLibsPath = await RestoreNuGetPackagesAsync(
-                    packageRefs, channelName, cancellationToken);
+                    packageRefs, requestedChannel, cancellationToken);
             }
 
             // Generate appsettings.json after build/restore so we can use actual assembly names
@@ -144,7 +146,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return new AppHostServerPrepareResult(
                 Success: true,
                 Output: null,
-                ChannelName: channelName,
+                ChannelName: requestedChannel,
                 NeedsCodeGeneration: true);
         }
         catch (Exception ex)
@@ -165,14 +167,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// </summary>
     private async Task<string> RestoreNuGetPackagesAsync(
         List<IntegrationReference> packageRefs,
-        string? channelName,
+        string? requestedChannel,
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
 
         var packages = packageRefs.Select(r => (r.Name, r.Version!)).ToList();
-        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(channelName, cancellationToken);
-        var sources = await GetNuGetSourcesAsync(channelName, cancellationToken);
+        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, cancellationToken);
+        var sources = await GetNuGetSourcesAsync(requestedChannel, cancellationToken);
 
         return await _nugetService.RestorePackagesAsync(
             packages,
@@ -192,7 +194,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private async Task<string> BuildIntegrationProjectAsync(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
-        string? channelName,
+        string? requestedChannel,
         CancellationToken cancellationToken)
     {
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
@@ -211,7 +213,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         IEnumerable<string>? channelSources = null;
         try
         {
-            channelSources = await GetNuGetSourcesAsync(channelName, cancellationToken);
+            channelSources = await GetNuGetSourcesAsync(requestedChannel, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -335,9 +337,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     }
 
     /// <summary>
-    /// Resolves the configured channel name from the local project config.
+    /// Resolves the channel name the <em>project requests</em> for restore — read from the
+    /// project's <c>aspire.config.json#channel</c> (or legacy <c>.aspire/settings.json#channel</c>).
+    /// This is independent of the running CLI's <see cref="CliExecutionContext.IdentityChannel"/>.
     /// </summary>
-    internal string? ResolveChannelName()
+    internal string? ResolveRequestedChannel()
     {
         // Check aspire.config.json first, then fall back to legacy .aspire/settings.json.
         var channelName = AspireConfigFile.Load(_appDirectoryPath)?.Channel
@@ -354,7 +358,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// <summary>
     /// Gets NuGet sources from the resolved channel for bundled restore.
     /// </summary>
-    private async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? channelName, CancellationToken cancellationToken)
+    private async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, CancellationToken cancellationToken)
     {
         var sources = new List<string>();
 
@@ -363,9 +367,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             var channels = await _packagingService.GetChannelsAsync(cancellationToken);
 
             IEnumerable<PackageChannel> explicitChannels;
-            if (!string.IsNullOrEmpty(channelName))
+            if (!string.IsNullOrEmpty(requestedChannel))
             {
-                var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+                var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
                 explicitChannels = matchingChannel is not null ? [matchingChannel] : channels.Where(c => c.Type == PackageChannelType.Explicit);
             }
             else
@@ -397,9 +401,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return sources.Count > 0 ? sources : null;
     }
 
-    private async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? channelName, CancellationToken cancellationToken)
+    private async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(channelName))
+        if (string.IsNullOrEmpty(requestedChannel))
         {
             return null;
         }
@@ -408,7 +412,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var channel = channels.FirstOrDefault(c =>
             c.Type == PackageChannelType.Explicit &&
             c.Mappings is { Length: > 0 } &&
-            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
 
         if (channel?.Mappings is null)
         {
@@ -420,7 +424,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // resolution. For all other channels (stable, staging, daily, pr-*) PSM
         // must emit so restore honors the channel's package source mappings even when
         // channelName == ExecutionContext.Channel.
-        if (string.Equals(_executionContext.Channel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

@@ -66,9 +66,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Seed the project channel: explicit user input wins; otherwise default to the channel
-        // baked into the running CLI (CliExecutionContext.Channel). Silent default — no prompt.
+        // baked into the running CLI (CliExecutionContext.IdentityChannel). Silent default — no prompt.
         var seedChannel = string.IsNullOrWhiteSpace(context.Channel)
-            ? _cliExecutionContext.Channel
+            ? _cliExecutionContext.IdentityChannel
             : context.Channel;
         if (!string.IsNullOrEmpty(seedChannel))
         {

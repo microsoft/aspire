@@ -259,7 +259,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // Locally-built CLI consuming its own local hive — only case the guard should fire.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var executionContext = CreateContextWithChannel("local");
+        var executionContext = CreateContextWithIdentityChannel("local");
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
 
         var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
@@ -273,7 +273,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // Channel == "local" — guard always fires regardless of the requested channel.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var executionContext = CreateContextWithChannel("local");
+        var executionContext = CreateContextWithIdentityChannel("local");
         var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
 
         var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
@@ -286,7 +286,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var executionContext = CreateContextWithChannel("stable");
+        var executionContext = CreateContextWithIdentityChannel("stable");
         var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
@@ -302,7 +302,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // channel are 'local'; with running channel == 'daily' the guard must not trip.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var executionContext = CreateContextWithChannel("daily");
+        var executionContext = CreateContextWithIdentityChannel("daily");
         var server = CreateServerWithExplicitChannel(workspace, "daily", executionContext);
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "daily");
@@ -316,7 +316,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         // PR-build CLI installing a different PR's hive — guard does not fire (channel != "local").
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var executionContext = CreateContextWithChannel("pr-12345");
+        var executionContext = CreateContextWithIdentityChannel("pr-12345");
         var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
@@ -324,14 +324,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result);
     }
 
-    private static CliExecutionContext CreateContextWithChannel(string channel) =>
+    private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
         new(new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
             "test.log",
-            channel: channel);
+            identityChannel: identityChannel);
 
     private static PrebuiltAppHostServer CreateServerWithExplicitChannel(
         TemporaryWorkspace workspace,
@@ -369,19 +369,19 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     private static async Task<TemporaryNuGetConfig?> InvokeTryCreateTemporaryNuGetConfigAsync(
-        PrebuiltAppHostServer server, string channelName)
+        PrebuiltAppHostServer server, string requestedChannel)
     {
         var method = typeof(PrebuiltAppHostServer).GetMethod(
             "TryCreateTemporaryNuGetConfigAsync",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [channelName, CancellationToken.None])!;
+        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, CancellationToken.None])!;
         return await task;
     }
 
     [Fact]
-    public async Task ResolveChannelName_UsesProjectLocalAspireConfig()
+    public async Task ResolveRequestedChannel_UsesProjectLocalAspireConfig()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -404,7 +404,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
-        var channel = server.ResolveChannelName();
+        var channel = server.ResolveRequestedChannel();
 
         Assert.Equal("pr-new", channel);
     }

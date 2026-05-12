@@ -12,7 +12,7 @@ namespace Aspire.Cli.Tests;
 
 /// <summary>
 /// Integration tests for the bootstrap wiring: the running CLI's
-/// <see cref="CliExecutionContext.Channel"/> is sourced from the binary's
+/// <see cref="CliExecutionContext.IdentityChannel"/> is sourced from the binary's
 /// <c>[AssemblyMetadata("AspireCliChannel")]</c> value via
 /// <see cref="IIdentityChannelReader"/>, registered in DI by
 /// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/>.
@@ -83,7 +83,7 @@ public class CliBootstrapTests
         var reader = host.Services.GetRequiredService<IIdentityChannelReader>();
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
-        Assert.Equal(reader.ReadChannel(), context.Channel);
+        Assert.Equal(reader.ReadChannel(), context.IdentityChannel);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class CliBootstrapTests
 
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
-        Assert.Equal(bakedChannel, context.Channel);
+        Assert.Equal(bakedChannel, context.IdentityChannel);
     }
 }
 

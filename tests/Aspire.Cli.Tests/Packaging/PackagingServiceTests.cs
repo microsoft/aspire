@@ -960,7 +960,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
             new DirectoryInfo(Path.Combine(tempDir.FullName, "aspire-test-runtimes")),
             new DirectoryInfo(Path.Combine(tempDir.FullName, "aspire-test-logs")),
-            "test.log", channel: "local");
+            "test.log", identityChannel: "local");
 
         var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
 
@@ -998,7 +998,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log", channel: "daily");
+            "test.log", identityChannel: "daily");
 
         var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
 

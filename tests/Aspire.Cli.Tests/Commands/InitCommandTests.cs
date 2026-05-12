@@ -24,7 +24,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// whose template package cache yields one Aspire.ProjectTemplates entry, and pins the
     /// running CLI's identity channel to <c>default</c> so the resolver matches that implicit
     /// channel by name. Init's project-mode path uses
-    /// <see cref="CliExecutionContext.Channel"/> as the channel override; this helper keeps
+    /// <see cref="CliExecutionContext.IdentityChannel"/> as the channel override; this helper keeps
     /// tests that don't care about channel selection on a single, predictable channel.
     /// </summary>
     private static void ConfigureImplicitTemplateChannel(CliServiceCollectionTestOptions options, string version = "13.3.0")
@@ -760,7 +760,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// When the user does not pass <c>--channel</c>, the project-mode init path must resolve
     /// its template package against the channel baked into the running CLI binary (exposed
-    /// as <see cref="CliExecutionContext.Channel"/>). One named explicit channel is registered
+    /// as <see cref="CliExecutionContext.IdentityChannel"/>). One named explicit channel is registered
     /// per theory row and uniquely sourced; the assertion captures the package source seen by
     /// <c>dotnet new install</c> and verifies it came from the matching channel — proving the
     /// resolver picked the binary's identity channel rather than the implicit default or any
@@ -864,7 +864,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// When the user does not pass <c>--channel</c>, the single-file init path must wire the
     /// workspace <c>nuget.config</c> to the channel baked into the running CLI binary
-    /// (exposed as <see cref="CliExecutionContext.Channel"/>). One named explicit channel is
+    /// (exposed as <see cref="CliExecutionContext.IdentityChannel"/>). One named explicit channel is
     /// registered per theory row with a uniquely-sourced feed; the assertion reads the
     /// workspace <c>nuget.config</c> emitted by <c>NuGetConfigMerger</c> and verifies it
     /// carries the matching feed URL — proving the resolver picked the binary's identity
@@ -925,7 +925,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 {
                     throw new InvalidOperationException(
                         "aspire init must not consult IConfigurationService for the 'channel' key. " +
-                        "Channel resolution sources from CliExecutionContext.Channel only.");
+                        "Channel resolution sources from CliExecutionContext.IdentityChannel only.");
                 }
                 return null;
             },
@@ -935,7 +935,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 {
                     throw new InvalidOperationException(
                         "aspire init must not consult IConfigurationService.GetConfigurationFromDirectoryAsync " +
-                        "for the 'channel' key. Channel resolution sources from CliExecutionContext.Channel only.");
+                        "for the 'channel' key. Channel resolution sources from CliExecutionContext.IdentityChannel only.");
                 }
                 return null;
             }
@@ -973,9 +973,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// Fresh-machine regression. On a developer machine that has never used Aspire,
     /// <c>~/.aspire/hives/</c> does not exist (so no per-hive channels are registered).
     /// A locally-built CLI bakes <c>local</c> as its identity channel via
-    /// <c>[AssemblyMetadata("AspireCliChannel", "local")]</c>, and <see cref="CliExecutionContext.Channel"/>
+    /// <c>[AssemblyMetadata("AspireCliChannel", "local")]</c>, and <see cref="CliExecutionContext.IdentityChannel"/>
     /// returns that value verbatim. <c>aspire init</c> currently passes
-    /// <see cref="CliExecutionContext.Channel"/> as the channel-override into
+    /// <see cref="CliExecutionContext.IdentityChannel"/> as the channel-override into
     /// <c>TemplateNuGetConfigService.ResolveTemplatePackageAsync</c>, which name-matches against
     /// the channels produced by <see cref="PackagingService.GetChannelsAsync"/>: <c>default</c>
     /// (implicit), <c>stable</c>, <c>daily</c>, optional <c>staging</c>, and one entry per hive
@@ -1075,7 +1075,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             sdksDirectory: sdksDirectory,
             logsDirectory: logsDirectory,
             logFilePath: logFilePath,
-            channel: channel);
+            identityChannel: channel);
     }
 
     private static TestPackagingService CreateNamedChannelPackagingService(string channelName)

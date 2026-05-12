@@ -16,7 +16,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
         var logsDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "logs"));
         return channel is null
             ? new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log")
-            : new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", channel: channel);
+            : new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", identityChannel: channel);
     }
 
     private static CliExecutionContext CreateContextWithHives(DirectoryInfo hivesDir)
@@ -33,7 +33,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
     {
         var ctx = CreateContext(channel: null);
 
-        Assert.Equal("local", ctx.Channel);
+        Assert.Equal("local", ctx.IdentityChannel);
     }
 
     [Theory]
@@ -51,7 +51,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
         // hands it. Validation of the channel SHAPE lives in IdentityChannelReader.
         var ctx = CreateContext(channel: channel);
 
-        Assert.Equal(channel, ctx.Channel);
+        Assert.Equal(channel, ctx.IdentityChannel);
     }
 
     [Fact]

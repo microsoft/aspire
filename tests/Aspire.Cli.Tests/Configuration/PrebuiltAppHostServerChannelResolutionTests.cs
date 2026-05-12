@@ -20,18 +20,18 @@ namespace Aspire.Cli.Tests.Configuration;
 public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void PrebuiltAppHostServer_ResolveChannelName_ReturnsNullWhenNoAspireConfigJson()
+    public void PrebuiltAppHostServer_ResolveRequestedChannel_ReturnsNullWhenNoAspireConfigJson()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        Assert.Null(server.ResolveChannelName());
+        Assert.Null(server.ResolveRequestedChannel());
     }
 
     [Fact]
-    public void PrebuiltAppHostServer_ResolveChannelName_HonorsAspireConfigJson()
+    public void PrebuiltAppHostServer_ResolveRequestedChannel_HonorsAspireConfigJson()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
@@ -42,11 +42,11 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        Assert.Equal("staging", server.ResolveChannelName());
+        Assert.Equal("staging", server.ResolveRequestedChannel());
     }
 
     [Fact]
-    public void PrebuiltAppHostServer_ResolveChannelName_FallsBackToLegacyAspireSettings_WhenAspireConfigJsonMissing()
+    public void PrebuiltAppHostServer_ResolveRequestedChannel_FallsBackToLegacyAspireSettings_WhenAspireConfigJsonMissing()
     {
         // Migration safety: projects scaffolded before the per-project aspire.config.json
         // landed wrote their channel into .aspire/settings.json (AspireJsonConfiguration).
@@ -65,15 +65,15 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        Assert.Equal("daily", server.ResolveChannelName());
+        Assert.Equal("daily", server.ResolveRequestedChannel());
     }
 
     [Fact]
-    public void PrebuiltAppHostServer_ResolveChannelName_PrefersAspireConfigJsonOverLegacyAspireSettings()
+    public void PrebuiltAppHostServer_ResolveRequestedChannel_PrefersAspireConfigJsonOverLegacyAspireSettings()
     {
         // When both files exist (e.g. during/after migration), the new format wins. This
         // anchors the precedence and prevents an accidental swap of the `??` operands in
-        // PrebuiltAppHostServer.ResolveChannelName from going unnoticed.
+        // PrebuiltAppHostServer.ResolveRequestedChannel from going unnoticed.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
@@ -86,7 +86,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
 
         var server = CreateServer(appHostDirectory.FullName);
 
-        Assert.Equal("staging", server.ResolveChannelName());
+        Assert.Equal("staging", server.ResolveRequestedChannel());
     }
 
     private static PrebuiltAppHostServer CreateServer(string appPath)
