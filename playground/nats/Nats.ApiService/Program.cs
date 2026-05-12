@@ -32,7 +32,7 @@ app.MapPost("/publish/", async (AppEvent @event, INatsJSContext js) =>
 {
     var ack = await js.PublishAsync(@event.Subject, @event);
     ack.EnsureSuccess();
-    return Results.Created();
+    return Results.Ok(new { ack.Stream, ack.Seq, ack.Duplicate });
 });
 
 app.MapGet("/consume", async (INatsJSContext js, HttpContext ctx, CancellationToken ct) =>
