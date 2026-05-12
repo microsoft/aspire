@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Aspire.Cli.Packaging;
 
 namespace Aspire.Cli.Acquisition;
 
@@ -124,7 +125,7 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
     /// </summary>
     internal static bool IsValidChannel(string value)
     {
-        if (value is "stable" or "staging" or "daily" or "local")
+        if (value is PackageChannelNames.Stable or PackageChannelNames.Staging or PackageChannelNames.Daily or PackageChannelNames.Local)
         {
             return true;
         }
