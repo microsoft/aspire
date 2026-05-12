@@ -1,8 +1,8 @@
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.mjs';
 
 const builder = await createBuilder();
 
-// Basic Go app — go run .
+// Basic Go app - go run .
 await builder.addGoApp('api', '../go-api');
 
 // Go app with build tags and linker flags via options
