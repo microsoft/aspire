@@ -42,6 +42,11 @@
         <target state="translated">Quando non si usa --follow, è necessario specificare un nome di risorsa. Usare --follow per trasmettere i log da tutte le risorse.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">trasmettere log da</target>

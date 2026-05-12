@@ -28,7 +28,10 @@ aspire otel logs [resource] --format Json
 aspire otel traces [resource] --format Json
 aspire otel spans [resource] --format Json
 aspire otel logs --trace-id <id> --format Json
+aspire otel logs [resource] --search "connection timeout"
+aspire otel spans [resource] --search "/api/products"
 aspire logs [resource]
+aspire logs [resource] --search "error"
 ```
 
 Keep these points in mind:
@@ -36,8 +39,10 @@ Keep these points in mind:
 - Prefer structured telemetry before raw console logs when possible.
 - Use `aspire logs` as a secondary console-output view after checking structured telemetry.
 - Use the trace-filtered log command when you already have a trace id and want the related log slice.
+- Use `--search` to filter results by a case-insensitive text match across all fields (messages, attribute keys/values, trace/span IDs, resource names, severity, scope names). This is the fastest way to narrow output when you know what you're looking for.
 - Prefer `--format Json` when another tool or script needs to consume the result, such as a Playwright handoff or endpoint extraction.
 - `[resource]` is optional. Include it to filter results to a single resource; omit it to see all resources.
+- `--search` can be combined with other options like `--format Json`, `--trace-id`, `--limit`, and resource filtering.
 
 ## Scenario: I Need A Sharable Diagnostics Bundle
 

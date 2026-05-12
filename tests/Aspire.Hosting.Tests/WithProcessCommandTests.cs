@@ -131,6 +131,145 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithProcessCommandFactoryExport_ProcessFactoryReceivesExecutionContextAndArguments()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["factory-line"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        ExecuteCommandContext? capturedContext = null;
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandFactoryExport(
+                "factory-command",
+                "Run factory command",
+                context =>
+                {
+                    capturedContext = context;
+                    var message = context.Arguments.GetString("message") ?? string.Empty;
+
+                    return Task.FromResult(new ProcessCommandSpecExportData
+                    {
+                        ExecutablePath = "factory-command-executable",
+                        Arguments = ["--message", message],
+                        WorkingDirectory = "/test/factory-working-directory",
+                        EnvironmentVariables = new Dictionary<string, string>
+                        {
+                            ["PROCESS_COMMAND_FACTORY_VALUE"] = message
+                        },
+                        InheritEnvironmentVariables = false,
+                        StandardInputContent = "from-factory-stdin",
+                        KillEntireProcessTree = false
+                    });
+                },
+                new ProcessCommandResultExportOptions
+                {
+                    CommandOptions = new CommandOptions
+                    {
+                        Description = "Factory command description",
+                        Arguments =
+                        [
+                            new InteractionInput
+                            {
+                                Name = "message",
+                                InputType = InputType.Text
+                            }
+                        ]
+                    },
+                    MaxOutputLineCount = 7,
+                    DisplayImmediately = false
+                });
+
+        var command = resource.Resource.Annotations.OfType<ResourceCommandAnnotation>().Single();
+        Assert.Equal("Factory command description", command.DisplayDescription);
+        var argument = Assert.Single(command.Arguments);
+        Assert.Equal("message", argument.Name);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello-from-factory"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "factory-command", arguments).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
+        Assert.False(result.Data?.DisplayImmediately);
+        Assert.Contains("factory-line", result.Data?.Value);
+        Assert.NotNull(capturedContext);
+        Assert.Equal(resource.Resource.Name, capturedContext.ResourceName);
+        Assert.Equal("hello-from-factory", capturedContext.Arguments.GetString("message"));
+
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("factory-command-executable", processSpec.ExecutablePath);
+        Assert.Equal(["--message", "hello-from-factory"], processSpec.ArgumentList);
+        Assert.Equal("/test/factory-working-directory", processSpec.WorkingDirectory);
+        Assert.Equal("hello-from-factory", processSpec.EnvironmentVariables["PROCESS_COMMAND_FACTORY_VALUE"]);
+        Assert.False(processSpec.InheritEnv);
+        Assert.Equal("from-factory-stdin", processSpec.StandardInputContent);
+        Assert.False(processSpec.KillEntireProcessTree);
+        Assert.Equal(7, processSpec.RetainedOutputLineCount);
+    }
+
+    [Fact]
+    public async Task WithProcessCommandFactoryExport_SuccessExitCodes_TreatsConfiguredExitCodeAsSuccess()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(exitCode: 17, output: ["factory-accepted-output"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandFactoryExport(
+                "factory-accepted-exit-code",
+                "Factory accepted exit code",
+                _ => Task.FromResult(new ProcessCommandSpecExportData
+                {
+                    ExecutablePath = "factory-executable"
+                }),
+                new ProcessCommandResultExportOptions
+                {
+                    SuccessExitCodes = [0, 17]
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "factory-accepted-exit-code").DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Contains("factory-accepted-output", result.Data?.Value);
+    }
+
+    [Fact]
+    public async Task WithProcessCommandFactoryExport_NullProcessSpecFactoryResult_ReturnsFailure()
+    {
+        var processRunner = new TestProcessRunner();
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandFactoryExport(
+                "null-process-spec",
+                "Null process spec",
+                _ => Task.FromResult<ProcessCommandSpecExportData>(null!));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "null-process-spec").DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Contains("factory returned null", result.Message);
+        Assert.Empty(processRunner.ProcessSpecs);
+    }
+
+    [Fact]
     public async Task WithProcessCommand_ProcessFactoryReceivesExecutionContextAndArguments()
     {
         var processRunner = new TestProcessRunner();

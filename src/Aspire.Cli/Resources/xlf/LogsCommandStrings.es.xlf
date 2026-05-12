@@ -42,6 +42,11 @@
         <target state="translated">Se requiere un nombre de recurso cuando no se usa --follow. Use --follow para transmitir registros de todos los recursos.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">transmitir registros desde</target>

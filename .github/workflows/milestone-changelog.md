@@ -210,11 +210,21 @@ jobs:
             echo "Enriched $BATCH_COUNT batch PRs with authorAssociation, comments, and files"
           fi
 
-          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date
+          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date.
+          #     Cap the date range to the most recently merged PR in the current
+          #     batch so that docs PRs are only evaluated once their corresponding
+          #     product PRs have been processed. When the batch is smaller than
+          #     BATCH_SIZE, all product PRs are caught up and no cap is needed.
           DOCS_REPO="${{ env.DOCS_REPO }}"
           MILESTONE_START="${{ env.MILESTONE_START }}"
+          DOCS_MERGED_RANGE="merged:>=${MILESTONE_START}"
+          if [ "$BATCH_COUNT" -ge "$BATCH_SIZE" ]; then
+            BATCH_CUTOFF=$(jq -r '.[-1].mergedAt' "$DATA_DIR/batch-prs.json")
+            DOCS_MERGED_RANGE="merged:${MILESTONE_START}..${BATCH_CUTOFF}"
+            echo "Capping docs PRs to merged on or before $BATCH_CUTOFF (batch is full)"
+          fi
           gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
-            --search "merged:>=${MILESTONE_START}" \
+            --search "$DOCS_MERGED_RANGE" \
             --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles,files \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-docs-prs.json"

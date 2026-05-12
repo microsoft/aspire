@@ -1,4 +1,4 @@
-﻿#   -------------------------------------------------------------
+#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1549,6 +1549,13 @@ class CommandParameters(typing.TypedDict, total=False):
     command_options: CommandOptions
 
 
+class ProcessCommandFactoryParameters(typing.TypedDict, total=False):
+    command_name: typing.Required[str]
+    display_name: typing.Required[str]
+    create_process_spec: typing.Required[typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]]
+    options: ProcessCommandResultExportOptions
+
+
 class PipelineStepFactoryParameters(typing.TypedDict, total=False):
     step_name: typing.Required[str]
     callback: typing.Required[typing.Callable[[PipelineStepContext], None]]
@@ -1819,6 +1826,21 @@ class ProcessCommandExportOptions(typing.TypedDict, total=False):
     MaxOutputLineCount: int
     DisplayImmediately: bool
     SuccessExitCodes: typing.Iterable[int]
+
+class ProcessCommandResultExportOptions(typing.TypedDict, total=False):
+    CommandOptions: CommandOptions
+    MaxOutputLineCount: int
+    DisplayImmediately: bool
+    SuccessExitCodes: typing.Iterable[int]
+
+class ProcessCommandSpecExportData(typing.TypedDict, total=False):
+    ExecutablePath: str
+    Arguments: typing.Iterable[str]
+    WorkingDirectory: str
+    EnvironmentVariables: typing.Mapping[str, str]
+    InheritEnvironmentVariables: bool
+    StandardInputContent: str
+    KillEntireProcessTree: bool
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool
@@ -5716,6 +5738,10 @@ class AbstractResource(abc.ABC):
         """Adds a process resource command"""
 
     @abc.abstractmethod
+    def with_process_command_factory(self, command_name: str, display_name: str, create_process_spec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData], *, options: ProcessCommandResultExportOptions | None = None) -> typing.Self:
+        """Adds a process resource command via callback"""
+
+    @abc.abstractmethod
     def with_relationship(self, resource_builder: AbstractResource, type: str) -> typing.Self:
         """Adds a relationship to another resource"""
 
@@ -6070,6 +6096,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     health_check: str
     command: tuple[str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]] | CommandParameters
     process_command: tuple[str, str, ProcessCommandExportOptions]
+    process_command_factory: tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]] | ProcessCommandFactoryParameters
     relationship: tuple[AbstractResource, str]
     parent_relationship: AbstractResource
     child_relationship: AbstractResource
@@ -6241,6 +6268,21 @@ class _BaseResource(AbstractResource):
         rpc_args['options'] = options
         result = self._client.invoke_capability(
             'Aspire.Hosting/withProcessCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_process_command_factory(self, command_name: str, display_name: str, create_process_spec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData], *, options: ProcessCommandResultExportOptions | None = None) -> typing.Self:
+        """Adds a process resource command via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['commandName'] = command_name
+        rpc_args['displayName'] = display_name
+        rpc_args['createProcessSpec'] = self._client.register_callback(create_process_spec)
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withProcessCommandFactory',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -6720,6 +6762,22 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'process_command'. Expected: (str, str, ProcessCommandExportOptions)")
+        if _process_command_factory := kwargs.pop("process_command_factory", None):
+            if _validate_tuple_types(_process_command_factory, (str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["commandName"] = typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]], _process_command_factory)[0]
+                rpc_args["displayName"] = typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]], _process_command_factory)[1]
+                rpc_args["createProcessSpec"] = client.register_callback(typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]], _process_command_factory)[2])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommandFactory', rpc_args))
+            elif _validate_dict_types(_process_command_factory, ProcessCommandFactoryParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["commandName"] = typing.cast(ProcessCommandFactoryParameters, _process_command_factory)["command_name"]
+                rpc_args["displayName"] = typing.cast(ProcessCommandFactoryParameters, _process_command_factory)["display_name"]
+                rpc_args["createProcessSpec"] = client.register_callback(typing.cast(ProcessCommandFactoryParameters, _process_command_factory)["create_process_spec"])
+                rpc_args["options"] = typing.cast(ProcessCommandFactoryParameters, _process_command_factory).get("options")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommandFactory', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'process_command_factory'. Expected: (str, str, Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]) or ProcessCommandFactoryParameters")
         if _relationship := kwargs.pop("relationship", None):
             if _validate_tuple_types(_relationship, (AbstractResource, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

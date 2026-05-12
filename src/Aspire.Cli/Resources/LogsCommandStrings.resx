@@ -159,4 +159,7 @@
   <data name="GettingLogs" xml:space="preserve">
     <value>Getting logs...</value>
   </data>
+  <data name="SearchOptionDescription" xml:space="preserve">
+    <value>Full-text search to filter log content</value>
+  </data>
 </root>
