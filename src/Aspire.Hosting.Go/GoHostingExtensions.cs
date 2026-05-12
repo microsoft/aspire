@@ -180,7 +180,8 @@ public static class GoHostingExtensions
                     // packagePath comes from the AddGoApp closure — ctx.Resource is the
                     // ContainerResource created by PublishAsDockerFile and does not carry
                     // the GoPackagePathAnnotation from the original GoAppResource.
-                    var buildCmd = BuildDockerGoCommand(ctx.Resource, packagePath);
+                    var binaryName = ctx.Resource.Name;
+                    var buildCmd = BuildDockerGoCommand(ctx.Resource, packagePath, binaryName);
                     var hasGoMod = File.Exists(Path.Combine(appDirectory, "go.mod"));
                     var hasGoSum = File.Exists(Path.Combine(appDirectory, "go.sum"));
                     var hasPrivate = ctx.Resource.TryGetLastAnnotation<GoPrivateAnnotation>(out var privateAnnotation);
@@ -277,9 +278,9 @@ public static class GoHostingExtensions
                         .WorkDir("/app")
                         // Add COPY --from=<source> instructions for each container files source.
                         .AddContainerFiles(ctx.Resource, "/app", logger)
-                        .CopyFrom("build", "/app/server", "/app/server")
+                        .CopyFrom("build", $"/app/{ctx.Resource.Name}", $"/app/{ctx.Resource.Name}")
                         .User("app")
-                        .Entrypoint(["/app/server"]);
+                        .Entrypoint([$"/app/{ctx.Resource.Name}"]);
                 });
             });
 
@@ -376,6 +377,15 @@ public static class GoHostingExtensions
 
             // Store the builder reference so WithModVendor/WithModDownload can chain after tidy.
             builder.WithAnnotation(new GoModTidyBuilderAnnotation(tidy));
+
+            // If WithModVendor was called before WithModTidy (reverse order), retroactively
+            // make the vendor sibling wait for tidy so the ordering is correct regardless of
+            // which With* method the caller invokes first.
+            if (builder.Resource.TryGetLastAnnotation<GoModVendorBuilderAnnotation>(out var existingVendor))
+            {
+                existingVendor.Sibling.WaitForCompletion(tidy);
+            }
+
             builder.WaitForCompletion(tidy);
         }
 
@@ -657,13 +667,13 @@ public static class GoHostingExtensions
     /// Builds the <c>go build</c> command for the generated Dockerfile, propagating any
     /// build-time flags that were set on the resource via <see cref="AddGoApp"/>.
     /// </summary>
-    private static string BuildDockerGoCommand(IResource resource, string packagePath = ".")
+    private static string BuildDockerGoCommand(IResource resource, string packagePath = ".", string binaryName = "app")
     {
         var parts = new List<string> { "go", "build" };
         // Race detection requires CGO; the Dockerfile sets CGO_ENABLED=0 for a fully static
         // binary, so -race is intentionally excluded from publish/deploy builds.
         parts.AddRange(BuildFlagParts(resource, includeRace: false));
-        parts.AddRange(["-o", "/app/server", packagePath]);
+        parts.AddRange(["-o", $"/app/{binaryName}", packagePath]);
         return string.Join(" ", parts);
     }
 

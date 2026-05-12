@@ -93,7 +93,7 @@ public class AddGoAppTests
         // Build context is the module root (sourceDir) — go.mod is found.
         Assert.Contains("go mod download", content);
         // go build targets the sub-package, not the module root.
-        Assert.Contains("-o /app/server ./cmd/server", content);
+        Assert.Contains("-o /app/api ./cmd/server", content);
     }
 
     // ---- Manifest: AddGoApp build params ------------------------------------
@@ -505,7 +505,7 @@ public class AddGoAppTests
         var content = await File.ReadAllTextAsync(dockerfilePath);
         Assert.Contains("FROM golang:1.23-alpine AS build", content);
         Assert.Contains("FROM alpine:latest", content);
-        Assert.Contains("go build -o /app/server .", content);
+        Assert.Contains("go build -o /app/api .", content);
         Assert.Contains("ca-certificates", content);
     }
 
