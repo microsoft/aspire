@@ -133,28 +133,33 @@ jobs:
           path: ${{ github.workspace }}/cli-e2e-image
 
       - name: Download prebuilt CLI E2E Java Docker image
-        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && contains(inputs.testShortName, 'Java') }}
+        # Explicit per-class enumeration to avoid case-insensitive substring matches
+        # (e.g. 'JavaScriptPublishTests' would otherwise pull the Java image).
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && (endsWith(inputs.testShortName, 'JavaPolyglotTests') || endsWith(inputs.testShortName, 'JavaCodegenValidationTests') || endsWith(inputs.testShortName, 'JavaEmptyAppHostTemplateTests')) }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cli-e2e-polyglot-java-image
           path: ${{ github.workspace }}/cli-e2e-image
 
       - name: Download prebuilt CLI E2E Python Docker image
-        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && contains(inputs.testShortName, 'Python') }}
+        # Anchored to Polyglot/Codegen suffixes so PythonReactTemplateTests doesn't pull this image.
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && (endsWith(inputs.testShortName, 'PythonPolyglotTests') || endsWith(inputs.testShortName, 'PythonCodegenValidationTests')) }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cli-e2e-polyglot-python-image
           path: ${{ github.workspace }}/cli-e2e-image
 
       - name: Download prebuilt CLI E2E Go Docker image
-        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && contains(inputs.testShortName, 'Go') }}
+        # `contains(testShortName, 'Go')` would match every *MongoDB*/*Postgres* test
+        # (case-insensitive substring). Use explicit endsWith gates instead.
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && (endsWith(inputs.testShortName, 'GoPolyglotTests') || endsWith(inputs.testShortName, 'GoCodegenValidationTests')) }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cli-e2e-polyglot-go-image
           path: ${{ github.workspace }}/cli-e2e-image
 
       - name: Download prebuilt CLI E2E Rust Docker image
-        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && contains(inputs.testShortName, 'Rust') }}
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && endsWith(inputs.testShortName, 'RustPolyglotTests') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: cli-e2e-polyglot-rust-image
@@ -165,14 +170,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # `require-*` modes mirror the per-language image gating above; the bash script
+          # treats 'false' as a no-op so the loader only loads tarballs it actually downloaded.
+          needs_java="${{ (endsWith(inputs.testShortName, 'JavaPolyglotTests') || endsWith(inputs.testShortName, 'JavaCodegenValidationTests') || endsWith(inputs.testShortName, 'JavaEmptyAppHostTemplateTests')) && 'true' || 'false' }}"
+          needs_python="${{ (endsWith(inputs.testShortName, 'PythonPolyglotTests') || endsWith(inputs.testShortName, 'PythonCodegenValidationTests')) && 'true' || 'false' }}"
+          needs_go="${{ (endsWith(inputs.testShortName, 'GoPolyglotTests') || endsWith(inputs.testShortName, 'GoCodegenValidationTests')) && 'true' || 'false' }}"
+          needs_rust="${{ endsWith(inputs.testShortName, 'RustPolyglotTests') && 'true' || 'false' }}"
           eng/scripts/load-cli-e2e-images.sh \
             --image-dir "${{ github.workspace }}/cli-e2e-image" \
             --require-dotnet true \
             --require-polyglot true \
-            --require-java "${{ contains(inputs.testShortName, 'Java') }}" \
-            --require-python "${{ contains(inputs.testShortName, 'Python') }}" \
-            --require-go "${{ contains(inputs.testShortName, 'Go') }}" \
-            --require-rust "${{ contains(inputs.testShortName, 'Rust') }}"
+            --require-java "$needs_java" \
+            --require-python "$needs_python" \
+            --require-go "$needs_go" \
+            --require-rust "$needs_rust"
 
       - name: Download built nugets
         if: ${{ fromJson(inputs.properties).requiresNugets == true }}

@@ -99,4 +99,49 @@ public sealed class GoCodegenValidationTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task RestoreAndCompileAllValidationFixtures()
+    {
+        // Replaces the per-integration enumeration loop in the deleted
+        // test-go-playground.sh: for every tests/PolyglotAppHosts/<Integration>/Go fixture,
+        // run `aspire restore --apphost apphost.go` and validate that the regenerated
+        // .modules + apphost compile under `go build`. Catches codegen regressions
+        // specific to individual integrations that the single-scenario test above does
+        // not exercise.
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            strategy,
+            output,
+            variant: CliE2ETestHelpers.DockerfileVariant.PolyglotGo,
+            workspace: workspace,
+            additionalVolumes: new[] { PolyglotFixtureValidation.GetFixtureVolumeMount(repoRoot) });
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromMinutes(30));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnableExperimentalGoSupportAsync(counter);
+
+        await PolyglotFixtureValidation.RunFixtureLoopAsync(
+            auto,
+            counter,
+            workspace,
+            languageSubdir: "Go",
+            appHostFileName: "apphost.go",
+            compileCommand: "go build -buildvcs=false ./...");
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
 }

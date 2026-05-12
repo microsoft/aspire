@@ -335,4 +335,54 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task RestoreAndCompileAllValidationFixtures()
+    {
+        // Replaces the per-integration enumeration loop in the deleted
+        // test-typescript-playground.sh: for every tests/PolyglotAppHosts/<Integration>/TypeScript
+        // fixture, run `npm install` (to bring in vscode-jsonrpc and friends declared in
+        // package.json), then `aspire restore --apphost apphost.ts` and `tsc --noEmit`.
+        // Catches codegen regressions specific to individual integrations that the
+        // single-scenario tests above do not exercise.
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            strategy,
+            output,
+            // Node.js + Aspire-installed npm/yarn/pnpm/bun. No JDK required for tsc.
+            variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
+            workspace: workspace,
+            additionalVolumes: new[] { PolyglotFixtureValidation.GetFixtureVolumeMount(repoRoot) });
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        // TypeScript fixtures each run `npm install`, which dominates wall time; bump
+        // the per-test timeout headroom accordingly.
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromMinutes(45));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await PolyglotFixtureValidation.RunFixtureLoopAsync(
+            auto,
+            counter,
+            workspace,
+            languageSubdir: "TypeScript",
+            appHostFileName: "apphost.ts",
+            // Mirrors the npm install + tsc invocation from test-typescript-playground.sh.
+            compileCommand: "npm install --ignore-scripts --no-audit --no-fund > /dev/null 2>&1 && "
+                + "npx tsc --noEmit --project tsconfig.json",
+            timeout: TimeSpan.FromMinutes(40));
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
 }

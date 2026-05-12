@@ -102,4 +102,53 @@ public sealed class PythonCodegenValidationTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task RestoreAndCompileAllValidationFixtures()
+    {
+        // Replaces the per-integration enumeration loop in the deleted
+        // test-python-playground.sh: for every tests/PolyglotAppHosts/<Integration>/Python
+        // fixture, run `aspire restore --apphost apphost.py` and validate that the
+        // regenerated `.modules/aspire_app.py` + apphost compile cleanly. Catches
+        // codegen regressions specific to individual integrations (Kafka surface,
+        // Azure.* surface, etc.) that the single-scenario test above does not exercise.
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            strategy,
+            output,
+            variant: CliE2ETestHelpers.DockerfileVariant.PolyglotPython,
+            workspace: workspace,
+            additionalVolumes: new[] { PolyglotFixtureValidation.GetFixtureVolumeMount(repoRoot) });
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromMinutes(30));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnableExperimentalPythonSupportAsync(counter);
+
+        await PolyglotFixtureValidation.RunFixtureLoopAsync(
+            auto,
+            counter,
+            workspace,
+            languageSubdir: "Python",
+            appHostFileName: "apphost.py",
+            // Mirrors the python compile loop from test-python-playground.sh: every generated
+            // .py file in .modules plus apphost.py must parse cleanly.
+            compileCommand: "python3 -c \"import pathlib, py_compile; "
+                + "files = [pathlib.Path('apphost.py')] + sorted(pathlib.Path('.modules').rglob('*.py')); "
+                + "[py_compile.compile(str(f), doraise=True) for f in files]\"");
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
 }

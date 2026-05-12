@@ -76,7 +76,7 @@ public sealed class RustPolyglotTests(ITestOutputHelper output)
             fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let builder = create_builder(None)?;
 
-                let _redis = builder.add_redis("cache")?;
+                let _redis = builder.add_redis("cache")?.with_image_registry("netaspireci.azurecr.io")?;
 
                 let app = builder.build()?;
                 app.run(None)?;

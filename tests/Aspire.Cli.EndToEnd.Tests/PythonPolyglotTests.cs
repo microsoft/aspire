@@ -63,7 +63,7 @@ public sealed class PythonPolyglotTests(ITestOutputHelper output)
             from aspire_app import create_builder
 
             with create_builder() as builder:
-                redis = builder.add_redis("cache")
+                redis = builder.add_redis("cache").with_image_registry("netaspireci.azurecr.io")
                 builder.run()
             """);
 

@@ -73,7 +73,7 @@ public sealed class GoPolyglotTests(ITestOutputHelper output)
             		log.Fatal(aspire.FormatError(err))
             	}
 
-            	_ = builder.AddRedis("cache")
+            	_ = builder.AddRedis("cache").WithImageRegistry("netaspireci.azurecr.io")
             	if err := builder.Err(); err != nil {
             		log.Fatal(aspire.FormatError(err))
             	}
