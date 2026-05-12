@@ -65,10 +65,17 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
-    /// Applies NuGet.config create/update behavior for a channel name resolved from
-    /// command input (e.g. <c>--channel</c>) or per-project <c>aspire.config.json</c>.
+    /// Applies NuGet.config create/update behavior for a channel name resolved from any of
+    /// the equivalent channel-name sources: <c>--channel</c>, per-project
+    /// <c>aspire.config.json#channel</c>, or the running CLI's
+    /// <see cref="CliExecutionContext.IdentityChannel"/>.
     /// </summary>
-    /// <param name="channelName">The optional channel name from command input.</param>
+    /// <param name="channelName">
+    /// The channel name to look up in the packaging service. May be sourced from
+    /// <c>--channel</c>, per-project <c>aspire.config.json#channel</c>, or the running
+    /// CLI's <see cref="CliExecutionContext.IdentityChannel"/> — all are name-equivalent
+    /// lookup keys for this entrypoint.
+    /// </param>
     /// <param name="outputPath">The output path where the project was created.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     public async Task PromptToCreateOrUpdateNuGetConfigAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
@@ -93,11 +100,19 @@ internal sealed class TemplateNuGetConfigService(
     /// <summary>
     /// Creates or updates NuGet.config for the given channel name without prompting the user
     /// and without displaying a confirmation message containing "NuGet.config" (which can
-    /// trip up automation/tests that match on substrings). Resolves the channel name from
-    /// configuration if not provided. Suitable for non-interactive code paths such as
-    /// <c>aspire init</c> where the caller wants to display its own message (or none).
+    /// trip up automation/tests that match on substrings). Suitable for non-interactive
+    /// code paths such as <c>aspire init</c> where the caller wants to display its own
+    /// message (or none). The channel name may come from any of the equivalent
+    /// channel-name sources: <c>--channel</c>, per-project
+    /// <c>aspire.config.json#channel</c>, or the running CLI's
+    /// <see cref="CliExecutionContext.IdentityChannel"/>.
     /// </summary>
-    /// <param name="channelName">The optional channel name from command input.</param>
+    /// <param name="channelName">
+    /// The channel name to look up in the packaging service. May be sourced from
+    /// <c>--channel</c>, per-project <c>aspire.config.json#channel</c>, or the running
+    /// CLI's <see cref="CliExecutionContext.IdentityChannel"/> — all are name-equivalent
+    /// lookup keys for this entrypoint.
+    /// </param>
     /// <param name="outputPath">The output path where the NuGet.config should be created or updated.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns><see langword="true"/> if a NuGet.config was created or updated; otherwise <see langword="false"/>.</returns>
