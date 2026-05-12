@@ -370,9 +370,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                     LanguageId: new LanguageId(KnownLanguageId.TypeScript),
                     DisplayName: "TypeScript (Node.js)",
                     PackageName: "@aspire/app-host",
-                    DetectionPatterns: ["apphost.ts"],
-                    CodeGenerator: "typescript",
-                    AppHostFileName: "apphost.ts"));
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
                 return new TestLanguageService { DefaultProject = tsProject };
             };
             options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
@@ -385,12 +385,39 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
 
         var config = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
         var appHost = config["appHost"]!.AsObject();
-        Assert.Equal("apphost.ts", appHost["path"]!.GetValue<string>());
+        Assert.Equal("apphost.mts", appHost["path"]!.GetValue<string>());
         Assert.Equal("typescript/nodejs", appHost["language"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenLegacyTypeScriptAppHostExists_DoesNotCreateMtsAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var existingAppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        const string existingAppHostContent = "console.log('existing commonjs-compatible project');";
+        File.WriteAllText(existingAppHostPath, existingAppHostContent);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), """{ "type": "commonjs" }""");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language typescript");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(existingAppHostContent, File.ReadAllText(existingAppHostPath));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
+        Assert.Equal("""{ "type": "commonjs" }""", File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json")));
     }
 
     [Fact]

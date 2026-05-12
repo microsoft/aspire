@@ -244,7 +244,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 "nodemon",
                 "--signal", "SIGTERM",
                 "--watch", ".",
-                "--ext", "ts",
+                "--ext", "ts,mts",
                 "--ignore", "node_modules/",
                 "--ignore", ".modules/",
                 "--exec", "bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\""
@@ -292,7 +292,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             Language = KnownLanguageId.TypeScript,
             DisplayName = "TypeScript (Node.js)",
             CodeGenLanguage = "TypeScript",
-            DetectionPatterns = ["apphost.ts"],
+            DetectionPatterns = ["apphost.mts"],
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",

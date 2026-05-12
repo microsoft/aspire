@@ -16,13 +16,13 @@ public class ScaffoldingServiceTests
         {
             File.WriteAllText(Path.Combine(rootDirectory.FullName, ".gitignore"), "node_modules/\n");
             File.WriteAllText(Path.Combine(rootDirectory.FullName, "package.json"), "{}");
-            File.WriteAllText(Path.Combine(rootDirectory.FullName, "apphost.ts"), string.Empty);
+            File.WriteAllText(Path.Combine(rootDirectory.FullName, "apphost.mts"), string.Empty);
 
             var conflicts = ScaffoldingService.GetConflictingScaffoldFiles(
                 rootDirectory.FullName,
-                [".gitignore", "package.json", "apphost.ts"]);
+                [".gitignore", "package.json", "apphost.mts"]);
 
-            Assert.Equal(["apphost.ts"], conflicts);
+            Assert.Equal(["apphost.mts"], conflicts);
         }
         finally
         {

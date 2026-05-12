@@ -409,10 +409,12 @@ internal sealed class InitCommand : BaseCommand
         var appHostFileName = language.AppHostFileName
             ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {language.LanguageId}");
 
-        var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
-        if (File.Exists(appHostPath))
+        var existingAppHostFileName = language.DetectionPatterns
+            .Where(pattern => !pattern.Contains('*', StringComparison.Ordinal))
+            .FirstOrDefault(pattern => File.Exists(Path.Combine(workingDirectory.FullName, pattern)));
+        if (existingAppHostFileName is not null)
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{existingAppHostFileName} already exists — skipping.");
             return ExitCodeConstants.Success;
         }
 

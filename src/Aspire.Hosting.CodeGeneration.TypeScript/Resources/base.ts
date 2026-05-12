@@ -1,11 +1,11 @@
-// base.ts - Core Aspire types: base classes, ReferenceExpression
-import { Handle, AspireClient, MarshalledHandle, CancellationToken, registerCancellation, registerHandleWrapper, unregisterCancellation } from './transport.js';
-import type { AspireClientRpc } from './transport.js';
+// base.mts - Core Aspire types: base classes, ReferenceExpression
+import { Handle, AspireClient, MarshalledHandle, CancellationToken, registerCancellation, registerHandleWrapper, unregisterCancellation } from './transport.mjs';
+import type { AspireClientRpc } from './transport.mjs';
 
 // Re-export transport types for convenience
-export { Handle, AspireClient, CapabilityError, CancellationToken, registerCallback, unregisterCallback, registerCancellation, unregisterCancellation } from './transport.js';
-export type { MarshalledHandle, AtsError, AtsErrorDetails, CallbackFunction } from './transport.js';
-export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './transport.js';
+export { Handle, AspireClient, CapabilityError, CancellationToken, registerCallback, unregisterCallback, registerCancellation, unregisterCancellation } from './transport.mjs';
+export type { MarshalledHandle, AtsError, AtsErrorDetails, CallbackFunction } from './transport.mjs';
+export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './transport.mjs';
 
 /**
  * Utility type for parameters that accept either a resolved value or a promise of that value.

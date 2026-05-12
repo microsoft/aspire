@@ -49,7 +49,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         // Step 1: Create a TypeScript AppHost.
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
@@ -74,13 +74,13 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 4: Verify generated SDK files exist.
-        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "modules");
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($"modules directory was not created at {modulesDir}");
         }
 
-        var expectedFiles = new[] { "aspire.ts", "base.ts", "transport.ts" };
+        var expectedFiles = new[] { "aspire.mts", "base.mts", "transport.mts" };
         foreach (var file in expectedFiles)
         {
             var filePath = Path.Combine(modulesDir, file);
@@ -96,15 +96,15 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             }
         }
 
-        var aspireTs = File.ReadAllText(Path.Combine(modulesDir, "aspire.ts"));
+        var aspireTs = File.ReadAllText(Path.Combine(modulesDir, "aspire.mts"));
         if (!aspireTs.Contains("addRedis"))
         {
-            throw new InvalidOperationException("aspire.ts does not contain addRedis from Aspire.Hosting.Redis");
+            throw new InvalidOperationException("aspire.mts does not contain addRedis from Aspire.Hosting.Redis");
         }
 
         if (!aspireTs.Contains("addSqlServer"))
         {
-            throw new InvalidOperationException("aspire.ts does not contain addSqlServer from Aspire.Hosting.SqlServer");
+            throw new InvalidOperationException("aspire.mts does not contain addSqlServer from Aspire.Hosting.SqlServer");
         }
 
         await auto.TypeAsync("exit");
@@ -144,7 +144,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         // Step 1: Create a TypeScript AppHost, restore it, and verify the baseline generated SDK.
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire restore");
@@ -152,13 +152,13 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, "modules");
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($"modules directory was not created at {modulesDir}");
         }
 
-        var aspireModulePath = Path.Combine(modulesDir, "aspire.ts");
+        var aspireModulePath = Path.Combine(modulesDir, "aspire.mts");
         if (!File.Exists(aspireModulePath))
         {
             throw new InvalidOperationException($"Expected generated file not found: {aspireModulePath}");
@@ -167,7 +167,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         var initialAspireTs = File.ReadAllText(aspireModulePath);
         if (!initialAspireTs.Contains("createBuilder"))
         {
-            throw new InvalidOperationException("aspire.ts did not contain the expected base exports before adding a new integration.");
+            throw new InvalidOperationException("aspire.mts did not contain the expected base exports before adding a new integration.");
         }
 
         if (Regex.IsMatch(initialAspireTs, @"(?m)^\s*(?![*/])\S.*\baddRedis\s*\("))
@@ -191,7 +191,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 4: Verify generated SDK files exist and were refreshed.
-        var expectedFiles = new[] { "aspire.ts", "base.ts", "transport.ts" };
+        var expectedFiles = new[] { "aspire.mts", "base.mts", "transport.mts" };
         foreach (var file in expectedFiles)
         {
             var filePath = Path.Combine(modulesDir, file);
@@ -210,7 +210,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         var restoredAspireTs = File.ReadAllText(aspireModulePath);
         if (!restoredAspireTs.Contains("createBuilder"))
         {
-            throw new InvalidOperationException("aspire.ts no longer contains the original base exports after restore.");
+            throw new InvalidOperationException("aspire.mts no longer contains the original base exports after restore.");
         }
 
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
@@ -226,9 +226,9 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             throw new InvalidOperationException(".modules/.codegen-hash did not change after adding Aspire.Hosting.Redis and running aspire restore.");
         }
 
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
             await builder.addRedis("cache");
@@ -270,7 +270,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire add Aspire.Hosting.PostgreSQL");
@@ -283,9 +283,9 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 

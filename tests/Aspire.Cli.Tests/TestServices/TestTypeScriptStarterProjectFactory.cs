@@ -23,7 +23,7 @@ internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, Ca
 
     public IAppHostProject? TryGetProject(FileInfo appHostFile)
     {
-        return appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase) ? _project : null;
+        return appHostFile.Name.Equals("apphost.mts", StringComparison.OrdinalIgnoreCase) ? _project : null;
     }
 
     public IAppHostProject GetProject(FileInfo appHostFile)
@@ -40,16 +40,16 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public string DisplayName => "TypeScript (Node.js)";
 
-    public string? AppHostFileName => "apphost.ts";
+    public string? AppHostFileName => "apphost.mts";
 
     public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<string[]>(["apphost.ts"]);
+        return Task.FromResult<string[]>(["apphost.mts"]);
     }
 
     public bool CanHandle(FileInfo appHostFile)
     {
-        return appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase);
+        return appHostFile.Name.Equals("apphost.mts", StringComparison.OrdinalIgnoreCase);
     }
 
     public bool IsUsingProjectReferences(FileInfo appHostFile)

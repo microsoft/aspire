@@ -136,7 +136,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);

@@ -82,7 +82,7 @@ internal sealed partial class CliTemplateFactory
                         }
                     }
 
-                    var appHostProject = _projectFactory.TryGetProject(new FileInfo(Path.Combine(outputPath, "apphost.ts")));
+                    var appHostProject = _projectFactory.TryGetProject(new FileInfo(Path.Combine(outputPath, "apphost.mts")));
                     if (appHostProject is not IGuestAppHostSdkGenerator guestProject)
                     {
                         _interactionService.DisplayError("Automatic 'aspire restore' is unavailable for the new Python starter project because no TypeScript AppHost SDK generator was found.");

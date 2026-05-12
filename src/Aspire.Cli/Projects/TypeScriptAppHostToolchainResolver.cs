@@ -231,7 +231,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
                     "--exec", $"bun run tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
@@ -246,7 +246,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
                     "--exec", $"yarn run tsc --noEmit -p {tsConfigFileName} && yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
@@ -261,7 +261,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
                     "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""

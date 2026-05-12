@@ -45,17 +45,17 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
 
         // Assert
-        Assert.Contains("aspire.ts", files.Keys);
-        Assert.Contains("transport.ts", files.Keys);
-        Assert.Contains("base.ts", files.Keys);
+        Assert.Contains("aspire.mts", files.Keys);
+        Assert.Contains("transport.mts", files.Keys);
+        Assert.Contains("base.mts", files.Keys);
 
-        await Verify(files["aspire.ts"], extension: "ts")
+        await Verify(files["aspire.mts"], extension: "ts")
             .UseFileName("AtsGeneratedAspire");
 
-        await Verify(files["base.ts"], extension: "ts")
+        await Verify(files["base.mts"], extension: "ts")
             .UseFileName("base");
 
-        await Verify(files["transport.ts"], extension: "ts")
+        await Verify(files["transport.mts"], extension: "ts")
             .UseFileName("transport");
     }
 
@@ -68,7 +68,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
 
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("export namespace TestConfigs", aspireTs);
         Assert.Contains("export const Default", aspireTs);
@@ -83,14 +83,14 @@ public class AtsTypeScriptCodeGeneratorTests
 
         var files = _generator.GenerateDistributedApplication(atsContext);
 
-        Assert.DoesNotContain("export class ReferenceExpression {", files["aspire.ts"]);
-        Assert.Contains("export class ReferenceExpression {", files["base.ts"]);
-        Assert.Contains("registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'", files["base.ts"]);
-        Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.ts"]);
-        Assert.Contains("('$handle' in json || '$expr' in json)", files["base.ts"]);
-        Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.ts"]);
-        Assert.Contains("arguments(): Promise<InteractionInputCollection>", files["aspire.ts"]);
-        Assert.DoesNotContain("setArguments", files["aspire.ts"]);
+        Assert.DoesNotContain("export class ReferenceExpression {", files["aspire.mts"]);
+        Assert.Contains("export class ReferenceExpression {", files["base.mts"]);
+        Assert.Contains("registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'", files["base.mts"]);
+        Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.mts"]);
+        Assert.Contains("('$handle' in json || '$expr' in json)", files["base.mts"]);
+        Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.mts"]);
+        Assert.Contains("arguments(): Promise<InteractionInputCollection>", files["aspire.mts"]);
+        Assert.DoesNotContain("setArguments", files["aspire.mts"]);
     }
 
     [Fact]
@@ -349,7 +349,7 @@ public class AtsTypeScriptCodeGeneratorTests
         // SqlServerDatabaseResourcePromise.
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         // addTestChildDatabase is a factory method on TestRedisResource that returns TestDatabaseResource.
         // The generated internal method must return TestDatabaseResource, not TestRedisResource.
@@ -625,7 +625,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // Generate the TypeScript output
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>)", aspireTs);
         Assert.DoesNotContain("withDependency(dependency: HandleReference)", aspireTs);
@@ -637,7 +637,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var atsContext = CreateContextFromTestAssembly();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>)", aspireTs);
     }
@@ -872,7 +872,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // Generate TypeScript
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         // Verify withEnvironment appears on TestRedisResource class
         // The generated code should have a TestRedisResource class with withEnvironment method
@@ -890,7 +890,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
         var lines = aspireTs.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         Assert.DoesNotContain("ResourceBuilderBase | ResourceBuilderBase", aspireTs);
@@ -1026,7 +1026,7 @@ public class AtsTypeScriptCodeGeneratorTests
     {
         var atsContext = CreateContextFromHostingAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("getSection", aspireTs);
         Assert.Contains("getChildren", aspireTs);
@@ -1193,7 +1193,7 @@ public class AtsTypeScriptCodeGeneratorTests
     {
         var atsContext = CreateContextFromBothAssemblies();
         var files = _generator.GenerateDistributedApplication(atsContext);
-        return files["aspire.ts"];
+        return files["aspire.mts"];
     }
 
     // ===== CancellationToken Tests =====
@@ -1396,7 +1396,7 @@ public class AtsTypeScriptCodeGeneratorTests
         // generate zero-argument methods (same pattern as Dictionary properties with AspireDict)
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var code = files["aspire.ts"];
+        var code = files["aspire.mts"];
 
         // TestCollectionContext has both Items (List) and Metadata (Dictionary)
         // Both should use the same getter-only method pattern with lazy initialization.
@@ -1418,7 +1418,7 @@ public class AtsTypeScriptCodeGeneratorTests
         // Verify that getter-only List properties do not use the old property object pattern.
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var code = files["aspire.ts"];
+        var code = files["aspire.mts"];
 
         // Should NOT contain the old pattern for items
         Assert.DoesNotContain("items = {", code);
@@ -1440,7 +1440,7 @@ public class AtsTypeScriptCodeGeneratorTests
     {
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var code = files["aspire.ts"];
+        var code = files["aspire.mts"];
 
         Assert.Contains("readonly tags: AspireList<string>;", code);
         Assert.Contains("get tags(): AspireList<string> {", code);
@@ -1458,7 +1458,7 @@ public class AtsTypeScriptCodeGeneratorTests
         // exactly one class definition, preferring the concrete type.
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
-        var code = files["aspire.ts"];
+        var code = files["aspire.mts"];
 
         // Count occurrences of the public interface definition.
         var classCount = CountOccurrences(code, "export interface TestVaultResource ");

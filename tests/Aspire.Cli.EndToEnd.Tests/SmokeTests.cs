@@ -136,7 +136,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter, channel: "stable");
 
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var appHostPath = Path.Combine(projectPath, "apphost.ts");
+        var appHostPath = Path.Combine(projectPath, "apphost.mts");
         if (!File.Exists(appHostPath))
         {
             throw new FileNotFoundException($"Expected TypeScript AppHost file to exist: {appHostPath}", appHostPath);
@@ -176,7 +176,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
             throw new FileNotFoundException($"Expected Aspire config file to exist: {configPath}", configPath);
         }
 
-        // Expected shape: { "appHost": { "path": "apphost.ts", "language": "typescript/nodejs" }, "sdk": { "version": "13.2.0" }, "channel": "stable" }
+        // Expected shape: { "appHost": { "path": "apphost.mts", "language": "typescript/nodejs" }, "sdk": { "version": "13.2.0" }, "channel": "stable" }
         using var config = JsonDocument.Parse(File.ReadAllText(configPath));
         var root = config.RootElement;
         AssertJsonStringProperty(root, "channel", "stable", configPath);
@@ -189,7 +189,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
         }
 
         var appHost = GetRequiredJsonObjectProperty(root, "appHost", configPath);
-        AssertJsonStringProperty(appHost, "path", "apphost.ts", configPath);
+        AssertJsonStringProperty(appHost, "path", "apphost.mts", configPath);
         AssertJsonStringProperty(appHost, "language", "typescript/nodejs", configPath);
     }
 

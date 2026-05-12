@@ -1,4 +1,4 @@
-// transport.ts - ATS transport layer: RPC, Handle, errors, callbacks
+// transport.mts - ATS transport layer: RPC, Handle, errors, callbacks
 import * as net from 'net';
 import * as rpc from 'vscode-jsonrpc/node.js';
 

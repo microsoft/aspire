@@ -26,7 +26,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string CodeGenTarget = "TypeScript";
 
     private const string LanguageDisplayName = "TypeScript (Node.js)";
-    private const string AppHostFileName = "apphost.ts";
+    private const string AppHostFileName = "apphost.mts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
 
@@ -46,7 +46,16 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             "outDir": "./dist/apphost",
             "rootDir": "."
           },
-          "include": ["apphost.ts", ".modules/**/*.ts"],
+          "include": [
+            "apphost.mts",
+            "apphost.ts",
+            ".modules/aspire.mts",
+            ".modules/base.mts",
+            ".modules/transport.mts",
+            ".modules/aspire.ts",
+            ".modules/base.ts",
+            ".modules/transport.ts"
+          ],
           "exclude": ["node_modules"]
         }
         """;
@@ -56,7 +65,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         WriteIndented = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-    private static readonly string[] s_detectionPatterns = ["apphost.ts"];
+    private static readonly string[] s_detectionPatterns = ["apphost.mts", "apphost.ts"];
 
     /// <inheritdoc />
     public string Language => LanguageId;
@@ -66,12 +75,12 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     {
         var files = new Dictionary<string, string>();
 
-        // Create apphost.ts
+        // Create apphost.mts
         files[AppHostFileName] = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -90,7 +99,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             """;
         files[PackageJsonFileName] = CreatePackageJson(request);
 
-        // Create eslint.config.mjs for catching unawaited promises in apphost.ts
+        // Create eslint.config.mjs for catching unawaited promises in apphost.mts
         files["eslint.config.mjs"] = """
             // @ts-check
 
@@ -98,7 +107,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             import tseslint from 'typescript-eslint';
 
             export default defineConfig({
-              files: ['apphost.ts'],
+              files: ['apphost.mts'],
               extends: [tseslint.configs.base],
               languageOptions: {
                 parserOptions: {
@@ -157,7 +166,6 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             packageJson["name"] = packageName;
             packageJson["version"] = "1.0.0";
             packageJson["private"] = true;
-            packageJson["type"] = "module";
         }
 
         // NOTE: The engines.node constraint must match ESLint 10's own requirement
@@ -168,7 +176,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         engines["node"] = "^20.19.0 || ^22.13.0 || >=24";
 
         var scripts = EnsureObject(packageJson, "scripts");
-        scripts["aspire:lint"] = "eslint apphost.ts";
+        scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
@@ -231,8 +239,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     /// <inheritdoc />
     public DetectionResult Detect(string directoryPath)
     {
-        // Check for apphost.ts
-        var appHostPath = Path.Combine(directoryPath, AppHostFileName);
+        var appHostFileName = File.Exists(Path.Combine(directoryPath, AppHostFileName))
+            ? AppHostFileName
+            : "apphost.ts";
+        var appHostPath = Path.Combine(directoryPath, appHostFileName);
         if (!File.Exists(appHostPath))
         {
             return DetectionResult.NotFound;
@@ -248,7 +258,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         // Note: .csproj precedence is handled by the CLI, not here.
         // Language support should only check for its own language markers.
 
-        return DetectionResult.Found(LanguageId, AppHostFileName);
+        return DetectionResult.Found(LanguageId, appHostFileName);
     }
 
     /// <inheritdoc />
@@ -287,7 +297,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
                     "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""

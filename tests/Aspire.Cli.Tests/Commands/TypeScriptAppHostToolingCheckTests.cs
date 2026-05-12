@@ -16,9 +16,9 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         LanguageId: new LanguageId(KnownLanguageId.TypeScript),
         DisplayName: "TypeScript (Node.js)",
         PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
-        DetectionPatterns: ["apphost.ts"],
+        DetectionPatterns: ["apphost.mts"],
         CodeGenerator: "TypeScript",
-        AppHostFileName: "apphost.ts");
+        AppHostFileName: "apphost.mts");
 
     [Fact]
     public async Task CheckAsync_ReturnsPass_WhenConfiguredToolchainIsAvailable()
@@ -67,7 +67,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
 
     private static FileInfo CreateTypeScriptAppHost(TemporaryWorkspace workspace, string packageJsonContent)
     {
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, "await Promise.resolve();");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), packageJsonContent);
         return new FileInfo(appHostPath);

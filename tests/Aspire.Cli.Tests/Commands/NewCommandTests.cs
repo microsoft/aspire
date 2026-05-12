@@ -803,7 +803,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             ScaffoldAsyncCallback = (context, cancellationToken) =>
             {
                 scaffoldedLanguageId = context.Language.LanguageId.Value;
-                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.mts"), "// test apphost");
                 return Task.FromResult(true);
             }
         });
@@ -820,7 +820,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain((KnownTemplateId.TypeScriptEmptyAppHost, "Empty (TypeScript AppHost)"), promptedTemplates);
         Assert.DoesNotContain((KnownTemplateId.JavaEmptyAppHost, "Empty (Java AppHost)"), promptedTemplates);
         Assert.Contains((KnownTemplateId.TypeScriptStarter, "Starter App (Express/React, TypeScript AppHost)"), promptedTemplates);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "aspire.config.json")));
     }
 
@@ -1060,7 +1060,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             ScaffoldAsyncCallback = (context, cancellationToken) =>
             {
                 scaffoldedLanguageId = context.Language.LanguageId.Value;
-                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.mts"), "// test apphost");
                 return Task.FromResult(true);
             }
         });
@@ -1072,7 +1072,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(KnownLanguageId.TypeScript, scaffoldedLanguageId);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
     }
 
     [Fact]
@@ -1459,7 +1459,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 await File.WriteAllTextAsync(Path.Combine(context.TargetDirectory.FullName, "aspire.config.json"), """
                     {
                       "appHost": {
-                        "path": "apphost.ts",
+                        "path": "apphost.mts",
                         "language": "typescript/nodejs"
                       },
                       "profiles": {
@@ -1550,8 +1550,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             channelSeenByProject = config?.Channel;
             sdkVersionSeenByProject = config?.SdkVersion;
 
-            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".modules"));
-            File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated sdk");
+            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, "modules"));
+            File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.mts"), "// generated sdk");
 
             return Task.FromResult(true);
         }));
@@ -1566,7 +1566,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
         Assert.Equal("9.2.0", sdkVersionSeenByProject);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".modules", "aspire.ts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "modules", "aspire.mts")));
     }
 
     [Fact]

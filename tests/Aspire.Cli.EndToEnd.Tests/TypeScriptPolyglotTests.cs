@@ -51,7 +51,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Step 1: Create TypeScript AppHost
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
@@ -80,13 +80,13 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
 
-        // Step 5: Modify apphost.ts to add the Vite app
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        // Step 5: Modify apphost.mts to add the Vite app
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -175,7 +175,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Run aspire init in brownfield mode
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         // Verify brownfield augmentation preserved existing config
@@ -215,13 +215,13 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var packages = packagesNode!.AsObject();
         Assert.NotNull(packages["Aspire.Hosting.JavaScript"]);
 
-        // Modify apphost.ts to add the Vite app before running
-        var appHostPath = Path.Combine(projectRoot, "apphost.ts");
+        // Modify apphost.mts to add the Vite app before running
+        var appHostPath = Path.Combine(projectRoot, "apphost.mts");
         var newContent = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 
