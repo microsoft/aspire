@@ -139,6 +139,54 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_WithTestTypes_CapturesXmlDocumentation()
+    {
+        var context = CreateContextFromTestAssembly();
+
+        var addTestRedis = context.Capabilities.First(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
+        Assert.Equal("Adds a test Redis resource", addTestRedis.Description);
+        Assert.Equal("Adds a test Redis resource from ATS documentation.", addTestRedis.Documentation?.Summary);
+        Assert.Null(addTestRedis.Documentation?.Remarks);
+        Assert.Equal("The ATS test Redis resource builder.", addTestRedis.Documentation?.Returns);
+
+        var nameParameter = addTestRedis.Parameters.First(p => p.Name == "name");
+        Assert.Equal("The ATS resource name.", nameParameter.Documentation?.Summary);
+
+        var portParameter = addTestRedis.Parameters.First(p => p.Name == "port");
+        Assert.Null(portParameter.Documentation);
+
+        var testConfig = context.DtoTypes.First(dto => dto.Name == nameof(TestConfigDto));
+        Assert.Equal("Test DTO to verify [AspireDto] generates TypeScript interfaces.", testConfig.Documentation?.Summary);
+        Assert.Equal("The name of the test config.", testConfig.Properties.First(p => p.Name == nameof(TestConfigDto.Name)).Documentation?.Summary);
+
+        var testStatus = context.EnumTypes.First(e => e.Name == nameof(TestResourceStatus));
+        Assert.Equal("Test enum for type generation verification.", testStatus.Documentation?.Summary);
+        Assert.Equal("The resource is pending.", testStatus.ValueInfos.First(v => v.Name == nameof(TestResourceStatus.Pending)).Documentation?.Summary);
+
+        var defaultConfig = context.ExportedValues.First(value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Equal("The default test configuration.", defaultConfig.Documentation?.Summary);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_EmitsXmlDocumentationAsJSDoc()
+    {
+        var context = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("Adds a test Redis resource from ATS documentation.", aspireTs);
+        Assert.Contains("@param name The ATS resource name.", aspireTs);
+        Assert.Contains("@param options Additional options.", aspireTs);
+        Assert.Contains("@returns The ATS test Redis resource builder.", aspireTs);
+        Assert.DoesNotContain("The optional Redis port.", aspireTs);
+        Assert.DoesNotContain("Uses XML documentation instead of the attribute description when both are present.", aspireTs);
+        Assert.Contains("/** The name of the test config. */", aspireTs);
+        Assert.Contains("/** The default test configuration. */", aspireTs);
+        Assert.Contains("/** The resource is pending. */", aspireTs);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithContextType_GeneratesPropertyCapabilities()
     {
         // Arrange

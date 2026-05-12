@@ -80,6 +80,7 @@ internal sealed class CodeGenerationService
         OwningTypeName = c.OwningTypeName,
         QualifiedMethodName = c.QualifiedMethodName,
         Description = c.Description,
+        Documentation = MapDocumentation(c.Documentation),
         CapabilityKind = c.CapabilityKind.ToString(),
         TargetTypeId = c.TargetTypeId,
         TargetParameterName = c.TargetParameterName,
@@ -100,10 +101,12 @@ internal sealed class CodeGenerationService
         CallbackParameters = p.CallbackParameters?.Select(cp => new CallbackParameterResponse
         {
             Name = cp.Name,
-            Type = MapTypeRef(cp.Type)
+            Type = MapTypeRef(cp.Type),
+            Documentation = MapDocumentation(cp.Documentation)
         }).ToList(),
         CallbackReturnType = p.CallbackReturnType != null ? MapTypeRef(p.CallbackReturnType) : null,
-        DefaultValue = p.DefaultValue?.ToString()
+        DefaultValue = p.DefaultValue?.ToString(),
+        Documentation = MapDocumentation(p.Documentation)
     };
 
     private static TypeRefResponse MapTypeRef(AtsTypeRef t) => new()
@@ -124,6 +127,7 @@ internal sealed class CodeGenerationService
         IsInterface = t.IsInterface,
         ExposeProperties = t.HasExposeProperties,
         ExposeMethods = t.HasExposeMethods,
+        Documentation = MapDocumentation(t.Documentation),
         ImplementedInterfaces = t.ImplementedInterfaces.Select(MapTypeRef).ToList(),
         BaseTypeHierarchy = t.BaseTypeHierarchy.Select(MapTypeRef).ToList()
     };
@@ -133,12 +137,14 @@ internal sealed class CodeGenerationService
         TypeId = t.TypeId,
         Name = t.Name,
         Description = t.Description,
+        Documentation = MapDocumentation(t.Documentation),
         Properties = t.Properties.Select(p => new DtoPropertyResponse
         {
             Name = p.Name,
             Type = MapTypeRef(p.Type),
             IsOptional = p.IsOptional,
-            Description = p.Description
+            Description = p.Description,
+            Documentation = MapDocumentation(p.Documentation)
         }).ToList()
     };
 
@@ -146,7 +152,13 @@ internal sealed class CodeGenerationService
     {
         TypeId = t.TypeId,
         Name = t.Name,
-        Values = t.Values.ToList()
+        Values = t.Values.ToList(),
+        ValueInfos = t.ValueInfos.Select(value => new EnumValueResponse
+        {
+            Name = value.Name,
+            Documentation = MapDocumentation(value.Documentation)
+        }).ToList(),
+        Documentation = MapDocumentation(t.Documentation)
     };
 
     private static ExportedValueResponse MapExportedValue(AtsExportedValueInfo value) => new()
@@ -154,8 +166,29 @@ internal sealed class CodeGenerationService
         PathSegments = value.PathSegments.ToList(),
         Type = MapTypeRef(value.Type),
         Value = value.Value?.DeepClone(),
-        Description = value.Description
+        Description = value.Description,
+        Documentation = MapDocumentation(value.Documentation)
     };
+
+    private static DocumentationResponse? MapDocumentation(AtsDocumentationInfo? documentation)
+    {
+        if (documentation is null)
+        {
+            return null;
+        }
+
+        return new DocumentationResponse
+        {
+            Summary = documentation.Summary,
+            Remarks = documentation.Remarks,
+            Returns = documentation.Returns,
+            Parameters = documentation.Parameters.Select(parameter => new ParameterDocumentationResponse
+            {
+                Name = parameter.Name,
+                Description = parameter.Description
+            }).ToList()
+        };
+    }
 
     private static DiagnosticResponse MapDiagnostic(AtsDiagnostic d) => new()
     {
@@ -223,6 +256,7 @@ internal sealed class CapabilityResponse
     public string? OwningTypeName { get; set; }
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationResponse? Documentation { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -243,12 +277,14 @@ internal sealed class ParameterResponse
     public List<CallbackParameterResponse>? CallbackParameters { get; set; }
     public TypeRefResponse? CallbackReturnType { get; set; }
     public string? DefaultValue { get; set; }
+    public DocumentationResponse? Documentation { get; set; }
 }
 
 internal sealed class CallbackParameterResponse
 {
     public string Name { get; set; } = "";
     public TypeRefResponse? Type { get; set; }
+    public DocumentationResponse? Documentation { get; set; }
 }
 
 internal sealed class TypeRefResponse
@@ -269,6 +305,7 @@ internal sealed class HandleTypeResponse
     public bool IsInterface { get; set; }
     public bool ExposeProperties { get; set; }
     public bool ExposeMethods { get; set; }
+    public DocumentationResponse? Documentation { get; set; }
     public List<TypeRefResponse> ImplementedInterfaces { get; set; } = [];
     public List<TypeRefResponse> BaseTypeHierarchy { get; set; } = [];
 }
@@ -278,6 +315,7 @@ internal sealed class DtoTypeResponse
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationResponse? Documentation { get; set; }
     public List<DtoPropertyResponse> Properties { get; set; } = [];
 }
 
@@ -287,6 +325,7 @@ internal sealed class DtoPropertyResponse
     public TypeRefResponse? Type { get; set; }
     public bool IsOptional { get; set; }
     public string? Description { get; set; }
+    public DocumentationResponse? Documentation { get; set; }
 }
 
 internal sealed class EnumTypeResponse
@@ -294,6 +333,14 @@ internal sealed class EnumTypeResponse
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public List<string> Values { get; set; } = [];
+    public List<EnumValueResponse> ValueInfos { get; set; } = [];
+    public DocumentationResponse? Documentation { get; set; }
+}
+
+internal sealed class EnumValueResponse
+{
+    public string Name { get; set; } = "";
+    public DocumentationResponse? Documentation { get; set; }
 }
 
 internal sealed class ExportedValueResponse
@@ -302,6 +349,21 @@ internal sealed class ExportedValueResponse
     public TypeRefResponse Type { get; set; } = null!;
     public System.Text.Json.Nodes.JsonNode? Value { get; set; }
     public string? Description { get; set; }
+    public DocumentationResponse? Documentation { get; set; }
+}
+
+internal sealed class DocumentationResponse
+{
+    public string? Summary { get; set; }
+    public string? Remarks { get; set; }
+    public string? Returns { get; set; }
+    public List<ParameterDocumentationResponse> Parameters { get; set; } = [];
+}
+
+internal sealed class ParameterDocumentationResponse
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
 }
 
 internal sealed class DiagnosticResponse

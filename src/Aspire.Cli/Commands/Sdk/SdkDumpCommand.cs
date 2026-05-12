@@ -591,6 +591,7 @@ internal sealed class CapabilityInfo
     public string? OwningTypeName { get; set; }
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -611,12 +612,14 @@ internal sealed class ParameterInfo
     public List<CallbackParameterInfo>? CallbackParameters { get; set; }
     public TypeRefInfo? CallbackReturnType { get; set; }
     public string? DefaultValue { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class CallbackParameterInfo
 {
     public string Name { get; set; } = "";
     public TypeRefInfo? Type { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class TypeRefInfo
@@ -637,6 +640,7 @@ internal sealed class HandleTypeInfo
     public bool IsInterface { get; set; }
     public bool ExposeProperties { get; set; }
     public bool ExposeMethods { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<TypeRefInfo> ImplementedInterfaces { get; set; } = [];
     public List<TypeRefInfo> BaseTypeHierarchy { get; set; } = [];
 }
@@ -646,6 +650,7 @@ internal sealed class DtoTypeInfo
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<DtoPropertyInfo> Properties { get; set; } = [];
 }
 
@@ -655,6 +660,7 @@ internal sealed class DtoPropertyInfo
     public TypeRefInfo? Type { get; set; }
     public bool IsOptional { get; set; }
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class EnumTypeInfo
@@ -662,6 +668,14 @@ internal sealed class EnumTypeInfo
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public List<string> Values { get; set; } = [];
+    public List<EnumValueInfo> ValueInfos { get; set; } = [];
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class EnumValueInfo
+{
+    public string Name { get; set; } = "";
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class ExportedValueInfo
@@ -670,6 +684,21 @@ internal sealed class ExportedValueInfo
     public TypeRefInfo Type { get; set; } = null!;
     public JsonNode? Value { get; set; }
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class DocumentationInfo
+{
+    public string? Summary { get; set; }
+    public string? Remarks { get; set; }
+    public string? Returns { get; set; }
+    public List<ParameterDocumentationInfo> Parameters { get; set; } = [];
+}
+
+internal sealed class ParameterDocumentationInfo
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
 }
 
 internal sealed class DiagnosticInfo
@@ -694,7 +723,10 @@ internal sealed class DiagnosticInfo
 [JsonSerializable(typeof(DtoTypeInfo))]
 [JsonSerializable(typeof(DtoPropertyInfo))]
 [JsonSerializable(typeof(EnumTypeInfo))]
+[JsonSerializable(typeof(EnumValueInfo))]
 [JsonSerializable(typeof(ExportedValueInfo))]
+[JsonSerializable(typeof(DocumentationInfo))]
+[JsonSerializable(typeof(ParameterDocumentationInfo))]
 [JsonSerializable(typeof(DiagnosticInfo))]
 internal partial class CapabilitiesJsonContext : JsonSerializerContext
 {

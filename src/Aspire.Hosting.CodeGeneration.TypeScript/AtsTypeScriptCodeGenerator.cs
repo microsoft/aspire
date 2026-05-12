@@ -132,6 +132,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     // Mapping of enum type IDs to TypeScript enum names
     private readonly Dictionary<string, string> _enumTypeNames = new(StringComparer.Ordinal);
 
+    // Mapping of handle type IDs to XML documentation captured during ATS scanning.
+    private readonly Dictionary<string, AtsDocumentationInfo> _handleDocumentationById = new(StringComparer.Ordinal);
+
     private static string GetInterfaceName(string className) => className;
 
     private static string GetPromiseInterfaceName(string className) => $"{className}Promise";
@@ -410,47 +413,37 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return MapInputTypeToTypeScript(param.Type);
     }
 
-    private void WriteCapabilityDocComment(string indent, AtsCapabilityInfo capability)
+    private void WriteCapabilityDocComment(
+        string indent,
+        AtsCapabilityInfo capability,
+        IReadOnlyList<AtsParameterInfo>? publicParameters = null,
+        string? optionsParameterName = null)
     {
-        List<string>? lines = null;
+        var parameterDocs = (publicParameters ?? capability.Parameters
+                .Where(p => !string.Equals(p.Name, capability.TargetParameterName, StringComparison.Ordinal))
+                .ToList())
+            .Select(p => (p.Name, Summary: p.Documentation?.Summary))
+            .Where(static p => !string.IsNullOrWhiteSpace(p.Summary))
+            .ToList();
 
-        if (!string.IsNullOrWhiteSpace(capability.Description))
+        if (!string.IsNullOrWhiteSpace(optionsParameterName))
         {
-            lines = [];
-            lines.AddRange(capability.Description
-                .Split(['\r', '\n'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+            parameterDocs.Add((optionsParameterName, "Additional options."));
         }
 
-        if (capability.IsObsolete)
-        {
-            lines ??= [];
-            lines.Add(string.IsNullOrWhiteSpace(capability.ObsoleteMessage)
-                ? "@deprecated"
-                : $"@deprecated {capability.ObsoleteMessage}");
-        }
-
-        if (lines is not { Count: > 0 })
-        {
-            return;
-        }
-
-        if (lines.Count == 1 && !lines[0].StartsWith("@deprecated", StringComparison.Ordinal))
-        {
-            WriteLine($"{indent}/** {lines[0]} */");
-            return;
-        }
-
-        WriteLine($"{indent}/**");
-        foreach (var line in lines)
-        {
-            WriteLine($"{indent} * {line}");
-        }
-        WriteLine($"{indent} */");
+        WriteDocumentationComment(
+            indent,
+            capability.Documentation,
+            capability.Description,
+            parameterDocs,
+            capability.ReturnType.TypeId == AtsConstants.Void ? null : capability.Documentation?.Returns,
+            capability.IsObsolete,
+            capability.ObsoleteMessage);
     }
 
     private void WritePropertyDocComment(string indent, AtsCapabilityInfo? getter, AtsCapabilityInfo? setter)
     {
-        var capability = getter is not null && (!string.IsNullOrWhiteSpace(getter.Description) || getter.IsObsolete)
+        var capability = getter is not null && (getter.Documentation is not null || !string.IsNullOrWhiteSpace(getter.Description) || getter.IsObsolete)
             ? getter
             : setter;
 
@@ -459,6 +452,105 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteCapabilityDocComment(indent, capability);
         }
     }
+
+    private void WriteDocumentationComment(
+        string indent,
+        AtsDocumentationInfo? documentation,
+        string? fallbackSummary = null,
+        IReadOnlyList<(string Name, string? Summary)>? parameters = null,
+        string? returns = null,
+        bool isObsolete = false,
+        string? obsoleteMessage = null)
+    {
+        var lines = new List<string>();
+        AddDocumentationLines(lines, documentation?.Summary ?? fallbackSummary);
+        AddDocumentationLines(lines, documentation?.Remarks, addBlankLineBefore: lines.Count > 0);
+
+        foreach (var parameter in parameters ?? [])
+        {
+            AddTaggedDocumentationLines(lines, $"@param {parameter.Name}", parameter.Summary);
+        }
+
+        AddTaggedDocumentationLines(lines, "@returns", returns ?? documentation?.Returns);
+
+        if (isObsolete)
+        {
+            lines.Add(string.IsNullOrWhiteSpace(obsoleteMessage)
+                ? "@deprecated"
+                : $"@deprecated {EscapeJSDocText(obsoleteMessage)}");
+        }
+
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        if (lines.Count == 1 && !lines[0].StartsWith('@'))
+        {
+            WriteLine($"{indent}/** {lines[0]} */");
+            return;
+        }
+
+        WriteLine($"{indent}/**");
+        foreach (var line in lines)
+        {
+            WriteLine(line.Length == 0 ? $"{indent} *" : $"{indent} * {line}");
+        }
+        WriteLine($"{indent} */");
+    }
+
+    private static void AddTaggedDocumentationLines(List<string> lines, string tag, string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        var tagLines = SplitDocumentationLines(text);
+        if (tagLines.Count == 0)
+        {
+            return;
+        }
+
+        lines.Add($"{tag} {tagLines[0]}");
+        foreach (var line in tagLines.Skip(1))
+        {
+            lines.Add(line);
+        }
+    }
+
+    private static void AddDocumentationLines(List<string> lines, string? text, bool addBlankLineBefore = false)
+    {
+        var textLines = SplitDocumentationLines(text);
+        if (textLines.Count == 0)
+        {
+            return;
+        }
+
+        if (addBlankLineBefore)
+        {
+            lines.Add(string.Empty);
+        }
+
+        lines.AddRange(textLines);
+    }
+
+    private static List<string> SplitDocumentationLines(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        return text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(EscapeJSDocText)
+            .ToList();
+    }
+
+    private static string EscapeJSDocText(string text) => text.Replace("*/", "* /", StringComparison.Ordinal);
 
     private string? TryMapInterfaceInputTypeToTypeScript(AtsTypeRef typeRef)
     {
@@ -715,6 +807,15 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         _generatedOptionsInterfaces.Clear();
         _optionsInterfacesToGenerate.Clear();
         _capabilityOptionsInterfaceMap.Clear();
+        _handleDocumentationById.Clear();
+
+        foreach (var handleType in context.HandleTypes)
+        {
+            if (handleType.Documentation is not null)
+            {
+                _handleDocumentationById[handleType.AtsTypeId] = handleType.Documentation;
+            }
+        }
 
         foreach (var builder in resourceBuilders)
         {
@@ -827,11 +928,16 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             var handleName = GetHandleTypeName(typeId);
             var description = GetTypeDescription(typeId);
-            WriteLine($"/** {description} */");
+            WriteDocumentationComment(string.Empty, GetHandleDocumentation(typeId), description);
             // Internal type alias - not exported (users work with wrapper classes)
             WriteLine($"type {handleName} = Handle<'{typeId}'>;");
             WriteLine();
         }
+    }
+
+    private AtsDocumentationInfo? GetHandleDocumentation(string typeId)
+    {
+        return _handleDocumentationById.GetValueOrDefault(typeId);
     }
 
     /// <summary>
@@ -860,13 +966,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Track enum name for type mapping
             _enumTypeNames[enumType.TypeId] = enumType.Name;
 
-            WriteLine($"/** Enum type for {enumType.Name} */");
+            WriteDocumentationComment(string.Empty, enumType.Documentation, $"Enum type for {enumType.Name}");
             WriteLine($"export enum {enumType.Name} {{");
 
-            foreach (var value in enumType.Values)
+            var enumValues = enumType.ValueInfos.Count > 0
+                ? enumType.ValueInfos
+                : enumType.Values.Select(value => new AtsEnumValueInfo { Name = value }).ToList();
+
+            foreach (var value in enumValues)
             {
                 // Enums serialize as strings in JSON
-                WriteLine($"    {value} = \"{value}\",");
+                WriteDocumentationComment("    ", value.Documentation);
+                WriteLine($"    {value.Name} = \"{value.Name}\",");
             }
 
             WriteLine("}");
@@ -897,7 +1008,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             var interfaceName = GetDtoInterfaceName(dto.TypeId);
 
-            WriteLine($"/** DTO interface for {dto.Name} */");
+            WriteDocumentationComment(string.Empty, dto.Documentation, dto.Description ?? $"DTO interface for {dto.Name}");
             WriteLine($"export interface {interfaceName} {{");
 
             foreach (var prop in dto.Properties)
@@ -908,6 +1019,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 // All DTO properties are optional in TypeScript to allow partial objects
                 // Convert PascalCase to camelCase for TypeScript
                 var propName = ToCamelCase(prop.Name);
+                WriteDocumentationComment("    ", prop.Documentation, prop.Description);
                 WriteLine($"    {propName}?: {tsType};");
             }
 
@@ -959,10 +1071,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             if (child.Value is { } valueInfo)
             {
-                if (!string.IsNullOrWhiteSpace(valueInfo.Description))
-                {
-                    WriteLine($"{indent}/** {valueInfo.Description} */");
-                }
+                WriteDocumentationComment(indent, valueInfo.Documentation, valueInfo.Description);
 
                 var literal = RenderTypeScriptExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById);
                 var exportedType = MapTypeRefToTypeScript(valueInfo.Type);
@@ -1321,6 +1430,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             foreach (var param in optionalParams)
             {
                 var tsType = MapParameterToTypeScript(param);
+                WriteDocumentationComment("    ", param.Documentation);
                 WriteLine($"    {param.Name}?: {tsType};");
             }
             WriteLine("}");
@@ -1505,6 +1615,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine($"// {interfaceName}");
         WriteLine("// ============================================================================");
         WriteLine();
+        WriteDocumentationComment(string.Empty, GetHandleDocumentation(builder.TypeId));
         WriteLine($"export interface {interfaceName} {{");
         WriteLine("    toJSON(): MarshalledHandle;");
 
@@ -1532,7 +1643,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var publicParamsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
 
-            WriteCapabilityDocComment("    ", capability);
+            WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? "options" : null);
             if (hasNonBuilderReturn)
             {
                 var returnType = MapTypeRefToTypeScript(capability.ReturnType);
@@ -1585,7 +1696,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
             var hasNonBuilderReturn = !capability.ReturnsBuilder && capability.ReturnType != null;
 
-            WriteCapabilityDocComment("    ", capability);
+            WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? "options" : null);
             if (hasNonBuilderReturn)
             {
                 var returnType = MapTypeRefToTypeScript(capability.ReturnType);
@@ -1615,7 +1726,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var paramsString = BuildPublicParameterList(requiredParams, hasOptionals, optionsInterfaceName);
         var isVoid = capability.ReturnType == null || capability.ReturnType.TypeId == AtsConstants.Void;
 
-        WriteCapabilityDocComment("    ", capability);
+        WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? "options" : null);
         if (capability.ReturnType != null && _typesWithPromiseWrappers.Contains(capability.ReturnType.TypeId))
         {
             WriteLine($"    {methodName}({paramsString}): {GetPublicPromiseInterfaceName(capability.ReturnType.TypeId)};");
@@ -1640,6 +1751,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine($"// {interfaceName}");
         WriteLine("// ============================================================================");
         WriteLine();
+        WriteDocumentationComment(string.Empty, GetHandleDocumentation(model.TypeId));
         WriteLine($"export interface {interfaceName} {{");
         WriteLine("    toJSON(): MarshalledHandle;");
 
@@ -1698,6 +1810,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var handleType = GetHandleTypeName(builder.TypeId);
 
         // Generate builder class extending ResourceBuilderBase
+        WriteDocumentationComment(string.Empty, GetHandleDocumentation(builder.TypeId));
         WriteLine($"class {implementationClassName} extends ResourceBuilderBase<{handleType}> implements {builder.BuilderClassName} {{");
 
         // Constructor
@@ -1820,6 +1933,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Generate a simple async method that returns the actual type
             var returnType = MapTypeRefToTypeScript(capability.ReturnType);
 
+            WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
             Write($"    async {methodName}(");
             Write(publicParamsString);
             WriteLine($"): Promise<{returnType}> {{");
@@ -1905,6 +2019,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Generate public fluent method (returns thenable wrapper)
         var promiseClass = $"{returnClassName}Promise";
         var promiseImplementationClass = GetImplementationPromiseClassName(returnClassName);
+        WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
         Write($"    {methodName}(");
         Write(publicParamsString);
         Write($"): {promiseClass} {{");
@@ -2747,9 +2862,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var allMethods = contextMethods.Concat(otherMethods).ToList();
         var hasMethods = allMethods.Count > 0;
 
-        WriteLine($"/**");
-        WriteLine($" * Type class for {className}.");
-        WriteLine($" */");
+        WriteDocumentationComment(string.Empty, GetHandleDocumentation(model.TypeId), $"Type class for {className}.");
         WriteLine($"class {implementationClassName} implements {className} {{");
         WriteLine($"    constructor(private _handle: {handleType}, private _client: AspireClientRpc) {{}}");
         WriteLine();
@@ -3282,6 +3395,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             : "void";
 
         // Generate async method
+        WriteCapabilityDocComment("    ", method, requiredParams, hasOptionals ? publicOptionsParamName : null);
         Write($"    async {methodName}(");
         Write(paramsString);
         WriteLine($"): Promise<{returnType}> {{");
@@ -3360,6 +3474,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var returnType = MapTypeRefToTypeScript(capability.ReturnType);
 
         // Generate async method
+        WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
         Write($"    async {methodName}(");
         Write(paramsString);
         WriteLine($"): Promise<{returnType}> {{");
@@ -3491,6 +3606,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine();
 
             // Generate public fluent method that returns thenable wrapper
+            WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
             Write($"    {methodName}(");
             Write(publicParamsString);
             WriteLine($"): {returnPromiseWrapper} {{");
@@ -3546,6 +3662,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine();
 
             // Generate public fluent method
+            WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
             Write($"    {methodName}(");
             Write(publicParamsString);
             WriteLine($"): {promiseClass} {{");
@@ -3564,6 +3681,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         else
         {
             // Non-void, non-wrapper return - plain async method
+            WriteCapabilityDocComment("    ", capability, requiredParams, hasOptionals ? publicOptionsParamName : null);
             Write($"    async {methodName}(");
             Write(publicParamsString);
             WriteLine($"): Promise<{returnType}> {{");

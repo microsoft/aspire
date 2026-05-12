@@ -191,13 +191,22 @@ The primary method for interacting with Aspire. Capabilities are identified by `
 Capabilities are discovered by scanning assemblies for:
 
 1. **[AspireExport]** - Static methods that can be invoked:
-   ```csharp
-   [AspireExport("addRedis", Description = "Adds a Redis container")]
-   public static IResourceBuilder<RedisResource> AddRedis(
-       IDistributedApplicationBuilder builder,
-       string name,
-       int? port = null)
-   ```
+    ```csharp
+    /// <summary>
+    /// Adds a Redis container.
+    /// </summary>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The Redis resource name.</param>
+    /// <param name="port">The optional Redis port.</param>
+    /// <returns>The Redis resource builder.</returns>
+    [AspireExport("addRedis", Description = "Adds a Redis container")]
+    public static IResourceBuilder<RedisResource> AddRedis(
+        IDistributedApplicationBuilder builder,
+        string name,
+        int? port = null)
+    ```
+
+   XML documentation is the primary source for generated polyglot SDK API documentation. The scanner captures `<summary>`, `<param>`, `<returns>`, and `<remarks>` tags for TypeScript JSDoc. First-level `ats-*` tags override the matching standard tags when polyglot SDK docs need different text: `<ats-summary>`, `<ats-param name="...">`, `<ats-returns>`, and `<ats-remarks>`. An empty `ats-*` override intentionally suppresses the matching standard documentation. The `Description` property remains supported as compatibility metadata and is used as a fallback only when the corresponding XML documentation tag is not available.
 
 2. **[AspireContextType]** - Types whose properties are exposed as capabilities. The type ID is derived as `{AssemblyName}/{TypeName}`:
    ```csharp
