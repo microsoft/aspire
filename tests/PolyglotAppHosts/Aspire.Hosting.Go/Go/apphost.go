@@ -38,7 +38,7 @@ func main() {
 		WithModVendor().
 		WithModDownload().
 		WithVetTool().
-		WithAppArgs([]string{"--config", "prod.yaml"})
+		WithAppArgs([]any{"--config", "prod.yaml"})
 	if err = managed.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
