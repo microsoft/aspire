@@ -158,6 +158,8 @@ public static class GoHostingExtensions
                     }
                 }
             })
+            .WithRequiredCommand("go", "https://go.dev/dl/")
+            .WithOtlpExporter()
             .WithVSCodeDebugging()
             .PublishAsDockerFile(containerBuilder =>
             {
@@ -260,7 +262,15 @@ public static class GoHostingExtensions
                     // ca-certificates and tzdata, or extend the Dockerfile.
                     if (runtimeImage.Contains("alpine", StringComparison.OrdinalIgnoreCase))
                     {
-                        runtimeStage.Run("apk --no-cache add ca-certificates tzdata");
+                        runtimeStage
+                            .Run("apk --no-cache add ca-certificates tzdata")
+                            // Create a non-root user — Alpine uses addgroup/adduser.
+                            .Run("addgroup -S app && adduser -S -G app app");
+                    }
+                    else
+                    {
+                        // Debian/Ubuntu and other glibc-based images use groupadd/useradd.
+                        runtimeStage.Run("groupadd --system --gid 999 app && useradd --system --gid 999 --uid 999 --no-create-home app");
                     }
 
                     runtimeStage
@@ -268,6 +278,7 @@ public static class GoHostingExtensions
                         // Add COPY --from=<source> instructions for each container files source.
                         .AddContainerFiles(ctx.Resource, "/app", logger)
                         .CopyFrom("build", "/app/server", "/app/server")
+                        .User("app")
                         .Entrypoint(["/app/server"]);
                 });
             });
@@ -363,6 +374,8 @@ public static class GoHostingExtensions
                 .WithArgs("mod", "tidy", "-e")
                 .ExcludeFromManifest();
 
+            // Store the builder reference so WithModVendor/WithModDownload can chain after tidy.
+            builder.WithAnnotation(new GoModTidyBuilderAnnotation(tidy));
             builder.WaitForCompletion(tidy);
         }
 
@@ -400,6 +413,14 @@ public static class GoHostingExtensions
                 .WithArgs("mod", "vendor")
                 .ExcludeFromManifest();
 
+            // vendor must run after tidy: tidy updates go.mod/go.sum which vendor reads.
+            if (builder.Resource.TryGetLastAnnotation<GoModTidyBuilderAnnotation>(out var tidyBuilder))
+            {
+                vendor.WaitForCompletion(tidyBuilder.Sibling);
+            }
+
+            // Store vendor builder so WithModDownload can chain after it.
+            builder.WithAnnotation(new GoModVendorBuilderAnnotation(vendor));
             builder.WaitForCompletion(vendor);
         }
 
@@ -436,6 +457,17 @@ public static class GoHostingExtensions
                 .AddResource(downloadResource)
                 .WithArgs("mod", "download")
                 .ExcludeFromManifest();
+
+            // download must run after tidy (tidy may add/remove entries) and after
+            // vendor (vendor and download both populate module state — run sequentially).
+            if (builder.Resource.TryGetLastAnnotation<GoModVendorBuilderAnnotation>(out var vendorBuilder))
+            {
+                download.WaitForCompletion(vendorBuilder.Sibling);
+            }
+            else if (builder.Resource.TryGetLastAnnotation<GoModTidyBuilderAnnotation>(out var tidyBuilder))
+            {
+                download.WaitForCompletion(tidyBuilder.Sibling);
+            }
 
             builder.WaitForCompletion(download);
         }
@@ -599,7 +631,8 @@ public static class GoHostingExtensions
             .WithAnnotation(
                 new ExecutableAnnotation { Command = "dlv", WorkingDirectory = builder.Resource.WorkingDirectory },
                 ResourceAnnotationMutationBehavior.Replace)
-            .WithAnnotation(new GoDelveServerAnnotation(port), ResourceAnnotationMutationBehavior.Replace);
+            .WithAnnotation(new GoDelveServerAnnotation(port), ResourceAnnotationMutationBehavior.Replace)
+            .WithRequiredCommand("dlv", "https://github.com/go-delve/delve");
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -627,7 +660,9 @@ public static class GoHostingExtensions
     private static string BuildDockerGoCommand(IResource resource, string packagePath = ".")
     {
         var parts = new List<string> { "go", "build" };
-        parts.AddRange(BuildFlagParts(resource));
+        // Race detection requires CGO; the Dockerfile sets CGO_ENABLED=0 for a fully static
+        // binary, so -race is intentionally excluded from publish/deploy builds.
+        parts.AddRange(BuildFlagParts(resource, includeRace: false));
         parts.AddRange(["-o", "/app/server", packagePath]);
         return string.Join(" ", parts);
     }
@@ -638,18 +673,18 @@ public static class GoHostingExtensions
     /// For <c>go run</c> the flags are individual args; for <c>dlv --build-flags</c> they are combined.
     /// </summary>
     private static string BuildFlagsString(IResource resource) =>
-        string.Join(" ", BuildFlagParts(resource));
+        string.Join(" ", BuildFlagParts(resource, includeRace: true));
 
     /// <summary>
     /// Returns the ordered flag tokens derived from build annotations on the resource.
     /// Shared by <see cref="BuildDockerGoCommand"/> and <see cref="BuildFlagsString"/> so
     /// that flag ordering and quoting rules are defined in exactly one place.
     /// </summary>
-    private static List<string> BuildFlagParts(IResource resource)
+    private static List<string> BuildFlagParts(IResource resource, bool includeRace = true)
     {
         var parts = new List<string>();
 
-        if (resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
+        if (includeRace && resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
         {
             parts.Add("-race");
         }

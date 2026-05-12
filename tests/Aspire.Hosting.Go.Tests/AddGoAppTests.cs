@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIRECOMMAND001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -540,7 +541,8 @@ public class AddGoAppTests
         builder.Build().Run();
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
-        Assert.Contains("-race", content);
+        // -race requires CGO; the Dockerfile sets CGO_ENABLED=0, so it must not appear in publish builds.
+        Assert.DoesNotContain("-race", content);
         Assert.Contains("-tags='netgo,osusergo'", content);
         Assert.Contains("-ldflags='-X main.version=1.0.0'", content);
     }
@@ -763,6 +765,152 @@ public class AddGoAppTests
 
     // Minimal resource that implements IResourceWithContainerFiles so tests can
     // call PublishWithContainerFiles without depending on a real container integration.
+    // ---- Issue 1: required command annotations ------------------------------
+
+    [Fact]
+    public void AddGoApp_HasRequiredCommandAnnotationForGo()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        Assert.True(
+            app.Resource.TryGetAnnotationsOfType<RequiredCommandAnnotation>(out var annotations),
+            "GoAppResource should have at least one RequiredCommandAnnotation");
+        Assert.Contains(annotations, a => a.Command == "go");
+    }
+
+    [Fact]
+    public void WithDelveServer_AddsRequiredCommandAnnotationForDlv()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory).WithDelveServer();
+
+        Assert.True(
+            app.Resource.TryGetAnnotationsOfType<RequiredCommandAnnotation>(out var annotations));
+        Assert.Contains(annotations, a => a.Command == "dlv");
+    }
+
+    // ---- Issue 3: race detector not in Dockerfile ---------------------------
+
+    [Fact]
+    public async Task VerifyPublish_RaceDetector_NotPropagatedToDockerfile()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path, raceDetector: true);
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        // -race requires CGO; Dockerfile sets CGO_ENABLED=0 — must not appear in publish builds.
+        Assert.DoesNotContain("-race", content);
+        // go build should still be present.
+        Assert.Contains("go build", content);
+    }
+
+    // ---- Issue 4: mod tool ordering -----------------------------------------
+
+    [Fact]
+    public void WithModTidy_ThenWithModVendor_VendorWaitsForTidy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        builder.AddGoApp("api", AppContext.BaseDirectory)
+               .WithModTidy()
+               .WithModVendor();
+
+        var tidyResource = builder.Resources.First(r => r.Name == "api-mod-tidy");
+        var vendorResource = builder.Resources.First(r => r.Name == "api-mod-vendor");
+
+        // The vendor sibling must carry a WaitAnnotation pointing to tidy.
+        Assert.True(
+            vendorResource.TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations),
+            "vendor sibling should have a WaitAnnotation");
+        Assert.Contains(waitAnnotations, w => w.Resource == tidyResource);
+    }
+
+    [Fact]
+    public void WithModTidy_ThenWithModDownload_DownloadWaitsForTidy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        builder.AddGoApp("api", AppContext.BaseDirectory)
+               .WithModTidy()
+               .WithModDownload();
+
+        var tidyResource = builder.Resources.First(r => r.Name == "api-mod-tidy");
+        var downloadResource = builder.Resources.First(r => r.Name == "api-mod-download");
+
+        Assert.True(
+            downloadResource.TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations));
+        Assert.Contains(waitAnnotations, w => w.Resource == tidyResource);
+    }
+
+    [Fact]
+    public void WithModTidy_ThenWithModVendor_ThenWithModDownload_DownloadWaitsForVendor()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        builder.AddGoApp("api", AppContext.BaseDirectory)
+               .WithModTidy()
+               .WithModVendor()
+               .WithModDownload();
+
+        var vendorResource = builder.Resources.First(r => r.Name == "api-mod-vendor");
+        var downloadResource = builder.Resources.First(r => r.Name == "api-mod-download");
+
+        Assert.True(
+            downloadResource.TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations));
+        Assert.Contains(waitAnnotations, w => w.Resource == vendorResource);
+    }
+
+    // ---- Issue 5: non-root user in Dockerfile --------------------------------
+
+    [Fact]
+    public async Task VerifyPublish_RuntimeStage_HasNonRootUser_Alpine()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path);
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        // Alpine non-root user creation.
+        Assert.Contains("addgroup -S app", content);
+        Assert.Contains("adduser -S -G app app", content);
+        Assert.Contains("USER app", content);
+    }
+
+    [Fact]
+    public async Task VerifyPublish_RuntimeStage_HasNonRootUser_NonAlpine()
+    {
+        using var sourceDir = new TestTempDirectory();
+        using var outputDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(sourceDir.Path, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        builder.AddGoApp("api", sourceDir.Path)
+               .WithDockerfileBaseImage(runtimeImage: "debian:bookworm-slim");
+
+        builder.Build().Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
+
+        // Debian non-root user creation.
+        Assert.Contains("groupadd --system --gid 999 app", content);
+        Assert.Contains("useradd --system --gid 999 --uid 999 --no-create-home app", content);
+        Assert.Contains("USER app", content);
+    }
+
     private sealed class GoFilesContainer(string name, string command, string workingDirectory)
         : ExecutableResource(name, command, workingDirectory), IResourceWithContainerFiles;
 }
