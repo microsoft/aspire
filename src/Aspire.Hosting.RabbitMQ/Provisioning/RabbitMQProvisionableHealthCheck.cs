@@ -23,12 +23,6 @@ internal sealed class RabbitMQProvisionableHealthCheck(
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        // Stage 1: own lifecycle state gate.
-        if (!notifications.TryGetCurrentState(self.Name, out var evt) || evt.Snapshot.State?.Text != KnownResourceStates.Running)
-        {
-            return HealthCheckResult.Unhealthy($"'{self.Name}' is not yet Running.");
-        }
-
         foreach (var dep in self.HealthDependencies)
         {
             if (!notifications.TryGetCurrentState(dep.Name, out var depEvt) || depEvt.Snapshot.HealthStatus != HealthStatus.Healthy)
@@ -37,8 +31,17 @@ internal sealed class RabbitMQProvisionableHealthCheck(
             }
         }
 
-        // Stage 3: live broker probe
-        var probe = await self.ProbeAsync(client, cancellationToken).ConfigureAwait(false);
+        RabbitMQProbeResult probe;
+        try
+        {
+            probe = await self.ProbeAsync(client, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Health probe for '{Resource}' threw.", self.Name);
+            return HealthCheckResult.Unhealthy(ex.Message);
+        }
+
         if (!probe.IsHealthy)
         {
             logger.LogWarning("Health probe for '{Resource}' failed: {Reason}", self.Name, probe.Description);

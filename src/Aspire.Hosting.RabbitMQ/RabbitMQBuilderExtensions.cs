@@ -145,7 +145,7 @@ public static class RabbitMQBuilderExtensions
     /// <param name="builder">The RabbitMQ server resource builder.</param>
     /// <param name="plugin">The plugin to enable.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Enables a RabbitMQ plugin")]
+    [AspireExportIgnore(Reason = "RabbitMQPlugin is a C# enum — not usable from polyglot hosts. Use the string overload (withPlugin) instead.")]
     public static IResourceBuilder<RabbitMQServerResource> WithPlugin(
         this IResourceBuilder<RabbitMQServerResource> builder,
         RabbitMQPlugin plugin)

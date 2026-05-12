@@ -69,6 +69,7 @@ public static class RabbitMQPolicyExtensions
         var vhost = builder.Resource;
 
         return RabbitMQBuilderExtensions.WithProvisionableHealthCheck(policyBuilder)
+            .WithIconName("ClipboardSettings")
             .WithRabbitMQProvisioning(
                 dependencies: [(vhost, WaitType.WaitUntilHealthy)],
                 provisionAsync: async (p, client, _, ct) =>
@@ -77,7 +78,7 @@ public static class RabbitMQPolicyExtensions
 
                     if (p.ApplyTo != RabbitMQPolicyApplyTo.Exchanges)
                     {
-                        p.QueueArguments.FlattenInto(definition, $"Policy '{p.PolicyName}'");
+                        p.QueueArguments.FlattenIntoPolicy(definition, $"Policy '{p.PolicyName}'");
                     }
 
                     if (p.ApplyTo != RabbitMQPolicyApplyTo.Queues)

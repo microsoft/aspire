@@ -42,6 +42,7 @@ public static class RabbitMQQueueExtensions
         builder.Resource.Queues.Add(queue);
 
         return RabbitMQBuilderExtensions.WithProvisionableHealthCheck(builder.ApplicationBuilder.AddResource(queue))
+            .WithIconName("MailInbox")
             .WithRabbitMQProvisioning(
                 dependencies: [(vhost, WaitType.WaitUntilHealthy)],
                 provisionAsync: async (q, client, _, ct) =>

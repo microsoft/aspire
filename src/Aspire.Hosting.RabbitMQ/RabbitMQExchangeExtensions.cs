@@ -69,6 +69,7 @@ public static class RabbitMQExchangeExtensions
 
         return builder.ApplicationBuilder.AddResource(exchange)
             .WithProvisionableHealthCheck()
+            .WithIconName("ArrowSwap")
             .WithRabbitMQProvisioning(
                 dependencies: [(vhost, WaitType.WaitUntilHealthy)],
                 provisionAsync: async (ex, client, _, ct) =>
@@ -96,11 +97,11 @@ public static class RabbitMQExchangeExtensions
                 var client = evt.Services.GetRequiredKeyedService<IRabbitMQProvisioningClient>(
                     ex.VirtualHost.Parent.Name);
 
-                // Fan-out: each binding waits for its target independently (parallel).
+                // Fan-out: each binding waits for its target to be healthy before applying.
                 await Task.WhenAll(ex.Bindings.Select(async binding =>
                 {
-                    await evt.Notifications.WaitForResourceAsync(
-                        binding.Destination.Name, KnownResourceStates.Running, ct).ConfigureAwait(false);
+                    await evt.Notifications.WaitForResourceHealthyAsync(
+                        binding.Destination.Name, ct).ConfigureAwait(false);
                     try
                     {
                         await binding.Destination.BindAsync(

@@ -80,6 +80,7 @@ public class RabbitMQServerResource : ContainerResource, IResourceWithConnection
     /// </summary>
     /// <remarks>
     /// Format: <c>amqp://{user}:{password}@{host}:{port}</c>.
+    /// The host and port are the host-mapped values, suitable for connections from outside the container.
     /// </remarks>
     public ReferenceExpression UriExpression
     {
@@ -99,6 +100,34 @@ public class RabbitMQServerResource : ContainerResource, IResourceWithConnection
             builder.Append($"{PasswordParameter:uri}");
             builder.AppendLiteral("@");
             builder.Append($"{PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
+
+            return builder.Build();
+        }
+    }
+
+    /// <summary>
+    /// Gets the connection URI expression using the container-internal AMQP port (<c>localhost:5672</c>).
+    /// </summary>
+    /// <remarks>
+    /// Used by dynamic shovels, which run inside the broker container and cannot reach the host-mapped port.
+    /// </remarks>
+    internal ReferenceExpression ContainerUriExpression
+    {
+        get
+        {
+            var builder = new ReferenceExpressionBuilder();
+            builder.AppendLiteral("amqp://");
+            if (UserNameParameter is not null)
+            {
+                builder.Append($"{UserNameParameter:uri}");
+            }
+            else
+            {
+                builder.Append($"{DefaultUserName:uri}");
+            }
+            builder.AppendLiteral(":");
+            builder.Append($"{PasswordParameter:uri}");
+            builder.AppendLiteral("@localhost:5672");
 
             return builder.Build();
         }

@@ -8,6 +8,7 @@ using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 
 namespace Aspire.Hosting.RabbitMQ.Provisioning;
 
@@ -135,6 +136,20 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         try
         {
             await action(ch).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is AlreadyClosedException or OperationInterruptedException)
+        {
+            // The broker closed or interrupted the channel mid-operation (e.g. the shovel plugin
+            // racing with queue declaration). Retry once with a fresh channel.
+            ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
+            try
+            {
+                await action(ch).ConfigureAwait(false);
+            }
+            catch (Exception retryEx)
+            {
+                throw new DistributedApplicationException($"{errorMessage}: {retryEx.Message}", retryEx);
+            }
         }
         catch (Exception ex)
         {

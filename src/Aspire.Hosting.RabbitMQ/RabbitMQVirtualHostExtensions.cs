@@ -44,8 +44,9 @@ public static class RabbitMQVirtualHostExtensions
         }
 
         return RabbitMQBuilderExtensions.WithProvisionableHealthCheck(builder.ApplicationBuilder.AddResource(vhost))
+            .WithIconName("Server")
             .WithRabbitMQProvisioning(
-                dependencies: [],
+                dependencies: [(builder.Resource, WaitType.WaitUntilHealthy)],
                 provisionAsync: async (v, client, _, ct) =>
                 {
                     if (v.VirtualHostName != "/")

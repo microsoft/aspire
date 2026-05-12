@@ -70,18 +70,27 @@ public static class RabbitMQShovelExtensions
         return RabbitMQBuilderExtensions.WithProvisionableHealthCheck(vhost.ApplicationBuilder.AddResource(shovel)
             .WithRelationship(source.Resource, "Source")
             .WithRelationship(destination.Resource, "Destination"))
+            .WithIconName("ArrowMove")
             .WithRabbitMQProvisioning(
                 dependencies: [
                     (vhostResource, WaitType.WaitUntilHealthy),
-                    (shovel.Source, WaitType.WaitUntilStarted),
-                    (shovel.Destination, WaitType.WaitUntilStarted)
+                    (shovel.Source, WaitType.WaitUntilHealthy),
+                    (shovel.Destination, WaitType.WaitUntilHealthy)
                 ],
                 provisionAsync: async (s, client, _, ct) =>
                 {
-                    var srcUri = await s.Source.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
-                        ?? throw new DistributedApplicationException($"Could not resolve source URI for shovel '{s.ShovelName}'.");
-                    var destUri = await s.Destination.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
-                        ?? throw new DistributedApplicationException($"Could not resolve destination URI for shovel '{s.ShovelName}'.");
+                    // Shovels run inside the broker container and connect to the broker via the
+                    // internal AMQP port (5672). The host-mapped port in ConnectionStringExpression
+                    // is not reachable from inside the container.
+                    var server = s.Parent.Parent;
+                    var containerUri = await server.ContainerUriExpression.GetValueAsync(ct).ConfigureAwait(false)
+                        ?? throw new DistributedApplicationException($"Could not resolve container URI for shovel '{s.ShovelName}'.");
+
+                    var vhostSuffix = s.Parent.VirtualHostName == "/"
+                        ? string.Empty
+                        : $"/{Uri.EscapeDataString(s.Parent.VirtualHostName)}";
+                    var srcUri = containerUri + vhostSuffix;
+                    var destUri = containerUri + vhostSuffix;
 
                     var ackModeString = s.AckMode switch
                     {

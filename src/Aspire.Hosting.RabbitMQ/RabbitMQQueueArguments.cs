@@ -67,12 +67,18 @@ public sealed class RabbitMQQueueArguments
         DeadLetterRoutingKey = routingKey;
     }
 
+    // Queue x-argument keys. Policy definition keys use the same names without the "x-" prefix
+    // (e.g. "x-message-ttl" → "message-ttl"); see ToPolicyKey.
+    // RabbitMQ rejects policy definitions that use the "x-" prefix.
+    // See: https://www.rabbitmq.com/docs/parameters#policies
     internal const string XArgMessageTtl = "x-message-ttl";
     internal const string XArgMaxLength = "x-max-length";
     internal const string XArgMaxLengthBytes = "x-max-length-bytes";
     internal const string XArgExpires = "x-expires";
     internal const string XArgDeadLetterExchange = "x-dead-letter-exchange";
     internal const string XArgDeadLetterRoutingKey = "x-dead-letter-routing-key";
+
+    private static string ToPolicyKey(string xArgKey) => xArgKey[2..];
 
     internal static readonly FrozenSet<string> s_reservedKeys = new[]
     {
@@ -84,11 +90,16 @@ public sealed class RabbitMQQueueArguments
         XArgDeadLetterRoutingKey,
     }.ToFrozenSet(StringComparer.Ordinal);
 
-    /// <summary>Validates <see cref="AdditionalArguments"/> and merges all arguments into <paramref name="target"/>.</summary>
-    /// <param name="target">The dictionary to merge into.</param>
-    /// <param name="resourceDescription">Human-readable resource description (e.g. <c>Queue 'orders'</c>) used in error messages.</param>
-    /// <exception cref="DistributedApplicationException">Thrown when <see cref="AdditionalArguments"/> contains a key already handled by a typed property.</exception>
+    // Merges all arguments into target using AMQP x-argument keys (e.g. x-message-ttl).
     internal void FlattenInto(IDictionary<string, object?> target, string resourceDescription)
+        => FlattenCore(target, resourceDescription, policyKeys: false);
+
+    // Merges all arguments into target using policy definition keys (e.g. message-ttl, without the x- prefix).
+    // RabbitMQ rejects policy definitions that use the x- prefix. See: https://www.rabbitmq.com/docs/parameters#policies
+    internal void FlattenIntoPolicy(IDictionary<string, object?> target, string resourceDescription)
+        => FlattenCore(target, resourceDescription, policyKeys: true);
+
+    private void FlattenCore(IDictionary<string, object?> target, string resourceDescription, bool policyKeys)
     {
         foreach (var key in AdditionalArguments.Keys)
         {
@@ -105,35 +116,14 @@ public sealed class RabbitMQQueueArguments
             target[k] = v;
         }
 
-        if (MessageTtl is { } ttl)
-        {
-            target[XArgMessageTtl] = (long)ttl.TotalMilliseconds;
-        }
+        string Key(string xArgKey) => policyKeys ? ToPolicyKey(xArgKey) : xArgKey;
 
-        if (MaxLength is { } ml)
-        {
-            target[XArgMaxLength] = ml;
-        }
-
-        if (MaxLengthBytes is { } mlb)
-        {
-            target[XArgMaxLengthBytes] = mlb;
-        }
-
-        if (Expires is { } exp)
-        {
-            target[XArgExpires] = (long)exp.TotalMilliseconds;
-        }
-
-        if (DeadLetterExchange is { } dlx)
-        {
-            target[XArgDeadLetterExchange] = dlx.ExchangeName;
-        }
-
-        if (DeadLetterRoutingKey is { } drk)
-        {
-            target[XArgDeadLetterRoutingKey] = drk;
-        }
+        if (MessageTtl is { } ttl) { target[Key(XArgMessageTtl)] = (long)ttl.TotalMilliseconds; }
+        if (MaxLength is { } ml) { target[Key(XArgMaxLength)] = ml; }
+        if (MaxLengthBytes is { } mlb) { target[Key(XArgMaxLengthBytes)] = mlb; }
+        if (Expires is { } exp) { target[Key(XArgExpires)] = (long)exp.TotalMilliseconds; }
+        if (DeadLetterExchange is { } dlx) { target[Key(XArgDeadLetterExchange)] = dlx.ExchangeName; }
+        if (DeadLetterRoutingKey is { } drk) { target[Key(XArgDeadLetterRoutingKey)] = drk; }
     }
 
 }
