@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CSS styling change on docs site, unrelated to any product feature in this milestone",
+  "mergedAt": "2026-05-12T04:04:04Z",
+  "number": 884,
+  "runDate": "2026-05-12T05:14:51Z",
+  "status": "excluded",
+  "title": "Style inline code with theme-aware accent + hairline border"
+}

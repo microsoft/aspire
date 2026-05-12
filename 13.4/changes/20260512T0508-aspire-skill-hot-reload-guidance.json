@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Added hot reload guidance to the Aspire agent skill, clarifying when AppHost-level changes require rerunning `aspire start`, when resource-specific changes should keep the AppHost running, and how frontend frameworks with HMR (Vite, Next.js) handle code changes automatically without requiring restarts.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔥",
+  "firstMergedAt": "2026-05-12T05:08:30Z",
+  "lastMergedAt": "2026-05-12T05:08:30Z",
+  "name": "Aspire skill hot reload guidance",
+  "owner": "davidfowl",
+  "prs": [
+    16868
+  ]
+}

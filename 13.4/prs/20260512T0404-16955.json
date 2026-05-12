@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "ATS export shadowing fix - exact-target exports no longer collide with generic IResourceWithEnvironment exports for Keycloak and similar resources",
+  "mergedAt": "2026-05-12T04:04:12Z",
+  "number": 16955,
+  "runDate": "2026-05-12T05:14:51Z",
+  "status": "included",
+  "title": "Fix ATS export shadowing for target-specific methods"
+}
