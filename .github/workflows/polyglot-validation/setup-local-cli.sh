@@ -43,8 +43,14 @@ if [ ! -d "$SHIPPING_DIR" ]; then
 fi
 
 # Auto-detect PR identity from .nupkg filenames (e.g. "Aspire.Hosting.AppHost.13.4.0-pr.16820.g3703c5c4.nupkg")
-# so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel resolves to
-# ("pr-<N>"). Falls back to "local" for true local-dev builds.
+# so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
+# resolves to ("pr-<N>").
+#
+# Polyglot validation is PR-only (gated in .github/workflows/tests.yml on
+# github.event_name == 'pull_request'). On non-PR builds the CLI archive is baked
+# with channel=daily/staging, the .nupkg filenames lack the -pr.<N>.gSHA suffix, and
+# this script has no way to derive a hive label that the CLI will look in — so we
+# fail loud instead of silently writing to hives/local/ where the CLI won't read.
 #
 # Anchor on Aspire.Hosting.AppHost because:
 #   - It is the core MSBuild SDK package every AppHost references; removing/renaming it
@@ -55,7 +61,6 @@ fi
 #     per-RID built-nugets-for-<rid> artifact ($NUGETS_RID_DIR), so we avoid the
 #     Aspire.Cli pointer-vs-RID ambiguity (Aspire.Cli.<rid>.<ver>.nupkg also matches
 #     "Aspire.Cli.*.nupkg" and could be picked first depending on filesystem order).
-HIVE_LABEL="local"
 SAMPLE_NUPKG=$(find "$SHIPPING_DIR" -maxdepth 4 -name "Aspire.Hosting.AppHost.*.nupkg" 2>/dev/null | head -1)
 if [ -z "$SAMPLE_NUPKG" ]; then
     echo "ERROR: Could not find Aspire.Hosting.AppHost.*.nupkg under $SHIPPING_DIR." >&2
@@ -68,6 +73,12 @@ fi
 SUFFIX=$(basename "$SAMPLE_NUPKG" | sed -nE 's/.*-(pr\.[0-9]+\.[0-9a-g]+).*\.nupkg$/\1/p')
 if [[ "$SUFFIX" =~ ^pr\.([0-9]+)\.[0-9a-g]+$ ]]; then
     HIVE_LABEL="pr-${BASH_REMATCH[1]}"
+else
+    echo "ERROR: Could not derive PR identity from $(basename "$SAMPLE_NUPKG")." >&2
+    echo "       Polyglot validation is PR-only and expects a '-pr.<N>.g<sha>' suffix on the built nupkgs." >&2
+    echo "       If you are seeing this on a non-PR build, the polyglot_validation job in tests.yml is" >&2
+    echo "       running outside its 'github.event_name == pull_request' guard." >&2
+    exit 1
 fi
 HIVE_DIR="$ASPIRE_HOME/hives/$HIVE_LABEL/packages"
 echo "  Using hive label: $HIVE_LABEL"
