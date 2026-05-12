@@ -31,7 +31,6 @@ public static class JavaScriptHostingExtensions
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
     private const string DefaultJavaScriptRunScriptName = "dev";
-    private const string PublishManifestStepName = "publish-manifest";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
     // This is the order of config files that Vite will look for by default
@@ -899,15 +898,6 @@ public static class JavaScriptHostingExtensions
                 {
                     ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource, runScriptName);
                     return Task.CompletedTask;
-                }
-            }));
-            containerBuilder.WithAnnotation(new PipelineConfigurationAnnotation(context =>
-            {
-                var validationStep = context.Steps.FirstOrDefault(s => string.Equals(s.Name, validationStepName, StringComparison.Ordinal));
-                var publishManifestStep = context.Steps.FirstOrDefault(s => string.Equals(s.Name, PublishManifestStepName, StringComparison.Ordinal));
-                if (validationStep is not null && publishManifestStep is not null)
-                {
-                    validationStep.RequiredBy(publishManifestStep);
                 }
             }));
         }
