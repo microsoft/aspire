@@ -300,7 +300,7 @@ public class ListConsoleLogsToolTests
     }
 
     [Fact]
-    public async Task ListConsoleLogsTool_WithSearch_TotalLogsCountReflectsUnfilteredCount()
+    public async Task ListConsoleLogsTool_WithSearch_ReturnsSummaryWithFilteredCount()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel

@@ -83,9 +83,10 @@ public class TelemetryApiServiceTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void GetTraces_HasErrorFilter_ReturnsExpectedTraces(bool hasError)
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(null, 2)]
+    public void GetTraces_HasErrorFilter_ReturnsExpectedTraces(bool? hasError, int expectedCount)
     {
         var repository = CreateRepository();
         AddTracesWithStatus(repository);
@@ -95,11 +96,7 @@ public class TelemetryApiServiceTests
         var result = service.GetTraces(resourceNames: null, hasError: hasError, limit: null);
 
         Assert.NotNull(result);
-        Assert.Equal(1, result.ReturnedCount);
-
-        var allResult = service.GetTraces(resourceNames: null, hasError: null, limit: null);
-        Assert.NotNull(allResult);
-        Assert.Equal(2, allResult.ReturnedCount);
+        Assert.Equal(expectedCount, result.ReturnedCount);
     }
 
     [Fact]
