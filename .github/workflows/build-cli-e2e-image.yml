@@ -53,17 +53,20 @@ jobs:
 
           mkdir -p artifacts/cli-e2e-image
 
-          # Build a single image with GHA layer cache and apt-mirror fallback. We
-          # try the Azure Ubuntu mirror first (faster + more reliable from
-          # GitHub-hosted runners) and fall back to the default sources on
-          # failure. SKIP_SOURCE_BUILD is only relevant to the .NET image so it
-          # is opt-in via the trailing flag. All remaining args are tags (-t)
-          # — the polyglot base passes two tags so both the FROM-referenced
-          # base name and the artifact-friendly polyglot name resolve locally
-          # without a follow-up `docker tag` step. The optional EXTRA_BUILD_ARGS
-          # array, set by callers in this script, is spliced into every invocation
-          # — used by the extended polyglot loop below to expose the locally-loaded
-          # base image to the buildx container driver via --build-context.
+          # Build a single image through the cli-e2e-builder buildx container
+          # with GHA layer cache and an apt-mirror fallback. We try the Azure
+          # Ubuntu mirror first (faster + more reliable from GitHub-hosted
+          # runners) and fall back to the default sources on failure.
+          # SKIP_SOURCE_BUILD is only relevant to the .NET-bearing images so
+          # it is opt-in via the trailing flag. All remaining args are tags
+          # (-t) — the polyglot base passes two tags so both the
+          # FROM-referenced base name and the artifact-friendly polyglot name
+          # resolve locally without a follow-up `docker tag` step.
+          #
+          # Only used for the .NET image and the polyglot base; extended
+          # polyglot images build through the default `docker` driver below
+          # because the cli-e2e-builder's container image store can't see
+          # the host daemon's `aspire-e2e-polyglot-base:latest` tag.
           build_image() {
             local display="$1" dockerfile="$2" cache_scope="$3" skip_source="$4"
             shift 4
@@ -93,7 +96,6 @@ jobs:
                   --cache-from "type=gha,scope=$cache_scope" \
                   --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
                   "${extra_args[@]}" \
-                  "${EXTRA_BUILD_ARGS[@]+"${EXTRA_BUILD_ARGS[@]}"}" \
                   "${mirror_args[@]}" \
                   "${tag_args[@]}" \
                   -f "$dockerfile" \
@@ -140,34 +142,54 @@ jobs:
 
           # Extended polyglot images. All layer on top of the polyglot base and
           # install a language toolchain via apt or a multi-stage COPY from the
-          # official language image. Routed through buildx with GHA layer cache
-          # so the heavy upstream `golang:1` / `rust:1` COPY stages don't
-          # re-pull on every CI build (which would also hit Docker Hub
-          # anonymous-pull rate limits).
+          # official language image.
           #
-          # The `cli-e2e-builder` instance uses the docker-container driver,
-          # which has its own image store separate from the host Docker
-          # daemon. `--load` exports the polyglot base to the host daemon but
-          # does NOT register the tag in the buildkit container's internal
-          # store, so a naked `FROM aspire-e2e-polyglot-base` falls back to
-          # docker.io/library/... and 401s. --build-context with the
-          # docker-image:// scheme tells buildx to resolve that name via the
-          # host daemon, which is where the base now lives.
-          EXTRA_BUILD_ARGS=(
-            --build-context "aspire-e2e-polyglot-base=docker-image://aspire-e2e-polyglot-base:latest"
-          )
+          # These build through the default docker driver (host daemon) instead
+          # of the cli-e2e-builder buildx container, because:
+          #
+          # 1. They `FROM aspire-e2e-polyglot-base`, which was just `--load`-ed
+          #    into the host daemon. The cli-e2e-builder uses the
+          #    docker-container driver, which has an image store separate from
+          #    the host. A naked `FROM aspire-e2e-polyglot-base` from inside
+          #    that container resolves through docker.io/library/... and 401s.
+          #    Earlier attempts to bridge this with
+          #    `--build-context aspire-e2e-polyglot-base=docker-image://...`
+          #    were still resolved as a remote registry reference by buildkit,
+          #    not a local daemon lookup, so they 401'd the same way.
+          #
+          # 2. The default driver can't export `type=gha` cache, but these
+          #    images are thin layers on top of the cached base — losing the
+          #    cache for them is cheap. The heavy upstream `golang:1` /
+          #    `rust:1` COPY stages re-pull on every build but those are
+          #    multi-stage source images, not registry pulls of our base,
+          #    and they're rate-limit-free official images.
           for lang in java python go rust; do
-            # Extended polyglot images FROM aspire-e2e-polyglot-base; they have
-            # no source-build stage of their own, so SKIP_SOURCE_BUILD is a
-            # no-op here. Passed as 'true' for symmetry with the base image
-            # and to make the intent explicit.
-            build_image "${lang^} polyglot image" \
-              "tests/Shared/Docker/Dockerfile.e2e-polyglot-${lang}" \
-              "cli-e2e-polyglot-${lang}" \
-              true \
-              "aspire-cli-e2e-polyglot-${lang}:prebuilt"
-            save_image "aspire-cli-e2e-polyglot-${lang}:prebuilt" \
-              "aspire-cli-e2e-polyglot-${lang}.tar.gz"
+            display="${lang^} polyglot image"
+            tag="aspire-cli-e2e-polyglot-${lang}:prebuilt"
+            mirror="http://azure.archive.ubuntu.com/ubuntu/"
+            while :; do
+              mirror_arg=()
+              if [[ -n "$mirror" ]]; then
+                echo "Building $display with Ubuntu apt mirror: $mirror"
+                mirror_arg+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
+              else
+                echo "Building $display with the default Ubuntu apt sources"
+              fi
+              if DOCKER_BUILDKIT=1 docker build \
+                  "${mirror_arg[@]}" \
+                  -f "tests/Shared/Docker/Dockerfile.e2e-polyglot-${lang}" \
+                  -t "$tag" \
+                  .; then
+                break
+              fi
+              if [[ -z "$mirror" ]]; then
+                echo "$display build failed with the default Ubuntu apt sources" >&2
+                exit 1
+              fi
+              echo "$display build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
+              mirror=""
+            done
+            save_image "$tag" "aspire-cli-e2e-polyglot-${lang}.tar.gz"
           done
 
       - name: Upload CLI E2E .NET Docker image
