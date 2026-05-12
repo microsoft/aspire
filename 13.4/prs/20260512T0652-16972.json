@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Extends process-backed resource commands with withProcessCommandFactory for TypeScript/polyglot AppHosts",
+  "mergedAt": "2026-05-12T06:52:28Z",
+  "number": 16972,
+  "runDate": "2026-05-12T06:58:08Z",
+  "status": "included",
+  "title": "Add polyglot process command factories"
+}
