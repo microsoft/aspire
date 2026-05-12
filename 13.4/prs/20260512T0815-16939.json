@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New CLI feature: adds --search option to aspire logs and aspire otel commands.",
+  "mergedAt": "2026-05-12T08:15:06Z",
+  "number": 16939,
+  "runDate": "2026-05-12T08:59:18Z",
+  "status": "included",
+  "title": "Add --search option to aspire logs and aspire otel commands"
+}

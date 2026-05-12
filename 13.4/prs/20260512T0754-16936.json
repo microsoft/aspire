@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix for changelog workflow: caps docs PR date range to batch cutoff to prevent premature exclusion. Grouped with existing changelog workflow improvements entry.",
+  "mergedAt": "2026-05-12T07:54:01Z",
+  "number": 16936,
+  "runDate": "2026-05-12T08:59:18Z",
+  "status": "included",
+  "title": "Cap docs PR date range to batch cutoff to prevent premature exclusion"
+}

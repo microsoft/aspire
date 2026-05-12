@@ -1,20 +1,21 @@
 {
   "area": "Engineering",
-  "areaEmoji": "🔧",
+  "areaEmoji": "\ud83d\udd27",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "Improved the milestone changelog workflow with better backport PR filtering, docs PR enrichment, deterministic target-branch resolution for the docs check workflow, and various cleanup improvements for more accurate and complete changelogs.",
+  "description": "Improved the milestone changelog workflow with better backport PR filtering, docs PR enrichment, deterministic target-branch resolution, capping the docs PR date range to the batch cutoff to prevent premature exclusion, and various other cleanup improvements for more accurate and complete changelogs.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "📝",
+  "emoji": "\ud83d\udcdd",
   "firstMergedAt": "2026-05-11T09:22:03Z",
-  "lastMergedAt": "2026-05-12T01:35:52Z",
+  "lastMergedAt": "2026-05-12T07:54:01Z",
   "name": "Milestone changelog workflow improvements",
   "owner": "JamesNK",
   "prs": [
     16933,
-    16950
+    16950,
+    16936
   ]
 }

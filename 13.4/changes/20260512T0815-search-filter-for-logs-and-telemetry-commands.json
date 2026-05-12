@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Added a --search option to aspire logs and aspire otel commands, allowing users to filter output by keyword directly from the CLI without manual post-processing.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd0e",
+  "firstMergedAt": "2026-05-12T08:15:06Z",
+  "lastMergedAt": "2026-05-12T08:15:06Z",
+  "name": "Search filter for logs and telemetry commands",
+  "owner": "JamesNK",
+  "prs": [
+    16939
+  ]
+}
