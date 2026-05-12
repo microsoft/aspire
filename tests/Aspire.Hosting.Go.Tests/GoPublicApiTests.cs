@@ -244,6 +244,24 @@ public class GoPublicApiTests
     }
 
     [Fact]
+    public void WithAppArgs_AcceptsReferenceExpression()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // A parameter whose value is a ReferenceExpression — no container needed.
+        var param = builder.AddParameter("db-url");
+        var app = builder.AddGoApp("api", builder.AppHostDirectory)
+                         .WithAppArgs("--db", param.Resource);
+
+        // The annotation must store the object[] including the ReferenceExpression — not
+        // just strings — so that it is resolved lazily by the args callback at runtime.
+        Assert.True(app.Resource.TryGetLastAnnotation<GoAppArgsAnnotation>(out var annotation));
+        Assert.Equal(2, annotation!.Args.Length);
+        Assert.Equal("--db", annotation.Args[0]);
+        Assert.Same(param.Resource, annotation.Args[1]);
+    }
+
+    [Fact]
     public async Task WithAppArgsReplacesOnSecondCall()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

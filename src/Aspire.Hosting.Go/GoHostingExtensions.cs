@@ -335,7 +335,7 @@ public static class GoHostingExtensions
     /// <param name="args">The program arguments (e.g., <c>"serve"</c>, <c>"--config"</c>, <c>"prod.yaml"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     [AspireExport(Description = "Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)")]
-    public static IResourceBuilder<T> WithAppArgs<T>(this IResourceBuilder<T> builder, params string[] args)
+    public static IResourceBuilder<T> WithAppArgs<T>(this IResourceBuilder<T> builder, params object[] args)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);

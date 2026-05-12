@@ -5,7 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Go;
 
-internal sealed class GoAppArgsAnnotation(string[] args) : IResourceAnnotation
+internal sealed class GoAppArgsAnnotation(object[] args) : IResourceAnnotation
 {
-    public string[] Args { get; } = args;
+    public object[] Args { get; } = args;
 }
