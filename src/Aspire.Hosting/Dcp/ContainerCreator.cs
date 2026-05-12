@@ -466,7 +466,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             _tunnelConfigurations.AddRange(newTunnels);
             if (_tunnelCreationTask is null)
             {
-                _tunnelCreationTask = CreateTunnelProxyResourceAsync(factory, _tunnelConfigurations.ToList(), cancellationToken);
+                _tunnelCreationTask = CreateTunnelProxyResourceAsync(factory, _tunnelConfigurations.ToList(), cctx.ApplicationRunCancellationToken);
                 tunnelConfigIsValid = true; // .. because the tunnel proxy will be created with "our" current tunnel configuration.
             }
         }

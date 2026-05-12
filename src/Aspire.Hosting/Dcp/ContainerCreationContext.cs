@@ -17,7 +17,10 @@ internal record class ContainerNetworkService
 /// <summary>
 /// Helps coordinate container creation tasks and container tunnel creation and configuration task.
 /// </summary>
-internal sealed class ContainerCreationContext(Task containerPrerequisitesReady, Task containerTunnelPrerequisitesReady)
+internal sealed class ContainerCreationContext(
+    Task containerPrerequisitesReady, 
+    Task containerTunnelPrerequisitesReady,
+    CancellationToken applicationRunCancellationToken)
 {
     // The task that completes when the container prerequisites are ready.
     public Task ContainerPrerequisitesReady { get; } = containerPrerequisitesReady;
@@ -25,4 +28,8 @@ internal sealed class ContainerCreationContext(Task containerPrerequisitesReady,
     // The task that completes when the container tunnel prerequisites are ready.
     // For container tunnel to start, both the container prerequisites and the container tunnel prerequisites must be ready.
     public Task ContainerTunnelPrerequisitesReady { get; } = containerTunnelPrerequisitesReady;
+
+    // The cancellation token for the application run that this context belongs to. 
+    // This is used to cancel the container tunnel creation task if the application run is cancelled.
+    public CancellationToken ApplicationRunCancellationToken { get; } = applicationRunCancellationToken;
 }
